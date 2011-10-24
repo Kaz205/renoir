@@ -3107,12 +3107,19 @@ long do_mount(const char *dev_name, const char __user *dir_name,
 		return -EINVAL;
 
 	/* ... and get the mountpoint */
-	retval = user_path_at(AT_FDCWD, dir_name, LOOKUP_FOLLOW, &path);
+	retval = nameidata_set_temporary(dir_name);
 	if (retval)
 		return retval;
 
+	retval = user_path_at(AT_FDCWD, dir_name, LOOKUP_FOLLOW, &path);
+	if (retval) {
+		nameidata_restore_temporary();
+		return retval;
+	}
+
 	retval = security_sb_mount(dev_name, &path,
 				   type_page, flags, data_page);
+	nameidata_restore_temporary();
 	if (!retval && !may_mount())
 		retval = -EPERM;
 	if (!retval && (flags & SB_MANDLOCK) && !may_mandlock())
