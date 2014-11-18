@@ -1169,7 +1169,6 @@ static void __intel_panel_enable_backlight(const struct intel_crtc_state *crtc_s
 	WARN_ON(panel->backlight.max == 0);
 
 	if (panel->backlight.level <= panel->backlight.min) {
-		panel->backlight.level = panel->backlight.max;
 		if (panel->backlight.device)
 			panel->backlight.device->props.brightness =
 				scale_hw_to_user(connector,
