@@ -26,6 +26,7 @@
 #include <linux/pm_opp.h>
 #include <linux/pm_qos.h>
 #include <linux/thermal.h>
+#include <linux/ratelimit.h>
 
 #include <trace/events/thermal.h>
 
@@ -33,6 +34,13 @@
 #define SCALE_ERROR_MITIGATION	100
 
 static DEFINE_IDA(devfreq_ida);
+
+static DEFINE_RATELIMIT_STATE(devfreq_cooling_ratelimit_state, 30 * HZ, 1);
+
+static int devfreq_cooling_ratelimit(void)
+{
+	return __ratelimit(&devfreq_cooling_ratelimit_state);
+}
 
 /**
  * struct devfreq_cooling_device - Devfreq cooling device
@@ -115,6 +123,10 @@ static int devfreq_cooling_set_cur_state(struct thermal_cooling_device *cdev,
 				  DIV_ROUND_UP(freq, HZ_PER_KHZ));
 
 	dfc->cooling_state = state;
+
+	if (devfreq_cooling_ratelimit())
+		dev_info(dev, "Cooling state set to %lu. New max freq = %u\n",
+			 state, dfc->freq_table[state]);
 
 	return 0;
 }
