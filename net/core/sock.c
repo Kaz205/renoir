@@ -115,6 +115,7 @@
 #include <linux/prefetch.h>
 #include <linux/cred.h>
 #include <linux/uidgid.h>
+#include <linux/android_aid.h>
 
 #include <linux/uaccess.h>
 
@@ -210,6 +211,22 @@ bool inet_sk_allowed(struct net *net, gid_t gid)
 	return in_android_group(net->user_ns, gid);
 }
 EXPORT_SYMBOL(inet_sk_allowed);
+
+bool android_ns_capable(struct net *net, int cap)
+{
+	if (ns_capable(net->user_ns, cap))
+		return true;
+	if (!net->core.sysctl_android_paranoid)
+		return false;
+	if (cap == CAP_NET_RAW &&
+	    in_android_group(net->user_ns, AID_NET_RAW))
+		return true;
+	if (cap == CAP_NET_ADMIN &&
+	    in_android_group(net->user_ns, AID_NET_ADMIN))
+		return true;
+	return false;
+}
+EXPORT_SYMBOL(android_ns_capable);
 
 /*
  * Each address family might have different locking rules, so we have
@@ -597,7 +614,7 @@ static int sock_setbindtodevice_locked(struct sock *sk, int ifindex)
 
 	/* Sorry... */
 	ret = -EPERM;
-	if (!ns_capable(net->user_ns, CAP_NET_RAW))
+	if (!android_ns_capable(net, CAP_NET_RAW))
 		goto out;
 
 	ret = -EINVAL;
