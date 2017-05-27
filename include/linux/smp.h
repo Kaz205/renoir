@@ -249,6 +249,9 @@ static inline bool is_IPI_pending(const struct cpumask *mask)
 #define get_cpu()		({ preempt_disable(); __smp_processor_id(); })
 #define put_cpu()		preempt_enable()
 
+#define get_cpu_light()		({ migrate_disable(); __smp_processor_id(); })
+#define put_cpu_light()		migrate_enable()
+
 /*
  * Callback to arch code if there's nosmp or maxcpus=0 on the
  * boot command line:
