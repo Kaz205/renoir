@@ -2,6 +2,7 @@
 // Copyright (c) 2017 Intel Corporation.
 
 #include <linux/acpi.h>
+#include <linux/delay.h>
 #include <linux/i2c.h>
 #include <linux/module.h>
 #include <linux/pm_runtime.h>
@@ -64,6 +65,17 @@
 #define OV13858_ANA_GAIN_STEP		1
 #define OV13858_ANA_GAIN_DEFAULT	0x80
 
+/* OTP control registers */
+#define OV13858_REG_OTP_LOAD_CTRL	0x3d81
+#define OV13858_OTP_LOAD_ENABLE		BIT(0)
+#define OV13858_REG_OTP_MODE_CTRL	0x3d84
+#define OV13858_OTP_PROGRAM_DISABLE	BIT(7)
+#define OV13858_OTP_MANUAL_MODE		BIT(6)
+
+/* ISP control registers */
+#define OV13858_REG_ISP_CTRL_0		0x5000
+#define OV13858_ISP_OTP_ENABLE		BIT(4)
+
 /* Digital gain control */
 #define OV13858_REG_B_MWB_GAIN		0x5100
 #define OV13858_REG_G_MWB_GAIN		0x5102
@@ -80,6 +92,15 @@
 
 /* Number of frames to skip */
 #define OV13858_NUM_OF_SKIP_FRAMES	2
+
+/* OTP access for vendor Id */
+#define OV13858_OTP_SRAM                0x7000
+#define OV13858_FLAG_BASIC_OFFSET	0x220
+#define OV13858_NUM_OTP_GROUP		2
+#define OV13858_OTP_GROUP_FLAG_SHIFT(i)	(6 - 2*(i))
+#define OV13858_OTP_GROUP_FLAG_MASK	0x3
+#define OV13858_OTP_GROUP_FLAG_VALID	0x1
+#define OV13858_OTP_MI_ID_OFFSET(i)	(0x221 + 8*(i))
 
 struct ov13858_reg {
 	u16 address;
@@ -1045,6 +1066,10 @@ struct ov13858 {
 
 	/* Streaming on/off */
 	bool streaming;
+
+	/* Vendor Id from OTP */
+	bool otp_read;
+	u32 vendor_id;
 };
 
 #define to_ov13858(_sd)	container_of(_sd, struct ov13858, sd)
@@ -1677,6 +1702,130 @@ error:
 	return ret;
 }
 
+static int ov13858_read_otp(struct ov13858 *ov13858)
+{
+	struct i2c_client *client = v4l2_get_subdevdata(&ov13858->sd);
+	u32 otp_mode_ctrl, isp_ctrl_0, flag_basic;
+	unsigned int mi_id_offs;
+	int ret = 0;
+	int i;
+
+	mutex_lock(&ov13858->mutex);
+	if (ov13858->otp_read)
+		goto out_unlock;
+
+	ret = pm_runtime_get_sync(&client->dev);
+	if (ret < 0) {
+		pm_runtime_put_noidle(&client->dev);
+		goto out_unlock;
+	}
+
+	if (!ov13858->streaming) {
+		ret = ov13858_start_streaming(ov13858);
+		if (ret)
+			goto out_runtime_put;
+	}
+
+	ret = ov13858_read_reg(ov13858,
+			       OV13858_REG_ISP_CTRL_0,
+			       OV13858_REG_VALUE_08BIT, &isp_ctrl_0);
+	if (ret)
+		goto out_standby;
+
+	ret = ov13858_write_reg(ov13858,
+				OV13858_REG_ISP_CTRL_0,
+				OV13858_REG_VALUE_08BIT,
+				isp_ctrl_0 & ~OV13858_ISP_OTP_ENABLE);
+	if (ret)
+		goto out_standby;
+
+	ret = ov13858_read_reg(ov13858,
+			       OV13858_REG_OTP_MODE_CTRL,
+			       OV13858_REG_VALUE_08BIT, &otp_mode_ctrl);
+	if (ret)
+		goto out_isp_otp_enable;
+
+	otp_mode_ctrl |= OV13858_OTP_PROGRAM_DISABLE;
+	otp_mode_ctrl &= ~OV13858_OTP_MANUAL_MODE;
+
+	ret = ov13858_write_reg(ov13858,
+				OV13858_REG_OTP_MODE_CTRL,
+				OV13858_REG_VALUE_08BIT, otp_mode_ctrl);
+	if (ret)
+		goto out_isp_otp_enable;
+
+	ret = ov13858_write_reg(ov13858,
+				OV13858_REG_OTP_LOAD_CTRL,
+				OV13858_REG_VALUE_08BIT,
+				OV13858_OTP_LOAD_ENABLE);
+	if (ret)
+		goto out_isp_otp_enable;
+
+	usleep_range(10000, 11000);
+
+	ret = ov13858_read_reg(ov13858,
+			       OV13858_OTP_SRAM + OV13858_FLAG_BASIC_OFFSET,
+			       OV13858_REG_VALUE_08BIT, &flag_basic);
+
+	for (i = 0; i < OV13858_NUM_OTP_GROUP; ++i) {
+		u8 flag;
+
+		flag = (flag_basic >> OV13858_OTP_GROUP_FLAG_SHIFT(i))
+					& OV13858_OTP_GROUP_FLAG_MASK;
+		if (flag == OV13858_OTP_GROUP_FLAG_VALID) {
+			mi_id_offs = OV13858_OTP_MI_ID_OFFSET(i);
+			break;
+		}
+	}
+	if (i == OV13858_NUM_OTP_GROUP) {
+		ret = -EFAULT;
+		goto out_isp_otp_enable;
+	}
+
+	ret = ov13858_read_reg(ov13858,
+			       OV13858_OTP_SRAM + mi_id_offs,
+			       OV13858_REG_VALUE_08BIT, &ov13858->vendor_id);
+
+out_isp_otp_enable:
+	ov13858_write_reg(ov13858,
+			  OV13858_REG_ISP_CTRL_0,
+			  OV13858_REG_VALUE_08BIT,
+			  isp_ctrl_0);
+
+out_standby:
+	if (!ov13858->streaming)
+		ov13858_stop_streaming(ov13858);
+
+out_runtime_put:
+	pm_runtime_put(&client->dev);
+
+out_unlock:
+	if (!ret)
+		ov13858->otp_read = true;
+
+	mutex_unlock(&ov13858->mutex);
+
+	return ret;
+}
+
+static ssize_t ov13858_vendor_id_read(struct device *dev,
+				      struct device_attribute *attr,
+				      char *buf)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct v4l2_subdev *sd = i2c_get_clientdata(client);
+	struct ov13858 *ov13858 = to_ov13858(sd);
+	int ret;
+
+	ret = ov13858_read_otp(ov13858);
+	if (ret)
+		return ret;
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", ov13858->vendor_id);
+}
+
+static DEVICE_ATTR(vendor_id, 0444, ov13858_vendor_id_read, NULL);
+
 static void ov13858_free_controls(struct ov13858 *ov13858)
 {
 	v4l2_ctrl_handler_free(ov13858->sd.ctrl_handler);
@@ -1733,6 +1882,12 @@ static int ov13858_probe(struct i2c_client *client,
 	if (ret < 0)
 		goto error_media_entity;
 
+	ret = device_create_file(&client->dev, &dev_attr_vendor_id);
+	if (ret) {
+		dev_err(&client->dev, "sysfs vendor_id creation failed\n");
+		goto error_unregister;
+	}
+
 	/*
 	 * Device is already turned on by i2c-core with ACPI domain PM.
 	 * Enable runtime PM and turn off the device.
@@ -1742,6 +1897,9 @@ static int ov13858_probe(struct i2c_client *client,
 	pm_runtime_idle(&client->dev);
 
 	return 0;
+
+error_unregister:
+	v4l2_async_unregister_subdev(&ov13858->sd);
 
 error_media_entity:
 	media_entity_cleanup(&ov13858->sd.entity);
@@ -1758,6 +1916,7 @@ static int ov13858_remove(struct i2c_client *client)
 	struct v4l2_subdev *sd = i2c_get_clientdata(client);
 	struct ov13858 *ov13858 = to_ov13858(sd);
 
+	device_remove_file(&client->dev, &dev_attr_vendor_id);
 	v4l2_async_unregister_subdev(sd);
 	media_entity_cleanup(&sd->entity);
 	ov13858_free_controls(ov13858);
