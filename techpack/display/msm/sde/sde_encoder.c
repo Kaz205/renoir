@@ -1597,6 +1597,8 @@ static void _sde_encoder_rc_restart_delayed(struct sde_encoder_virt *sde_enc,
 	else
 		idle_pc_duration = IDLE_POWERCOLLAPSE_DURATION;
 
+	msm_idle_set_state(drm_enc, false);
+
 	priv = drm_enc->dev->dev_private;
 	disp_thread = &priv->disp_thread[sde_enc->crtc->index];
 
@@ -1631,6 +1633,8 @@ static int _sde_encoder_rc_kickoff(struct drm_encoder *drm_enc,
 	u32 sw_event, struct sde_encoder_virt *sde_enc, bool is_vid_mode)
 {
 	int ret = 0;
+
+	msm_idle_set_state(drm_enc, true);
 
 	mutex_lock(&sde_enc->rc_lock);
 
