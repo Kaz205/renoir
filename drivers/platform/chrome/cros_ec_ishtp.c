@@ -304,6 +304,10 @@ static void process_recv(struct ishtp_cl *cros_ish_cl,
 		       rb_in_proc->buffer.data, data_len);
 
 error_wake_up:
+		/* Free the buffer since we copied data or didn't need it */
+		ishtp_cl_io_rb_recycle(rb_in_proc);
+		rb_in_proc = NULL;
+
 		/* Set flag before waking up the caller */
 		client_data->response.received = true;
 
@@ -313,7 +317,9 @@ error_wake_up:
 		break;
 
 	case CROS_MKBP_EVENT:
-		/* The event system doesn't send any data in buffer */
+		/* Free the buffer. This is just an event without data */
+		ishtp_cl_io_rb_recycle(rb_in_proc);
+		rb_in_proc = NULL;
 		schedule_work(&client_data->work_ec_evt);
 
 		break;
@@ -323,8 +329,9 @@ error_wake_up:
 	}
 
 end_error:
-	/* Free the buffer */
-	ishtp_cl_io_rb_recycle(rb_in_proc);
+	/* Free the buffer if we already haven't */
+	if (rb_in_proc)
+		ishtp_cl_io_rb_recycle(rb_in_proc);
 
 	up_read(&init_lock);
 }
