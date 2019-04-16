@@ -504,6 +504,21 @@ static int __do_page_fault(struct pt_regs *regs, unsigned long address,
 	if (is_exec)
 		flags |= FAULT_FLAG_INSTRUCTION;
 
+	/*
+	 * Try speculative page fault before grabbing the mmap_sem.
+	 * The Page fault is done if VM_FAULT_RETRY is not returned.
+	 * But if the memory protection keys are active, we don't know if the
+	 * fault is due to key mistmatch or due to a classic protection check.
+	 * To differentiate that, we will need the VMA we no more have, so
+	 * let's retry with the mmap_sem held.
+	 */
+	fault = handle_speculative_fault(mm, address, flags);
+	if (fault != VM_FAULT_RETRY && (IS_ENABLED(CONFIG_PPC_MEM_KEYS) &&
+					fault != VM_FAULT_SIGSEGV)) {
+		perf_sw_event(PERF_COUNT_SW_SPF, 1, regs, address);
+		goto done;
+	}
+
 	/* When running in the kernel we expect faults to occur only to
 	 * addresses in user space.  All other faults represent errors in the
 	 * kernel and should generate an OOPS.  Unfortunately, in the case of an
@@ -603,6 +618,7 @@ good_area:
 
 	up_read(&current->mm->mmap_sem);
 
+done:
 	if (unlikely(fault & VM_FAULT_ERROR))
 		return mm_fault_error(regs, address, fault);
 
