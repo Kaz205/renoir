@@ -301,6 +301,7 @@ struct vm_area_struct {
 
 #ifdef CONFIG_SPECULATIVE_PAGE_FAULT
 	atomic_t vm_ref_count;
+	struct rcu_head vm_rcu;
 #endif
 	struct rb_node vm_rb;
 
