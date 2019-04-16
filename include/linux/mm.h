@@ -397,6 +397,7 @@ extern pgprot_t protection_map[16];
  * @FAULT_FLAG_REMOTE: The fault is not for current task/mm.
  * @FAULT_FLAG_INSTRUCTION: The fault was during an instruction fetch.
  * @FAULT_FLAG_INTERRUPTIBLE: The fault can be interrupted by non-fatal signals.
+ * @FAULT_FLAG_SPECULATIVE: Speculative fault, not holding mmap_sem.
  *
  * About @FAULT_FLAG_ALLOW_RETRY and @FAULT_FLAG_TRIED: we can specify
  * whether we would allow page faults to retry by specifying these two
@@ -427,6 +428,7 @@ extern pgprot_t protection_map[16];
 #define FAULT_FLAG_REMOTE			0x80
 #define FAULT_FLAG_INSTRUCTION  		0x100
 #define FAULT_FLAG_INTERRUPTIBLE		0x200
+#define FAULT_FLAG_SPECULATIVE			0x400
 
 /*
  * The default fault flags that should be used by most of the
@@ -464,7 +466,8 @@ static inline bool fault_flag_allow_retry_first(unsigned int flags)
 	{ FAULT_FLAG_USER,		"USER" }, \
 	{ FAULT_FLAG_REMOTE,		"REMOTE" }, \
 	{ FAULT_FLAG_INSTRUCTION,	"INSTRUCTION" }, \
-	{ FAULT_FLAG_INTERRUPTIBLE,	"INTERRUPTIBLE" }
+	{ FAULT_FLAG_INTERRUPTIBLE,	"INTERRUPTIBLE" }, \
+	{ FAULT_FLAG_SPECULATIVE,	"SPECULATIVE" }
 
 /*
  * vm_fault is filled by the the pagefault handler and passed to the vma's
@@ -482,6 +485,10 @@ struct vm_fault {
 	gfp_t gfp_mask;			/* gfp mask to be used for allocations */
 	pgoff_t pgoff;			/* Logical page offset based on vma */
 	unsigned long address;		/* Faulting virtual address */
+#ifdef CONFIG_SPECULATIVE_PAGE_FAULT
+	unsigned int sequence;
+	pmd_t orig_pmd;			/* value of PMD at the time of fault */
+#endif
 	pmd_t *pmd;			/* Pointer to pmd entry matching
 					 * the 'address' */
 	pud_t *pud;			/* Pointer to pud entry matching
@@ -1580,6 +1587,31 @@ int invalidate_inode_page(struct page *page);
 #ifdef CONFIG_MMU
 extern vm_fault_t handle_mm_fault(struct vm_area_struct *vma,
 			unsigned long address, unsigned int flags);
+
+#ifdef CONFIG_SPECULATIVE_PAGE_FAULT
+extern vm_fault_t __handle_speculative_fault(struct mm_struct *mm,
+					     unsigned long address,
+					     unsigned int flags);
+static inline vm_fault_t handle_speculative_fault(struct mm_struct *mm,
+						  unsigned long address,
+						  unsigned int flags)
+{
+	/*
+	 * Try speculative page fault for multithreaded user space task only.
+	 */
+	if (!(flags & FAULT_FLAG_USER) || atomic_read(&mm->mm_users) == 1)
+		return VM_FAULT_RETRY;
+	return __handle_speculative_fault(mm, address, flags);
+}
+#else
+static inline vm_fault_t handle_speculative_fault(struct mm_struct *mm,
+						  unsigned long address,
+						  unsigned int flags)
+{
+	return VM_FAULT_RETRY;
+}
+#endif /* CONFIG_SPECULATIVE_PAGE_FAULT */
+
 extern int fixup_user_fault(struct task_struct *tsk, struct mm_struct *mm,
 			    unsigned long address, unsigned int fault_flags,
 			    bool *unlocked);
