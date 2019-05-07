@@ -111,6 +111,8 @@ struct cros_ec_sensors_ts_filter_state {
 	s64 median_error;
 };
 
+#define FUTURE_TS_ANALYTICS_COUNT_MAX 100
+
 /* State data for ec_sensors iio driver. */
 struct cros_ec_sensors_ring_state {
 	/* Shared by all sensors */
@@ -144,6 +146,16 @@ struct cros_ec_sensors_ring_state {
 	 * Set either by feature bits coming from the EC or userspace.
 	 */
 	bool tight_timestamps;
+
+	/*
+	 * Statistics used to compute shaved time. This occures when
+	 * timestamp interpolation from EC time to AP time accidentally
+	 * puts timestamps in the future. These timestamps are clamped
+	 * to `now` and these count/total_ns maintain the statistics for
+	 * how much time was removed in a given period..
+	 */
+	s32 future_timestamp_count;
+	s64 future_timestamp_total_ns;
 };
 
 static ssize_t cros_ec_ring_attr_tight_timestamps_show(
@@ -457,6 +469,7 @@ static bool cros_ec_ring_process_event(
 	/* Do not populate the filter based on asynchronous events. */
 	const int async_flags = in->flags &
 		(MOTIONSENSE_SENSOR_FLAG_ODR | MOTIONSENSE_SENSOR_FLAG_FLUSH);
+	const s64 now = cros_ec_get_time_ns();
 
 	if (in->flags & MOTIONSENSE_SENSOR_FLAG_TIMESTAMP && !async_flags) {
 		s64 a = in->timestamp;
@@ -470,7 +483,6 @@ static bool cros_ec_ring_process_event(
 			cros_ec_ring_ts_filter_update(&state->filter, b, c);
 			*current_timestamp =
 				cros_ec_ring_ts_filter(&state->filter, a);
-
 		} else {
 			s64 new_timestamp;
 			/*
@@ -514,7 +526,26 @@ static bool cros_ec_ring_process_event(
 
 	/* Regular sample */
 	out->sensor_id = in->sensor_num;
-	out->timestamp = *current_timestamp;
+	if (*current_timestamp - now > 0) {
+		/*
+		 * This fix is needed to overcome the timestamp filter putting
+		 * events in the future.
+		 */
+		state->future_timestamp_total_ns += *current_timestamp - now;
+		if (++state->future_timestamp_count ==
+				FUTURE_TS_ANALYTICS_COUNT_MAX) {
+			s64 avg = div_s64(state->future_timestamp_total_ns,
+					state->future_timestamp_count);
+			dev_warn(&state->core.indio_dev->dev,
+					"100 timestamps in the future, %lldns shaved on average\n",
+					avg);
+			state->future_timestamp_count = 0;
+			state->future_timestamp_total_ns = 0;
+		}
+		out->timestamp = now;
+	} else {
+		out->timestamp = *current_timestamp;
+	}
 	out->flag = in->flags;
 	for (axis = CROS_EC_SENSOR_X; axis < CROS_EC_SENSOR_MAX_AXIS; axis++)
 		out->vector[axis] = in->data[axis];
