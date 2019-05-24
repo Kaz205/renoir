@@ -1185,9 +1185,14 @@ static void gen6_pm_rps_work(struct work_struct *work)
 
 	/* Make sure we didn't queue anything we're not going to process. */
 	WARN_ON(pm_iir & ~dev_priv->pm_rps_events);
+	/*
+	 * FIXME: This is temporary change to improve power consumption
+	 * in hangouts use case. (See: b/130638275)
+	 */
+	/*
 	if ((pm_iir & dev_priv->pm_rps_events) == 0 && !client_boost)
 		goto out;
-
+	*/
 	mutex_lock(&rps->lock);
 
 	pm_iir |= vlv_wa_c0_ei(dev_priv, pm_iir);
@@ -1256,7 +1261,6 @@ static void gen6_pm_rps_work(struct work_struct *work)
 
 	mutex_unlock(&rps->lock);
 
-out:
 	/* Make sure not to corrupt PMIMR state used by ringbuffer on GEN6 */
 	spin_lock_irq(&gt->irq_lock);
 	if (rps->interrupts_enabled)
