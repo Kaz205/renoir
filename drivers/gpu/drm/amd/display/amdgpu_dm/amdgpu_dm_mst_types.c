@@ -123,21 +123,6 @@ static ssize_t dm_dp_aux_transfer(struct drm_dp_aux *aux,
 	return result;
 }
 
-static enum drm_connector_status
-dm_dp_mst_detect(struct drm_connector *connector, bool force)
-{
-	struct amdgpu_dm_connector *aconnector = to_amdgpu_dm_connector(connector);
-	struct amdgpu_dm_connector *master = aconnector->mst_port;
-
-	enum drm_connector_status status =
-		drm_dp_mst_detect_port(
-			connector,
-			&master->mst_mgr,
-			aconnector->port);
-
-	return status;
-}
-
 static void
 dm_dp_mst_connector_destroy(struct drm_connector *connector)
 {
@@ -177,7 +162,6 @@ amdgpu_dm_mst_connector_early_unregister(struct drm_connector *connector)
 }
 
 static const struct drm_connector_funcs dm_dp_mst_connector_funcs = {
-	.detect = dm_dp_mst_detect,
 	.fill_modes = drm_helper_probe_single_connector_modes,
 	.destroy = dm_dp_mst_connector_destroy,
 	.reset = amdgpu_dm_connector_funcs_reset,
@@ -283,11 +267,23 @@ static int dm_dp_mst_atomic_check(struct drm_connector *connector,
 						mst_port);
 }
 
+static int
+dm_dp_mst_detect(struct drm_connector *connector,
+		 struct drm_modeset_acquire_ctx *ctx, bool force)
+{
+	struct amdgpu_dm_connector *aconnector = to_amdgpu_dm_connector(connector);
+	struct amdgpu_dm_connector *master = aconnector->mst_port;
+
+	return drm_dp_mst_detect_port(connector, ctx, &master->mst_mgr,
+				      aconnector->port);
+}
+
 static const struct drm_connector_helper_funcs dm_dp_mst_connector_helper_funcs = {
 	.get_modes = dm_dp_mst_get_modes,
 	.mode_valid = amdgpu_dm_connector_mode_valid,
 	.atomic_best_encoder = dm_mst_atomic_best_encoder,
 	.atomic_check = dm_dp_mst_atomic_check,
+	.detect_ctx = dm_dp_mst_detect,
 };
 
 static void amdgpu_dm_encoder_destroy(struct drm_encoder *encoder)
