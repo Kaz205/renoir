@@ -84,5 +84,4 @@ config PREEMPTION
 config SCHED_CORE
 	bool
 	default y
-	depends on SCHED_SMT
-
+	depends on SCHED_SMT && FAIR_GROUP_SCHED
