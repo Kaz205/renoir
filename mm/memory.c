@@ -2315,7 +2315,7 @@ static inline int pte_unmap_same(struct vm_fault *vmf)
 {
 	int ret = 0;
 
-#if defined(CONFIG_SMP) || defined(CONFIG_PREEMPT)
+#if defined(CONFIG_SMP) || defined(CONFIG_PREEMPTION)
 	if (sizeof(pte_t) > sizeof(unsigned long)) {
 		if (pte_spinlock(vmf)) {
 			if (!pte_same(*vmf->pte, vmf->orig_pte))
