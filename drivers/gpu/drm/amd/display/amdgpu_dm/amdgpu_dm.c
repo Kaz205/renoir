@@ -4674,7 +4674,7 @@ static int dm_encoder_helper_atomic_check(struct drm_encoder *encoder,
 		color_depth = convert_color_depth_from_display_info(connector, conn_state);
 		bpp = convert_dc_color_depth_into_bpc(color_depth) * 3;
 		clock = adjusted_mode->clock;
-		dm_new_connector_state->pbn = drm_dp_calc_pbn_mode(clock, bpp);
+		dm_new_connector_state->pbn = drm_dp_calc_pbn_mode(clock, bpp, false);
 	}
 	dm_new_connector_state->vcpi_slots = drm_dp_atomic_find_vcpi_slots(state,
 									   mst_mgr,
