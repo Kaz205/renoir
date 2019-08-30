@@ -102,6 +102,11 @@ struct virtio_gpu_object {
 #define gem_to_virtio_gpu_obj(gobj) \
 	container_of((gobj), struct virtio_gpu_object, gem_base)
 
+struct virtio_gpu_vq_cb_target {
+	struct virtio_gpu_object *obj;
+	struct list_head next;
+};
+
 struct virtio_gpu_vbuffer;
 struct virtio_gpu_device;
 
@@ -226,6 +231,10 @@ struct virtio_gpu_device {
 
 	struct work_struct config_changed_work;
 
+	struct work_struct obj_free_work;
+	spinlock_t obj_free_lock;
+	struct list_head obj_free_list;
+
 	struct virtio_gpu_drv_capset *capsets;
 	uint32_t num_capsets;
 	struct list_head cap_cache;
@@ -281,6 +290,10 @@ int virtio_gpu_mode_dumb_create(struct drm_file *file_priv,
 int virtio_gpu_mode_dumb_mmap(struct drm_file *file_priv,
 			      struct drm_device *dev,
 			      uint32_t handle, uint64_t *offset_p);
+
+void virtio_gpu_gem_object_put_free_delayed(struct virtio_gpu_device *vgdev,
+					    struct virtio_gpu_vq_cb_target *t);
+void virtio_gpu_gem_object_put_free_work(struct work_struct *work);
 
 /* virtio vg */
 int virtio_gpu_alloc_vbufs(struct virtio_gpu_device *vgdev);
