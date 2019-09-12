@@ -384,12 +384,6 @@ static struct snd_soc_pcm_runtime *soc_new_pcm_runtime(
 	if (!rtd)
 		return NULL;
 
-	INIT_LIST_HEAD(&rtd->component_list);
-	rtd->card = card;
-	rtd->dai_link = dai_link;
-	if (!rtd->dai_link->ops)
-		rtd->dai_link->ops = &null_snd_soc_ops;
-
 	rtd->codec_dais = kcalloc(dai_link->num_codecs,
 					sizeof(struct snd_soc_dai *),
 					GFP_KERNEL);
@@ -397,6 +391,12 @@ static struct snd_soc_pcm_runtime *soc_new_pcm_runtime(
 		kfree(rtd);
 		return NULL;
 	}
+
+	INIT_LIST_HEAD(&rtd->component_list);
+	rtd->card = card;
+	rtd->dai_link = dai_link;
+	if (!rtd->dai_link->ops)
+		rtd->dai_link->ops = &null_snd_soc_ops;
 
 	/* see for_each_card_rtds */
 	list_add_tail(&rtd->list, &card->rtd_list);
