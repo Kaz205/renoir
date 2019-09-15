@@ -1445,6 +1445,11 @@ void intel_engine_dump(struct intel_engine_cs *engine,
 		}
 
 		print_request_ring(m, rq);
+
+		if (rq->hw_context->lrc_reg_state) {
+			drm_printf(m, "Logical Ring Context:\n");
+			hexdump(m, rq->hw_context->lrc_reg_state, PAGE_SIZE);
+		}
 	}
 	spin_unlock_irqrestore(&engine->active.lock, flags);
 
