@@ -51,6 +51,8 @@ enum {
  * @read_ec_sensors_data:	function used for accessing sensors values
  * @curr_sampl_freq:		current sampling period
  * @fifo_max_event_count:	Size of the EC sensor FIFO
+ * @frequencies:		Table of known available frequencies:
+ *				0, Min and Max in mHz.
  */
 struct cros_ec_sensors_core_state {
 	struct cros_ec_device *ec;
@@ -76,9 +78,7 @@ struct cros_ec_sensors_core_state {
 
 	int curr_sampl_freq;
 	u32 fifo_max_event_count;
-
-	/* Table of known available frequencies : 0, Min and Max in mHz */
-	int frequencies[3];
+	int frequencies[6];
 };
 
 /**
