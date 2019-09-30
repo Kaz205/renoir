@@ -151,6 +151,7 @@ extern int amdgpu_prim_buf_per_se;
 extern int amdgpu_pos_buf_per_se;
 extern int amdgpu_cntl_sb_buf_per_se;
 extern int amdgpu_param_buf_per_se;
+extern uint amdgpu_force_long_training;
 extern int amdgpu_job_hang_limit;
 extern int amdgpu_lbpw;
 extern int amdgpu_compute_multipipe;
