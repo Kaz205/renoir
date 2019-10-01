@@ -1579,7 +1579,7 @@ static void connector_bad_edid(struct drm_connector *connector,
 	connector->real_edid_checksum =
 		drm_edid_block_checksum(edid + num_of_ext * EDID_LENGTH);
 
-	if (connector->bad_edid_counter++ && !(drm_debug & DRM_UT_KMS))
+	if (connector->bad_edid_counter++ && !drm_debug_enabled(DRM_UT_KMS))
 		return;
 
 	dev_warn(connector->dev->dev,
