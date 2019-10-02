@@ -382,7 +382,6 @@ static void soc_free_pcm_runtime(struct snd_soc_pcm_runtime *rtd)
 	if (!rtd)
 		return;
 
-	kfree(rtd->codec_dais);
 	list_del(&rtd->list);
 
 	/*
@@ -396,7 +395,6 @@ static void soc_free_pcm_runtime(struct snd_soc_pcm_runtime *rtd)
 	 *	soc_new_pcm_runtime()
 	 */
 	device_unregister(rtd->dev);
-	kfree(rtd);
 }
 
 static struct snd_soc_pcm_runtime *soc_new_pcm_runtime(
@@ -428,7 +426,7 @@ static struct snd_soc_pcm_runtime *soc_new_pcm_runtime(
 	/*
 	 * for rtd
 	 */
-	rtd = kzalloc(sizeof(struct snd_soc_pcm_runtime), GFP_KERNEL);
+	rtd = devm_kzalloc(dev, sizeof(*rtd), GFP_KERNEL);
 	if (!rtd)
 		goto free_rtd;
 
@@ -438,7 +436,7 @@ static struct snd_soc_pcm_runtime *soc_new_pcm_runtime(
 	/*
 	 * for rtd->codec_dais
 	 */
-	rtd->codec_dais = kcalloc(dai_link->num_codecs,
+	rtd->codec_dais = devm_kcalloc(dev, dai_link->num_codecs,
 					sizeof(struct snd_soc_dai *),
 					GFP_KERNEL);
 	if (!rtd->codec_dais)
