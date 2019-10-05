@@ -690,7 +690,7 @@ static bool is_same_edid(struct dc_edid *old_edid, struct dc_edid *new_edid)
 		       new_edid->raw_edid, new_edid->length) == 0);
 }
 
-bool wait_for_alt_mode(struct dc_link *link)
+static bool wait_for_alt_mode(struct dc_link *link)
 {
 	/**
 	 * something is terribly wrong if time out is > 200ms. (5Hz)
