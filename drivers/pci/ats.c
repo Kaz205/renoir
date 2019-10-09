@@ -69,7 +69,6 @@ int pci_enable_ats(struct pci_dev *dev, int ps)
 	dev->ats_enabled = 1;
 	return 0;
 }
-EXPORT_SYMBOL_GPL(pci_enable_ats);
 
 /**
  * pci_disable_ats - disable the ATS capability
@@ -88,7 +87,6 @@ void pci_disable_ats(struct pci_dev *dev)
 
 	dev->ats_enabled = 0;
 }
-EXPORT_SYMBOL_GPL(pci_disable_ats);
 
 void pci_restore_ats_state(struct pci_dev *dev)
 {
@@ -102,7 +100,6 @@ void pci_restore_ats_state(struct pci_dev *dev)
 		ctrl |= PCI_ATS_CTRL_STU(dev->ats_stu - PCI_ATS_MIN_STU);
 	pci_write_config_word(dev, dev->ats_cap + PCI_ATS_CTRL, ctrl);
 }
-EXPORT_SYMBOL_GPL(pci_restore_ats_state);
 
 /**
  * pci_ats_queue_depth - query the ATS Invalidate Queue Depth
@@ -129,7 +126,6 @@ int pci_ats_queue_depth(struct pci_dev *dev)
 	pci_read_config_word(dev, dev->ats_cap + PCI_ATS_CAP, &cap);
 	return PCI_ATS_CAP_QDEP(cap) ? PCI_ATS_CAP_QDEP(cap) : PCI_ATS_MAX_QDEP;
 }
-EXPORT_SYMBOL_GPL(pci_ats_queue_depth);
 
 /**
  * pci_ats_page_aligned - Return Page Aligned Request bit status.
@@ -156,7 +152,6 @@ int pci_ats_page_aligned(struct pci_dev *pdev)
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(pci_ats_page_aligned);
 
 #ifdef CONFIG_PCI_PRI
 void pci_pri_init(struct pci_dev *pdev)
@@ -209,7 +204,6 @@ int pci_enable_pri(struct pci_dev *pdev, u32 reqs)
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(pci_enable_pri);
 
 /**
  * pci_disable_pri - Disable PRI capability
@@ -262,7 +256,6 @@ void pci_restore_pri_state(struct pci_dev *pdev)
 	pci_write_config_dword(pdev, pri + PCI_PRI_ALLOC_REQ, reqs);
 	pci_write_config_word(pdev, pri + PCI_PRI_CTRL, control);
 }
-EXPORT_SYMBOL_GPL(pci_restore_pri_state);
 
 /**
  * pci_reset_pri - Resets device's PRI state
@@ -290,7 +283,6 @@ int pci_reset_pri(struct pci_dev *pdev)
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(pci_reset_pri);
 
 /**
  * pci_prg_resp_pasid_required - Return PRG Response PASID Required bit
@@ -318,7 +310,6 @@ int pci_prg_resp_pasid_required(struct pci_dev *pdev)
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(pci_prg_resp_pasid_required);
 #endif /* CONFIG_PCI_PRI */
 
 #ifdef CONFIG_PCI_PASID
@@ -376,7 +367,6 @@ int pci_enable_pasid(struct pci_dev *pdev, int features)
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(pci_enable_pasid);
 
 /**
  * pci_disable_pasid - Disable the PASID capability
@@ -401,7 +391,6 @@ void pci_disable_pasid(struct pci_dev *pdev)
 
 	pdev->pasid_enabled = 0;
 }
-EXPORT_SYMBOL_GPL(pci_disable_pasid);
 
 /**
  * pci_restore_pasid_state - Restore PASID capabilities
@@ -424,7 +413,6 @@ void pci_restore_pasid_state(struct pci_dev *pdev)
 	control = PCI_PASID_CTRL_ENABLE | pdev->pasid_features;
 	pci_write_config_word(pdev, pasid + PCI_PASID_CTRL, control);
 }
-EXPORT_SYMBOL_GPL(pci_restore_pasid_state);
 
 /**
  * pci_pasid_features - Check which PASID features are supported
@@ -454,7 +442,6 @@ int pci_pasid_features(struct pci_dev *pdev)
 
 	return supported;
 }
-EXPORT_SYMBOL_GPL(pci_pasid_features);
 
 #define PASID_NUMBER_SHIFT	8
 #define PASID_NUMBER_MASK	(0x1f << PASID_NUMBER_SHIFT)
@@ -483,5 +470,4 @@ int pci_max_pasids(struct pci_dev *pdev)
 
 	return (1 << supported);
 }
-EXPORT_SYMBOL_GPL(pci_max_pasids);
 #endif /* CONFIG_PCI_PASID */
