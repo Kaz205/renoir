@@ -517,6 +517,12 @@ static int pci_restore_standard_config(struct pci_dev *pci_dev)
 	return 0;
 }
 
+static void pci_pm_default_resume(struct pci_dev *pci_dev)
+{
+	pci_fixup_device(pci_fixup_resume, pci_dev);
+	pci_enable_wake(pci_dev, PCI_D0, false);
+}
+
 #endif
 
 #ifdef CONFIG_PM_SLEEP
@@ -644,12 +650,6 @@ static int pci_legacy_resume(struct device *dev)
 }
 
 /* Auxiliary functions used by the new power management framework */
-
-static void pci_pm_default_resume(struct pci_dev *pci_dev)
-{
-	pci_fixup_device(pci_fixup_resume, pci_dev);
-	pci_enable_wake(pci_dev, PCI_D0, false);
-}
 
 static void pci_pm_default_suspend(struct pci_dev *pci_dev)
 {
@@ -996,7 +996,6 @@ static int pci_pm_resume(struct device *dev)
 #endif /* !CONFIG_SUSPEND */
 
 #ifdef CONFIG_HIBERNATE_CALLBACKS
-
 
 /*
  * pcibios_pm_ops - provide arch-specific hooks when a PCI device is doing
@@ -1351,8 +1350,7 @@ static int pci_pm_runtime_resume(struct device *dev)
 		return 0;
 
 	pci_fixup_device(pci_fixup_resume_early, pci_dev);
-	pci_enable_wake(pci_dev, PCI_D0, false);
-	pci_fixup_device(pci_fixup_resume, pci_dev);
+	pci_pm_default_resume(pci_dev);
 
 	if (prev_state == PCI_D3cold)
 		pci_bridge_wait_for_secondary_bus(pci_dev);
