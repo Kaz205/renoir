@@ -1433,22 +1433,6 @@ static inline ssize_t drm_dp_dpcd_writeb(struct drm_dp_aux *aux,
 int drm_dp_dpcd_read_link_status(struct drm_dp_aux *aux,
 				 u8 status[DP_LINK_STATUS_SIZE]);
 
-/*
- * DisplayPort link
- */
-#define DP_LINK_CAP_ENHANCED_FRAMING (1 << 0)
-
-struct drm_dp_link {
-	unsigned char revision;
-	unsigned int rate;
-	unsigned int num_lanes;
-	unsigned long capabilities;
-};
-
-int drm_dp_link_probe(struct drm_dp_aux *aux, struct drm_dp_link *link);
-int drm_dp_link_power_up(struct drm_dp_aux *aux, struct drm_dp_link *link);
-int drm_dp_link_power_down(struct drm_dp_aux *aux, struct drm_dp_link *link);
-int drm_dp_link_configure(struct drm_dp_aux *aux, struct drm_dp_link *link);
 bool drm_dp_send_real_edid_checksum(struct drm_dp_aux *aux,
 				    u8 real_edid_checksum);
 
