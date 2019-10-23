@@ -61,7 +61,7 @@ struct drm_printer;
 	param(char *, dmc_firmware_path, NULL) \
 	param(int, mmio_debug, -IS_ENABLED(CONFIG_DRM_I915_DEBUG_MMIO)) \
 	param(int, edp_vswing, 0) \
-	param(int, reset, 2) \
+	param(int, reset, 3) \
 	param(unsigned int, inject_load_failure, 0) \
 	param(int, fastboot, -1) \
 	/* CHROMIUM: Use VBT to determine whether to use AUX or PWM backlight control */ \
