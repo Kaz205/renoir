@@ -1120,7 +1120,7 @@ int intel_guc_submission_enable(struct intel_guc *guc)
 	enum intel_engine_id id;
 	int err;
 
-	err = i915_inject_load_error(gt->i915, -ENXIO);
+	err = i915_inject_probe_error(gt->i915, -ENXIO);
 	if (err)
 		return err;
 
