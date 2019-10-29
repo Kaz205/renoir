@@ -433,7 +433,7 @@ static int spi_nor_read_sr(struct spi_nor *nor)
 						    nor->bouncebuf, 1);
 	}
 
-	if (ret < 0) {
+	if (ret) {
 		pr_err("error %d reading SR\n", (int) ret);
 		return ret;
 	}
@@ -463,7 +463,7 @@ static int spi_nor_read_fsr(struct spi_nor *nor)
 						    nor->bouncebuf, 1);
 	}
 
-	if (ret < 0) {
+	if (ret) {
 		pr_err("error %d reading FSR\n", ret);
 		return ret;
 	}
@@ -493,7 +493,7 @@ static int spi_nor_read_cr(struct spi_nor *nor)
 						    nor->bouncebuf, 1);
 	}
 
-	if (ret < 0) {
+	if (ret) {
 		dev_err(nor->dev, "error %d reading CR\n", ret);
 		return ret;
 	}
@@ -750,7 +750,7 @@ static int s3an_sr_ready(struct spi_nor *nor)
 	int ret;
 
 	ret = spi_nor_xread_sr(nor, nor->bouncebuf);
-	if (ret < 0) {
+	if (ret) {
 		dev_err(nor->dev, "error %d reading XRDSR\n", (int) ret);
 		return ret;
 	}
@@ -1715,7 +1715,7 @@ static int spi_nor_write_sr_cr(struct spi_nor *nor, u8 *sr_cr)
 						     sr_cr, 2);
 	}
 
-	if (ret < 0) {
+	if (ret) {
 		dev_err(nor->dev,
 			"error while writing configuration register\n");
 		return -EINVAL;
@@ -1956,20 +1956,23 @@ static int sr2_bit7_quad_enable(struct spi_nor *nor)
 	spi_nor_write_enable(nor);
 
 	ret = spi_nor_write_sr2(nor, sr2);
-	if (ret < 0) {
+	if (ret) {
 		dev_err(nor->dev, "error while writing status register 2\n");
 		return -EINVAL;
 	}
 
 	ret = spi_nor_wait_till_ready(nor);
-	if (ret < 0) {
+	if (ret) {
 		dev_err(nor->dev, "timeout while writing status register 2\n");
 		return ret;
 	}
 
 	/* Read back and check it. */
 	ret = spi_nor_read_sr2(nor, sr2);
-	if (!(ret > 0 && (*sr2 & SR2_QUAD_EN_BIT7))) {
+	if (ret)
+		return ret;
+
+	if (!(*sr2 & SR2_QUAD_EN_BIT7)) {
 		dev_err(nor->dev, "SR2 Quad bit not set\n");
 		return -EINVAL;
 	}
@@ -2579,7 +2582,7 @@ static const struct flash_info *spi_nor_read_id(struct spi_nor *nor)
 		tmp = nor->controller_ops->read_reg(nor, SPINOR_OP_RDID, id,
 						    SPI_NOR_MAX_ID_LEN);
 	}
-	if (tmp < 0) {
+	if (tmp) {
 		dev_err(nor->dev, "error %d reading JEDEC ID\n", tmp);
 		return ERR_PTR(tmp);
 	}
@@ -2802,7 +2805,7 @@ static int s3an_nor_setup(struct spi_nor *nor,
 	int ret;
 
 	ret = spi_nor_xread_sr(nor, nor->bouncebuf);
-	if (ret < 0) {
+	if (ret) {
 		dev_err(nor->dev, "error %d reading XRDSR\n", (int) ret);
 		return ret;
 	}
