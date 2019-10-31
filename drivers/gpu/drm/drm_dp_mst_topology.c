@@ -32,7 +32,7 @@
 #include <linux/iopoll.h>
 
 #if IS_ENABLED(CONFIG_DRM_DEBUG_DP_MST_TOPOLOGY_REFS)
-#include <linux/stackdepot.h>
+#include <linux/stacktrace.h>
 #include <linux/sort.h>
 #include <linux/timekeeping.h>
 #include <linux/math64.h>
