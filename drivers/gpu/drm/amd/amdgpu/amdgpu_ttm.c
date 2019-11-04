@@ -1815,9 +1815,6 @@ void amdgpu_ttm_late_init(struct amdgpu_device *adev)
 	if (!adev->gmc.keep_stolen_vga_memory)
 		amdgpu_bo_free_kernel(&adev->gmc.stolen_vga_memory, NULL, NULL);
 	amdgpu_bo_free_kernel(&adev->gmc.stolen_extended_memory, NULL, NULL);
-
-	/* return the IP Discovery TMR memory back to VRAM */
-	amdgpu_bo_free_kernel(&adev->discovery_memory, NULL, NULL);
 }
 
 /**
@@ -1829,6 +1826,8 @@ void amdgpu_ttm_fini(struct amdgpu_device *adev)
 		return;
 
 	amdgpu_ttm_debugfs_fini(adev);
+	/* return the IP Discovery TMR memory back to VRAM */
+	amdgpu_bo_free_kernel(&adev->discovery_memory, NULL, NULL);
 	/* return the stolen vga memory back to VRAM */
 	if (adev->gmc.keep_stolen_vga_memory)
 		amdgpu_bo_free_kernel(&adev->gmc.stolen_vga_memory, NULL, NULL);
