@@ -1800,22 +1800,6 @@ void intel_ddi_set_pipe_settings(const struct intel_crtc_state *crtc_state)
 	I915_WRITE(TRANS_MSA_MISC(cpu_transcoder), temp);
 }
 
-void intel_ddi_set_vc_payload_alloc(const struct intel_crtc_state *crtc_state,
-				    bool state)
-{
-	struct intel_crtc *crtc = to_intel_crtc(crtc_state->base.crtc);
-	struct drm_i915_private *dev_priv = to_i915(crtc->base.dev);
-	enum transcoder cpu_transcoder = crtc_state->cpu_transcoder;
-	u32 temp;
-
-	temp = I915_READ(TRANS_DDI_FUNC_CTL(cpu_transcoder));
-	if (state == true)
-		temp |= TRANS_DDI_DP_VC_PAYLOAD_ALLOC;
-	else
-		temp &= ~TRANS_DDI_DP_VC_PAYLOAD_ALLOC;
-	I915_WRITE(TRANS_DDI_FUNC_CTL(cpu_transcoder), temp);
-}
-
 /*
  * Returns the TRANS_DDI_FUNC_CTL value based on CRTC state.
  *
@@ -1921,6 +1905,8 @@ void intel_ddi_enable_transcoder_func(const struct intel_crtc_state *crtc_state)
 	u32 temp;
 
 	temp = intel_ddi_transcoder_func_reg_val_get(crtc_state);
+	if (intel_crtc_has_type(crtc_state, INTEL_OUTPUT_DP_MST))
+		temp |= TRANS_DDI_DP_VC_PAYLOAD_ALLOC;
 	I915_WRITE(TRANS_DDI_FUNC_CTL(cpu_transcoder), temp);
 }
 
