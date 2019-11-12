@@ -722,7 +722,7 @@ static void io_req_link_next(struct io_kiocb *req, struct io_kiocb **nxtptr)
 		 * If we're in async work, we can continue processing the chain
 		 * in this context instead of having to queue up new async work.
 		 */
-		if (nxtptr && current_work())
+		if (nxtptr && io_wq_current_is_worker())
 			*nxtptr = nxt;
 		else
 			io_queue_async_work(req->ctx, nxt);
