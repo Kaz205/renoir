@@ -213,7 +213,8 @@ static inline struct cpuidle_device *cpuidle_get_device(void) {return NULL; }
 
 #ifdef CONFIG_CPU_IDLE
 extern int cpuidle_find_deepest_state(struct cpuidle_driver *drv,
-				      struct cpuidle_device *dev);
+				      struct cpuidle_device *dev,
+				      u64 latency_limit_ns);
 extern int cpuidle_enter_s2idle(struct cpuidle_driver *drv,
 				struct cpuidle_device *dev);
 extern void cpuidle_use_deepest_state(u64 latency_limit_ns);
@@ -221,7 +222,8 @@ extern void cpuidle_prepare_freeze(void);
 extern int cpuidle_complete_freeze(void);
 #else
 static inline int cpuidle_find_deepest_state(struct cpuidle_driver *drv,
-					     struct cpuidle_device *dev)
+					     struct cpuidle_device *dev,
+					     u64 latency_limit_ns)
 {return -ENODEV; }
 static inline int cpuidle_enter_s2idle(struct cpuidle_driver *drv,
 				       struct cpuidle_device *dev)
