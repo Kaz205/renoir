@@ -33,6 +33,7 @@ struct adsp_data {
 	const char *firmware_name;
 	int pas_id;
 	bool has_aggre2_clk;
+	bool auto_boot;
 
 	char **active_pd_names;
 	char **proxy_pd_names;
@@ -396,6 +397,8 @@ static int adsp_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
+	rproc->auto_boot = desc->auto_boot;
+
 	adsp = (struct qcom_adsp *)rproc->priv;
 	adsp->dev = &pdev->dev;
 	adsp->rproc = rproc;
@@ -479,6 +482,7 @@ static const struct adsp_data adsp_resource_init = {
 		.firmware_name = "adsp.mdt",
 		.pas_id = 1,
 		.has_aggre2_clk = false,
+		.auto_boot = true,
 		.ssr_name = "lpass",
 		.sysmon_name = "adsp",
 		.ssctl_id = 0x14,
@@ -489,6 +493,7 @@ static const struct adsp_data sm8150_adsp_resource = {
 		.firmware_name = "adsp.mdt",
 		.pas_id = 1,
 		.has_aggre2_clk = false,
+		.auto_boot = true,
 		.active_pd_names = (char*[]){
 			"load_state",
 			NULL
@@ -507,6 +512,7 @@ static const struct adsp_data cdsp_resource_init = {
 	.firmware_name = "cdsp.mdt",
 	.pas_id = 18,
 	.has_aggre2_clk = false,
+	.auto_boot = true,
 	.ssr_name = "cdsp",
 	.sysmon_name = "cdsp",
 	.ssctl_id = 0x17,
@@ -517,6 +523,7 @@ static const struct adsp_data sm8150_cdsp_resource = {
 	.firmware_name = "cdsp.mdt",
 	.pas_id = 18,
 	.has_aggre2_clk = false,
+	.auto_boot = true,
 	.active_pd_names = (char*[]){
 		"load_state",
 		NULL
@@ -535,6 +542,7 @@ static const struct adsp_data mpss_resource_init = {
 	.firmware_name = "modem.mdt",
 	.pas_id = 4,
 	.has_aggre2_clk = false,
+	.auto_boot = false,
 	.active_pd_names = (char*[]){
 		"load_state",
 		NULL
@@ -554,6 +562,7 @@ static const struct adsp_data slpi_resource_init = {
 		.firmware_name = "slpi.mdt",
 		.pas_id = 12,
 		.has_aggre2_clk = true,
+		.auto_boot = true,
 		.ssr_name = "dsps",
 		.sysmon_name = "slpi",
 		.ssctl_id = 0x16,
@@ -564,6 +573,7 @@ static const struct adsp_data sm8150_slpi_resource = {
 		.firmware_name = "slpi.mdt",
 		.pas_id = 12,
 		.has_aggre2_clk = false,
+		.auto_boot = true,
 		.active_pd_names = (char*[]){
 			"load_state",
 			NULL
@@ -582,6 +592,7 @@ static const struct adsp_data wcss_resource_init = {
 	.crash_reason_smem = 421,
 	.firmware_name = "wcnss.mdt",
 	.pas_id = 6,
+	.auto_boot = true,
 	.ssr_name = "mpss",
 	.sysmon_name = "wcnss",
 	.ssctl_id = 0x12,
