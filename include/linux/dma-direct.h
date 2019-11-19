@@ -55,14 +55,15 @@ static inline phys_addr_t dma_to_phys(struct device *dev, dma_addr_t daddr)
 	return __sme_clr(__dma_to_phys(dev, daddr));
 }
 
-static inline bool dma_capable(struct device *dev, dma_addr_t addr, size_t size)
+static inline bool dma_capable(struct device *dev, dma_addr_t addr, size_t size,
+		bool is_ram)
 {
 	dma_addr_t end = addr + size - 1;
 
 	if (!dev->dma_mask)
 		return false;
 
-	if (!IS_ENABLED(CONFIG_ARCH_DMA_ADDR_T_64BIT) &&
+	if (is_ram && !IS_ENABLED(CONFIG_ARCH_DMA_ADDR_T_64BIT) &&
 	    min(addr, end) < phys_to_dma(dev, PFN_PHYS(min_low_pfn)))
 		return false;
 
@@ -157,7 +158,7 @@ static inline bool dma_direct_possible(struct device *dev, dma_addr_t dma_addr,
 		size_t size)
 {
 	return swiotlb_force != SWIOTLB_FORCE &&
-		dma_capable(dev, dma_addr, size);
+		dma_capable(dev, dma_addr, size, true);
 }
 
 static inline void report_addr(struct device *dev, dma_addr_t dma_addr,
