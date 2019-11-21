@@ -45,15 +45,14 @@ u64 dma_direct_get_required_mask(struct device *dev)
 }
 
 static gfp_t __dma_direct_optimal_gfp_mask(struct device *dev, u64 dma_mask,
-		u64 *phys_mask)
+		u64 *phys_limit)
 {
-	if (dev->bus_dma_mask && dev->bus_dma_mask < dma_mask)
-		dma_mask = dev->bus_dma_mask;
+	u64 dma_limit = min_not_zero(dma_mask, dev->bus_dma_limit);
 
 	if (force_dma_unencrypted(dev))
-		*phys_mask = __dma_to_phys(dev, dma_mask);
+		*phys_limit = __dma_to_phys(dev, dma_limit);
 	else
-		*phys_mask = dma_to_phys(dev, dma_mask);
+		*phys_limit = dma_to_phys(dev, dma_limit);
 
 	/*
 	 * Optimistically try the zone that the physical address mask falls
@@ -63,9 +62,9 @@ static gfp_t __dma_direct_optimal_gfp_mask(struct device *dev, u64 dma_mask,
 	 * Note that GFP_DMA32 and GFP_DMA are no ops without the corresponding
 	 * zones.
 	 */
-	if (*phys_mask <= DMA_BIT_MASK(ARCH_ZONE_DMA_BITS))
+	if (*phys_limit <= DMA_BIT_MASK(ARCH_ZONE_DMA_BITS))
 		return GFP_DMA;
-	if (*phys_mask <= DMA_BIT_MASK(32))
+	if (*phys_limit <= DMA_BIT_MASK(32))
 		return GFP_DMA32;
 	return 0;
 }
@@ -73,7 +72,7 @@ static gfp_t __dma_direct_optimal_gfp_mask(struct device *dev, u64 dma_mask,
 static bool dma_coherent_ok(struct device *dev, phys_addr_t phys, size_t size)
 {
 	return phys_to_dma_direct(dev, phys) + size - 1 <=
-			min_not_zero(dev->coherent_dma_mask, dev->bus_dma_mask);
+			min_not_zero(dev->coherent_dma_mask, dev->bus_dma_limit);
 }
 
 static void __dma_direct_free_pages(struct device *dev, struct page *page, size_t size)
@@ -90,7 +89,7 @@ static struct page *__dma_direct_alloc_pages(struct device *dev, size_t size,
 {
 	int node = dev_to_node(dev);
 	struct page *page = NULL;
-	u64 phys_mask;
+	u64 phys_limit;
 
 	WARN_ON_ONCE(!PAGE_ALIGNED(size));
 
@@ -106,7 +105,7 @@ static struct page *__dma_direct_alloc_pages(struct device *dev, size_t size,
 	/* we always manually zero the memory once we are done: */
 	gfp &= ~__GFP_ZERO;
 	gfp |= __dma_direct_optimal_gfp_mask(dev, dev->coherent_dma_mask,
-			&phys_mask);
+			&phys_limit);
 	page = dma_alloc_contiguous(dev, size, gfp);
 	if (page && !dma_coherent_ok(dev, page_to_phys(page), size)) {
 		dma_free_contiguous(dev, page, size);
@@ -120,7 +119,7 @@ again:
 		page = NULL;
 
 		if (IS_ENABLED(CONFIG_ZONE_DMA32) &&
-		    phys_mask < DMA_BIT_MASK(64) &&
+		    phys_limit < DMA_BIT_MASK(64) &&
 		    !(gfp & (GFP_DMA32 | GFP_DMA))) {
 			gfp |= GFP_DMA32;
 			goto again;
