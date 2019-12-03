@@ -106,6 +106,11 @@ static const u16 mgmt_commands[] = {
 	MGMT_OP_START_LIMITED_DISCOVERY,
 	MGMT_OP_READ_EXT_INFO,
 	MGMT_OP_SET_APPEARANCE,
+	MGMT_OP_SET_ADVERTISING_INTERVALS,
+	MGMT_OP_SET_EVENT_MASK,
+	MGMT_OP_SET_BLOCKED_LTKS,
+	MGMT_OP_READ_SUPPORTED_CAPABILITIES,
+	MGMT_OP_SET_KERNEL_DEBUG,
 };
 
 static const u16 mgmt_events[] = {
@@ -769,6 +774,7 @@ static u32 get_supported_settings(struct hci_dev *hdev)
 		settings |= MGMT_SETTING_SECURE_CONN;
 		settings |= MGMT_SETTING_PRIVACY;
 		settings |= MGMT_SETTING_STATIC_ADDRESS;
+		settings |= MGMT_SETTING_ADVERTISING_INTERVALS;
 	}
 
 	if (test_bit(HCI_QUIRK_EXTERNAL_CONFIG, &hdev->quirks) ||
@@ -844,6 +850,9 @@ static u32 get_current_settings(struct hci_dev *hdev)
 		if (bacmp(&hdev->static_addr, BDADDR_ANY))
 			settings |= MGMT_SETTING_STATIC_ADDRESS;
 	}
+
+	if (hci_dev_test_flag(hdev, HCI_ADVERTISING_INTERVALS))
+		settings |= MGMT_SETTING_ADVERTISING_INTERVALS;
 
 	return settings;
 }
@@ -1135,8 +1144,7 @@ static int clean_up_hci_state(struct hci_dev *hdev)
 
 	hci_req_clear_adv_instance(hdev, NULL, NULL, 0x00, false);
 
-	if (hci_dev_test_flag(hdev, HCI_LE_ADV))
-		__hci_req_disable_advertising(&req);
+	__hci_req_disable_advertising(&req);
 
 	discov_stopped = hci_req_stop_discovery(&req);
 
@@ -1144,6 +1152,22 @@ static int clean_up_hci_state(struct hci_dev *hdev)
 		/* 0x15 == Terminated due to Power Off */
 		__hci_abort_conn(&req, conn, 0x15);
 	}
+
+	/* When there are no bluetooth activities, i.e., no advertising,
+	 * no scanning, and no connections, the only command built into
+	 * the request would be a conditional HCI command to disable
+	 * advertising. Since the advertising is already off, the command
+	 * is skipped at run time. This leads to an issue that there is
+	 * no command complete event and thus the clean_up_hci_complete()
+	 * callback below is not invoked. This ends up with a 5-second delay
+	 * in setting power off.
+	 * It is important to add this dummy HCI command at the end of the
+	 * request to ensure that the last command in the request would
+	 * definitely be executed. As a result, the clean_up_hci_complete()
+	 * callback would be executed which in turn starts the power off
+	 * procedure immediately.
+	 */
+	hci_req_add(&req, HCI_OP_READ_LOCAL_NAME, 0, NULL);
 
 	err = hci_req_run(&req, clean_up_hci_complete);
 	if (!err && discov_stopped)
@@ -1954,9 +1978,7 @@ static int set_le(struct sock *sk, struct hci_dev *hdev, void *data, u16 len)
 		hci_cp.le = val;
 		hci_cp.simul = 0x00;
 	} else {
-		if (hci_dev_test_flag(hdev, HCI_LE_ADV))
-			__hci_req_disable_advertising(&req);
-
+		__hci_req_disable_advertising(&req);
 		if (ext_adv_capable(hdev))
 			__hci_req_clear_ext_adv_sets(&req);
 	}
@@ -3889,7 +3911,7 @@ static int start_discovery_internal(struct sock *sk, struct hci_dev *hdev,
 	cmd->cmd_complete = generic_cmd_complete;
 
 	hci_discovery_set_state(hdev, DISCOVERY_STARTING);
-	queue_work(hdev->req_workqueue, &hdev->discov_update);
+	queue_work(hdev->req_workqueue, &hdev->start_discov_update);
 	err = 0;
 
 failed:
@@ -4012,7 +4034,7 @@ static int start_service_discovery(struct sock *sk, struct hci_dev *hdev,
 	}
 
 	hci_discovery_set_state(hdev, DISCOVERY_STARTING);
-	queue_work(hdev->req_workqueue, &hdev->discov_update);
+	queue_work(hdev->req_workqueue, &hdev->start_discov_update);
 	err = 0;
 
 failed:
@@ -4071,7 +4093,7 @@ static int stop_discovery(struct sock *sk, struct hci_dev *hdev, void *data,
 	cmd->cmd_complete = generic_cmd_complete;
 
 	hci_discovery_set_state(hdev, DISCOVERY_STOPPING);
-	queue_work(hdev->req_workqueue, &hdev->discov_update);
+	queue_work(hdev->req_workqueue, &hdev->stop_discov_update);
 	err = 0;
 
 unlock:
@@ -4486,11 +4508,14 @@ static int set_scan_params(struct sock *sk, struct hci_dev *hdev,
 	err = mgmt_cmd_complete(sk, hdev->id, MGMT_OP_SET_SCAN_PARAMS, 0,
 				NULL, 0);
 
-	/* If background scan is running, restart it so new parameters are
+	/* If background scan is running (and not in progress of stopping
+	 * already), restart it so new parameters are
 	 * loaded.
 	 */
 	if (hci_dev_test_flag(hdev, HCI_LE_SCAN) &&
+	    !hci_dev_test_flag(hdev, HCI_LE_SCAN_CHANGE_IN_PROGRESS) &&
 	    hdev->discovery.state == DISCOVERY_STOPPED) {
+
 		struct hci_request req;
 
 		hci_req_init(&req, hdev);
@@ -4603,6 +4628,158 @@ unlock:
 	hci_dev_unlock(hdev);
 
 	return err;
+}
+
+static int set_advertising_intervals(struct sock *sk, struct hci_dev *hdev,
+				     void *data, u16 len)
+{
+	struct mgmt_cp_set_advertising_intervals *cp = data;
+	int err;
+	u16 max_interval_ms, grace_period;
+	/* If both min_interval and max_interval are 0, use default values. */
+	bool use_default = cp->min_interval == 0 && cp->max_interval == 0;
+	struct adv_info *adv_instance;
+	int instance;
+
+	BT_DBG("%s", hdev->name);
+
+	/* This method is intended for LE devices only.*/
+	if (!hci_dev_test_flag(hdev, HCI_LE_ENABLED))
+		return mgmt_cmd_status(sk, hdev->id,
+				       MGMT_OP_SET_ADVERTISING_INTERVALS,
+				       MGMT_STATUS_REJECTED);
+
+	/* Check the validity of the intervals. */
+	if (!use_default && (cp->min_interval < HCI_VALID_LE_ADV_MIN_INTERVAL ||
+			     cp->max_interval > HCI_VALID_LE_ADV_MAX_INTERVAL ||
+			     cp->min_interval > cp->max_interval)) {
+		return mgmt_cmd_status(sk, hdev->id,
+				       MGMT_OP_SET_ADVERTISING_INTERVALS,
+				       MGMT_STATUS_INVALID_PARAMS);
+	}
+
+	hci_dev_lock(hdev);
+
+	if (use_default) {
+		hci_dev_clear_flag(hdev, HCI_ADVERTISING_INTERVALS);
+		hdev->le_adv_min_interval = HCI_DEFAULT_LE_ADV_MIN_INTERVAL;
+		hdev->le_adv_max_interval = HCI_DEFAULT_LE_ADV_MAX_INTERVAL;
+		hdev->le_adv_duration = HCI_DEFAULT_ADV_DURATION;
+	} else {
+		hci_dev_set_flag(hdev, HCI_ADVERTISING_INTERVALS);
+		hdev->le_adv_min_interval = cp->min_interval;
+		hdev->le_adv_max_interval = cp->max_interval;
+
+		max_interval_ms = CONVERT_TO_ADV_INTERVAL_MS(cp->max_interval);
+		grace_period = ADV_DURATION_GRACE_PERIOD(max_interval_ms);
+		if (grace_period < ADV_DURATION_MIN_GRACE_PERIOD)
+			grace_period = ADV_DURATION_MIN_GRACE_PERIOD;
+		hdev->le_adv_duration = max_interval_ms + grace_period;
+	}
+	hdev->le_adv_param_changed = true;
+
+	/* hdev->le_adv_duration would be copied to adv instances created
+	 * hereafter. However, for any existing adv instance of which the
+	 * individual_duration_flag is false, we should modify its duration.
+	 */
+	for (instance = 1;  instance <= HCI_MAX_ADV_INSTANCES; instance++) {
+		adv_instance = hci_find_adv_instance(hdev, instance);
+		if (adv_instance && !adv_instance->individual_duration_flag)
+			adv_instance->duration = hdev->le_adv_duration;
+	}
+
+	/* If advertising is not enabled, the new parameters will take effect
+	 * when advertising is enabled.
+	 * If advertising has been enabled, the new parameters will take effect
+	 * when next adv instance is scheduled by
+	 * __hci_req_schedule_adv_instance().
+	 * Hence, it is ok to send settings response now.
+	 */
+	err = send_settings_rsp(sk, MGMT_OP_SET_ADVERTISING_INTERVALS, hdev);
+	new_settings(hdev, sk);
+
+	hci_dev_unlock(hdev);
+
+	return err;
+}
+
+static void set_event_mask_complete(struct hci_dev *hdev, u8 status, u16 opcode)
+{
+	struct mgmt_pending_cmd *cmd;
+
+	BT_DBG("status 0x%02x", status);
+
+	hci_dev_lock(hdev);
+
+	/* Saving of the new event mask is done in  */
+	cmd = pending_find_data(MGMT_OP_SET_EVENT_MASK, hdev, NULL);
+	if (!cmd)
+		goto unlock;
+
+	cmd->cmd_complete(cmd, mgmt_status(status));
+	mgmt_pending_remove(cmd);
+
+unlock:
+	hci_dev_unlock(hdev);
+}
+
+static int set_event_mask(struct sock *sk, struct hci_dev *hdev,
+			  void *data, u16 len)
+{
+	struct mgmt_cp_set_event_mask *cp = data;
+	struct mgmt_pending_cmd *cmd;
+	struct hci_request req;
+	u8 new_events[8], i;
+	int err;
+
+	BT_DBG("request for %s", hdev->name);
+
+	hci_dev_lock(hdev);
+
+	if (pending_find(MGMT_OP_SET_EVENT_MASK, hdev)) {
+		err = mgmt_cmd_complete(sk, hdev->id, MGMT_OP_SET_EVENT_MASK,
+					MGMT_STATUS_BUSY, NULL, 0);
+		goto failed;
+	}
+
+	cmd = mgmt_pending_add(sk, MGMT_OP_SET_EVENT_MASK, hdev, data, len);
+	if (!cmd) {
+		err = -ENOMEM;
+		goto failed;
+	}
+
+	cmd->cmd_complete = generic_cmd_complete;
+
+	hci_req_init(&req, hdev);
+	for (i = 0 ; i < HCI_SET_EVENT_MASK_SIZE; i++) {
+		/* Modify only bits that are requested by the stack */
+		new_events[i] = hdev->event_mask[i];
+		new_events[i] &= ~cp->mask[i];
+		new_events[i] |= cp->mask[i] & cp->events[i];
+	}
+
+	hci_req_add(&req, HCI_OP_SET_EVENT_MASK, sizeof(new_events),
+		    new_events);
+	err = hci_req_run(&req, set_event_mask_complete);
+	if (err < 0)
+		mgmt_pending_remove(cmd);
+
+failed:
+	hci_dev_unlock(hdev);
+	return err;
+}
+
+static int set_blocked_ltks(struct sock *sk, struct hci_dev *hdev,
+			    void *data, u16 len)
+{
+	struct mgmt_cp_set_blocked_ltks *cp = data;
+
+	hci_dev_lock(hdev);
+	memcpy(hdev->blocked_ltks, cp->ltks, sizeof(hdev->blocked_ltks));
+	hci_dev_unlock(hdev);
+
+	return mgmt_cmd_complete(sk, hdev->id, MGMT_OP_SET_BLOCKED_LTKS, 0,
+				 NULL, 0);
 }
 
 static void set_bredr_complete(struct hci_dev *hdev, u8 status, u16 opcode)
@@ -6522,12 +6699,24 @@ static void add_advertising_complete(struct hci_dev *hdev, u8 status,
 	cp = cmd->param;
 	rp.instance = cp->instance;
 
-	if (status)
+	if (status) {
 		mgmt_cmd_status(cmd->sk, cmd->index, cmd->opcode,
 				mgmt_status(status));
-	else
+		// Error codes from mgmt_status_table.
+		WARN_ONCE(status == 0x0c,
+			  "HCI error: Command Disallowed (%d)", status);
+		WARN_ONCE(status == 0x17,
+			  "HCI error: Repeated Attempts (%d)", status);
+		WARN_ONCE(status == 0x30,
+			  "HCI error: Role Switch Pending? (%d)", status);
+		WARN_ONCE(status == 0x35,
+			  "HCI error: Host Busy Pairing? (%d)", status);
+		WARN_ONCE(status == 0x37,
+			  "HCI error: Controller Busy? (%d)", status);
+	} else {
 		mgmt_cmd_complete(cmd->sk, cmd->index, cmd->opcode,
 				  mgmt_status(status), &rp, sizeof(rp));
+	}
 
 	mgmt_pending_remove(cmd);
 
@@ -6591,6 +6780,7 @@ static int add_advertising(struct sock *sk, struct hci_dev *hdev,
 	if (pending_find(MGMT_OP_ADD_ADVERTISING, hdev) ||
 	    pending_find(MGMT_OP_REMOVE_ADVERTISING, hdev) ||
 	    pending_find(MGMT_OP_SET_LE, hdev)) {
+		WARN_ONCE(1, "MGMT_OP_ADD_ADVERTISING error: pending command");
 		err = mgmt_cmd_status(sk, hdev->id, MGMT_OP_ADD_ADVERTISING,
 				      MGMT_STATUS_BUSY);
 		goto unlock;
@@ -6664,13 +6854,18 @@ static int add_advertising(struct sock *sk, struct hci_dev *hdev,
 
 	hci_req_init(&req, hdev);
 
+	hci_req_add(&req, HCI_OP_READ_LOCAL_NAME, 0, NULL);
+
 	err = __hci_req_schedule_adv_instance(&req, schedule_instance, true);
 
 	if (!err)
 		err = hci_req_run(&req, add_advertising_complete);
 
-	if (err < 0)
+	if (err < 0) {
+		err = mgmt_cmd_status(sk, hdev->id, MGMT_OP_ADD_ADVERTISING,
+				      MGMT_STATUS_FAILED);
 		mgmt_pending_remove(cmd);
+	}
 
 unlock:
 	hci_dev_unlock(hdev);
@@ -6731,6 +6926,8 @@ static int remove_advertising(struct sock *sk, struct hci_dev *hdev,
 	if (pending_find(MGMT_OP_ADD_ADVERTISING, hdev) ||
 	    pending_find(MGMT_OP_REMOVE_ADVERTISING, hdev) ||
 	    pending_find(MGMT_OP_SET_LE, hdev)) {
+		WARN_ONCE(1,
+			  "MGMT_OP_REMOVE_ADVERTISING error: pending command");
 		err = mgmt_cmd_status(sk, hdev->id, MGMT_OP_REMOVE_ADVERTISING,
 				      MGMT_STATUS_BUSY);
 		goto unlock;
@@ -6770,6 +6967,8 @@ static int remove_advertising(struct sock *sk, struct hci_dev *hdev,
 		err = -ENOMEM;
 		goto unlock;
 	}
+
+	hci_req_add(&req, HCI_OP_READ_LOCAL_NAME, 0, NULL);
 
 	err = hci_req_run(&req, remove_advertising_complete);
 	if (err < 0)
@@ -6818,6 +7017,32 @@ static int get_adv_size_info(struct sock *sk, struct hci_dev *hdev,
 				MGMT_STATUS_SUCCESS, &rp, sizeof(rp));
 
 	return err;
+}
+
+static int read_supported_capabilities(struct sock *sk, struct hci_dev *hdev,
+				       void *data, u16 data_len)
+{
+	struct mgmt_rp_read_supported_capabilities rp;
+	int err;
+
+	rp.wide_band_speech = hdev->wide_band_speech;
+
+	err = mgmt_cmd_complete(sk, hdev->id,
+				MGMT_OP_READ_SUPPORTED_CAPABILITIES,
+				MGMT_STATUS_SUCCESS, &rp, sizeof(rp));
+
+	return err;
+}
+
+static int set_kernel_debug(struct sock *sk, struct hci_dev *hdev,
+			    void *data, u16 data_len)
+{
+	struct mgmt_cp_set_kernel_debug *cp = data;
+
+	bt_set_debug(cp->enabled);
+
+	return mgmt_cmd_complete(sk, MGMT_INDEX_NONE, MGMT_OP_SET_KERNEL_DEBUG,
+				 MGMT_STATUS_SUCCESS, NULL, 0);
 }
 
 static const struct hci_mgmt_handler mgmt_handlers[] = {
@@ -6912,6 +7137,13 @@ static const struct hci_mgmt_handler mgmt_handlers[] = {
 	{ read_ext_controller_info,MGMT_READ_EXT_INFO_SIZE,
 						HCI_MGMT_UNTRUSTED },
 	{ set_appearance,	   MGMT_SET_APPEARANCE_SIZE },
+	{ set_advertising_intervals, MGMT_SET_ADVERTISING_INTERVALS_SIZE },
+	{ set_event_mask,	   MGMT_SET_EVENT_MASK_CP_SIZE },
+	{ set_blocked_ltks,	   MGMT_SET_BLOCKED_LTKS_CP_SIZE },
+	{ read_supported_capabilities, MGMT_READ_SUPPORTED_CAPABILITIES_SIZE },
+	{ set_kernel_debug,	   MGMT_SET_KERNEL_DEBUG_SIZE,
+						HCI_MGMT_NO_HDEV |
+						HCI_MGMT_UNTRUSTED },
 	{ get_phy_configuration,   MGMT_GET_PHY_CONFIGURATION_SIZE },
 	{ set_phy_configuration,   MGMT_SET_PHY_CONFIGURATION_SIZE },
 };
@@ -7807,6 +8039,7 @@ static bool is_filter_match(struct hci_dev *hdev, s8 rssi, u8 *eir,
 	 * scanning to ensure updated result with updated RSSI values.
 	 */
 	if (test_bit(HCI_QUIRK_STRICT_DUPLICATE_FILTER, &hdev->quirks)) {
+		BT_DBG("BT_DBG_DG: queue le_scan_restart: mgmt:restart_le_scan:is_filter_match\n");
 		restart_le_scan(hdev);
 
 		/* Validate RSSI value against the RSSI threshold once more. */

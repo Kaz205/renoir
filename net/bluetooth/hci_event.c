@@ -39,6 +39,12 @@
 #define ZERO_KEY "\x00\x00\x00\x00\x00\x00\x00\x00" \
 		 "\x00\x00\x00\x00\x00\x00\x00\x00"
 
+/* Minimum encryption key length, value adopted from BLE (7 bytes) */
+#define MIN_ENC_KEY_LEN 7
+
+/* Intel manufacturer ID  and specific events */
+#define MAUFACTURER_ID_INTEL      0x0002
+
 /* Handle HCI Event packets */
 
 static void hci_cc_inquiry_cancel(struct hci_dev *hdev, struct sk_buff *skb)
@@ -1169,7 +1175,8 @@ static void hci_cc_le_set_adv_enable(struct hci_dev *hdev, struct sk_buff *skb)
 	} else {
 		hci_dev_clear_flag(hdev, HCI_LE_ADV);
 	}
-
+	hci_dev_clear_flag(hdev, HCI_LE_ADV_CHANGE_IN_PROGRESS);
+	hdev->count_adv_change_in_progress--;
 	hci_dev_unlock(hdev);
 }
 
@@ -1286,6 +1293,8 @@ static void le_set_scan_enable_complete(struct hci_dev *hdev, u8 enable)
 {
 	hci_dev_lock(hdev);
 
+	hci_dev_clear_flag(hdev, HCI_LE_SCAN_CHANGE_IN_PROGRESS);
+	hdev->count_scan_change_in_progress--;
 	switch (enable) {
 	case LE_SCAN_ENABLE:
 		hci_dev_set_flag(hdev, HCI_LE_SCAN);
@@ -1741,6 +1750,37 @@ unlock:
 	hci_dev_unlock(hdev);
 }
 
+static void hci_cc_set_event_mask(struct hci_dev *hdev, struct sk_buff *skb)
+{
+	u8 status = *((u8 *)skb->data);
+	u8 *events;
+
+	BT_DBG("%s status 0x%2.2x", hdev->name, status);
+
+	if (status) {
+		BT_ERR("Set Event mask failed! status %d", status);
+		return;
+	}
+
+	hci_dev_lock(hdev);
+	events = hci_sent_cmd_data(hdev, HCI_OP_SET_EVENT_MASK);
+	if (events)
+		memcpy(hdev->event_mask, events, sizeof(hdev->event_mask));
+	else
+		BT_ERR("Set Event mask failed! events is NULL");
+
+	BT_DBG("Event mask byte 0: 0x%02x  byte 1: 0x%02x",
+	       hdev->event_mask[0], hdev->event_mask[1]);
+	BT_DBG("Event mask byte 2: 0x%02x  byte 3: 0x%02x",
+	       hdev->event_mask[2], hdev->event_mask[3]);
+	BT_DBG("Event mask byte 4: 0x%02x  byte 5: 0x%02x",
+	       hdev->event_mask[4], hdev->event_mask[5]);
+	BT_DBG("Event mask byte 6: 0x%02x  byte 7: 0x%02x",
+	       hdev->event_mask[6], hdev->event_mask[7]);
+
+	hci_dev_unlock(hdev);
+}
+
 static void hci_cc_write_ssp_debug_mode(struct hci_dev *hdev, struct sk_buff *skb)
 {
 	u8 status = *((u8 *) skb->data);
@@ -2191,6 +2231,7 @@ static void hci_cs_disconnect(struct hci_dev *hdev, u8 status)
 {
 	struct hci_cp_disconnect *cp;
 	struct hci_conn *conn;
+	u8 type;
 
 	if (!status)
 		return;
@@ -2202,9 +2243,29 @@ static void hci_cs_disconnect(struct hci_dev *hdev, u8 status)
 	hci_dev_lock(hdev);
 
 	conn = hci_conn_hash_lookup_handle(hdev, __le16_to_cpu(cp->handle));
-	if (conn)
+	if (conn) {
 		mgmt_disconnect_failed(hdev, &conn->dst, conn->type,
 				       conn->dst_type, status);
+
+		/* If the disconnection failed for any reason, the upper layer
+		 * does not retry to disconnect in current implementation.
+		 * Hence, we need to do some basic cleanup here.
+		 * TODO(b/72355862): Intel to fix the controller firmware.
+		 * The disconnect failure occurs sometimes on Intel 7265
+		 * controller as follows:
+		 *     > HCI Event: Command Status (0x0f) plen 4
+		 *         Disconnect (0x01|0x0006) ncmd 1
+		 *           Status: Unknown Connection Identifier (0x02)
+		 */
+		BT_DBG("Do some disconnect cleanup.");
+
+		type = conn->type;
+		hci_conn_del(conn);
+		if (type == LE_LINK)
+			hci_req_reenable_advertising(hdev);
+	} else {
+		BT_DBG("The connection handle cannot be found.");
+	}
 
 	hci_dev_unlock(hdev);
 }
@@ -2895,16 +2956,29 @@ static void read_enc_key_size_complete(struct hci_dev *hdev, u8 status,
 	if (!conn)
 		goto unlock;
 
-	/* If we fail to read the encryption key size, assume maximum
-	 * (which is the same we do also when this HCI command isn't
-	 * supported.
+	/* If we fail to read the encryption key size, abort the connection
+	 * since the encryption key entropy is not guaranteed to be large
+	 * enough.
 	 */
 	if (rp->status) {
 		bt_dev_err(hdev, "failed to read key size for handle %u",
 			   handle);
 		conn->enc_key_size = HCI_LINK_KEY_SIZE;
+#ifdef CONFIG_BT_ENFORCE_CLASSIC_SECURITY
+		WARN(1, "Read Encryption Key Size command failed, chip may not support this");
+		hci_disconnect(conn, HCI_ERROR_REMOTE_USER_TERM);
+		hci_conn_drop(conn);
+		goto unlock;
+#endif
 	} else {
 		conn->enc_key_size = rp->key_size;
+	}
+
+	if (conn->enc_key_size < MIN_ENC_KEY_LEN) {
+		WARN(1, "Dropping connection with weak encryption key length");
+		hci_disconnect(conn, HCI_ERROR_REMOTE_USER_TERM);
+		hci_conn_drop(conn);
+		goto unlock;
 	}
 
 	if (conn->state == BT_CONFIG) {
@@ -3014,7 +3088,14 @@ static void hci_encrypt_change_evt(struct hci_dev *hdev, struct sk_buff *skb)
 		if (hci_req_run_skb(&req, read_enc_key_size_complete)) {
 			bt_dev_err(hdev, "sending read key size failed");
 			conn->enc_key_size = HCI_LINK_KEY_SIZE;
+#ifdef CONFIG_BT_ENFORCE_CLASSIC_SECURITY
+			WARN(1, "Failed sending HCI Read Encryption Key Size, chip may not support this");
+			hci_disconnect(conn, HCI_ERROR_REMOTE_USER_TERM);
+			hci_conn_drop(conn);
+			goto unlock;
+#else
 			goto notify;
+#endif
 		}
 
 		goto unlock;
@@ -3462,6 +3543,10 @@ static void hci_cmd_complete_evt(struct hci_dev *hdev, struct sk_buff *skb,
 		hci_cc_le_set_adv_set_random_addr(hdev, skb);
 		break;
 
+	case HCI_OP_SET_EVENT_MASK:
+		hci_cc_set_event_mask(hdev, skb);
+		break;
+
 	default:
 		BT_DBG("%s opcode 0x%4.4x", hdev->name, *opcode);
 		break;
@@ -3767,6 +3852,49 @@ static void hci_num_comp_blocks_evt(struct hci_dev *hdev, struct sk_buff *skb)
 	}
 
 	queue_work(hdev->workqueue, &hdev->tx_work);
+}
+
+static void hci_vendor_evt(struct hci_dev *hdev, struct sk_buff *skb)
+{
+	u8 evt_id;
+	u16 i;
+	u8 *b;
+	char line[HCI_MAX_EVENT_SIZE * 3 + 1] = {0x00,};
+
+	if (hdev->manufacturer == MAUFACTURER_ID_INTEL) {
+		if (skb->len < 1)
+			return;
+
+		BT_INFO("Manufacturer ID 0x%04X:", hdev->manufacturer);
+
+		evt_id = *((u8 *)skb->data);
+		skb_pull(skb, sizeof(evt_id));
+
+		switch (evt_id) {
+		case HCI_EV_INTEL_BOOT_UP:
+		case HCI_EV_INTEL_FATAL_EXCEPTION:
+		case HCI_EV_INTEL_DEBUG_EXCEPTION:
+			if (skb->len < 1) {
+				BT_WARN("Evt ID:%02X", evt_id);
+				return;
+			}
+			b = (u8 *)skb->data;
+			for (i = 0; i < skb->len && i < HCI_MAX_EVENT_SIZE; ++i)
+				sprintf(line + strlen(line), " %02X", b[i]);
+			BT_WARN("Evt ID: %02X data:%s", evt_id, line);
+			break;
+		default:
+			if (skb->len < 1) {
+				BT_ERR("Unknown Evt ID:%02x", evt_id);
+				return;
+			}
+			b = (u8 *)skb->data;
+			for (i = 0; i < skb->len && i < HCI_MAX_EVENT_SIZE; ++i)
+				sprintf(line + strlen(line), " %02X", b[i]);
+			BT_ERR("Unknown Evt ID: %02X data:%s", evt_id, line);
+			break;
+		}
+	}
 }
 
 static void hci_mode_change_evt(struct hci_dev *hdev, struct sk_buff *skb)
@@ -4229,6 +4357,11 @@ static void hci_sync_conn_complete_evt(struct hci_dev *hdev,
 	default:
 		conn->state = BT_CLOSED;
 		break;
+	}
+
+	if (ev->air_mode == SCO_AIRMODE_TRANSP) {
+		if (hdev->notify)
+			hdev->notify(hdev, HCI_NOTIFY_AIR_MODE_TRANSP);
 	}
 
 	hci_connect_cfm(conn, ev->status);
@@ -5585,6 +5718,9 @@ static void hci_le_ltk_request_evt(struct hci_dev *hdev, struct sk_buff *skb)
 	if (!ltk)
 		goto not_found;
 
+	if (is_ltk_blocked(ltk, hdev))
+		goto not_found;
+
 	if (smp_ltk_is_sc(ltk)) {
 		/* With SC both EDiv and Rand are set to zero */
 		if (ev->ediv || ev->rand)
@@ -6027,6 +6163,10 @@ void hci_event_packet(struct hci_dev *hdev, struct sk_buff *skb)
 
 	case HCI_EV_NUM_COMP_BLOCKS:
 		hci_num_comp_blocks_evt(hdev, skb);
+		break;
+
+	case HCI_EV_VENDOR:
+		hci_vendor_evt(hdev, skb);
 		break;
 
 	default:
