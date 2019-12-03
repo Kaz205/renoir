@@ -23,6 +23,7 @@
 #include <linux/slab.h>
 #include <linux/mutex.h>
 #include <linux/spinlock.h>
+#include <linux/suspend.h>
 #include <linux/freezer.h>
 #include <linux/tpm_eventlog.h>
 
@@ -79,6 +80,11 @@ static ssize_t tpm_try_transmit(struct tpm_chip *chip, void *buf, size_t bufsiz)
 		dev_err(&chip->dev,
 			"invalid count value %x %zx\n", count, bufsiz);
 		return -E2BIG;
+	}
+
+	if (chip->is_suspended) {
+		dev_warn(&chip->dev, "blocking transmit while suspended\n");
+		return -EAGAIN;
 	}
 
 	rc = chip->ops->send(chip, buf, count);
@@ -394,7 +400,11 @@ int tpm_pm_suspend(struct device *dev)
 		return -ENODEV;
 
 	if (chip->flags & TPM_CHIP_FLAG_ALWAYS_POWERED)
-		return 0;
+		goto suspended;
+
+	if ((chip->flags & TPM_CHIP_FLAG_FIRMWARE_POWER_MANAGED) &&
+	    !pm_suspend_via_firmware())
+		goto suspended;
 
 	if (!tpm_chip_start(chip)) {
 		if (chip->flags & TPM_CHIP_FLAG_TPM2)
@@ -405,6 +415,10 @@ int tpm_pm_suspend(struct device *dev)
 		tpm_chip_stop(chip);
 	}
 
+	if (!rc)
+		chip->is_suspended = true;
+
+suspended:
 	return rc;
 }
 EXPORT_SYMBOL_GPL(tpm_pm_suspend);
@@ -420,6 +434,7 @@ int tpm_pm_resume(struct device *dev)
 	if (chip == NULL)
 		return -ENODEV;
 
+	chip->is_suspended = false;
 	return 0;
 }
 EXPORT_SYMBOL_GPL(tpm_pm_resume);
