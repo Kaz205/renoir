@@ -28,7 +28,6 @@
 #include <linux/iio/trigger_consumer.h>
 #include <linux/iio/sysfs.h>
 #include <linux/kernel.h>
-#include <linux/mfd/cros_ec.h>
 #include <linux/module.h>
 #include <linux/sort.h>
 #include <linux/slab.h>
