@@ -23,12 +23,55 @@
  */
 
 #include <drm/drm_prime.h>
-
+#include <linux/dma-buf.h>
 #include "virtgpu_drv.h"
 
 /* Empty Implementations as there should not be any other driver for a virtual
  * device that might share buffers with virtgpu
  */
+
+const struct dma_buf_ops virtgpu_dmabuf_ops =  {
+	.attach = drm_gem_map_attach,
+	.detach = drm_gem_map_detach,
+	.map_dma_buf = drm_gem_map_dma_buf,
+	.unmap_dma_buf = drm_gem_unmap_dma_buf,
+	.release = drm_gem_dmabuf_release,
+	.mmap = drm_gem_dmabuf_mmap,
+	.vmap = drm_gem_dmabuf_vmap,
+	.vunmap = drm_gem_dmabuf_vunmap,
+};
+
+struct dma_buf *virtgpu_gem_prime_export(struct drm_gem_object *obj,
+					 int flags)
+{
+	struct dma_buf *buf;
+
+	buf = drm_gem_prime_export(obj, flags);
+	if (!IS_ERR(buf))
+		buf->ops = &virtgpu_dmabuf_ops;
+
+	return buf;
+}
+
+struct drm_gem_object *virtgpu_gem_prime_import(struct drm_device *dev,
+						struct dma_buf *buf)
+{
+	struct drm_gem_object *obj;
+
+	if (buf->ops == &virtgpu_dmabuf_ops) {
+		obj = buf->priv;
+		if (obj->dev == dev) {
+			/*
+			 * Importing dmabuf exported from our own gem increases
+			 * refcount on gem itself instead of f_count of dmabuf.
+			 */
+			drm_gem_object_get(obj);
+			return obj;
+		}
+	}
+
+	return drm_gem_prime_import(dev, buf);
+}
 
 struct sg_table *virtgpu_gem_prime_get_sg_table(struct drm_gem_object *obj)
 {
