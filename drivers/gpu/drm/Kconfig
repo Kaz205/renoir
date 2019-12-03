@@ -172,6 +172,8 @@ config DRM_VRAM_HELPER
 	help
 	  Helpers for VRAM memory management
 
+source "drivers/gpu/drm/ttm/Kconfig"
+
 config DRM_GEM_CMA_HELPER
 	bool
 	depends on DRM
@@ -267,6 +269,8 @@ config DRM_VKMS
 
 config DRM_ATI_PCIGART
         bool
+
+source "drivers/gpu/drm/evdi/Kconfig"
 
 source "drivers/gpu/drm/exynos/Kconfig"
 
