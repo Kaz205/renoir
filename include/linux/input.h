@@ -127,6 +127,10 @@ enum input_clock_type {
  *	and needs not be explicitly unregistered or freed.
  * @timestamp: storage for a timestamp set by input_set_timestamp called
  *  by a driver
+ * @inhibit: method to ignore all events and power off device.
+ *      inhibit..uninhibit are always called outside of suspend..resume.
+ * @uninhibit: undo effects of inhibit
+ * @inhibited: whether the input device is currently inhibited
  */
 struct input_dev {
 	const char *name;
@@ -201,6 +205,11 @@ struct input_dev {
 	bool devres_managed;
 
 	ktime_t timestamp[INPUT_CLK_MAX];
+
+	int (*inhibit)(struct input_dev *dev);
+	int (*uninhibit)(struct input_dev *dev);
+
+	bool inhibited;
 };
 #define to_input_dev(d) container_of(d, struct input_dev, dev)
 
