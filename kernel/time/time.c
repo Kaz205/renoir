@@ -268,7 +268,7 @@ COMPAT_SYSCALL_DEFINE2(settimeofday, struct old_timeval32 __user *, tv,
 #endif
 
 #if !defined(CONFIG_64BIT_TIME) || defined(CONFIG_64BIT)
-SYSCALL_DEFINE1(adjtimex, struct __kernel_timex __user *, txc_p)
+int ksys_adjtimex(struct __kernel_timex __user * txc_p)
 {
 	struct __kernel_timex txc;		/* Local copy of parameter */
 	int ret;
@@ -281,6 +281,11 @@ SYSCALL_DEFINE1(adjtimex, struct __kernel_timex __user *, txc_p)
 		return -EFAULT;
 	ret = do_adjtimex(&txc);
 	return copy_to_user(txc_p, &txc, sizeof(struct __kernel_timex)) ? -EFAULT : ret;
+}
+
+SYSCALL_DEFINE1(adjtimex, struct __kernel_timex __user *, txc_p)
+{
+	return ksys_adjtimex(txc_p);
 }
 #endif
 
@@ -348,7 +353,7 @@ int put_old_timex32(struct old_timex32 __user *utp, const struct __kernel_timex 
 	return 0;
 }
 
-SYSCALL_DEFINE1(adjtimex_time32, struct old_timex32 __user *, utp)
+int ksys_adjtimex_time32(struct old_timex32 __user * utp)
 {
 	struct __kernel_timex txc;
 	int err, ret;
@@ -365,6 +370,12 @@ SYSCALL_DEFINE1(adjtimex_time32, struct old_timex32 __user *, utp)
 
 	return ret;
 }
+
+SYSCALL_DEFINE1(adjtimex_time32, struct old_timex32 __user *, utp)
+{
+	return ksys_adjtimex_time32(utp);
+}
+
 #endif
 
 /*

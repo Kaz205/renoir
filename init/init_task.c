@@ -12,6 +12,8 @@
 #include <linux/audit.h>
 #include <linux/numa.h>
 
+#include <linux/alt-syscall.h>
+
 #include <asm/pgtable.h>
 #include <linux/uaccess.h>
 
