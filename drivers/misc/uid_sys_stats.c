@@ -120,13 +120,16 @@ static void compute_io_bucket_stats(struct io_stats *io_bucket,
 }
 
 #ifdef CONFIG_UID_SYS_STATS_DEBUG
+
+#define __BUF_UNUSED_LEN	(MAX_TASK_COMM_LEN - TASK_COMM_LEN - 1)
+
 static void get_full_task_comm(struct task_entry *task_entry,
 		struct task_struct *task)
 {
 	int i = 0, offset = 0, len = 0;
 	/* save one byte for terminating null character */
-	int unused_len = MAX_TASK_COMM_LEN - TASK_COMM_LEN - 1;
-	char buf[unused_len];
+	int unused_len = __BUF_UNUSED_LEN;
+	char buf[__BUF_UNUSED_LEN];
 	struct mm_struct *mm = task->mm;
 
 	/* fill the first TASK_COMM_LEN bytes with thread name */
