@@ -146,6 +146,10 @@ struct cpufreq_policy {
 
 	struct notifier_block nb_min;
 	struct notifier_block nb_max;
+
+	unsigned int complexusb_cnt; /* complex usb device refcount */
+	unsigned int complexusb_minfreq; /* in Khz, when plug complex usb
+					  * device, cpu min frequency value */
 };
 
 struct cpufreq_freqs {
@@ -237,6 +241,14 @@ static inline void cpufreq_stats_free_table(struct cpufreq_policy *policy) { }
 static inline void cpufreq_stats_record_transition(struct cpufreq_policy *policy,
 						   unsigned int new_freq) { }
 #endif /* CONFIG_CPU_FREQ_STAT */
+
+#ifdef CONFIG_CPU_FREQ
+void cpufreq_start_complex_usb(void);
+void cpufreq_end_complex_usb(void);
+#else
+static inline void cpufreq_start_complex_usb(void) { }
+static inline void cpufreq_end_complex_usb(void) { }
+#endif
 
 /*********************************************************************
  *                      CPUFREQ DRIVER INTERFACE                     *
