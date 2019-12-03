@@ -113,20 +113,6 @@ out:
 	mutex_unlock(&vsock->rx_lock);
 }
 
-static int virtio_transport_send_pkt_loopback(struct virtio_vsock *vsock,
-					      struct virtio_vsock_pkt *pkt)
-{
-	int len = pkt->len;
-
-	spin_lock_bh(&vsock->loopback_list_lock);
-	list_add_tail(&pkt->list, &vsock->loopback_list);
-	spin_unlock_bh(&vsock->loopback_list_lock);
-
-	queue_work(virtio_vsock_workqueue, &vsock->loopback_work);
-
-	return len;
-}
-
 static void
 virtio_transport_send_pkt_work(struct work_struct *work)
 {
@@ -221,7 +207,12 @@ virtio_transport_send_pkt(struct virtio_vsock_pkt *pkt)
 	}
 
 	if (le64_to_cpu(pkt->hdr.dst_cid) == vsock->guest_cid) {
-		len = virtio_transport_send_pkt_loopback(vsock, pkt);
+		// Loopback is disabled on chrome os because we don't use it and
+		// it's easier to just block all loopback connections in the
+		// kernel instead of trying to have each individual application
+		// implement proper authentication.
+		virtio_transport_free_pkt(pkt);
+		len = -EPERM;
 		goto out_rcu;
 	}
 
