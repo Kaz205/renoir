@@ -82,6 +82,8 @@ struct drm_panel_funcs {
 	 * @prepare:
 	 *
 	 * Turn on panel and perform set up.
+	 *
+	 * This function is optional.
 	 */
 	int (*prepare)(struct drm_panel *panel);
 
@@ -89,6 +91,8 @@ struct drm_panel_funcs {
 	 * @enable:
 	 *
 	 * Enable panel (turn on back light, etc.).
+	 *
+	 * This function is optional.
 	 */
 	int (*enable)(struct drm_panel *panel);
 
@@ -96,6 +100,8 @@ struct drm_panel_funcs {
 	 * @disable:
 	 *
 	 * Disable panel (turn off back light, etc.).
+	 *
+	 * This function is optional.
 	 */
 	int (*disable)(struct drm_panel *panel);
 
@@ -103,14 +109,18 @@ struct drm_panel_funcs {
 	 * @unprepare:
 	 *
 	 * Turn off panel.
+	 *
+	 * This function is optional.
 	 */
 	int (*unprepare)(struct drm_panel *panel);
 
 	/**
 	 * @get_modes:
 	 *
-	 * Add modes to the connector that the panel is attached to and
-	 * return the number of modes added.
+	 * Add modes to the connector that the panel is attached to
+	 * and returns the number of modes added.
+	 *
+	 * This function is mandatory.
 	 */
 	int (*get_modes)(struct drm_panel *panel);
 
@@ -119,6 +129,8 @@ struct drm_panel_funcs {
 	 *
 	 * Copy display timings into the provided array and return
 	 * the number of display timings available.
+	 *
+	 * This function is optional.
 	 */
 	int (*get_timings)(struct drm_panel *panel, unsigned int num_timings,
 			   struct display_timing *timings);
