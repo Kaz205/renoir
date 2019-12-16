@@ -15,7 +15,6 @@ extern unsigned int walt_big_tasks(int cpu);
 extern void reset_task_stats(struct task_struct *p);
 extern void walt_rotate_work_init(void);
 extern void walt_rotation_checkpoint(int nr_big);
-extern unsigned int walt_rotation_enabled;
 extern void walt_fill_ta_data(struct core_ctl_notif_data *data);
 extern int sched_set_group_id(struct task_struct *p, unsigned int group_id);
 extern unsigned int sched_get_group_id(struct task_struct *p);
