@@ -1018,10 +1018,10 @@ static bool of_is_ancestor_of(struct device_node *test_ancestor,
  * - -EINVAL if the supplier link is invalid and should not be created
  * - -ENODEV if there is no device that corresponds to the supplier phandle
  */
-static int of_link_to_phandle(struct device *dev, struct device_node *sup_np,
-			      u32 dl_flags)
+static int of_link_to_phandle(struct device *dev, struct device_node *sup_np)
 {
 	struct device *sup_dev;
+	u32 dl_flags = DL_FLAG_AUTOPROBE_CONSUMER;
 	int ret = 0;
 	struct device_node *tmp_np = sup_np;
 
@@ -1181,20 +1181,13 @@ static int of_link_property(struct device *dev, struct device_node *con_np,
 	unsigned int i = 0;
 	bool matched = false;
 	int ret = 0;
-	u32 dl_flags;
-
-	if (dev->of_node == con_np)
-		dl_flags = DL_FLAG_AUTOPROBE_CONSUMER;
-	else
-		dl_flags = DL_FLAG_SYNC_STATE_ONLY;
 
 	/* Do not stop at first failed link, link all available suppliers. */
 	while (!matched && s->parse_prop) {
 		while ((phandle = s->parse_prop(con_np, prop_name, i))) {
 			matched = true;
 			i++;
-			if (of_link_to_phandle(dev, phandle, dl_flags)
-								== -EAGAIN)
+			if (of_link_to_phandle(dev, phandle) == -EAGAIN)
 				ret = -EAGAIN;
 			of_node_put(phandle);
 		}
@@ -1212,10 +1205,10 @@ static int of_link_to_suppliers(struct device *dev,
 
 	for_each_property_of_node(con_np, p)
 		if (of_link_property(dev, con_np, p->name))
-			ret = -ENODEV;
+			ret = -EAGAIN;
 
 	for_each_child_of_node(con_np, child)
-		if (of_link_to_suppliers(dev, child) && !ret)
+		if (of_link_to_suppliers(dev, child))
 			ret = -EAGAIN;
 
 	return ret;
