@@ -330,7 +330,7 @@ int drm_panel_notifier_call_chain(struct drm_panel *panel,
 }
 EXPORT_SYMBOL(drm_panel_notifier_call_chain);
 
-#if IS_ENABLED(CONFIG_BACKLIGHT_CLASS_DEVICE)
+#if IS_REACHABLE(CONFIG_BACKLIGHT_CLASS_DEVICE)
 /**
  * drm_panel_of_backlight - use backlight device node for backlight
  * @panel: DRM panel
