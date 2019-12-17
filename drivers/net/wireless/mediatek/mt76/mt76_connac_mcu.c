@@ -1284,7 +1284,7 @@ int mt76_connac_mcu_uni_add_bss(struct mt76_phy *phy,
 				vif->bss_conf.he_operation.he_oper_params,
 				IEEE80211_HE_OPERATION_BSS_COLOR_DISABLED);
 			he_req.bss_color.bss_color =
-				vif->bss_conf.bss_color;
+				vif->bss_conf.he_bss_color.color;
 		}
 
 		mt76_connac_mcu_uni_bss_he_tlv(phy, vif,
