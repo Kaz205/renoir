@@ -745,6 +745,19 @@ ap_spi_fp: &spi10 {
 	vdda-pll-supply = <&vdda_usb_ss_dp_core>;
 };
 
+&wifi {
+	status = "okay";
+
+	vdd-0.8-cx-mx-supply = <&vdd_cx_wlan>;
+	vdd-1.8-xo-supply = <&pp1800_l1c>;
+	vdd-1.3-rfa-supply = <&pp1300_l2c>;
+	vdd-3.3-ch0-supply = <&pp3300_l11c>;
+	/* TODO: Binding and driver doesn't turn on ch1 supply? */
+	wifi-firmware {
+		iommus = <&apps_smmu 0xc2 0x1>;
+	};
+};
+
 /* PINCTRL - additions to nodes defined in sdm845.dtsi */
 
 &qspi_cs0 {
