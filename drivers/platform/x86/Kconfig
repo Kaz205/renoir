@@ -1004,6 +1004,15 @@ config INTEL_SCU_PCI
 	    Broxton
 	    Apollo Lake
 
+config INTEL_SCU_PLATFORM
+	tristate "Intel SCU platform driver"
+	depends on ACPI
+	select INTEL_SCU
+	help
+	  SCU is used to bridge the communications between kernel and SCU
+	  (sometimes called PMC as well). This driver currently supports
+	  Intel Tiger Lake platform.
+
 config INTEL_SCU_IPC_UTIL
 	tristate "Intel SCU IPC utility driver"
 	depends on INTEL_SCU
