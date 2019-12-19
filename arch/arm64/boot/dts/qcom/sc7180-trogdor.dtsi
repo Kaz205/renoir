@@ -109,6 +109,21 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&ap_edp_bklten>;
 	};
+
+	panel: panel {
+		compatible = "auo,b116xa01";
+		power-supply = <&pp3300_dx_edp>;
+		backlight = <&backlight>;
+		no-hpd; /*TODO: Evaluate hpd */
+
+		ports {
+			port {
+				panel_in_edp: endpoint {
+					remote-endpoint = <&sn65dsi86_out>;
+				};
+			};
+		};
+	};
 };
 
 &qspi {
@@ -411,9 +426,67 @@
 	};
 };
 
+&dsi0 {
+	status = "okay";
+	vdda-supply = <&vdda_mipi_dsi0_1p2>;
+
+	ports {
+		port@1 {
+			endpoint {
+				remote-endpoint = <&sn65dsi86_in>;
+				data-lanes = <0 1 2 3>;
+			};
+		};
+	};
+};
+
+&dsi_phy {
+	status = "okay";
+	vdds-supply = <&vdda_mipi_dsi0_pll>;
+};
+
 edp_brij_i2c: &i2c2 {
 	status = "okay";
 	clock-frequency = <400000>;
+
+	sn65dsi86_bridge: bridge@2d {
+		compatible = "ti,sn65dsi86";
+		reg = <0x2d>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&edp_brij_en>, <&edp_brij_irq>;
+
+		interrupt-parent = <&tlmm>;
+		interrupts = <11 IRQ_TYPE_LEVEL_HIGH>;
+
+		enable-gpios = <&tlmm 14 GPIO_ACTIVE_HIGH>;
+
+		vpll-supply = <&pp1800_edp_vpll>;
+		vccio-supply = <&pp1800_brij_vccio>;
+		vcca-supply = <&pp1200_brij>;
+		vcc-supply = <&pp1200_brij>;
+
+		clocks = <&rpmhcc RPMH_LN_BB_CLK3>;
+		clock-names = "refclk";
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				sn65dsi86_in: endpoint {
+					remote-endpoint = <&dsi0_out>;
+				};
+			};
+
+			port@1 {
+				reg = <1>;
+				sn65dsi86_out: endpoint {
+					remote-endpoint = <&panel_in_edp>;
+				};
+			};
+		};
+	};
 };
 
 ap_ts_pen_1v8: &i2c4 {
@@ -495,6 +568,14 @@ hp_i2c: &i2c9 {
 		realtek,dmic1-clk-pin = <1>;
 		realtek,jd-src = <1>;
 	};
+};
+
+&mdp {
+	status = "okay";
+};
+
+&mdss {
+	status = "okay";
 };
 
 &pm6150_pwrkey {
