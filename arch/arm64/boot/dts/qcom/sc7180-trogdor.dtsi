@@ -505,6 +505,34 @@ hp_i2c: &i2c9 {
 	status = "okay";
 };
 
+&sdhc_1 {
+	status = "okay";
+
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&sdc1_on>;
+	pinctrl-1 = <&sdc1_off>;
+	vmmc-supply = <&mcp_vcc>;
+	vqmmc-supply = <&mcp_vccq>;
+
+	max-frequency = <100000000>;
+
+	/* TODO: b/146670930 */
+	/delete-property/ mmc-hs400-1_8v;
+	/delete-property/ mmc-hs400-enhanced-strobe;
+};
+
+&sdhc_2 {
+	status = "okay";
+
+	pinctrl-names = "default","sleep";
+	pinctrl-0 = <&sdc2_on>;
+	pinctrl-1 = <&sdc2_off>;
+	vmmc-supply = <&pp2950_l9c>;
+	vqmmc-supply = <&ppvar_l6c>;
+
+	cd-gpios = <&tlmm 69 GPIO_ACTIVE_LOW>;
+};
+
 ap_ec_spi: &spi0 {
 	status = "okay";
 	cros_ec: ec@0 {
@@ -1004,79 +1032,6 @@ ap_spi_fp: &spi10 {
 			 * remove "output-high" here.
 			 */
 			output-high; /* TODO: Remove this? */
-		};
-	};
-
-	sdc1_clk: sdc1-clk {
-		pinconf {
-			pins = "sdc1_clk";
-			bias-disable;
-			drive-strength = <16>;
-		};
-	};
-
-	sdc1_cmd: sdc1-cmd {
-		cmd {
-			pins = "sdc1_cmd";
-			bias-pull-up;
-			drive-strength = <10>;
-		};
-	};
-
-	sdc1_data: sdc1-data {
-		data {
-			pins = "sdc1_data";
-			bias-pull-up;
-			drive-strength = <10>;
-		};
-	};
-
-	sdc1_rclk: sdc1-rclk {
-		rclk {
-			pins = "sdc1_rclk";
-			bias-pull-down;
-		};
-	};
-
-	sdc2_clk: sdc2-clk {
-		pinconf {
-			pins = "sdc2_clk";
-			bias-disable;
-
-			/*
-			 * TODO: Revisit
-			 * It seems that mmc_test reports errors if drive
-			 * strength is not 16.
-			 */
-			drive-strength = <16>;
-		};
-	};
-
-	sdc2_cmd: sdc2-cmd {
-		pinconf {
-			pins = "sdc2_cmd";
-			bias-pull-up;
-			drive-strength = <16>;
-		};
-	};
-
-	sdc2_data: sdc2-data {
-		pinconf {
-			pins = "sdc2_data";
-			bias-pull-up;
-			drive-strength = <16>;
-		};
-	};
-
-	sd_cd_od: sd-cd-od {
-		pinmux {
-			pins = "gpio69";
-			function = "gpio";
-		};
-
-		pinconf {
-			pins = "gpio69";
-			bias-pull-up;
 		};
 	};
 
