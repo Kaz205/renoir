@@ -2596,6 +2596,10 @@
 				clock-names = "core", "bus";
 				power-domains = <&videocc VCODEC1_GDSC>;
 			};
+
+			video-firmware {
+				iommus = <&apps_smmu 0x10b2 0x0>;
+			};
 		};
 
 		videocc: clock-controller@ab00000 {
