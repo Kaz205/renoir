@@ -1431,18 +1431,6 @@ static int io_read(struct io_kiocb *req, const struct sqe_submit *s,
 		else
 			ret2 = -EINVAL;
 
-		/*
-		 * In case of a short read, punt to async. This can happen
-		 * if we have data partially cached. Alternatively we can
-		 * return the short read, in which case the application will
-		 * need to issue another SQE and wait for it. That SQE will
-		 * need async punt anyway, so it's more efficient to do it
-		 * here.
-		 */
-		if (force_nonblock && !(req->flags & REQ_F_NOWAIT) &&
-		    (req->flags & REQ_F_ISREG) &&
-		    ret2 > 0 && ret2 < read_size)
-			ret2 = -EAGAIN;
 		/* Catch -EAGAIN return for forced non-blocking submission */
 		if (!force_nonblock || ret2 != -EAGAIN)
 			kiocb_done(kiocb, ret2, nxt, s->in_async);
