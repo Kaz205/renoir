@@ -936,14 +936,14 @@ static int __intel_get_crtc_scanline(struct intel_crtc *crtc)
 	return (position + crtc->scanline_offset) % vtotal;
 }
 
-bool i915_get_crtc_scanoutpos(struct drm_device *dev, unsigned int pipe,
+bool i915_get_crtc_scanoutpos(struct drm_device *dev, unsigned int index,
 			      bool in_vblank_irq, int *vpos, int *hpos,
 			      ktime_t *stime, ktime_t *etime,
 			      const struct drm_display_mode *mode)
 {
 	struct drm_i915_private *dev_priv = to_i915(dev);
-	struct intel_crtc *intel_crtc = intel_get_crtc_for_pipe(dev_priv,
-								pipe);
+	struct intel_crtc *crtc = to_intel_crtc(drm_crtc_from_index(dev, index));
+	enum pipe pipe = crtc->pipe;
 	int position;
 	int vbl_start, vbl_end, hsync_start, htotal, vtotal;
 	unsigned long irqflags;
@@ -986,7 +986,7 @@ bool i915_get_crtc_scanoutpos(struct drm_device *dev, unsigned int pipe,
 		/* No obvious pixelcount register. Only query vertical
 		 * scanout position from Display scan line register.
 		 */
-		position = __intel_get_crtc_scanline(intel_crtc);
+		position = __intel_get_crtc_scanline(crtc);
 	} else {
 		/* Have access to pixelcount since start of frame.
 		 * We can split this into vertical and horizontal
@@ -1700,7 +1700,7 @@ static void i9xx_pipestat_irq_reset(struct drm_i915_private *dev_priv)
 static void i9xx_pipestat_irq_ack(struct drm_i915_private *dev_priv,
 				  u32 iir, u32 pipe_stats[I915_MAX_PIPES])
 {
-	int pipe;
+	enum pipe pipe;
 
 	spin_lock(&dev_priv->irq_lock);
 
@@ -1725,6 +1725,7 @@ static void i9xx_pipestat_irq_ack(struct drm_i915_private *dev_priv,
 		status_mask = PIPE_FIFO_UNDERRUN_STATUS;
 
 		switch (pipe) {
+		default:
 		case PIPE_A:
 			iir_bit = I915_DISPLAY_PIPE_A_EVENT_INTERRUPT;
 			break;
@@ -2120,7 +2121,7 @@ static void ibx_hpd_irq_handler(struct drm_i915_private *dev_priv,
 
 static void ibx_irq_handler(struct drm_i915_private *dev_priv, u32 pch_iir)
 {
-	int pipe;
+	enum pipe pipe;
 	u32 hotplug_trigger = pch_iir & SDE_HOTPLUG_MASK;
 
 	ibx_hpd_irq_handler(dev_priv, hotplug_trigger, hpd_ibx);
@@ -2206,7 +2207,7 @@ static void cpt_serr_int_handler(struct drm_i915_private *dev_priv)
 
 static void cpt_irq_handler(struct drm_i915_private *dev_priv, u32 pch_iir)
 {
-	int pipe;
+	enum pipe pipe;
 	u32 hotplug_trigger = pch_iir & SDE_HOTPLUG_MASK_CPT;
 
 	ibx_hpd_irq_handler(dev_priv, hotplug_trigger, hpd_cpt);
@@ -2579,10 +2580,16 @@ static u32 gen8_de_port_aux_mask(struct drm_i915_private *dev_priv)
 	u32 mask;
 
 	if (INTEL_GEN(dev_priv) >= 12)
-		/* TODO: Add AUX entries for USBC */
 		return TGL_DE_PORT_AUX_DDIA |
 			TGL_DE_PORT_AUX_DDIB |
-			TGL_DE_PORT_AUX_DDIC;
+			TGL_DE_PORT_AUX_DDIC |
+			TGL_DE_PORT_AUX_USBC1 |
+			TGL_DE_PORT_AUX_USBC2 |
+			TGL_DE_PORT_AUX_USBC3 |
+			TGL_DE_PORT_AUX_USBC4 |
+			TGL_DE_PORT_AUX_USBC5 |
+			TGL_DE_PORT_AUX_USBC6;
+
 
 	mask = GEN8_AUX_CHANNEL_A;
 	if (INTEL_GEN(dev_priv) >= 9)
@@ -2618,11 +2625,21 @@ gen8_de_misc_irq_handler(struct drm_i915_private *dev_priv, u32 iir)
 	}
 
 	if (iir & GEN8_DE_EDP_PSR) {
-		u32 psr_iir = I915_READ(EDP_PSR_IIR);
+		u32 psr_iir;
+		i915_reg_t iir_reg;
+
+		if (INTEL_GEN(dev_priv) >= 12)
+			iir_reg = TRANS_PSR_IIR(dev_priv->psr.transcoder);
+		else
+			iir_reg = EDP_PSR_IIR;
+
+		psr_iir = I915_READ(iir_reg);
+		I915_WRITE(iir_reg, psr_iir);
+
+		if (psr_iir)
+			found = true;
 
 		intel_psr_irq_handler(dev_priv, psr_iir);
-		I915_WRITE(EDP_PSR_IIR, psr_iir);
-		found = true;
 	}
 
 	if (!found)
@@ -2853,9 +2870,11 @@ static inline void gen11_master_intr_enable(void __iomem * const regs)
 	raw_reg_write(regs, GEN11_GFX_MSTR_IRQ, GEN11_MASTER_IRQ);
 }
 
-static irqreturn_t gen11_irq_handler(int irq, void *arg)
+static __always_inline irqreturn_t
+__gen11_irq_handler(struct drm_i915_private * const i915,
+		    u32 (*intr_disable)(void __iomem * const regs),
+		    void (*intr_enable)(void __iomem * const regs))
 {
-	struct drm_i915_private * const i915 = arg;
 	void __iomem * const regs = i915->uncore.regs;
 	struct intel_gt *gt = &i915->gt;
 	u32 master_ctl;
@@ -2864,9 +2883,9 @@ static irqreturn_t gen11_irq_handler(int irq, void *arg)
 	if (!intel_irqs_enabled(i915))
 		return IRQ_NONE;
 
-	master_ctl = gen11_master_intr_disable(regs);
+	master_ctl = intr_disable(regs);
 	if (!master_ctl) {
-		gen11_master_intr_enable(regs);
+		intr_enable(regs);
 		return IRQ_NONE;
 	}
 
@@ -2888,11 +2907,18 @@ static irqreturn_t gen11_irq_handler(int irq, void *arg)
 
 	gu_misc_iir = gen11_gu_misc_irq_ack(gt, master_ctl);
 
-	gen11_master_intr_enable(regs);
+	intr_enable(regs);
 
 	gen11_gu_misc_irq_handler(gt, gu_misc_iir);
 
 	return IRQ_HANDLED;
+}
+
+static irqreturn_t gen11_irq_handler(int irq, void *arg)
+{
+	return __gen11_irq_handler(arg,
+				   gen11_master_intr_disable,
+				   gen11_master_intr_enable);
 }
 
 /* Called from drm generic code, passed 'crtc' which
@@ -3205,7 +3231,7 @@ static void valleyview_irq_reset(struct drm_i915_private *dev_priv)
 static void gen8_irq_reset(struct drm_i915_private *dev_priv)
 {
 	struct intel_uncore *uncore = &dev_priv->uncore;
-	int pipe;
+	enum pipe pipe;
 
 	gen8_master_intr_disable(dev_priv->uncore.regs);
 
@@ -3230,7 +3256,7 @@ static void gen8_irq_reset(struct drm_i915_private *dev_priv)
 static void gen11_irq_reset(struct drm_i915_private *dev_priv)
 {
 	struct intel_uncore *uncore = &dev_priv->uncore;
-	int pipe;
+	enum pipe pipe;
 
 	gen11_master_intr_disable(dev_priv->uncore.regs);
 
@@ -3238,8 +3264,23 @@ static void gen11_irq_reset(struct drm_i915_private *dev_priv)
 
 	intel_uncore_write(uncore, GEN11_DISPLAY_INT_CTL, 0);
 
-	intel_uncore_write(uncore, EDP_PSR_IMR, 0xffffffff);
-	intel_uncore_write(uncore, EDP_PSR_IIR, 0xffffffff);
+	if (INTEL_GEN(dev_priv) >= 12) {
+		enum transcoder trans;
+
+		for (trans = TRANSCODER_A; trans <= TRANSCODER_D; trans++) {
+			enum intel_display_power_domain domain;
+
+			domain = POWER_DOMAIN_TRANSCODER(trans);
+			if (!intel_display_power_is_enabled(dev_priv, domain))
+				continue;
+
+			intel_uncore_write(uncore, TRANS_PSR_IMR(trans), 0xffffffff);
+			intel_uncore_write(uncore, TRANS_PSR_IIR(trans), 0xffffffff);
+		}
+	} else {
+		intel_uncore_write(uncore, EDP_PSR_IMR, 0xffffffff);
+		intel_uncore_write(uncore, EDP_PSR_IIR, 0xffffffff);
+	}
 
 	for_each_pipe(dev_priv, pipe)
 		if (intel_display_power_is_enabled(dev_priv,
@@ -3649,7 +3690,6 @@ static void ironlake_irq_postinstall(struct drm_i915_private *dev_priv)
 
 	if (IS_HASWELL(dev_priv)) {
 		gen3_assert_iir_is_zero(uncore, EDP_PSR_IIR);
-		intel_psr_irq_control(dev_priv, dev_priv->psr.debug);
 		display_mask |= DE_EDP_PSR_INT_HSW;
 	}
 
@@ -3759,8 +3799,21 @@ static void gen8_de_irq_postinstall(struct drm_i915_private *dev_priv)
 	else if (IS_BROADWELL(dev_priv))
 		de_port_enables |= GEN8_PORT_DP_A_HOTPLUG;
 
-	gen3_assert_iir_is_zero(uncore, EDP_PSR_IIR);
-	intel_psr_irq_control(dev_priv, dev_priv->psr.debug);
+	if (INTEL_GEN(dev_priv) >= 12) {
+		enum transcoder trans;
+
+		for (trans = TRANSCODER_A; trans <= TRANSCODER_D; trans++) {
+			enum intel_display_power_domain domain;
+
+			domain = POWER_DOMAIN_TRANSCODER(trans);
+			if (!intel_display_power_is_enabled(dev_priv, domain))
+				continue;
+
+			gen3_assert_iir_is_zero(uncore, TRANS_PSR_IIR(trans));
+		}
+	} else {
+		gen3_assert_iir_is_zero(uncore, EDP_PSR_IIR);
+	}
 
 	for_each_pipe(dev_priv, pipe) {
 		dev_priv->de_irq_mask[pipe] = ~de_pipe_masked;
