@@ -497,6 +497,10 @@ hp_i2c: &i2c9 {
 	};
 };
 
+&pm6150_pwrkey {
+	status = "disabled";
+};
+
 &qupv3_id_0 {
 	status = "okay";
 };
