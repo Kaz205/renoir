@@ -803,7 +803,6 @@ struct skl_ddb_allocation {
 };
 
 struct skl_ddb_values {
-	unsigned dirty_pipes;
 	struct skl_ddb_allocation ddb;
 };
 
