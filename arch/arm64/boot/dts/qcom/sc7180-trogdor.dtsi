@@ -8,7 +8,6 @@
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
 #include <dt-bindings/regulator/qcom,rpmh-regulator.h>
-#include "sc7180.dtsi"
 
 /* PMICs depend on spmi_bus label and so must come after SoC */
 #include "pm6150.dtsi"
@@ -44,6 +43,19 @@
 		regulator-boot-on;
 
 		vin-supply = <&ppvar_sys>;
+	};
+
+	pp1200_brij: pp1200-brij-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "pp1200_brij";
+
+		regulator-min-microvolt = <1200000>;
+		regulator-max-microvolt = <1200000>;
+
+		gpio = <&tlmm 30 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		pinctrl-names = "default";
+		pinctrl-0 = <&brij_pp1200_en>;
 	};
 
 	pp5000_a: pp5000-a-regulator {
@@ -340,7 +352,6 @@
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
 		};
 
-		pp1200_brij:
 		vdd_ufs1_1p2:
 		vdda_csi0_1p25:
 		vdda_csi1_1p25:
@@ -426,6 +437,48 @@
 	};
 };
 
+&ap_ec_spi {
+	status = "okay";
+	cros_ec: ec@0 {
+		compatible = "google,cros-ec-spi";
+		reg = <0>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <94 IRQ_TYPE_LEVEL_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&ap_ec_int_l>;
+		spi-max-frequency = <3000000>;
+
+		cros_ec_pwm: ec-pwm {
+			compatible = "google,cros-ec-pwm";
+			#pwm-cells = <1>;
+		};
+
+		i2c_tunnel: i2c-tunnel {
+			compatible = "google,cros-ec-i2c-tunnel";
+			google,remote-bus = <0>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
+		pdupdate {
+			compatible = "google,cros-ec-pd-update";
+		};
+	};
+};
+
+&ap_h1_spi {
+	status = "okay";
+	cr50: tpm@0 {
+		compatible = "google,cr50";
+		reg = <0>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&h1_ap_int_odl>;
+		spi-max-frequency = <800000>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <42 IRQ_TYPE_EDGE_RISING>;
+	};
+};
+
 &dsi0 {
 	status = "okay";
 	vdda-supply = <&vdda_mipi_dsi0_1p2>;
@@ -503,7 +556,7 @@ ap_ts_pen_1v8: &i2c4 {
 		post-power-on-delay-ms = <100>;
 
 		interrupt-parent = <&tlmm>;
-		interrupts = <104 IRQ_TYPE_LEVEL_LOW>;
+		interrupts = <21 IRQ_TYPE_LEVEL_LOW>;
 
 		hid-descr-addr = <0x1>; /* TODO: Confirm */
 	};
@@ -612,48 +665,6 @@ hp_i2c: &i2c9 {
 	cd-gpios = <&tlmm 69 GPIO_ACTIVE_LOW>;
 };
 
-ap_ec_spi: &spi0 {
-	status = "okay";
-	cros_ec: ec@0 {
-		compatible = "google,cros-ec-spi";
-		reg = <0>;
-		interrupt-parent = <&tlmm>;
-		interrupts = <94 IRQ_TYPE_LEVEL_LOW>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&ap_ec_int_l>;
-		spi-max-frequency = <3000000>;
-
-		cros_ec_pwm: ec-pwm {
-			compatible = "google,cros-ec-pwm";
-			#pwm-cells = <1>;
-		};
-
-		i2c_tunnel: i2c-tunnel {
-			compatible = "google,cros-ec-i2c-tunnel";
-			google,remote-bus = <0>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-		};
-
-		pdupdate {
-			compatible = "google,cros-ec-pd-update";
-		};
-	};
-};
-
-ap_h1_spi: &spi6 {
-	status = "okay";
-	cr50@0 {
-		compatible = "google,cr50";
-		reg = <0>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&h1_ap_int_odl>;
-		spi-max-frequency = <800000>;
-		interrupt-parent = <&tlmm>;
-		interrupts = <21 IRQ_TYPE_EDGE_RISING>;
-	};
-};
-
 ap_spi_fp: &spi10 {
 	status = "okay";
 
@@ -663,7 +674,7 @@ ap_spi_fp: &spi10 {
 		interrupt-parent = <&tlmm>;
 		interrupts = <4 IRQ_TYPE_LEVEL_LOW>;
 		pinctrl-names = "default";
-		pinctrl-0 = <&fp_to_ap_irq_l>, <&fp_rst_l>, <&fpmcu_boot0>, <&fpmcu_sel_od>;
+		pinctrl-0 = <&fp_to_ap_irq_l>, <&fp_rst_l>, <&fpmcu_boot0>, <&fpmcu_sel>;
 		spi-max-frequency = <3000000>;
 	};
 };
@@ -863,7 +874,7 @@ ap_spi_fp: &spi10 {
 };
 
 &pm6150l_gpio {
-	gpio-line-names = "AP_SUSPEND_L", /* TODO: Remove if doesn't work */
+	gpio-line-names = "AP_SUSPEND", /* TODO: Remove if doesn't work */
 			  "",
 			  "",
 			  "",
@@ -882,7 +893,20 @@ ap_spi_fp: &spi10 {
 	 * pinctrl settings for pins that have no real owners.
 	 */
 	pinctrl-names = "default";
-	pinctrl-0 = <&bios_flash_wp_l>;
+	pinctrl-0 = <&bios_flash_wp_l>, <&ap_suspend_l_neuter>;
+
+	ap_ec_int_l: ap-ec-int-l {
+		pinmux {
+			pins = "gpio94";
+			function = "gpio";
+			input-enable;
+		};
+
+		pinconf {
+			pins = "gpio94";
+			bias-pull-up;
+		};
+	};
 
 	ap_edp_bklten: ap-edp-bklten {
 		pinmux {
@@ -893,6 +917,19 @@ ap_spi_fp: &spi10 {
 		pinconf {
 			pins = "gpio12";
 			drive-strength = <2>;
+			bias-disable;
+		};
+	};
+
+	/* We will totally remove this in r2+ */
+	ap_suspend_l_neuter: ap-suspend-l-neuter {
+		pinmux  {
+			pins = "gpio27";
+			function = "gpio";
+		};
+
+		pinconf {
+			pins = "gpio27";
 			bias-disable;
 		};
 	};
@@ -910,27 +947,28 @@ ap_spi_fp: &spi10 {
 		};
 	};
 
-	ap_ec_int_l: ec-ap-int-l {
+	brij_pp1200_en: brij-pp1200-en {
 		pinmux {
-		       pins = "gpio94";
-		       function = "gpio";
-		       input-enable;
-		};
-
-		pinconf {
-		       pins = "gpio94";
-		       bias-pull-up;
-		};
-	};
-
-	edp_brij_en: edp-brij-en {
-		pinmux {
-			pins = "gpio14";
+			pins = "gpio30";
 			function = "gpio";
 		};
 
 		pinconf {
-			pins = "gpio14";
+			pins = "gpio30";
+			drive-strength = <2>;
+			bias-disable;
+		};
+
+	};
+
+	edp_brij_en: edp-brij-en {
+		pinmux {
+			pins = "gpio104";
+			function = "gpio";
+		};
+
+		pinconf {
+			pins = "gpio104";
 			drive-strength = <2>;
 			bias-disable;
 		};
@@ -962,7 +1000,6 @@ ap_spi_fp: &spi10 {
 		};
 	};
 
-
 	en_pp3300_dx_edp: en-pp3300-dx-edp {
 		pinmux {
 			pins = "gpio106";
@@ -990,7 +1027,7 @@ ap_spi_fp: &spi10 {
 		};
 	};
 
-	fpmcu_sel_od: fpmcu-sel-od {
+	fpmcu_sel: fpmcu-sel {
 		pinmux {
 			pins = "gpio22";
 			function = "gpio";
@@ -1036,13 +1073,13 @@ ap_spi_fp: &spi10 {
 
 	h1_ap_int_odl: h1-ap-int-odl {
 		pinmux {
-			pins = "gpio21";
+			pins = "gpio42";
 			function = "gpio";
 			input-enable;
 		};
 
 		pinconf {
-			pins = "gpio21";
+			pins = "gpio42";
 			bias-pull-up;
 		};
 	};
@@ -1062,12 +1099,12 @@ ap_spi_fp: &spi10 {
 
 	pen_irq_l: pen-irq-l {
 		pinmux {
-			pins = "gpio104";
+			pins = "gpio21";
 			function = "gpio";
 		};
 
 		pinconf {
-			pins = "gpio104";
+			pins = "gpio21";
 
 			/* Has external pullup */
 			bias-disable;

@@ -7,11 +7,16 @@
 
 /dts-v1/;
 
+#include "sc7180.dtsi"
+
+ap_ec_spi: &spi0 {};
+ap_h1_spi: &spi6 {};
+
 #include "sc7180-trogdor.dtsi"
 
 / {
-	model = "Google Trogdor (rev0+)";
-	compatible = "google,trogdor", "qcom,sc7180";
+	model = "Google Trogdor (rev0)";
+	compatible = "google,trogdor-r0", "qcom,sc7180";
 };
 
 &ap_pen {
@@ -34,7 +39,78 @@
 	clock-frequency = <100000>;
 };
 
+/delete-node/ &brij_pp1200_en;
+
+&cr50 {
+	interrupts = <21 IRQ_TYPE_EDGE_RISING>;
+};
+
+/delete-node/ &pp1200_brij;
+pp1200_brij: &pp1200_l3c {};
+
+&sn65dsi86_bridge {
+	vcca-supply = <&pp1200_brij>;
+	vcc-supply = <&pp1200_brij>;
+};
+
+/* PINCTRL - modifications to sc7180-trogdor.dtsi */
+
+&ap_suspend_l_neuter {
+	pinmux  {
+		pins = "gpio20";
+	};
+
+	pinconf {
+		pins = "gpio20";
+	};
+};
+
+&edp_brij_en {
+	pinmux {
+		pins = "gpio14";
+	};
+
+	pinconf {
+		pins = "gpio14";
+	};
+};
+
+&h1_ap_int_odl {
+	pinmux {
+		pins = "gpio21";
+	};
+
+	pinconf {
+		pins = "gpio21";
+	};
+};
+
+&pen_irq_l {
+	pinmux {
+		pins = "gpio104";
+	};
+
+	pinconf {
+		pins = "gpio104";
+	};
+};
+
 /* PINCTRL - board-specific pinctrl */
+
+&pm6150l_gpio {
+	gpio-line-names = "AP_SUSPEND_L", /* TODO: Remove if doesn't work */
+			  "",
+			  "",
+			  "",
+			  "",
+			  "",
+			  "",
+			  "",
+			  "",
+			  "",
+			  "",
+			  "";
+};
 
 &tlmm {
 	gpio-line-names = "ESIM_MISO",
@@ -158,27 +234,4 @@
 			  "EC_IN_RW_ODL",
 			  "",
 			  "";
-};
-
-/* PINCTRL - board-specific pinctrl */
-
-&tlmm {
-	/*
-	 * pinctrl settings for pins that have no real owners.
-	 */
-	pinctrl-names = "default";
-	pinctrl-0 = <&bios_flash_wp_l>, <&ap_suspend_l_neuter>;
-
-	/* We will totally remove this in r1+ */
-	ap_suspend_l_neuter: ap-suspend-l-neuter {
-		pinmux  {
-			pins = "gpio20";
-			function = "gpio";
-		};
-
-		pinconf {
-			pins = "gpio20";
-			bias-disable;
-		};
-	};
 };
