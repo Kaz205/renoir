@@ -62,9 +62,8 @@ struct virtio_gpu_object_params {
 	bool dumb;
 	/* 3d */
 	bool virgl;
-	bool resource_v2;
-	enum virtio_gpu_memory_type guest_memory_type;
-	enum virtio_gpu_caching_type caching_type;
+	bool blob;
+	uint32_t blob_mem;
 	uint32_t target;
 	uint32_t bind;
 	uint32_t depth;
@@ -89,17 +88,16 @@ struct virtio_gpu_object {
 	uint32_t mapped;
 	void *vmap;
 	bool dumb;
-	bool resource_v2;
+	bool blob;
+	bool waited_on_map;
 	struct ttm_place                placement_code;
 	struct ttm_placement		placement;
 	struct ttm_buffer_object	tbo;
 	struct ttm_bo_kmap_obj		kmap;
 	bool created;
-	enum virtio_gpu_memory_type guest_memory_type;
-	enum virtio_gpu_caching_type caching_type;
-
 	int uuid_state;
 	uuid_t uuid;
+	uint32_t blob_mem;
 };
 #define gem_to_virtio_gpu_obj(gobj) \
 	container_of((gobj), struct virtio_gpu_object, gem_base)
@@ -193,12 +191,6 @@ struct virtio_gpu_drv_cap_cache {
 	atomic_t is_valid;
 };
 
-struct virtio_gpu_allocation_metadata_response {
-	bool callback_done;
-	struct virtio_gpu_resp_allocation_metadata info;
-	uint32_t response_data[];
-};
-
 struct virtio_gpu_device {
 	struct device *dev;
 	struct drm_device *ddev;
@@ -229,9 +221,8 @@ struct virtio_gpu_device {
 	bool has_virgl_3d;
 	bool has_edid;
 	bool has_resource_assign_uuid;
-	bool has_resource_v2;
-	bool has_shared_guest;
-	bool has_host_coherent;
+	bool has_resource_blob;
+	bool has_host_visible;
 
 	struct work_struct config_changed_work;
 
@@ -359,23 +350,21 @@ virtio_gpu_cmd_resource_create_3d(struct virtio_gpu_device *vgdev,
 				  struct virtio_gpu_object_params *params,
 				  struct virtio_gpu_fence *fence);
 void
-virtio_gpu_cmd_resource_create_v2(struct virtio_gpu_device *vgdev,
-			     uint32_t resource_id, uint32_t guest_memory_type,
-			     uint32_t caching_type, uint64_t size,
-			     uint64_t pci_addr, uint32_t nents,
-			     uint32_t args_size, void *data, uint32_t data_size,
-			     struct virtio_gpu_fence *fence);
-void
-virtio_gpu_cmd_resource_v2_unref(struct virtio_gpu_device *vgdev,
-			    uint32_t resource_id,
-			    struct virtio_gpu_fence *fence);
-int
-virtio_gpu_cmd_allocation_metadata(struct virtio_gpu_device *vgdev,
-				   uint32_t request_id,
-				   uint32_t request_size,
-				   uint32_t response_size,
-				   void *request,
-				   struct virtio_gpu_fence *fence);
+virtio_gpu_cmd_resource_create_blob(struct virtio_gpu_device *vgdev,
+				    struct virtio_gpu_object *bo,
+				    uint32_t ctx_id, uint32_t blob_mem,
+				    uint32_t blob_flags, uint64_t blob_id,
+				    uint64_t size, uint32_t nents,
+				    struct virtio_gpu_mem_entry *ents);
+
+void virtio_gpu_cmd_map(struct virtio_gpu_device *vgdev,
+			struct virtio_gpu_object *bo,
+			uint64_t offset,
+			struct virtio_gpu_fence *fence);
+
+void virtio_gpu_cmd_unmap(struct virtio_gpu_device *vgdev,
+			  uint32_t resource_id);
+
 void virtio_gpu_ctrl_ack(struct virtqueue *vq);
 void virtio_gpu_cursor_ack(struct virtqueue *vq);
 void virtio_gpu_fence_ack(struct virtqueue *vq);

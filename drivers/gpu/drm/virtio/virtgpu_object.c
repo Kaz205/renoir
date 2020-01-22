@@ -29,6 +29,7 @@
 #include <linux/dma-buf.h>
 #include <linux/uuid.h>
 #include "virtgpu_drv.h"
+#include <drm/virtgpu_drm.h>
 
 static int virtio_gpu_virglrenderer_workaround = 1;
 module_param_named(virglhack, virtio_gpu_virglrenderer_workaround, int, 0400);
@@ -88,39 +89,31 @@ static void virtio_gpu_init_ttm_placement(struct virtio_gpu_object *vgbo)
 	u32 c = 1;
 	u32 ttm_caching_flags = 0;
 
+	bool has_guest = (vgbo->blob_mem == VIRTGPU_BLOB_MEM_GUEST ||
+	                  vgbo->blob_mem == VIRTGPU_BLOB_MEM_HOST3D_GUEST);
+
+	/*
+         * This should work for all ChromeOS devices.  AMD + ARM KVM
+         * implementations honor the guest caching attribute, and it's WC for
+         * rockchip/mediatek/grunt. Intel KVM doesn't and the attribute is always
+         * cached, so it's ignored there. Upstream kernel will look for
+         * virtio_gpu_resp_map_info, but it's not needed for chromeos-5.4.
+         */
+	ttm_caching_flags = TTM_PL_FLAG_WC;
+
 	vgbo->placement.placement = &vgbo->placement_code;
 	vgbo->placement.busy_placement = &vgbo->placement_code;
 	vgbo->placement_code.fpfn = 0;
 	vgbo->placement_code.lpfn = 0;
 
-	switch (vgbo->caching_type) {
-	case VIRTIO_GPU_CACHED:
-		ttm_caching_flags = TTM_PL_FLAG_CACHED;
-		break;
-	case VIRTIO_GPU_WRITE_COMBINE:
-		ttm_caching_flags = TTM_PL_FLAG_WC;
-		break;
-	case VIRTIO_GPU_UNCACHED:
-		ttm_caching_flags = TTM_PL_FLAG_UNCACHED;
-		break;
-	default:
-		ttm_caching_flags = TTM_PL_MASK_CACHING;
-	}
-
-
-	switch (vgbo->guest_memory_type) {
-	case VIRTIO_GPU_MEMORY_UNDEFINED:
-	case VIRTIO_GPU_MEMORY_TRANSFER:
-	case VIRTIO_GPU_MEMORY_SHARED_GUEST:
-		vgbo->placement_code.flags =
-			TTM_PL_MASK_CACHING | TTM_PL_FLAG_TT |
-			TTM_PL_FLAG_NO_EVICT;
-		break;
-	case VIRTIO_GPU_MEMORY_HOST_COHERENT:
+	if (!has_guest && vgbo->blob) {
 		vgbo->placement_code.flags =
 			ttm_caching_flags | TTM_PL_FLAG_VRAM |
 			TTM_PL_FLAG_NO_EVICT;
-		break;
+	} else {
+		vgbo->placement_code.flags =
+			TTM_PL_MASK_CACHING | TTM_PL_FLAG_TT |
+			TTM_PL_FLAG_NO_EVICT;
 	}
 	vgbo->placement.num_placement = c;
 	vgbo->placement.num_busy_placement = c;
@@ -157,9 +150,8 @@ int virtio_gpu_object_create(struct virtio_gpu_device *vgdev,
 		return ret;
 	}
 	bo->dumb = params->dumb;
-	bo->resource_v2 = params->resource_v2;
-	bo->guest_memory_type = params->guest_memory_type;
-	bo->caching_type = params->caching_type;
+	bo->blob = params->blob;
+	bo->blob_mem = params->blob_mem;
 
 	if (params->virgl) {
 		virtio_gpu_cmd_resource_create_3d(vgdev, bo, params, fence);
