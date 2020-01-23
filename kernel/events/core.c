@@ -11189,8 +11189,10 @@ int ksys_perf_event_open(struct perf_event_attr __user * attr_uptr, pid_t pid,
 		}
 	}
 
-	if (event->attr.aux_output && !perf_get_aux_event(event, group_leader))
+	if (event->attr.aux_output && !perf_get_aux_event(event, group_leader)) {
+		err = -EINVAL;
 		goto err_locked;
+	}
 
 	/*
 	 * Must be under the same ctx::mutex as perf_install_in_context(),
