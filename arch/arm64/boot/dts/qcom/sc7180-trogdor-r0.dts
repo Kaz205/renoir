@@ -1,0 +1,184 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Google Trogdor board device tree source
+ *
+ * Copyright 2019 Google LLC.
+ */
+
+/dts-v1/;
+
+#include "sc7180-trogdor.dtsi"
+
+/ {
+	model = "Google Trogdor (rev0+)";
+	compatible = "google,trogdor", "qcom,sc7180";
+};
+
+&ap_pen {
+	/* Not hooked up */
+	status = "disabled";
+};
+
+&ap_sar_sensor_i2c {
+	/* Not hooked up */
+	status = "disabled";
+};
+
+&ap_spi_fp {
+	/* Not hooked up */
+	status = "disabled";
+};
+
+&ap_tp_i2c {
+	/* Pullups are missing on r0, but it seems to work at 100 kHz */
+	clock-frequency = <100000>;
+};
+
+/* PINCTRL - board-specific pinctrl */
+
+&tlmm {
+	gpio-line-names = "ESIM_MISO",
+			  "ESIM_MOSI",
+			  "ESIM_CLK",
+			  "ESIM_CS_L",
+			  "FP_TO_AP_IRQ_L",
+			  "FP_RST_L",
+			  "AP_TP_I2C_SDA",
+			  "AP_TP_I2C_SCL",
+			  "TS_RESET_L",
+			  "TS_INT_L",
+			  "FPMCU_BOOT0",
+			  "EDP_BRIJ_IRQ",
+			  "AP_EDP_BKLTEN",
+			  "",
+			  "EDP_BRIJ_EN",
+			  "EDP_BRIJ_I2C_SDA",
+			  "EDP_BRIJ_I2C_SCL",
+			  "HUB_RST_L",
+			  "PEN_RST_ODL",
+			  "AP_RST_REQ",
+			  "AP_SUSPEND_L",
+			  "H1_AP_INT_ODL",
+			  "FPMCU_SEL_OD",
+			  "AMP_EN",
+			  "",
+			  "AP_SAR_SENSOR_SCL",
+			  "AP_SAR_SENSOR_SDA",
+			  "AP_SKU_ID2",
+			  "HP_IRQ",
+			  "AP_RAM_ID0",
+			  "",
+			  "AP_BRD_ID2",
+			  "BRIJ_SUSPEND",
+			  "AP_BRD_ID0",
+			  "AP_EC_SPI_MISO",
+			  "AP_EC_SPI_MOSI",
+			  "AP_EC_SPI_CLK",
+			  "AP_EC_SPI_CS_L",
+			  "BT_UART_CTS",
+			  "BT_UART_RTS",
+			  "BT_UART_TXD",
+			  "BT_UART_RXD",
+			  "BIOS_FLASH_WP_L",
+			  "P_SENSOR_INT_L",
+			  "UART_AP_TX_DBG_RX",
+			  "UART_DBG_TX_AP_RX",
+			  "HP_I2C_SDA",
+			  "HP_I2C_SCL",
+			  "FORCED_USB_BOOT",
+			  "AMP_BCLK",
+			  "AMP_LRCLK",
+			  "AMP_DIN",
+			  "PEN_PDCT_L",
+			  "HP_BCLK",
+			  "HP_LRCLK",
+			  "HP_DOUT",
+			  "HP_DIN",
+			  "HP_MCLK",
+			  "TRACKPAD_INT_1V8_ODL",
+			  "AP_H1_SPI_MISO",
+			  "AP_H1_SPI_MOSI",
+			  "AP_H1_SPI_CLK",
+			  "AP_H1_SPI_CS_L",
+			  "AP_SPI_CLK",
+			  "AP_SPI_MOSI",
+			  "AP_SPI_MISO",
+			  "",
+			  "",
+			  "AP_SPI_CS0_L",
+			  "SD_CD_OD",
+			  "RFFE6_CLK",
+			  "RFFE6_DATA",
+			  "",
+			  "WLAN_SW_CTRL",
+			  "BOOT_CONFIG_0",
+			  "UIM2_DATA",
+			  "UIM2_CLK",
+			  "UIM2_RST",
+			  "UIM2_PRESENT",
+			  "UIM1_DATA",
+			  "UIM1_CLK",
+			  "UIM1_RST",
+			  "",
+			  "EN_PP3300_CODEC",
+			  "EN_PP3300_HUB",
+			  "WMSS_RESET_L",
+			  "AP_SPI_FP_MISO",
+			  "AP_SPI_FP_MOSI",
+			  "AP_SPI_FP_CLK",
+			  "AP_SPI_FP_CS_L",
+			  "AP_SKU_ID1",
+			  "AP_RAM_ID1",
+			  "RFFE4_CLK",
+			  "AP_BRD_ID1",
+			  "AP_EC_INT_L",
+			  "SDM_GRFC_3/BOOT_CONFIG_1",
+			  "QLINK_REQ",
+			  "QLINK_EN",
+			  "SDM_GRFC_2/BOOT_CONFIG_4",
+			  "PA_INDICATOR/BOOT_CONFIG_2",
+			  "SDM_GRFC_1",
+			  "RFFE3_DATA",
+			  "RFFE3_CLK",
+			  "RFFE4_DATA",
+			  "PEN_IRQ_L",
+			  "AP_SKU_ID0",
+			  "EN_PP3300_DX_EDP",
+			  "SDM_GRFC_5/BOOT_CONFIG_3",
+			  "WCI2_LTE_COEX_TXD",
+			  "WCI2_LTE_COEX_RXD",
+			  "RFFE2_DATA",
+			  "RFFE2_CLK",
+			  "RFFE1_DATA",
+			  "RFFE1_CLK",
+			  "FORCED_USB_BOOT_POL",
+			  "AP_TS_PEN_I2C_SDA",
+			  "AP_TS_PEN_I2C_SCL",
+			  "DP_HOT_PLUG_DET",
+			  "EC_IN_RW_ODL",
+			  "",
+			  "";
+};
+
+/* PINCTRL - board-specific pinctrl */
+
+&tlmm {
+	/*
+	 * pinctrl settings for pins that have no real owners.
+	 */
+	pinctrl-names = "default";
+	pinctrl-0 = <&bios_flash_wp_l>, <&ap_suspend_l_neuter>;
+
+	/* We will totally remove this in r1+ */
+	ap_suspend_l_neuter: ap-suspend-l-neuter {
+		pinmux  {
+			pins = "gpio20";
+			function = "gpio";
+		};
+
+		pinconf {
+			pins = "gpio20";
+			bias-disable;
+		};
+	};
+};

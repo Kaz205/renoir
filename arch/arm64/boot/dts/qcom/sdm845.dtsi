@@ -1374,6 +1374,8 @@
 			lanes-per-direction = <2>;
 			power-domains = <&gcc UFS_PHY_GDSC>;
 			#reset-cells = <1>;
+			resets = <&gcc GCC_UFS_PHY_BCR>;
+			reset-names = "rst";
 
 			iommus = <&apps_smmu 0x100 0xf>;
 
@@ -2596,6 +2598,10 @@
 				clock-names = "core", "bus";
 				power-domains = <&videocc VCODEC1_GDSC>;
 			};
+
+			video-firmware {
+				iommus = <&apps_smmu 0x10b2 0x0>;
+			};
 		};
 
 		videocc: clock-controller@ab00000 {
@@ -3203,7 +3209,7 @@
 			      <0 0x17a60000 0 0x100000>;    /* GICR * 8 */
 			interrupts = <GIC_PPI 9 IRQ_TYPE_LEVEL_HIGH>;
 
-			gic-its@17a40000 {
+			msi-controller@17a40000 {
 				compatible = "arm,gic-v3-its";
 				msi-controller;
 				#msi-cells = <1>;

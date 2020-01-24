@@ -274,6 +274,18 @@ static inline void snd_soc_debugfs_exit(void)
 
 #endif
 
+/*
+ * This is glue code between snd_pcm_lib_ioctl() and
+ * snd_soc_component_driver :: ioctl
+ */
+int snd_soc_pcm_lib_ioctl(struct snd_soc_component *component,
+			  struct snd_pcm_substream *substream,
+			  unsigned int cmd, void *arg)
+{
+	return snd_pcm_lib_ioctl(substream, cmd, arg);
+}
+EXPORT_SYMBOL_GPL(snd_soc_pcm_lib_ioctl);
+
 static int snd_soc_rtdcom_add(struct snd_soc_pcm_runtime *rtd,
 			      struct snd_soc_component *component)
 {
@@ -1886,6 +1898,8 @@ match:
 
 			/* convert non BE into BE */
 			dai_link->no_pcm = 1;
+			dai_link->dpcm_playback = 1;
+			dai_link->dpcm_capture = 1;
 
 			/* override any BE fixups */
 			dai_link->be_hw_params_fixup =

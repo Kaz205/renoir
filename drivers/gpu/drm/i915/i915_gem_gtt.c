@@ -132,9 +132,15 @@ static void gen6_ggtt_invalidate(struct i915_ggtt *ggtt)
 static void guc_ggtt_invalidate(struct i915_ggtt *ggtt)
 {
 	struct intel_uncore *uncore = ggtt->vm.gt->uncore;
+	struct drm_i915_private *i915 = ggtt->vm.i915;
 
 	gen6_ggtt_invalidate(ggtt);
-	intel_uncore_write_fw(uncore, GEN8_GTCR, GEN8_GTCR_INVALIDATE);
+
+	if (INTEL_GEN(i915) >= 12)
+		intel_uncore_write_fw(uncore, GEN12_GUC_TLB_INV_CR,
+				      GEN12_GUC_TLB_INV_CR_INVALIDATE);
+	else
+		intel_uncore_write_fw(uncore, GEN8_GTCR, GEN8_GTCR_INVALIDATE);
 }
 
 static void gmch_ggtt_invalidate(struct i915_ggtt *ggtt)
@@ -1489,8 +1495,10 @@ static struct i915_ppgtt *gen8_ppgtt_create(struct drm_i915_private *i915)
 	 *
 	 * Gen11 has HSDES#:1807136187 unresolved. Disable ro support
 	 * for now.
+	 *
+	 * Gen12 has inherited the same read-only fault issue from gen11.
 	 */
-	ppgtt->vm.has_read_only = INTEL_GEN(i915) != 11;
+	ppgtt->vm.has_read_only = !IS_GEN_RANGE(i915, 11, 12);
 
 	/* There are only few exceptions for gen >=6. chv and bxt.
 	 * And we are not sure about the latter so play safe for now.
@@ -2023,7 +2031,7 @@ static void gtt_write_workarounds(struct intel_gt *gt)
 		intel_uncore_write(uncore,
 				   GEN8_L3_LRA_1_GPGPU,
 				   GEN9_L3_LRA_1_GPGPU_DEFAULT_VALUE_BXT);
-	else if (INTEL_GEN(i915) >= 9)
+	else if (INTEL_GEN(i915) >= 9 && INTEL_GEN(i915) <= 11)
 		intel_uncore_write(uncore,
 				   GEN8_L3_LRA_1_GPGPU,
 				   GEN9_L3_LRA_1_GPGPU_DEFAULT_VALUE_SKL);
