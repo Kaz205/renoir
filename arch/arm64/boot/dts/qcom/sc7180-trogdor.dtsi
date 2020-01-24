@@ -517,12 +517,6 @@ hp_i2c: &i2c9 {
 	pinctrl-1 = <&sdc1_off>;
 	vmmc-supply = <&mcp_vcc>;
 	vqmmc-supply = <&mcp_vccq>;
-
-	max-frequency = <100000000>;
-
-	/* TODO: b/146670930 */
-	/delete-property/ mmc-hs400-1_8v;
-	/delete-property/ mmc-hs400-enhanced-strobe;
 };
 
 &sdhc_2 {
