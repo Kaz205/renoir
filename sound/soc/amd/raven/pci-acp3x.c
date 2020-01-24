@@ -16,17 +16,17 @@ struct acp3x_dev_data {
 	void __iomem *acp3x_base;
 	bool acp3x_audio_mode;
 	struct resource *res;
-	struct platform_device *pdev[ACP3x_DEVS];
+	struct platform_device *pdev;
 };
 
 static int snd_acp3x_probe(struct pci_dev *pci,
 			   const struct pci_device_id *pci_id)
 {
-	struct acp3x_dev_data *adata;
-	struct platform_device_info pdevinfo[ACP3x_DEVS];
-	unsigned int irqflags;
-	int ret, i;
+	int ret;
 	u32 addr, val;
+	struct acp3x_dev_data *adata;
+	struct platform_device_info pdevinfo;
+	unsigned int irqflags;
 
 	if (pci_enable_device(pci)) {
 		dev_err(&pci->dev, "pci_enable_device failed\n");
@@ -56,11 +56,10 @@ static int snd_acp3x_probe(struct pci_dev *pci,
 		irqflags = 0;
 
 	addr = pci_resource_start(pci, 0);
-	adata->acp3x_base = devm_ioremap(&pci->dev, addr,
-					pci_resource_len(pci, 0));
+	adata->acp3x_base = ioremap(addr, pci_resource_len(pci, 0));
 	if (!adata->acp3x_base) {
 		ret = -ENOMEM;
-		goto disable_msi;
+		goto release_regions;
 	}
 	pci_set_master(pci);
 	pci_set_drvdata(pci, adata);
@@ -69,11 +68,11 @@ static int snd_acp3x_probe(struct pci_dev *pci,
 	switch (val) {
 	case I2S_MODE:
 		adata->res = devm_kzalloc(&pci->dev,
-					  sizeof(struct resource) * 4,
+					  sizeof(struct resource) * 2,
 					  GFP_KERNEL);
 		if (!adata->res) {
 			ret = -ENOMEM;
-			goto disable_msi;
+			goto unmap_mmio;
 		}
 
 		adata->res[0].name = "acp3x_i2s_iomem";
@@ -81,67 +80,40 @@ static int snd_acp3x_probe(struct pci_dev *pci,
 		adata->res[0].start = addr;
 		adata->res[0].end = addr + (ACP3x_REG_END - ACP3x_REG_START);
 
-		adata->res[1].name = "acp3x_i2s_sp";
-		adata->res[1].flags = IORESOURCE_MEM;
-		adata->res[1].start = addr + ACP3x_I2STDM_REG_START;
-		adata->res[1].end = addr + ACP3x_I2STDM_REG_END;
-
-		adata->res[2].name = "acp3x_i2s_bt";
-		adata->res[2].flags = IORESOURCE_MEM;
-		adata->res[2].start = addr + ACP3x_BT_TDM_REG_START;
-		adata->res[2].end = addr + ACP3x_BT_TDM_REG_END;
-
-		adata->res[3].name = "acp3x_i2s_irq";
-		adata->res[3].flags = IORESOURCE_IRQ;
-		adata->res[3].start = pci->irq;
-		adata->res[3].end = adata->res[3].start;
+		adata->res[1].name = "acp3x_i2s_irq";
+		adata->res[1].flags = IORESOURCE_IRQ;
+		adata->res[1].start = pci->irq;
+		adata->res[1].end = pci->irq;
 
 		adata->acp3x_audio_mode = ACP3x_I2S_MODE;
 
 		memset(&pdevinfo, 0, sizeof(pdevinfo));
-		pdevinfo[0].name = "acp3x_rv_i2s_dma";
-		pdevinfo[0].id = 0;
-		pdevinfo[0].parent = &pci->dev;
-		pdevinfo[0].num_res = 4;
-		pdevinfo[0].res = &adata->res[0];
-		pdevinfo[0].data = &irqflags;
-		pdevinfo[0].size_data = sizeof(irqflags);
+		pdevinfo.name = "acp3x_rv_i2s";
+		pdevinfo.id = 0;
+		pdevinfo.parent = &pci->dev;
+		pdevinfo.num_res = 2;
+		pdevinfo.res = adata->res;
+		pdevinfo.data = &irqflags;
+		pdevinfo.size_data = sizeof(irqflags);
 
-		pdevinfo[1].name = "acp3x_i2s_playcap";
-		pdevinfo[1].id = 0;
-		pdevinfo[1].parent = &pci->dev;
-		pdevinfo[1].num_res = 1;
-		pdevinfo[1].res = &adata->res[1];
-
-		pdevinfo[2].name = "acp3x_i2s_playcap";
-		pdevinfo[2].id = 1;
-		pdevinfo[2].parent = &pci->dev;
-		pdevinfo[2].num_res = 1;
-		pdevinfo[2].res = &adata->res[2];
-		for (i = 0; i < ACP3x_DEVS ; i++) {
-			adata->pdev[i] =
-				platform_device_register_full(&pdevinfo[i]);
-			if (IS_ERR(adata->pdev[i])) {
-				dev_err(&pci->dev, "cannot register %s device\n",
-					pdevinfo[i].name);
-				ret = PTR_ERR(adata->pdev[i]);
-				goto unregister_devs;
-			}
+		adata->pdev = platform_device_register_full(&pdevinfo);
+		if (IS_ERR(adata->pdev)) {
+			dev_err(&pci->dev, "cannot register %s device\n",
+				pdevinfo.name);
+			ret = PTR_ERR(adata->pdev);
+			goto unmap_mmio;
 		}
 		break;
 	default:
 		dev_err(&pci->dev, "Invalid ACP audio mode : %d\n", val);
 		ret = -ENODEV;
-		goto disable_msi;
+		goto unmap_mmio;
 	}
 	return 0;
 
-unregister_devs:
-	if (val == I2S_MODE)
-		for (i = 0 ; i < ACP3x_DEVS ; i++)
-			platform_device_unregister(adata->pdev[i]);
-disable_msi:
+unmap_mmio:
 	pci_disable_msi(pci);
+	iounmap(adata->acp3x_base);
 release_regions:
 	pci_release_regions(pci);
 disable_pci:
@@ -153,12 +125,10 @@ disable_pci:
 static void snd_acp3x_remove(struct pci_dev *pci)
 {
 	struct acp3x_dev_data *adata = pci_get_drvdata(pci);
-	int i;
 
-	if (adata->acp3x_audio_mode == ACP3x_I2S_MODE) {
-		for (i = 0 ; i <  ACP3x_DEVS ; i++)
-			platform_device_unregister(adata->pdev[i]);
-	}
+	platform_device_unregister(adata->pdev);
+	iounmap(adata->acp3x_base);
+
 	pci_disable_msi(pci);
 	pci_release_regions(pci);
 	pci_disable_device(pci);
@@ -181,7 +151,6 @@ static struct pci_driver acp3x_driver  = {
 
 module_pci_driver(acp3x_driver);
 
-MODULE_AUTHOR("Vishnuvardhanrao.Ravulapati@amd.com");
 MODULE_AUTHOR("Maruthi.Bayyavarapu@amd.com");
 MODULE_DESCRIPTION("AMD ACP3x PCI driver");
 MODULE_LICENSE("GPL v2");
