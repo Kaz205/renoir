@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
  */
 
 #include "../../../kernel/sched/sched.h"
@@ -9,6 +9,22 @@
 #include "trace.h"
 
 #ifdef CONFIG_SCHED_WALT
+#ifdef CONFIG_HZ_300
+/*
+ * Tick interval becomes to 3333333 due to
+ * rounding error when HZ=300.
+ */
+#define DEFAULT_SCHED_RAVG_WINDOW (3333333 * 6)
+#else
+/* Min window size (in ns) = 20ms */
+#define DEFAULT_SCHED_RAVG_WINDOW 20000000
+#endif
+
+/* Max window size (in ns) = 1s */
+#define MAX_SCHED_RAVG_WINDOW 1000000000
+
+#define NR_WINDOWS_PER_SEC (NSEC_PER_SEC / DEFAULT_SCHED_RAVG_WINDOW)
+
 extern int num_sched_clusters;
 
 extern unsigned int walt_big_tasks(int cpu);
