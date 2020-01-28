@@ -444,6 +444,11 @@ err_rq:
 		if (!rq)
 			continue;
 
+		if (rq->fence.error) {
+			err = -EIO;
+			goto out;
+		}
+
 		GEM_BUG_ON(!test_bit(CONTEXT_ALLOC_BIT, &rq->context->flags));
 		if (!rq->context->state)
 			continue;
