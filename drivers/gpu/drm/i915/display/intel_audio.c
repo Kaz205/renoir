@@ -147,6 +147,10 @@ static const struct {
 	{ 74250, AUD_CONFIG_PIXEL_CLOCK_HDMI_74250 },
 	{ 148352, AUD_CONFIG_PIXEL_CLOCK_HDMI_148352 },
 	{ 148500, AUD_CONFIG_PIXEL_CLOCK_HDMI_148500 },
+	{ 296703, AUD_CONFIG_PIXEL_CLOCK_HDMI_296703 },
+	{ 297000, AUD_CONFIG_PIXEL_CLOCK_HDMI_297000 },
+	{ 593407, AUD_CONFIG_PIXEL_CLOCK_HDMI_593407 },
+	{ 594000, AUD_CONFIG_PIXEL_CLOCK_HDMI_594000 },
 };
 
 /* HDMI N/CTS table */
@@ -230,7 +234,8 @@ static const struct hdmi_aud_ncts hdmi_aud_ncts_36bpp[] = {
 };
 
 /* get AUD_CONFIG_PIXEL_CLOCK_HDMI_* value for mode */
-static u32 audio_config_hdmi_pixel_clock(const struct intel_crtc_state *crtc_state)
+static u32 audio_config_hdmi_pixel_clock(struct drm_i915_private *dev_priv,
+					 const struct intel_crtc_state *crtc_state)
 {
 	const struct drm_display_mode *adjusted_mode =
 		&crtc_state->base.adjusted_mode;
@@ -240,6 +245,9 @@ static u32 audio_config_hdmi_pixel_clock(const struct intel_crtc_state *crtc_sta
 		if (adjusted_mode->crtc_clock == hdmi_audio_clock[i].clock)
 			break;
 	}
+
+	if (INTEL_GEN(dev_priv) < 12 && adjusted_mode->crtc_clock > 148500)
+		i = ARRAY_SIZE(hdmi_audio_clock);
 
 	if (i == ARRAY_SIZE(hdmi_audio_clock)) {
 		DRM_DEBUG_KMS("HDMI audio pixel clock setting for %d not found, falling back to defaults\n",
@@ -432,7 +440,7 @@ hsw_hdmi_audio_config_update(struct intel_encoder *encoder,
 	tmp &= ~AUD_CONFIG_N_VALUE_INDEX;
 	tmp &= ~AUD_CONFIG_PIXEL_CLOCK_HDMI_MASK;
 	tmp &= ~AUD_CONFIG_N_PROG_ENABLE;
-	tmp |= audio_config_hdmi_pixel_clock(crtc_state);
+	tmp |= audio_config_hdmi_pixel_clock(dev_priv, crtc_state);
 
 	n = audio_config_hdmi_get_n(crtc_state, rate);
 	if (n != 0) {
@@ -672,7 +680,7 @@ static void ilk_audio_codec_enable(struct intel_encoder *encoder,
 	if (intel_crtc_has_dp_encoder(crtc_state))
 		tmp |= AUD_CONFIG_N_VALUE_INDEX;
 	else
-		tmp |= audio_config_hdmi_pixel_clock(crtc_state);
+		tmp |= audio_config_hdmi_pixel_clock(dev_priv, crtc_state);
 	I915_WRITE(aud_config, tmp);
 }
 
