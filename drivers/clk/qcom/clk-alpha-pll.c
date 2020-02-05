@@ -542,7 +542,8 @@ static int __clk_alpha_pll_set_rate(struct clk_hw *hw, unsigned long rate,
 	rate = alpha_pll_round_rate(rate, prate, &l, &a, alpha_width);
 	vco = alpha_pll_find_vco(pll, rate);
 	if (pll->vco_table && !vco) {
-		pr_err("alpha pll not in a valid vco range\n");
+		pr_err("%s: alpha pll not in a valid vco range\n",
+		       clk_hw_get_name(hw));
 		return -EINVAL;
 	}
 
@@ -720,7 +721,7 @@ static int alpha_pll_huayra_set_rate(struct clk_hw *hw, unsigned long rate,
 	 */
 	if (clk_alpha_pll_is_enabled(hw)) {
 		if (cur_alpha != a) {
-			pr_err("clock needs to be gated %s\n",
+			pr_err("%s: clock needs to be gated\n",
 			       clk_hw_get_name(hw));
 			return -EBUSY;
 		}
@@ -1168,7 +1169,7 @@ static int alpha_pll_fabia_set_rate(struct clk_hw *hw, unsigned long rate,
 	struct clk_alpha_pll *pll = to_clk_alpha_pll(hw);
 	u32 l, alpha_width = pll_alpha_width(pll);
 	u64 a;
-	unsigned long rrate;
+	unsigned long rrate, max = rate + FABIA_PLL_RATE_MARGIN;
 
 	rrate = alpha_pll_round_rate(rate, prate, &l, &a, alpha_width);
 
@@ -1176,8 +1177,9 @@ static int alpha_pll_fabia_set_rate(struct clk_hw *hw, unsigned long rate,
 	 * Due to limited number of bits for fractional rate programming, the
 	 * rounded up rate could be marginally higher than the requested rate.
 	 */
-	if (rrate > (rate + FABIA_PLL_RATE_MARGIN) || rrate < rate) {
-		pr_err("Call set rate on the PLL with rounded rates!\n");
+	if (rrate > max || rrate < rate) {
+		pr_err("%s: Rounded rate %lu not within range [%lu, %lu)\n",
+		       clk_hw_get_name(hw), rrate, rate, max);
 		return -EINVAL;
 	}
 
@@ -1194,6 +1196,7 @@ static int alpha_pll_fabia_prepare(struct clk_hw *hw)
 	struct clk_hw *parent_hw;
 	unsigned long cal_freq, rrate;
 	u32 cal_l, val, alpha_width = pll_alpha_width(pll);
+	const char *name = clk_hw_get_name(hw);
 	u64 a;
 	int ret;
 
@@ -1208,7 +1211,7 @@ static int alpha_pll_fabia_prepare(struct clk_hw *hw)
 
 	vco = alpha_pll_find_vco(pll, clk_hw_get_rate(hw));
 	if (!vco) {
-		pr_err("alpha pll: not in a valid vco range\n");
+		pr_err("%s: alpha pll not in a valid vco range\n", name);
 		return -EINVAL;
 	}
 
@@ -1234,7 +1237,7 @@ static int alpha_pll_fabia_prepare(struct clk_hw *hw)
 	/* Bringup the PLL at calibration frequency */
 	ret = clk_alpha_pll_enable(hw);
 	if (ret) {
-		pr_err("alpha pll calibration failed\n");
+		pr_err("%s: alpha pll calibration failed\n", name);
 		return ret;
 	}
 
