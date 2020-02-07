@@ -24,6 +24,13 @@ static inline bool __arch_vdso_hres_capable(void)
 }
 #endif
 
+#ifndef vdso_clocksource_ok
+static inline bool vdso_clocksource_ok(const struct vdso_data *vd)
+{
+	return vd->clock_mode != VDSO_CLOCKMODE_NONE;
+}
+#endif
+
 static __always_inline int do_hres(const struct vdso_data *vd, clockid_t clk,
 		   struct __kernel_timespec *ts)
 {
@@ -38,7 +45,7 @@ static __always_inline int do_hres(const struct vdso_data *vd, clockid_t clk,
 	do {
 		seq = vdso_read_begin(vd);
 
-		if (unlikely(vd->clock_mode == VDSO_CLOCKMODE_NONE))
+		if (unlikely(!vdso_clocksource_ok(vd)))
 			return -1;
 
 		cycles = __arch_get_hw_counter(vd->clock_mode);
