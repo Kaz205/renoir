@@ -24,4 +24,7 @@ config GENERIC_COMPAT_VDSO
 	help
 	  This config option enables the compat VDSO layer.
 
+config GENERIC_VDSO_CLOCK_MODE
+	bool
+
 endif
