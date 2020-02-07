@@ -1355,6 +1355,11 @@ rcs_engine_wa_init(struct intel_engine_cs *engine, struct i915_wa_list *wal)
 			    GEN7_SARCHKMD,
 			    GEN7_DISABLE_SAMPLER_PREFETCH);
 
+		/* Wa_1407928979:tgl */
+		wa_write_or(wal,
+			    GEN7_FF_THREAD_MODE,
+			    GEN12_FF_TESSELATION_DOP_GATE_DISABLE);
+
 		/* Wa_1606931601:tgl */
 		wa_masked_en(wal,
 			     GEN7_ROW_CHICKEN2,
