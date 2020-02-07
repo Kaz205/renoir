@@ -255,9 +255,8 @@
 	status = "okay";
 };
 
-
 &sdhc_1 {
-	status = "ok";
+	status = "okay";
 
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&sdc1_on>;
@@ -267,7 +266,7 @@
 };
 
 &sdhc_2 {
-	status = "ok";
+	status = "okay";
 
 	pinctrl-names = "default","sleep";
 	pinctrl-0 = <&sdc2_on>;
