@@ -237,12 +237,19 @@ static u64 read_hv_sched_clock_tsc(void)
 		(NSEC_PER_SEC / HV_CLOCK_HZ);
 }
 
+static int hv_cs_enable(struct clocksource *cs)
+{
+	hv_enable_vdso_clocksource();
+	return 0;
+}
+
 static struct clocksource hyperv_cs_tsc = {
 	.name	= "hyperv_clocksource_tsc_page",
 	.rating	= 400,
 	.read	= read_hv_clock_tsc,
 	.mask	= CLOCKSOURCE_MASK(64),
 	.flags	= CLOCK_SOURCE_IS_CONTINUOUS,
+	.enable = hv_cs_enable,
 };
 
 static u64 notrace read_hv_clock_msr(struct clocksource *arg)
