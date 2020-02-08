@@ -58,9 +58,9 @@ static int __mt7615_mcu_msg_send(struct mt7615_dev *dev, struct sk_buff *skb,
 	u32 val;
 	__le32 *txd;
 
-	seq = ++dev->mt76.mmio.mcu.msg_seq & 0xf;
+	seq = ++dev->mt76.mcu.msg_seq & 0xf;
 	if (!seq)
-		seq = ++dev->mt76.mmio.mcu.msg_seq & 0xf;
+		seq = ++dev->mt76.mcu.msg_seq & 0xf;
 
 	mcu_txd = (struct mt7615_mcu_txd *)skb_push(skb,
 		   sizeof(struct mt7615_mcu_txd));
@@ -156,7 +156,7 @@ mt7615_mcu_msg_send(struct mt76_dev *mdev, int cmd, const void *data,
 	if (!skb)
 		return -ENOMEM;
 
-	mutex_lock(&mdev->mmio.mcu.mutex);
+	mutex_lock(&mdev->mcu.mutex);
 
 	ret = __mt7615_mcu_msg_send(dev, skb, cmd, &seq);
 	if (ret)
@@ -177,7 +177,7 @@ mt7615_mcu_msg_send(struct mt76_dev *mdev, int cmd, const void *data,
 	}
 
 out:
-	mutex_unlock(&mdev->mmio.mcu.mutex);
+	mutex_unlock(&mdev->mcu.mutex);
 
 	return ret;
 }
@@ -722,7 +722,7 @@ void mt7615_mcu_exit(struct mt7615_dev *dev)
 {
 	__mt76_mcu_restart(&dev->mt76);
 	mt7615_firmware_own(dev);
-	skb_queue_purge(&dev->mt76.mmio.mcu.res_q);
+	skb_queue_purge(&dev->mt76.mcu.res_q);
 }
 
 int mt7615_mcu_set_eeprom(struct mt7615_dev *dev)
