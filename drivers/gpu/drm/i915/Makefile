@@ -47,7 +47,6 @@ i915-y += i915_drv.o \
 	  i915_switcheroo.o \
 	  i915_sysfs.o \
 	  i915_utils.o \
-	  intel_csr.o \
 	  intel_device_info.o \
 	  intel_memory_region.o \
 	  intel_pch.o \
@@ -184,6 +183,7 @@ i915-y += \
 	display/intel_color.o \
 	display/intel_combo_phy.o \
 	display/intel_connector.o \
+	display/intel_csr.o \
 	display/intel_display.o \
 	display/intel_display_power.o \
 	display/intel_dpio_phy.o \
