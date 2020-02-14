@@ -26,8 +26,7 @@
 #include <linux/moduleparam.h>
 
 #include <drm/ttm/ttm_execbuf_util.h>
-#include <linux/dma-buf.h>
-#include <linux/uuid.h>
+
 #include "virtgpu_drv.h"
 #include <drm/virtgpu_drm.h>
 #include <linux/virtio_dma_buf.h>
@@ -280,25 +279,4 @@ int virtio_gpu_object_wait(struct virtio_gpu_object *bo, bool no_wait)
 	r = ttm_bo_wait(&bo->tbo, true, no_wait);
 	ttm_bo_unreserve(&bo->tbo);
 	return r;
-}
-
-int virtio_gpu_dma_buf_to_handle(struct dma_buf *dma_buf, bool no_wait,
-				 uint32_t *handle)
-{
-	struct virtio_gpu_object *qobj;
-	struct virtio_gpu_device *vgdev;
-	uuid_t uuid;
-
-	if (virtio_dma_buf_get_uuid(dma_buf, &uuid) != 0)
-		return -EINVAL;
-
-	qobj = gem_to_virtio_gpu_obj(dma_buf->priv);
-	vgdev = (struct virtio_gpu_device *)qobj->gem_base.dev->dev_private;
-	if (!qobj->create_callback_done && !no_wait)
-		wait_event(vgdev->resp_wq, qobj->create_callback_done);
-	if (!qobj->create_callback_done)
-		return -ETIMEDOUT;
-
-	*handle = qobj->hw_res_handle;
-	return 0;
 }
