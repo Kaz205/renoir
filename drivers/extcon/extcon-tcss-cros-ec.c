@@ -482,6 +482,47 @@ int cros_ec_tcss_detect_cable(struct cros_ec_tcss_info *info,
 	return ret;
 }
 
+static void cros_ec_tcss_bh_work(struct work_struct *work)
+{
+	struct cros_ec_tcss_info *info =
+		container_of(work, struct cros_ec_tcss_info, bh_work);
+	u8 i;
+
+	mutex_lock(&info->lock);
+	for (i = 0; i < info->num_ports; i++) {
+		if (cros_ec_tcss_detect_cable(info, false, i) >= 0)
+			continue;
+		dev_err(info->dev, "Port %d, Error detecting cable\n", i);
+		break;
+	}
+	mutex_unlock(&info->lock);
+}
+
+static int cros_ec_tcss_event(struct notifier_block *nb,
+			      unsigned long queued_during_suspend,
+			      void *_notify)
+{
+	struct cros_ec_tcss_info *info =
+		container_of(nb, struct cros_ec_tcss_info, notifier);
+
+	if (info)
+		schedule_work(&info->bh_work);
+
+	return NOTIFY_DONE;
+}
+
+static int cros_ec_tcss_remove(struct platform_device *pdev)
+{
+	struct cros_ec_tcss_info *info = platform_get_drvdata(pdev);
+
+	blocking_notifier_chain_unregister(&info->ec->event_notifier,
+					   &info->notifier);
+	cancel_work_sync(&info->bh_work);
+	mutex_destroy(&info->lock);
+
+	return 0;
+}
+
 static int cros_ec_tcss_probe(struct platform_device *pdev)
 {
 	struct cros_ec_tcss_info *info;
@@ -523,25 +564,46 @@ static int cros_ec_tcss_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, info);
 
+	mutex_init(&info->lock);
+	INIT_WORK(&info->bh_work, cros_ec_tcss_bh_work);
+
+	/* Get Port detection events from the EC */
+	info->notifier.notifier_call = cros_ec_tcss_event;
+	ret = blocking_notifier_chain_register(&info->ec->event_notifier,
+					       &info->notifier);
+	if (ret < 0) {
+		dev_err(dev, "failed to register notifier\n");
+		goto destroy_mutex;
+	}
+
+	mutex_lock(&info->lock);
 	/* Perform initial detection */
 	for (i = 0; i < info->num_ports; i++) {
 		ret = cros_ec_pd_get_port_info(info, i);
 		if (ret < 0) {
 			dev_err(dev, "failed getting USB port info! ret = %d\n",
 				ret);
-			goto probe_exit;
+			goto remove_tcss;
 		}
 
 		ret = cros_ec_tcss_detect_cable(info, true, i);
 		if (ret < 0) {
 			dev_err(dev, "failed to detect initial cable state\n");
-			goto probe_exit;
+			goto remove_tcss;
 		}
 	}
+	mutex_unlock(&info->lock);
 
 return 0;
 
-probe_exit:
+remove_tcss:
+	mutex_unlock(&info->lock);
+	blocking_notifier_chain_unregister(&info->ec->event_notifier,
+					   &info->notifier);
+	cancel_work_sync(&info->bh_work);
+destroy_mutex:
+	mutex_destroy(&info->lock);
+
 	return ret;
 }
 
@@ -556,6 +618,7 @@ static struct platform_driver tcss_cros_ec_driver = {
 		   .name = "extcon-tcss-cros-ec",
 		   .of_match_table = cros_ec_tcss_of_match,
 	},
+	.remove = cros_ec_tcss_remove,
 	.probe = cros_ec_tcss_probe,
 };
 

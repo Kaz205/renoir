@@ -136,10 +136,14 @@ struct cros_ec_tcss_data {
 /* Driver specific structure that holds info on all its dependencies */
 struct cros_ec_tcss_info {
 	u8 num_ports;
+	struct work_struct bh_work;
+	struct notifier_block notifier;
 	struct device *dev;
 	struct cros_ec_device *ec;
 	struct cros_ec_tcss_data *tcss;
 	struct intel_scu_ipc_dev *scu;
+	/* Synchronize cable detection logic across callers */
+	struct mutex lock;
 };
 
 static const u8 tcss_requests[] = {
