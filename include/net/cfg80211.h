@@ -611,36 +611,32 @@ struct cfg80211_chan_def {
 	struct ieee80211_edmg edmg;
 };
 
-enum ieee80211_tid_conf_mask {
-	IEEE80211_TID_CONF_NOACK	= BIT(NL80211_TID_CONFIG_ATTR_NOACK),
-};
-
 /**
- * struct ieee80211_tid_cfg - TID specific configuration
+ * struct cfg80211_tid_cfg - TID specific configuration
  * @config_override: Flag to notify driver to reset TID configuration
  *	of the peer.
- * @tid: TID number
- * @tid_conf_mask: bitmap indicating which parameter changed
- *	see &enum ieee80211_tid_conf_mask
+ * @tids: bitmap of TIDs to modify
+ * @mask: bitmap of attributes indicating which parameter changed,
+ *	similar to &nl80211_tid_config_supp.
  * @noack: noack configuration value for the TID
  */
-struct ieee80211_tid_cfg {
+struct cfg80211_tid_cfg {
 	bool config_override;
-	u8 tid;
-	u32 tid_conf_mask;
+	u8 tids;
+	u32 mask;
 	enum nl80211_tid_config noack;
 };
 
 /**
- * struct ieee80211_tid_config - TID configuration
+ * struct cfg80211_tid_config - TID configuration
  * @peer: Station's MAC address
  * @n_tid_conf: Number of TID specific configurations to be applied
  * @tid_conf: Configuration change info
  */
-struct ieee80211_tid_config {
+struct cfg80211_tid_config {
 	const u8 *peer;
 	u32 n_tid_conf;
-	struct ieee80211_tid_cfg tid_conf[];
+	struct cfg80211_tid_cfg tid_conf[];
 };
 
 /**
@@ -3739,8 +3735,8 @@ struct cfg80211_update_owe_info {
  *
  * @set_tid_config: TID specific configuration, this can be peer or BSS specific
  *	This callback may sleep.
- * @reset_tid_config: Reset TID specific configuration for the peer.
- *	This callback may sleep.
+ * @reset_tid_config: Reset TID specific configuration for the peer, for the
+ *	given TIDs. This callback may sleep.
  */
 struct cfg80211_ops {
 	int	(*suspend)(struct wiphy *wiphy, struct cfg80211_wowlan *wow);
@@ -4064,9 +4060,9 @@ struct cfg80211_ops {
 	int	(*set_sar_specs)(struct wiphy *wiphy,
 				 struct cfg80211_sar_specs *sar);
 	int     (*set_tid_config)(struct wiphy *wiphy, struct net_device *dev,
-				  struct ieee80211_tid_config *tid_conf);
+				  struct cfg80211_tid_config *tid_conf);
 	int	(*reset_tid_config)(struct wiphy *wiphy, struct net_device *dev,
-				    const u8 *peer, u8 tid);
+				    const u8 *peer, u8 tids);
 };
 
 /*
@@ -4684,6 +4680,13 @@ struct wiphy_iftype_akm_suites {
  *
  * @pmsr_capa: peer measurement capabilities
  *
+ * @tid_config_support: describes the per-TID config support that the
+ *	device has
+ * @tid_config_support.vif: bitmap of attributes (configurations)
+ *	supported by the driver for each vif
+ * @tid_config_support.peer: bitmap of attributes (configurations)
+ *	supported by the driver for each peer
+ *
  * @sar_capa: SAR control capabilities
  */
 struct wiphy {
@@ -4831,6 +4834,10 @@ struct wiphy {
 	   support_only_he_mbssid:1;
 
 	const struct cfg80211_pmsr_capabilities *pmsr_capa;
+
+	struct {
+		u64 peer, vif;
+	} tid_config_support;
 
 	const struct cfg80211_sar_capa *sar_capa;
 

@@ -2191,9 +2191,7 @@ enum nl80211_tid_config {
 	NL80211_TID_CONFIG_ENABLE,
 	NL80211_TID_CONFIG_DISABLE,
 };
-#endif
 
-#if CFG80211_VERSION < KERNEL_VERSION(5,7,0)
 /**
  * struct cfg80211_tid_cfg - TID specific configuration
  * @config_override: Flag to notify driver to reset TID configuration
@@ -2228,6 +2226,9 @@ struct cfg80211_tid_config {
 	u32 n_tid_conf;
 	struct cfg80211_tid_cfg tid_conf[];
 };
+#endif
+
+#if CFG80211_VERSION < KERNEL_VERSION(5,7,0)
 
 #define NL80211_EXT_FEATURE_CONTROL_PORT_NO_PREAUTH -1
 #define NL80211_EXT_FEATURE_DEL_IBSS_STA -1

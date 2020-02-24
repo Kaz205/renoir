@@ -1327,7 +1327,7 @@ static inline int rdev_set_sar_specs(struct cfg80211_registered_device *rdev,
 
 static inline int rdev_set_tid_config(struct cfg80211_registered_device *rdev,
 				      struct net_device *dev,
-				      struct ieee80211_tid_config *tid_conf)
+				      struct cfg80211_tid_config *tid_conf)
 {
 	int ret;
 
@@ -1339,12 +1339,12 @@ static inline int rdev_set_tid_config(struct cfg80211_registered_device *rdev,
 
 static inline int rdev_reset_tid_config(struct cfg80211_registered_device *rdev,
 					struct net_device *dev, const u8 *peer,
-					u8 tid)
+					u8 tids)
 {
 	int ret;
 
-	trace_rdev_reset_tid_config(&rdev->wiphy, dev, peer, tid);
-	ret = rdev->ops->reset_tid_config(&rdev->wiphy, dev, peer, tid);
+	trace_rdev_reset_tid_config(&rdev->wiphy, dev, peer, tids);
+	ret = rdev->ops->reset_tid_config(&rdev->wiphy, dev, peer, tids);
 	trace_rdev_return_int(&rdev->wiphy, ret);
 	return ret;
 }
