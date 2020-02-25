@@ -167,16 +167,21 @@
 			regulator-max-microvolt = <1128000>;
 		};
 
-		pp1056_s4a: smps4 {
-			regulator-min-microvolt = <1056000>;
-			regulator-max-microvolt = <1056000>;
-		};
-
-		pp2040_s5a: smps5 {
-			/* TODO: not ppvar, so min/max should be the same */
-			regulator-min-microvolt = <2040000>;
-			regulator-max-microvolt = <2040000>;
-		};
+		/*
+		 * pp2040_s5a (smps5) and pp1056_s4a (smps4) are just
+		 * inputs to other rails on AOP-managed PMICs on trogdor.
+		 * The system is already configured to manage these rails
+		 * automatically (enable when needed, adjust voltage for
+		 * headroom) so we won't specify anything here.
+		 *
+		 * NOTE: though the rails have a voltage implied by their
+		 * name, the automatic headroom calculation might not result
+		 * in them being that voltage.  ...and that's OK.
+		 * Specifically the only point of these rails is to provide
+		 * an input source for other rails and if we can satisify the
+		 * needs of those other rails with a lower source voltage then
+		 * we save power.
+		 */
 
 		pp1200_l1a: ldo1 {
 			regulator-min-microvolt = <1200000>;
