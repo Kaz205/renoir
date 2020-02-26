@@ -278,19 +278,21 @@ u8 cros_ec_tcss_get_next_state_req(struct cros_ec_tcss_data *port_data,
 	    tcss_mode_states[prev_port_data->conn_mode][port_data->conn_mode];
 
 	/* before entering alternate mode enter safe mode */
-	if (ret == TO_REQ(PMC_IPC_SFMODE_REQ_RES))
+	if (ret == TO_REQ(PMC_IPC_SFMODE_REQ_RES)) {
 		port_data->conn_mode = PMC_IPC_SAFE_MODE;
 	/* check for HPD */
-	else if (ret == TO_REQ(PMC_IPC_ALTMODE_REQ_RES)) {
-		if (port_data->mux_info.dp &&
-		    (port_data->mux_info.hpd_irq ||
-		     port_data->mux_info.hpd_lvl !=
-		     prev_port_data->mux_info.hpd_lvl)) {
-			if (prev_port_data->conn_mode == PMC_IPC_ALT_MODE)
+	} else if (ret == TO_REQ(PMC_IPC_ALTMODE_REQ_RES)) {
+		if (prev_port_data->conn_mode == PMC_IPC_ALT_MODE) {
+			/* Alternate mode HPD/IRQ changed */
+			if (port_data->mux_info.hpd_irq ||
+			    port_data->mux_info.hpd_lvl !=
+			    prev_port_data->mux_info.hpd_lvl)
 				ret = TO_REQ(PMC_IPC_HPD_REQ_RES);
+			/* Nothing to change */
 			else
 				ret = 0;
 		} else {
+			/* Alternate mode has HPD/IRQ */
 			if (port_data->mux_info.hpd_irq ||
 			    port_data->mux_info.hpd_lvl)
 				ret |= TO_REQ(PMC_IPC_HPD_REQ_RES);
@@ -304,21 +306,21 @@ static void cros_ec_tcss_altmode_req(struct tcss_mux *mux_data, u8 *tcss_req)
 	if (!mux_data || !tcss_req)
 		return;
 
-	if (mux_data->dp)
-		tcss_req[1] |= PMC_IPC_ALTMODE_REQ_MODE_DP;
-	else if (mux_data->tbt || mux_data->usb4)
-		tcss_req[1] |= PMC_IPC_ALTMODE_REQ_MODE_TBT_USB4;
-
 	tcss_req[4] = MUX_DATA_CONN_INFO(mux_data);
 
-	if (mux_data->dp_mode <= BIT(DP_PIN_ASSIGN_F))
+	if (mux_data->dp) {
+		tcss_req[1] |= PMC_IPC_ALTMODE_REQ_MODE_DP;
+
 		tcss_req[5] = ffs(mux_data->dp_mode);
 
-	tcss_req[5] |= mux_data->hpd_lvl ?
+		tcss_req[5] |= mux_data->hpd_lvl ?
 		       PMC_IPC_ALTMODE_REQ_MODE_HPD_HIGH : 0;
 
-	if (!mux_data->tbt && !mux_data->usb4)
 		return;
+	}
+
+	/* USB4 or TBT */
+	tcss_req[1] |= PMC_IPC_ALTMODE_REQ_MODE_TBT_USB4;
 
 	tcss_req[6] = (mux_data->tbt_type ?
 		       PMC_IPC_ALTMODE_REQ_MODE_TBT_TYPE : 0) |
@@ -342,8 +344,10 @@ static int cros_ec_tcss_req(struct cros_ec_tcss_info *info, int req_type,
 {
 	struct cros_ec_tcss_data *tcss_info = &info->tcss[port];
 	struct device *dev = info->dev;
-	u32 write_size, tcss_res;
+	u32 write_size, tcss_res = 0;
+	bool retry_pmc_cmd = true;
 	u8 tcss_req[8] = { 0 };
+	u8 pmc_cmd_sts;
 	int ret;
 
 	tcss_req[0] = req_type | tcss_info->usb3_port << EC_USB3_PORT_SHIFT;
@@ -376,13 +380,15 @@ static int cros_ec_tcss_req(struct cros_ec_tcss_info *info, int req_type,
 		tcss_req[1] = (mux_data->hpd_lvl ? PMC_IPC_DP_HPD_REQ_LVL : 0) |
 			      (mux_data->hpd_irq ? PMC_IPC_DP_HPD_REQ_IRQ : 0);
 		write_size = PMC_IPC_HPD_REQ_WRITE_SIZE_BYTE;
-	break;
+		break;
 
 	default:
 		dev_err(dev, "Invalid req type to PMC = %d", req_type);
 		goto err;
 	}
 
+retry_pmc_ipc_cmd:
+	tcss_res = 0;
 	ret = intel_scu_ipc_dev_command(info->scu, PMC_IPC_USBC_CMD_ID, 0,
 					tcss_req, write_size, &tcss_res,
 					sizeof(tcss_res));
@@ -390,37 +396,47 @@ static int cros_ec_tcss_req(struct cros_ec_tcss_info *info, int req_type,
 		dev_err(dev, "IPC to PMC failed with error %d\n", ret);
 		goto err;
 	}
-	dev_dbg(dev, "tcss_res=0x%x", tcss_res);
+
+	if ((tcss_res & PMC_IPC_CONN_RES_REQ_MASK) != req_type)
+		goto err;
+	if ((tcss_res & PMC_IPC_CONN_RES_USB3_PORT_MASK) !=
+	    (tcss_info->usb3_port << PMC_IPC_CONN_RES_USB3_PORT_SHIFT))
+		goto err;
 
 	switch (req_type) {
 	case PMC_IPC_CONN_REQ_RES:
 	case PMC_IPC_DIS_REQ_RES:
-		if ((tcss_res & PMC_IPC_CONN_RES_REQ_MASK) != req_type)
-			goto err;
-		if ((tcss_res & PMC_IPC_CONN_RES_USB3_PORT_MASK) !=
-		    (tcss_info->usb3_port << PMC_IPC_CONN_RES_USB3_PORT_SHIFT))
-			goto err;
 		if ((tcss_res & PMC_IPC_CONN_RES_USB2_PORT_MASK) !=
 		    (tcss_info->usb2_port << PMC_IPC_CONN_RES_USB2_PORT_SHIFT))
 			goto err;
-		if (tcss_res & PMC_IPC_CONN_DIS_RES_STATUS_MASK)
-			goto err;
+		pmc_cmd_sts = (tcss_res & PMC_IPC_CONN_DIS_RES_STATUS_MASK) >>
+				PMC_IPC_CONN_DIS_RES_STATUS_SHIFT;
 		break;
 	case PMC_IPC_SFMODE_REQ_RES:
 	case PMC_IPC_ALTMODE_REQ_RES:
 	case PMC_IPC_HPD_REQ_RES:
-		if (((tcss_res & PMC_IPC_CONN_RES_REQ_MASK) != req_type) ||
-		    ((tcss_res & PMC_IPC_CONN_RES_USB3_PORT_MASK) !=
-		     (tcss_info->usb3_port <<
-		      PMC_IPC_CONN_RES_USB3_PORT_SHIFT)) ||
-		    (tcss_res & PMC_IPC_SAFE_ALT_HPD_RES_STATUS_MASK))
-			goto err;
+		pmc_cmd_sts = (tcss_res &
+			PMC_IPC_SAFE_ALT_HPD_RES_STATUS_MASK) >>
+				PMC_IPC_SAFE_ALT_HPD_RES_STATUS_SHIFT;
 		break;
+	default:
+		dev_err(dev, "Invalid req type to PMC = %d", req_type);
+		goto err;
 	}
 
-	return 0;
+	if (pmc_cmd_sts == TCSS_STATUS_SUCCESS)
+		return 0;
+
+	if (pmc_cmd_sts == TCSS_STATUS_UNSUCCESS_RETRY && retry_pmc_cmd) {
+		retry_pmc_cmd = false;
+		dev_warn(dev, "PMC IPC CMD retry: port=%d, req=%d\n",
+				port, req_type);
+		goto retry_pmc_ipc_cmd;
+	}
+
 err:
-	dev_err(dev, "PMC TCSS req %d failed\n", req_type);
+	dev_err(dev, "PMC TCSS failed port=%d, req=%d, tcss_res=0x%x\n",
+		port, req_type, tcss_res);
 	return -EIO;
 }
 

@@ -46,7 +46,6 @@
 #define PMC_IPC_ALTMODE_REQ_MODE_DATA_CONN		BIT(1)
 #define PMC_IPC_ALTMODE_REQ_MODE_DATA_CABLE		BIT(2)
 #define PMC_IPC_ALTMODE_REQ_MODE_DATA_UFP		BIT(3)
-#define PMC_IPC_ALTMODE_REQ_MODE_DATA_ORI		GENMASK(5, 4)
 
 /* Mode data [15:8] */
 #define PMC_IPC_ALTMODE_REQ_MODE_HPD_HIGH		BIT(6)
@@ -75,7 +74,9 @@
 #define PMC_IPC_CONN_RES_USB2_PORT_SHIFT		0x08
 
 #define PMC_IPC_CONN_DIS_RES_STATUS_MASK		GENMASK(17, 16)
+#define PMC_IPC_CONN_DIS_RES_STATUS_SHIFT		16
 #define PMC_IPC_SAFE_ALT_HPD_RES_STATUS_MASK		GENMASK(9, 8)
+#define PMC_IPC_SAFE_ALT_HPD_RES_STATUS_SHIFT		8
 
 /*
  * TBT Cable Speed Support
@@ -88,8 +89,7 @@
 		 PMC_IPC_ALTMODE_REQ_MODE_DATA_CONN : 0) | \
 		((mux_data)->active_cable ? \
 		 PMC_IPC_ALTMODE_REQ_MODE_DATA_CABLE : 0) | \
-		((mux_data)->ufp ? PMC_IPC_ALTMODE_REQ_MODE_DATA_UFP : 0) | \
-		((mux_data)->polarity ? PMC_IPC_ALTMODE_REQ_MODE_DATA_ORI : 0)
+		((mux_data)->ufp ? PMC_IPC_ALTMODE_REQ_MODE_DATA_UFP : 0)
 
 /* reserved field of struct ec_response_locate_chip */
 #define EC_USB2_PORT_MASK				0x0F
@@ -99,9 +99,17 @@
 enum pmc_ipc_conn_mode {
 	PMC_IPC_DISCONNECT_MODE = 0,
 	PMC_IPC_USB_MODE,
-	PMC_IPC_ALT_MODE,
 	PMC_IPC_SAFE_MODE,
+	PMC_IPC_ALT_MODE,
 	PMC_IPC_TOTAL_MODES,
+};
+
+/* TCSS result status */
+enum tcss_res_status {
+	TCSS_STATUS_SUCCESS = 0,
+	TCSS_STATUS_UNSUCCESS,
+	TCSS_STATUS_UNSUCCESS_RETRY,
+	TCSS_STATUS_FATAL,
 };
 
 /* TCSS Multiplexing data for a Type-C port */
@@ -158,27 +166,25 @@ static const u8 tcss_requests[] = {
  * This look up table retrieves the request given previous mode and
  * the next mode.
  * [Previous mode] [next mode]
+ *
+ * TCSS state transition diagram
+ * Ref: TCSS SAS document (b:147460168#comment71)
+ *
+ * USB-C Port modes: Open, USB, Safe, Alternate
+ * TCSS Requests: Connect, Disconnect, Safe, Altenate, HPD
  */
 static const u8 tcss_mode_states[][PMC_IPC_TOTAL_MODES] = {
-	/* From Disconnect mode -> USB mode */
-	{ 0, TO_REQ(PMC_IPC_CONN_REQ_RES), 0, 0, },
+	{ 0, TO_REQ(PMC_IPC_CONN_REQ_RES), TO_REQ(PMC_IPC_CONN_REQ_RES) |
+	  TO_REQ(PMC_IPC_SFMODE_REQ_RES), TO_REQ(PMC_IPC_CONN_REQ_RES) |
+	  TO_REQ(PMC_IPC_SFMODE_REQ_RES) | TO_REQ(PMC_IPC_ALTMODE_REQ_RES), },
 
-	/* From USB mode -> Disconnect mode
-	 *               -> Alternate mode
-	 *               -> Safe mode
-	 */
 	{ TO_REQ(PMC_IPC_DIS_REQ_RES), 0, TO_REQ(PMC_IPC_SFMODE_REQ_RES),
-	  TO_REQ(PMC_IPC_SFMODE_REQ_RES), },
+	  TO_REQ(PMC_IPC_SFMODE_REQ_RES) | TO_REQ(PMC_IPC_ALTMODE_REQ_RES), },
 
-	/*
-	 * From Alternate mode -> Disconnect mode
-	 *                     -> Alternate mode with HPD
-	 *                     -> Alternate mode without HPD
-	 */
-	{ TO_REQ(PMC_IPC_DIS_REQ_RES), 0, TO_REQ(PMC_IPC_ALTMODE_REQ_RES), 0, },
+	{ TO_REQ(PMC_IPC_DIS_REQ_RES), TO_REQ(PMC_IPC_CONN_REQ_RES), 0,
+	  TO_REQ(PMC_IPC_ALTMODE_REQ_RES), },
 
-	/* From Safe mode -> Disconnect mode -> Alternate mode */
-	{ TO_REQ(PMC_IPC_DIS_REQ_RES), 0, TO_REQ(PMC_IPC_ALTMODE_REQ_RES), 0, },
-
+	{ TO_REQ(PMC_IPC_DIS_REQ_RES), TO_REQ(PMC_IPC_SFMODE_REQ_RES) |
+	  TO_REQ(PMC_IPC_CONN_REQ_RES), TO_REQ(PMC_IPC_SFMODE_REQ_RES),
+	  TO_REQ(PMC_IPC_ALTMODE_REQ_RES), },
 };
-
