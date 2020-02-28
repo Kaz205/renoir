@@ -160,6 +160,22 @@ ap_ts_pen_1v8: &i2c4 {
 			  "";
 };
 
+&qup_uart3_default {
+	/* account for swapped Bluetooth TX/RX and RTS/CTS lines */
+
+	pinconf-cts {
+		pins = "gpio39";
+	};
+
+	pinconf-rts-tx {
+		pins = "gpio38", "gpio41";
+	};
+
+	pinconf-rx {
+		pins = "gpio40";
+	};
+};
+
 &tlmm {
 	gpio-line-names = "ESIM_MISO",
 			  "ESIM_MOSI",
@@ -284,4 +300,9 @@ ap_ts_pen_1v8: &i2c4 {
 			  "AP_TS_PEN_I2C_SCL",
 			  "DP_HOT_PLUG_DET",
 			  "EC_IN_RW_ODL";
+};
+
+&uart3 {
+	cts-rts-swap;
+	rx-tx-swap;
 };
