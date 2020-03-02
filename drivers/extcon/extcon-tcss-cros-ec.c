@@ -270,6 +270,7 @@ static int cros_ec_tcss_get_current_state(struct cros_ec_tcss_info *info,
  *
  * Return: Request for next state, 0 if nothing needs to be done
  */
+static
 u8 cros_ec_tcss_get_next_state_req(struct cros_ec_tcss_data *port_data,
 				   struct cros_ec_tcss_data *prev_port_data)
 {
@@ -423,8 +424,8 @@ err:
 	return -EIO;
 }
 
-int cros_ec_tcss_detect_cable(struct cros_ec_tcss_info *info,
-			      bool force, u8 port)
+static int cros_ec_tcss_detect_cable(struct cros_ec_tcss_info *info,
+				     bool force, u8 port)
 {
 	struct cros_ec_tcss_data *tcss_info;
 	struct cros_ec_tcss_data port_data;
