@@ -667,6 +667,17 @@ hp_i2c: &i2c9 {
 	status = "okay";
 };
 
+&remoteproc_mpss {
+	status = "okay";
+	compatible = "qcom,sc7180-mss-pil";
+	iommus = <&apps_smmu 0x460 0x1>, <&apps_smmu 0x444 0x3>;
+	memory-region = <&mba_mem &mpss_mem>;
+
+	/* This gets overridden for SKUs with LTE support. */
+	firmware-name = "sc7180-mss/google-trogdor-nolte/mba.mbn",
+			"sc7180-mss/google-trogdor-nolte/modem.mdt";
+};
+
 &sdhc_1 {
 	status = "okay";
 
