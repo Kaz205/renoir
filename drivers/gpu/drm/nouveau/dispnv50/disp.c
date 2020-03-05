@@ -1158,12 +1158,9 @@ static void
 nv50_mstm_destroy_connector(struct drm_dp_mst_topology_mgr *mgr,
 			    struct drm_connector *connector)
 {
-	struct nouveau_drm *drm = nouveau_drm(connector->dev);
 	struct nv50_mstc *mstc = nv50_mstc(connector);
 
 	drm_connector_unregister(&mstc->connector);
-
-	drm_fb_helper_remove_one_connector(&drm->fbcon->helper, &mstc->connector);
 
 	drm_connector_put(&mstc->connector);
 }
@@ -1171,10 +1168,6 @@ nv50_mstm_destroy_connector(struct drm_dp_mst_topology_mgr *mgr,
 static void
 nv50_mstm_register_connector(struct drm_connector *connector)
 {
-	struct nouveau_drm *drm = nouveau_drm(connector->dev);
-
-	drm_fb_helper_add_one_connector(&drm->fbcon->helper, connector);
-
 	drm_connector_register(connector);
 }
 
