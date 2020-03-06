@@ -78,6 +78,14 @@
 #define PMC_IPC_SAFE_ALT_HPD_RES_STATUS_0		BIT(8)
 #define PMC_IPC_SAFE_ALT_HPD_RES_STATUS_1		BIT(9)
 
+/* IOM PORT STATUS */
+#define IOM_PORT_STATUS_ADDR				0xfbc10560
+#define IOM_PORT_STATUS_LEN				16
+#define IOM_PORT_STATUS_CONNECTED			BIT(31)
+#define IOM_MAX_PORTS					4
+/* Register length in bytes */
+#define IOM_REG_LEN					4
+
 /*
  * TBT Cable Speed Support
  * 0x03: 10Gb/s and 20Gb/s only
@@ -144,6 +152,7 @@ struct cros_ec_tcss_info {
 	struct intel_scu_ipc_dev *scu;
 	/* Synchronize cable detection logic across callers */
 	struct mutex lock;
+	void __iomem *iom_port_status;
 };
 
 static const u8 tcss_requests[] = {
