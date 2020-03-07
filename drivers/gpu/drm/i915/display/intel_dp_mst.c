@@ -749,11 +749,6 @@ err:
 	return NULL;
 }
 
-static void intel_dp_register_mst_connector(struct drm_connector *connector)
-{
-	drm_connector_register(connector);
-}
-
 static void intel_dp_destroy_mst_connector(struct drm_dp_mst_topology_mgr *mgr,
 					   struct drm_connector *connector)
 {
@@ -773,7 +768,6 @@ intel_dp_mst_poll_hpd_irq(struct drm_dp_mst_topology_mgr *mgr)
 
 static const struct drm_dp_mst_topology_cbs mst_cbs = {
 	.add_connector = intel_dp_add_mst_connector,
-	.register_connector = intel_dp_register_mst_connector,
 	.destroy_connector = intel_dp_destroy_mst_connector,
 	.poll_hpd_irq = intel_dp_mst_poll_hpd_irq,
 };
