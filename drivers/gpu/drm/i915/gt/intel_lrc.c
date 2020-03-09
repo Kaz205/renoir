@@ -2437,6 +2437,7 @@ cancel_port_requests(struct intel_engine_execlists * const execlists)
 		execlists_schedule_out(*port);
 	clear_ports(execlists->inflight, ARRAY_SIZE(execlists->inflight));
 
+	smp_wmb(); /* complete the seqlock for execlists_active() */
 	WRITE_ONCE(execlists->active, execlists->inflight);
 }
 
@@ -2597,6 +2598,7 @@ static void process_csb(struct intel_engine_cs *engine)
 
 			/* Point active to the new ELSP; prevent overwriting */
 			WRITE_ONCE(execlists->active, execlists->pending);
+			smp_wmb(); /* notify execlists_active() */
 
 			/* cancel old inflight, prepare for switch */
 			trace_ports(execlists, "preempted", old);
@@ -2604,11 +2606,12 @@ static void process_csb(struct intel_engine_cs *engine)
 				execlists_schedule_out(*old++);
 
 			/* switch pending to inflight */
-			WRITE_ONCE(execlists->active,
-				   memcpy(execlists->inflight,
-					  execlists->pending,
-					  execlists_num_ports(execlists) *
-					  sizeof(*execlists->pending)));
+			memcpy(execlists->inflight,
+			       execlists->pending,
+			       execlists_num_ports(execlists) *
+			       sizeof(*execlists->pending));
+			smp_wmb(); /* complete the seqlock */
+			WRITE_ONCE(execlists->active, execlists->inflight);
 
 			/* XXX Magic delay for tgl */
 			ENGINE_POSTING_READ(engine, RING_CONTEXT_STATUS_PTR);
