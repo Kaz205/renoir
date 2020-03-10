@@ -52,7 +52,6 @@ static int intel_dp_mst_compute_link_config(struct intel_encoder *encoder,
 	struct drm_i915_private *i915 = to_i915(connector->base.dev);
 	const struct drm_display_mode *adjusted_mode =
 		&crtc_state->hw.adjusted_mode;
-	void *port = connector->port;
 	bool constant_n = drm_dp_has_quirk(&intel_dp->desc, 0,
 					   DP_DPCD_QUIRK_CONSTANT_N);
 	int bpp, slots = -EINVAL;
@@ -68,7 +67,7 @@ static int intel_dp_mst_compute_link_config(struct intel_encoder *encoder,
 						       false);
 
 		slots = drm_dp_atomic_find_vcpi_slots(state, &intel_dp->mst_mgr,
-						      port, crtc_state->pbn);
+						      connector->port, crtc_state->pbn);
 		if (slots == -EDEADLK)
 			return slots;
 		if (slots >= 0)
@@ -105,7 +104,6 @@ static int intel_dp_mst_compute_config(struct intel_encoder *encoder,
 		to_intel_digital_connector_state(conn_state);
 	const struct drm_display_mode *adjusted_mode =
 		&pipe_config->hw.adjusted_mode;
-	void *port = connector->port;
 	struct link_config_limits limits;
 	int ret;
 
