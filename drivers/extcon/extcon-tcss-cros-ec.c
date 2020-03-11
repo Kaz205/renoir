@@ -277,11 +277,8 @@ u8 cros_ec_tcss_get_next_state_req(struct cros_ec_tcss_data *port_data,
 	u8 ret =
 	    tcss_mode_states[prev_port_data->conn_mode][port_data->conn_mode];
 
-	/* before entering alternate mode enter safe mode */
-	if (ret == TO_REQ(PMC_IPC_SFMODE_REQ_RES)) {
-		port_data->conn_mode = PMC_IPC_SAFE_MODE;
-	/* check for HPD */
-	} else if (ret == TO_REQ(PMC_IPC_ALTMODE_REQ_RES)) {
+	/* Handle HPD in Alternate Mode */
+	if (ret & TO_REQ(PMC_IPC_ALTMODE_REQ_RES)) {
 		if (prev_port_data->conn_mode == PMC_IPC_ALT_MODE) {
 			/* Alternate mode HPD/IRQ changed */
 			if (port_data->mux_info.hpd_irq ||
