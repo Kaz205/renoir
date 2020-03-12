@@ -13,6 +13,7 @@
 
 #include <linux/module.h>
 #include <linux/platform_data/cros_ec_proto.h>
+#include <linux/platform_data/cros_usbpd_notify.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <linux/usb/typec_dp.h>
@@ -528,8 +529,7 @@ static int cros_ec_tcss_remove(struct platform_device *pdev)
 {
 	struct cros_ec_tcss_info *info = platform_get_drvdata(pdev);
 
-	blocking_notifier_chain_unregister(&info->ec->event_notifier,
-					   &info->notifier);
+	cros_usbpd_unregister_notify(&info->notifier);
 	cancel_work_sync(&info->bh_work);
 	mutex_destroy(&info->lock);
 
@@ -582,8 +582,7 @@ static int cros_ec_tcss_probe(struct platform_device *pdev)
 
 	/* Get Port detection events from the EC */
 	info->notifier.notifier_call = cros_ec_tcss_event;
-	ret = blocking_notifier_chain_register(&info->ec->event_notifier,
-					       &info->notifier);
+	ret = cros_usbpd_register_notify(&info->notifier);
 	if (ret < 0) {
 		dev_err(dev, "failed to register notifier\n");
 		goto destroy_mutex;
@@ -611,8 +610,7 @@ return 0;
 
 remove_tcss:
 	mutex_unlock(&info->lock);
-	blocking_notifier_chain_unregister(&info->ec->event_notifier,
-					   &info->notifier);
+	cros_usbpd_unregister_notify(&info->notifier);
 	cancel_work_sync(&info->bh_work);
 destroy_mutex:
 	mutex_destroy(&info->lock);
