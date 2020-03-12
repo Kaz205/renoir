@@ -2711,7 +2711,7 @@ static int le_scan_restart(struct hci_request *req, unsigned long opt)
 		ext_enable_cp.filter_dup = LE_SCAN_FILTER_DUP_ENABLE;
 
 		hci_req_add(req, HCI_OP_LE_SET_EXT_SCAN_ENABLE,
-			sizeof(ext_enable_cp), &ext_enable_cp);
+			    sizeof(ext_enable_cp), &ext_enable_cp);
 	} else {
 		struct hci_cp_le_set_scan_enable cp;
 
