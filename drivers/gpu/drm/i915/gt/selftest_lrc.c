@@ -5347,8 +5347,9 @@ static int live_lrc_isolation(void *arg)
 	const u32 poison[] = {
 		STACK_MAGIC,
 		0x3a3a3a3a,
-		0xc5c5c5c5,
+		0x5c5c5c5c,
 		0xffffffff,
+		0xffff0000,
 	};
 
 	/*
@@ -5372,6 +5373,10 @@ static int live_lrc_isolation(void *arg)
 		if (engine->pinned_default_state) {
 			for (i = 0; i < ARRAY_SIZE(poison); i++) {
 				err = __lrc_isolation(engine, poison[i]);
+				if (err)
+					break;
+
+				err = __lrc_isolation(engine, ~poison[i]);
 				if (err)
 					break;
 			}
