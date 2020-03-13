@@ -3477,7 +3477,8 @@ static void intel_ddi_disable_fec_state(struct intel_encoder *encoder,
 	intel_de_posting_read(dev_priv, intel_dp->regs.dp_tp_ctl);
 }
 
-static void tgl_ddi_pre_enable_dp(struct intel_encoder *encoder,
+static void tgl_ddi_pre_enable_dp(struct intel_atomic_state *state,
+				  struct intel_encoder *encoder,
 				  const struct intel_crtc_state *crtc_state,
 				  const struct drm_connector_state *conn_state)
 {
@@ -3617,7 +3618,8 @@ static void tgl_ddi_pre_enable_dp(struct intel_encoder *encoder,
 	intel_dsc_enable(encoder, crtc_state);
 }
 
-static void hsw_ddi_pre_enable_dp(struct intel_encoder *encoder,
+static void hsw_ddi_pre_enable_dp(struct intel_atomic_state *state,
+				  struct intel_encoder *encoder,
 				  const struct intel_crtc_state *crtc_state,
 				  const struct drm_connector_state *conn_state)
 {
@@ -3687,16 +3689,17 @@ static void hsw_ddi_pre_enable_dp(struct intel_encoder *encoder,
 	intel_dsc_enable(encoder, crtc_state);
 }
 
-static void intel_ddi_pre_enable_dp(struct intel_encoder *encoder,
+static void intel_ddi_pre_enable_dp(struct intel_atomic_state *state,
+				    struct intel_encoder *encoder,
 				    const struct intel_crtc_state *crtc_state,
 				    const struct drm_connector_state *conn_state)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
 
 	if (INTEL_GEN(dev_priv) >= 12)
-		tgl_ddi_pre_enable_dp(encoder, crtc_state, conn_state);
+		tgl_ddi_pre_enable_dp(state, encoder, crtc_state, conn_state);
 	else
-		hsw_ddi_pre_enable_dp(encoder, crtc_state, conn_state);
+		hsw_ddi_pre_enable_dp(state, encoder, crtc_state, conn_state);
 
 	/* MST will call a setting of MSA after an allocating of Virtual Channel
 	 * from MST encoder pre_enable callback.
@@ -3708,7 +3711,8 @@ static void intel_ddi_pre_enable_dp(struct intel_encoder *encoder,
 	}
 }
 
-static void intel_ddi_pre_enable_hdmi(struct intel_encoder *encoder,
+static void intel_ddi_pre_enable_hdmi(struct intel_atomic_state *state,
+				      struct intel_encoder *encoder,
 				      const struct intel_crtc_state *crtc_state,
 				      const struct drm_connector_state *conn_state)
 {
@@ -3748,7 +3752,8 @@ static void intel_ddi_pre_enable_hdmi(struct intel_encoder *encoder,
 				       crtc_state, conn_state);
 }
 
-static void intel_ddi_pre_enable(struct intel_encoder *encoder,
+static void intel_ddi_pre_enable(struct intel_atomic_state *state,
+				 struct intel_encoder *encoder,
 				 const struct intel_crtc_state *crtc_state,
 				 const struct drm_connector_state *conn_state)
 {
@@ -3777,12 +3782,14 @@ static void intel_ddi_pre_enable(struct intel_encoder *encoder,
 	intel_set_cpu_fifo_underrun_reporting(dev_priv, pipe, true);
 
 	if (intel_crtc_has_type(crtc_state, INTEL_OUTPUT_HDMI)) {
-		intel_ddi_pre_enable_hdmi(encoder, crtc_state, conn_state);
+		intel_ddi_pre_enable_hdmi(state, encoder, crtc_state,
+					  conn_state);
 	} else {
 		struct intel_lspcon *lspcon =
 				enc_to_intel_lspcon(encoder);
 
-		intel_ddi_pre_enable_dp(encoder, crtc_state, conn_state);
+		intel_ddi_pre_enable_dp(state, encoder, crtc_state,
+					conn_state);
 		if (lspcon->active) {
 			struct intel_digital_port *dig_port =
 					enc_to_dig_port(encoder);
@@ -3825,7 +3832,8 @@ static void intel_disable_ddi_buf(struct intel_encoder *encoder,
 		intel_wait_ddi_buf_idle(dev_priv, port);
 }
 
-static void intel_ddi_post_disable_dp(struct intel_encoder *encoder,
+static void intel_ddi_post_disable_dp(struct intel_atomic_state *state,
+				      struct intel_encoder *encoder,
 				      const struct intel_crtc_state *old_crtc_state,
 				      const struct drm_connector_state *old_conn_state)
 {
@@ -3881,7 +3889,8 @@ static void intel_ddi_post_disable_dp(struct intel_encoder *encoder,
 	intel_ddi_clk_disable(encoder);
 }
 
-static void intel_ddi_post_disable_hdmi(struct intel_encoder *encoder,
+static void intel_ddi_post_disable_hdmi(struct intel_atomic_state *state,
+					struct intel_encoder *encoder,
 					const struct intel_crtc_state *old_crtc_state,
 					const struct drm_connector_state *old_conn_state)
 {
@@ -3904,7 +3913,8 @@ static void intel_ddi_post_disable_hdmi(struct intel_encoder *encoder,
 	intel_dp_dual_mode_set_tmds_output(intel_hdmi, false);
 }
 
-static void intel_ddi_post_disable(struct intel_encoder *encoder,
+static void intel_ddi_post_disable(struct intel_atomic_state *state,
+				   struct intel_encoder *encoder,
 				   const struct intel_crtc_state *old_crtc_state,
 				   const struct drm_connector_state *old_conn_state)
 {
@@ -3942,11 +3952,11 @@ static void intel_ddi_post_disable(struct intel_encoder *encoder,
 	 */
 
 	if (intel_crtc_has_type(old_crtc_state, INTEL_OUTPUT_HDMI))
-		intel_ddi_post_disable_hdmi(encoder,
-					    old_crtc_state, old_conn_state);
+		intel_ddi_post_disable_hdmi(state, encoder, old_crtc_state,
+					    old_conn_state);
 	else
-		intel_ddi_post_disable_dp(encoder,
-					  old_crtc_state, old_conn_state);
+		intel_ddi_post_disable_dp(state, encoder, old_crtc_state,
+					  old_conn_state);
 
 	if (INTEL_GEN(dev_priv) >= 11)
 		icl_unmap_plls_to_ports(encoder);
@@ -3959,7 +3969,8 @@ static void intel_ddi_post_disable(struct intel_encoder *encoder,
 		intel_tc_port_put_link(dig_port);
 }
 
-void intel_ddi_fdi_post_disable(struct intel_encoder *encoder,
+void intel_ddi_fdi_post_disable(struct intel_atomic_state *state,
+				struct intel_encoder *encoder,
 				const struct intel_crtc_state *old_crtc_state,
 				const struct drm_connector_state *old_conn_state)
 {
@@ -3993,7 +4004,8 @@ void intel_ddi_fdi_post_disable(struct intel_encoder *encoder,
 	intel_de_write(dev_priv, FDI_RX_CTL(PIPE_A), val);
 }
 
-static void intel_enable_ddi_dp(struct intel_encoder *encoder,
+static void intel_enable_ddi_dp(struct intel_atomic_state *state,
+				struct intel_encoder *encoder,
 				const struct intel_crtc_state *crtc_state,
 				const struct drm_connector_state *conn_state)
 {
@@ -4034,7 +4046,8 @@ gen9_chicken_trans_reg_by_port(struct drm_i915_private *dev_priv,
 	return CHICKEN_TRANS(trans[port]);
 }
 
-static void intel_enable_ddi_hdmi(struct intel_encoder *encoder,
+static void intel_enable_ddi_hdmi(struct intel_atomic_state *state,
+				  struct intel_encoder *encoder,
 				  const struct intel_crtc_state *crtc_state,
 				  const struct drm_connector_state *conn_state)
 {
@@ -4096,7 +4109,8 @@ static void intel_enable_ddi_hdmi(struct intel_encoder *encoder,
 		intel_audio_codec_enable(encoder, crtc_state, conn_state);
 }
 
-static void intel_enable_ddi(struct intel_encoder *encoder,
+static void intel_enable_ddi(struct intel_atomic_state *state,
+			     struct intel_encoder *encoder,
 			     const struct intel_crtc_state *crtc_state,
 			     const struct drm_connector_state *conn_state)
 {
@@ -4107,9 +4121,9 @@ static void intel_enable_ddi(struct intel_encoder *encoder,
 	intel_crtc_vblank_on(crtc_state);
 
 	if (intel_crtc_has_type(crtc_state, INTEL_OUTPUT_HDMI))
-		intel_enable_ddi_hdmi(encoder, crtc_state, conn_state);
+		intel_enable_ddi_hdmi(state, encoder, crtc_state, conn_state);
 	else
-		intel_enable_ddi_dp(encoder, crtc_state, conn_state);
+		intel_enable_ddi_dp(state, encoder, crtc_state, conn_state);
 
 	/* Enable hdcp if it's desired */
 	if (conn_state->content_protection ==
@@ -4119,7 +4133,8 @@ static void intel_enable_ddi(struct intel_encoder *encoder,
 				  (u8)conn_state->hdcp_content_type);
 }
 
-static void intel_disable_ddi_dp(struct intel_encoder *encoder,
+static void intel_disable_ddi_dp(struct intel_atomic_state *state,
+				 struct intel_encoder *encoder,
 				 const struct intel_crtc_state *old_crtc_state,
 				 const struct drm_connector_state *old_conn_state)
 {
@@ -4139,7 +4154,8 @@ static void intel_disable_ddi_dp(struct intel_encoder *encoder,
 					      false);
 }
 
-static void intel_disable_ddi_hdmi(struct intel_encoder *encoder,
+static void intel_disable_ddi_hdmi(struct intel_atomic_state *state,
+				   struct intel_encoder *encoder,
 				   const struct intel_crtc_state *old_crtc_state,
 				   const struct drm_connector_state *old_conn_state)
 {
@@ -4157,19 +4173,23 @@ static void intel_disable_ddi_hdmi(struct intel_encoder *encoder,
 			    connector->base.id, connector->name);
 }
 
-static void intel_disable_ddi(struct intel_encoder *encoder,
+static void intel_disable_ddi(struct intel_atomic_state *state,
+			      struct intel_encoder *encoder,
 			      const struct intel_crtc_state *old_crtc_state,
 			      const struct drm_connector_state *old_conn_state)
 {
 	intel_hdcp_disable(to_intel_connector(old_conn_state->connector));
 
 	if (intel_crtc_has_type(old_crtc_state, INTEL_OUTPUT_HDMI))
-		intel_disable_ddi_hdmi(encoder, old_crtc_state, old_conn_state);
+		intel_disable_ddi_hdmi(state, encoder, old_crtc_state,
+				       old_conn_state);
 	else
-		intel_disable_ddi_dp(encoder, old_crtc_state, old_conn_state);
+		intel_disable_ddi_dp(state, encoder, old_crtc_state,
+				     old_conn_state);
 }
 
-static void intel_ddi_update_pipe_dp(struct intel_encoder *encoder,
+static void intel_ddi_update_pipe_dp(struct intel_atomic_state *state,
+				     struct intel_encoder *encoder,
 				     const struct intel_crtc_state *crtc_state,
 				     const struct drm_connector_state *conn_state)
 {
@@ -4180,18 +4200,20 @@ static void intel_ddi_update_pipe_dp(struct intel_encoder *encoder,
 	intel_psr_update(intel_dp, crtc_state);
 	intel_edp_drrs_enable(intel_dp, crtc_state);
 
-	intel_panel_update_backlight(encoder, crtc_state, conn_state);
+	intel_panel_update_backlight(state, encoder, crtc_state, conn_state);
 }
 
-static void intel_ddi_update_pipe(struct intel_encoder *encoder,
+static void intel_ddi_update_pipe(struct intel_atomic_state *state,
+				  struct intel_encoder *encoder,
 				  const struct intel_crtc_state *crtc_state,
 				  const struct drm_connector_state *conn_state)
 {
 
 	if (!intel_crtc_has_type(crtc_state, INTEL_OUTPUT_HDMI))
-		intel_ddi_update_pipe_dp(encoder, crtc_state, conn_state);
+		intel_ddi_update_pipe_dp(state, encoder, crtc_state,
+					 conn_state);
 
-	intel_hdcp_update_pipe(encoder, crtc_state, conn_state);
+	intel_hdcp_update_pipe(state, encoder, crtc_state, conn_state);
 }
 
 static void
@@ -4220,7 +4242,8 @@ intel_ddi_update_complete(struct intel_atomic_state *state,
 }
 
 static void
-intel_ddi_pre_pll_enable(struct intel_encoder *encoder,
+intel_ddi_pre_pll_enable(struct intel_atomic_state *state,
+			 struct intel_encoder *encoder,
 			 const struct intel_crtc_state *crtc_state,
 			 const struct drm_connector_state *conn_state)
 {
