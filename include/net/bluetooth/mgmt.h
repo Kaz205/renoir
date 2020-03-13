@@ -655,14 +655,24 @@ struct mgmt_cp_set_phy_confguration {
 } __packed;
 #define MGMT_SET_PHY_CONFIGURATION_SIZE	4
 
-#define MGMT_OP_SET_ADVERTISING_INTERVALS	0x0044
+#define MGMT_OP_SET_WAKE_CAPABLE			0x0047
+#define MGMT_SET_WAKE_CAPABLE_SIZE			8
+struct mgmt_cp_set_wake_capable {
+	struct mgmt_addr_info addr;
+	u8 wake_capable;
+} __packed;
+
+/*
+ * Begin chromium only op_codes
+ */
+#define MGMT_OP_SET_ADVERTISING_INTERVALS	0x0060
 struct mgmt_cp_set_advertising_intervals {
 	__le16	min_interval;
 	__le16	max_interval;
 } __packed;
 #define MGMT_SET_ADVERTISING_INTERVALS_SIZE	4
 
-#define MGMT_OP_SET_EVENT_MASK			0x0045
+#define MGMT_OP_SET_EVENT_MASK			0x0061
 struct mgmt_cp_set_event_mask {
 	/*
 	 * The mask variable enables modifying a subset of the 'event mask'.
@@ -738,31 +748,27 @@ enum mgmt_set_event_mask_byte_7 {
 	MGMT_EVENT_MASK_LE_META				=  (1 << 6),
 };
 
-#define MGMT_OP_SET_BLOCKED_LTKS			0x0046
+#define MGMT_OP_SET_BLOCKED_LTKS			0x0062
 struct mgmt_cp_set_blocked_ltks {
 	uint8_t	ltks[MAX_BLOCKED_LTKS][LTK_LENGTH];
 } __packed;
 #define MGMT_SET_BLOCKED_LTKS_CP_SIZE  (MAX_BLOCKED_LTKS * LTK_LENGTH)
 
-#define MGMT_OP_READ_SUPPORTED_CAPABILITIES		0x0047
+#define MGMT_OP_READ_SUPPORTED_CAPABILITIES		0x0063
 #define MGMT_READ_SUPPORTED_CAPABILITIES_SIZE		0
 struct mgmt_rp_read_supported_capabilities {
 	__u8 wide_band_speech;
 } __packed;
 
-#define MGMT_OP_SET_KERNEL_DEBUG			0x0048
+#define MGMT_OP_SET_KERNEL_DEBUG			0x0064
 #define MGMT_SET_KERNEL_DEBUG_SIZE			1
 struct mgmt_cp_set_kernel_debug {
 	__u8	enabled;
 } __packed;
 
-
-#define MGMT_OP_SET_WAKE_CAPABLE			0x004B
-#define MGMT_SET_WAKE_CAPABLE_SIZE			8
-struct mgmt_cp_set_wake_capable {
-	struct mgmt_addr_info addr;
-	u8 wake_capable;
-} __packed;
+/*
+ * End chromium only op_codes
+ */
 
 #define MGMT_EV_CMD_COMPLETE		0x0001
 struct mgmt_ev_cmd_complete {
