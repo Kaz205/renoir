@@ -281,8 +281,14 @@ u8 cros_ec_tcss_get_next_state_req(struct cros_ec_tcss_data *port_data,
 	u8 ret =
 	    tcss_mode_states[prev_port_data->conn_mode][port_data->conn_mode];
 
+	/* Handle HPD in Disconnect Mode */
+	if (port_data->conn_mode == PMC_IPC_DISCONNECT_MODE) {
+		if (prev_port_data->conn_mode == PMC_IPC_ALT_MODE &&
+			port_data->mux_info.hpd_lvl !=
+			prev_port_data->mux_info.hpd_lvl)
+			ret |= TO_REQ(PMC_IPC_HPD_REQ_RES);
 	/* Handle HPD in Alternate Mode */
-	if (ret & TO_REQ(PMC_IPC_ALTMODE_REQ_RES)) {
+	} else if (ret & TO_REQ(PMC_IPC_ALTMODE_REQ_RES)) {
 		if (prev_port_data->conn_mode == PMC_IPC_ALT_MODE) {
 			/* Alternate mode HPD/IRQ changed */
 			if (port_data->mux_info.hpd_irq ||
@@ -472,8 +478,8 @@ static int cros_ec_tcss_detect_cable(struct cros_ec_tcss_info *info,
 {
 	struct cros_ec_tcss_data *tcss_info;
 	struct cros_ec_tcss_data port_data;
+	int ret, i, index;
 	u8 next_seq;
-	int ret, i;
 
 	if (!info)
 		return -EIO;
@@ -506,9 +512,18 @@ static int cros_ec_tcss_detect_cable(struct cros_ec_tcss_info *info,
 		 port_data.mux_info.tbt_usb4_cable_gen);
 
 	for (i = 0; i < ARRAY_SIZE(tcss_requests); i++) {
-		if (next_seq & tcss_requests[i]) {
+		/*
+		 * Check if low priority mux request needs to be sent first
+		 * in the below scenarios
+		 * 1. Display PLLs needs to be cleared when the HPD is set
+		 * 2. USB fallback state transition happens
+		 */
+		index = port_data.conn_mode < tcss_info->conn_mode ?
+				(ARRAY_SIZE(tcss_requests) - 1 - i) : i;
+
+		if (next_seq & tcss_requests[index]) {
 			ret = cros_ec_tcss_req(info,
-					       (ffs(tcss_requests[i]) - 1),
+					       (ffs(tcss_requests[index]) - 1),
 					       port, &port_data.mux_info);
 			if (ret)
 				break;
