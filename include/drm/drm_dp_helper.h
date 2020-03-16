@@ -699,7 +699,7 @@
 # define DP_TEST_CRC_SUPPORTED		    (1 << 5)
 # define DP_TEST_COUNT_MASK		    0xf
 
-#define DP_TEST_PHY_PATTERN                 0x248
+#define DP_PHY_TEST_PATTERN                 0x248
 # define DP_TEST_PHY_PATTERN_NONE			0x0
 # define DP_TEST_PHY_PATTERN_D10_2_NO_SCRAMBLING	0x1
 # define DP_TEST_PHY_PATTERN_SYMBOL_ERR_MEASUREMENT_CNT 0x2
