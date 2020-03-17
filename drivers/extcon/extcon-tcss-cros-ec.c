@@ -218,7 +218,7 @@ static int cros_ec_tcss_get_current_state(struct cros_ec_tcss_info *info,
 	mux_info->tbt_usb4_cable_speed = pd_resp.cable_speed;
 	mux_info->tbt_usb4_cable_gen = pd_resp.cable_gen;
 
-	mux_info->ufp = (pd_resp.cc_state == PD_CC_DFP_ATTACHED);
+	mux_info->ufp = !(pd_resp.role & PD_CTRL_RESP_ROLE_DATA);
 	mux_info->dbg_acc = (pd_resp.cc_state == PD_CC_UFP_DEBUG_ACC ||
 			     pd_resp.cc_state == PD_CC_DFP_DEBUG_ACC);
 
