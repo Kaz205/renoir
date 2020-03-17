@@ -8,6 +8,7 @@
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
 #include <dt-bindings/regulator/qcom,rpmh-regulator.h>
+#include <dt-bindings/sound/sc7180-lpass.h>
 
 /* PMICs depend on spmi_bus label and so must come after SoC */
 #include "pm6150.dtsi"
@@ -163,6 +164,14 @@
 		pinctrl-0 = <&ap_edp_bklten>;
 	};
 
+	max98357a: max98357a {
+		compatible = "maxim,max98357a";
+		pinctrl-names = "default";
+		pinctrl-0 = <&amp_en>;
+		sdmode-gpios = <&tlmm 23 GPIO_ACTIVE_HIGH>;
+		#sound-dai-cells = <0>;
+	};
+
 	pwmleds {
 		compatible = "pwm-leds";
 		keyboard_backlight: keyboard-backlight {
@@ -170,6 +179,38 @@
 			label = "cros_ec::kbd_backlight";
 			pwms = <&cros_ec_pwm 0>;
 			max-brightness = <1023>;
+		};
+	};
+
+	sound {
+		compatible = "qcom,sc7180-sndcard";
+		model = "sc7180-snd-card";
+
+		audio-routing =
+			"Headphone Jack", "HPOL",
+			"Headphone Jack", "HPOR";
+
+		dai-link-0 {
+			link-name = "MultiMedia0";
+			cpu {
+				sound-dai = <&lpass_cpu  0>;
+			};
+
+			codec {
+				sound-dai = <&alc5682  0>;
+			};
+		};
+
+		dai-link-1 {
+			link-name = "MultiMedia1";
+			unidirectional = <0>;
+			cpu {
+				sound-dai = <&lpass_cpu  1>;
+			};
+
+			codec {
+				sound-dai = <&max98357a>;
+			};
 		};
 	};
 };
@@ -644,11 +685,13 @@ hp_i2c: &i2c9 {
 	status = "okay";
 	clock-frequency = <400000>;
 
-	codec@1a {
+	alc5682: codec@1a {
 		compatible = "realtek,rt5682i";
 		reg = <0x1a>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&hp_irq>;
+
+		#sound-dai-cells = <1>;
 
 		interrupt-parent = <&tlmm>;
 		/*
@@ -676,6 +719,30 @@ hp_i2c: &i2c9 {
 	 * the AP needs to wait for it.
 	 */
 	modem-init;
+};
+
+&lpass_cpu {
+	status = "okay";
+
+	pinctrl-names = "default";
+	pinctrl-0 = <&sec_mi2s_active &sec_mi2s_dout_active
+		     &sec_mi2s_ws_active &pri_mi2s_active
+		     &pri_mi2s_dout_active &pri_mi2s_ws_active
+		     &pri_mi2s_din_active &pri_mi2s_mclk_active>;
+
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	mi2s-primary@0 {
+		reg = <MI2S_PRIMARY>;
+		qcom,playback-sd-lines = <1>;
+		qcom,capture-sd-lines = <0>;
+	};
+
+	mi2s-secondary@1 {
+		reg = <MI2S_SECONDARY>;
+		qcom,playback-sd-lines = <0>;
+	};
 };
 
 &mdp {
@@ -974,6 +1041,18 @@ ap_spi_fp: &spi10 {
 	 */
 	pinctrl-names = "default";
 	pinctrl-0 = <&bios_flash_wp_l>, <&ap_suspend_l_neuter>;
+
+	amp_en: amp-en {
+		pinmux {
+			pins = "gpio23";
+			function = "gpio";
+		};
+
+		pinconf {
+			pins = "gpio23";
+			bias-pull-down;
+		};
+	};
 
 	ap_ec_int_l: ap-ec-int-l {
 		pinmux {
