@@ -89,3 +89,7 @@ SCHED_FEAT(WA_BIAS, true)
  * UtilEstimation. Use estimated CPU utilization.
  */
 SCHED_FEAT(UTIL_EST, true)
+
+/* Test feat to mitigate IRQ pausing */
+SCHED_FEAT(CORE_PRCTL,     true)
+SCHED_FEAT(CORE_IRQ_PAUSE, true)

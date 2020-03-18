@@ -6535,6 +6535,11 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 	 */
 	x86_spec_ctrl_set_guest(vmx->spec_ctrl, 0);
 
+	/* VM entries need to wait if the core is not ready. */
+#ifdef CONFIG_SCHED_CORE
+	sched_core_user_enter();
+#endif
+
 	/* L1D Flush includes CPU buffer clear to mitigate MDS */
 	if (static_branch_unlikely(&vmx_l1d_should_flush))
 		vmx_l1d_flush(vcpu);
