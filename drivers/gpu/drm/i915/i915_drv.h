@@ -1705,8 +1705,6 @@ struct drm_i915_private {
 		} contexts;
 	} gem;
 
-	u8 pch_ssc_use;
-
 	/* For i945gm vblank irq vs. C3 workaround */
 	struct {
 		struct work_struct work;
