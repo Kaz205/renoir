@@ -12,7 +12,6 @@
  */
 
 #include <linux/module.h>
-#include <linux/of.h>
 #include <linux/platform_data/cros_ec_proto.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
@@ -651,16 +650,9 @@ static const struct dev_pm_ops tcss_cros_ec_dev_pm_ops = {
 #define DEV_PM_OPS     NULL
 #endif /* CONFIG_PM_SLEEP */
 
-static const struct of_device_id cros_ec_tcss_of_match[] = {
-	{.compatible = "google,extcon-tcss-cros-ec"},
-	{ /* sentinel */ }
-};
-MODULE_DEVICE_TABLE(of, cros_ec_tcss_of_match);
-
 static struct platform_driver tcss_cros_ec_driver = {
 	.driver = {
 		   .name = "extcon-tcss-cros-ec",
-		   .of_match_table = cros_ec_tcss_of_match,
 		   .pm = DEV_PM_OPS,
 	},
 	.remove = cros_ec_tcss_remove,
