@@ -350,7 +350,7 @@ struct snd_soc_dai {
 
 	/* bit field */
 	unsigned int probed:1;
-	unsigned int started:1;
+	unsigned int started[SNDRV_PCM_STREAM_LAST + 1];
 };
 
 static inline void *snd_soc_dai_get_dma_data(const struct snd_soc_dai *dai,
