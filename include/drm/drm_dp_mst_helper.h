@@ -479,8 +479,6 @@ struct drm_dp_mst_topology_mgr;
 struct drm_dp_mst_topology_cbs {
 	/* create a connector for a port */
 	struct drm_connector *(*add_connector)(struct drm_dp_mst_topology_mgr *mgr, struct drm_dp_mst_port *port, const char *path);
-	void (*destroy_connector)(struct drm_dp_mst_topology_mgr *mgr,
-				  struct drm_connector *connector);
 	/*
 	 * Checks for any pending MST interrupts, passing them to MST core for
 	 * processing, the same way an HPD IRQ pulse handler would do this.
