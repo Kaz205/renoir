@@ -189,96 +189,6 @@ static bool cros_ec_ring_process_event(struct cros_ec_sensorhub *sensorhub,
 	return true;
 }
 
-/*
- * cros_ec_ring_spread_add: Calculate proper timestamps then
- * add to ringbuffer (legacy).
- *
- * If there is a sample with a proper timestamp
- *                        timestamp | count
- * older_unprocess_out --> TS1      | 1
- *                         TS1      | 2
- * out -->                 TS1      | 3
- * next_out -->            TS2      |
- * We spread time for the samples [older_unprocess_out .. out]
- * between TS1 and TS2: [TS1+1/4, TS1+2/4, TS1+3/4, TS2].
- *
- * If we reach the end of the samples, we compare with the
- * current timestamp:
- *
- * older_unprocess_out --> TS1      | 1
- *                         TS1      | 2
- * out -->                 TS1      | 3
- * We know have [TS1+1/3, TS1+2/3, current timestamp]
- */
-static void cros_ec_ring_spread_add(struct cros_ec_sensorhub *sensorhub,
-				unsigned long sensor_mask,
-				s64 current_timestamp,
-				struct cros_ec_sensors_ring_sample *last_out)
-{
-	struct cros_ec_sensors_ring_sample *out;
-	int i;
-
-	for_each_set_bit(i, &sensor_mask, BITS_PER_LONG) {
-		s64 older_timestamp;
-		s64 timestamp;
-		struct cros_ec_sensors_ring_sample *older_unprocess_out =
-			sensorhub->ring;
-		struct cros_ec_sensors_ring_sample *next_out;
-		int count = 1;
-
-		for (out = sensorhub->ring; out < last_out; out = next_out) {
-			s64 time_period;
-
-			next_out = out + 1;
-			if (out->sensor_id != i)
-				continue;
-
-			/* Timestamp to start with */
-			older_timestamp = out->timestamp;
-
-			/* find next sample */
-			while (next_out < last_out && next_out->sensor_id != i)
-				next_out++;
-
-			if (next_out >= last_out) {
-				timestamp = current_timestamp;
-			} else {
-				timestamp = next_out->timestamp;
-				if (timestamp == older_timestamp) {
-					count++;
-					continue;
-				}
-			}
-
-			/*
-			 * The next sample has a new timestamp,
-			 * spread the unprocessed samples.
-			 */
-			if (next_out < last_out)
-				count++;
-			time_period = div_s64(timestamp - older_timestamp,
-					      count);
-
-			for (; older_unprocess_out <= out;
-					older_unprocess_out++) {
-				if (older_unprocess_out->sensor_id != i)
-					continue;
-				older_timestamp += time_period;
-				older_unprocess_out->timestamp =
-					older_timestamp;
-			}
-			count = 1;
-			/* The next_out sample has a valid timestamp, skip. */
-			next_out++;
-			older_unprocess_out = next_out;
-		}
-	}
-
-	/* push the event into the kfifo */
-	for (out = sensorhub->ring; out < last_out; out++)
-		cros_sensorhub_send_sample(sensorhub, out);
-}
-
 /**
  * cros_ec_sensorhub_ring_handler() - the trigger handler function
  *
@@ -412,11 +322,9 @@ static void cros_ec_sensorhub_ring_handler(struct cros_ec_sensorhub *sensorhub)
 		}
 	}
 
-	/*
-	 * Spread samples in case of batching, then add them to the ringbuffer.
-	 */
-	cros_ec_ring_spread_add(sensorhub, sensor_mask,
-			current_timestamp, last_out);
+	/* push the event into the kfifo */
+	for (out = sensorhub->ring; out < last_out; out++)
+		cros_sensorhub_send_sample(sensorhub, out);
 
 ring_handler_end:
 	sensorhub->fifo_timestamp[CROS_EC_SENSOR_LAST_TS] = current_timestamp;
