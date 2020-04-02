@@ -135,9 +135,7 @@ static int cros_ec_baro_probe(struct platform_device *pdev)
 	if (!indio_dev)
 		return -ENOMEM;
 
-	ret = cros_ec_sensors_core_init(pdev, indio_dev, true,
-					cros_ec_sensors_capture,
-					cros_ec_sensors_push_data);
+	ret = cros_ec_sensors_core_init(pdev, indio_dev, true);
 	if (ret)
 		return ret;
 
@@ -183,6 +181,11 @@ static int cros_ec_baro_probe(struct platform_device *pdev)
 	indio_dev->num_channels = CROS_EC_BARO_MAX_CHANNELS;
 
 	state->core.read_ec_sensors_data = cros_ec_sensors_read_cmd;
+
+	ret = devm_iio_triggered_buffer_setup(dev, indio_dev, NULL,
+					      cros_ec_sensors_capture, NULL);
+	if (ret)
+		return ret;
 
 	iio_buffer_set_attrs(indio_dev->buffer, cros_ec_sensor_fifo_attributes);
 
