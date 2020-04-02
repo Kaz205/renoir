@@ -41,7 +41,8 @@ struct cros_ec_light_prox_state {
 static void cros_ec_light_channel_common(struct iio_chan_spec *channel)
 {
 	channel->info_mask_shared_by_all =
-		BIT(IIO_CHAN_INFO_SAMP_FREQ);
+		BIT(IIO_CHAN_INFO_SAMP_FREQ) |
+		BIT(IIO_CHAN_INFO_FREQUENCY);
 	channel->info_mask_separate =
 		BIT(IIO_CHAN_INFO_RAW) |
 		BIT(IIO_CHAN_INFO_CALIBBIAS) |
@@ -457,8 +458,6 @@ static int cros_ec_light_prox_probe(struct platform_device *pdev)
 					      cros_ec_light_capture, NULL);
 	if (ret)
 		return ret;
-
-	iio_buffer_set_attrs(indio_dev->buffer, cros_ec_sensor_fifo_attributes);
 
 	return devm_iio_device_register(dev, indio_dev);
 }
