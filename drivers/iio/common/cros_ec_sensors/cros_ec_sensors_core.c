@@ -21,12 +21,6 @@
 #include <linux/platform_data/cros_ec_proto.h>
 #include <linux/platform_device.h>
 
-/*
- * Hard coded to the first device to support sensor fifo.  The EC has a 2048
- * byte fifo and will trigger an interrupt when fifo is 2/3 full.
- */
-#define CROS_EC_FIFO_SIZE (2048 * 2 / 3)
-
 static char *cros_ec_loc[] = {
 	[MOTIONSENSE_LOC_BASE] = "base",
 	[MOTIONSENSE_LOC_LID] = "lid",
@@ -61,15 +55,8 @@ static int cros_ec_get_host_cmd_version_mask(struct cros_ec_device *ec_dev,
 
 static void get_default_min_max_freq(enum motionsensor_type type,
 				     u32 *min_freq,
-				     u32 *max_freq,
-				     u32 *max_fifo_events)
+				     u32 *max_freq)
 {
-	/*
-	 * We don't know fifo size, set to size previously used by older
-	 * hardware.
-	 */
-	*max_fifo_events = CROS_EC_FIFO_SIZE;
-
 	switch (type) {
 	case MOTIONSENSE_TYPE_ACCEL:
 	case MOTIONSENSE_TYPE_GYRO:
@@ -142,7 +129,6 @@ static ssize_t cros_ec_sensor_set_report_latency(struct device *dev,
 	return len;
 }
 
-
 static ssize_t cros_ec_sensor_get_report_latency(struct device *dev,
 					      struct device_attribute *attr,
 					      char *buf)
@@ -170,22 +156,8 @@ static IIO_DEVICE_ATTR(hwfifo_timeout, 0644,
 		       cros_ec_sensor_get_report_latency,
 		       cros_ec_sensor_set_report_latency, 0);
 
-static ssize_t hwfifo_watermark_max_show(
-		struct device *dev,
-		struct device_attribute *attr,
-		char *buf)
-{
-	struct iio_dev *indio_dev = dev_to_iio_dev(dev);
-	struct cros_ec_sensors_core_state *st = iio_priv(indio_dev);
-
-	return sprintf(buf, "%d\n", st->fifo_max_event_count);
-}
-
-static IIO_DEVICE_ATTR_RO(hwfifo_watermark_max, 0);
-
 const struct attribute *cros_ec_sensor_fifo_attributes[] = {
 	&iio_dev_attr_hwfifo_timeout.dev_attr.attr,
-	&iio_dev_attr_hwfifo_watermark_max.dev_attr.attr,
 	NULL,
 };
 EXPORT_SYMBOL_GPL(cros_ec_sensor_fifo_attributes);
@@ -253,15 +225,12 @@ int cros_ec_sensors_core_init(struct platform_device *pdev,
 		if (state->msg->version < 3) {
 			get_default_min_max_freq(state->resp->info.type,
 						 &state->frequencies[1],
-						 &state->frequencies[2],
-						 &state->fifo_max_event_count);
+						 &state->frequencies[2]);
 		} else {
 			state->frequencies[1] =
 			    state->resp->info_3.min_frequency;
 			state->frequencies[2] =
 			    state->resp->info_3.max_frequency;
-			state->fifo_max_event_count =
-			    state->resp->info_3.fifo_max_event_count;
 		}
 	}
 
