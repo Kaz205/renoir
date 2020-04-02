@@ -13,7 +13,6 @@
 #include <linux/notifier.h>
 #include <linux/power_supply.h>
 
-#include <linux/mfd/cros_ec.h>
 #include <linux/platform_data/cros_ec_commands.h>
 
 #define CROS_EC_DEV_NAME	"cros_ec"
@@ -319,9 +318,5 @@ int cros_ec_get_next_event(struct cros_ec_device *ec_dev, bool *wake_event);
  * Return: 0 on error or non-zero bitmask of one or more EC_HOST_EVENT_*.
  */
 u32 cros_ec_get_host_event(struct cros_ec_device *ec_dev);
-
-int cros_ec_check_features(struct cros_ec_dev *ec, int feature);
-
-int cros_ec_get_sensor_count(struct cros_ec_dev *ec);
 
 #endif /* __LINUX_CROS_EC_PROTO_H */
