@@ -51,8 +51,10 @@ static int cros_ec_sensorhub_register(struct device *dev,
 	int ret, i, id, sensor_num;
 	struct cros_ec_dev *ec = sensorhub->ec;
 	int sensor_type[MOTIONSENSE_TYPE_MAX] = { 0 };
+	struct ec_params_motion_sense *params;
+	struct ec_response_motion_sense *resp;
+	struct cros_ec_command *msg;
 	char *name;
-	struct cros_ec_command *msg = sensorhub->msg;
 
 	sensor_num = cros_ec_get_sensor_count(ec);
 	if (sensor_num < 0) {
@@ -67,21 +69,30 @@ static int cros_ec_sensorhub_register(struct device *dev,
 		return -EINVAL;
 	}
 
+	/* Prepare a message to send INFO command to each sensor. */
+	msg = kzalloc(sizeof(*msg) + max(sizeof(*params), sizeof(*resp)),
+		      GFP_KERNEL);
+	if (!msg)
+		return -ENOMEM;
+
 	msg->version = 1;
-	msg->insize = sizeof(struct ec_response_motion_sense);
-	msg->outsize = sizeof(struct ec_params_motion_sense);
+	msg->command = EC_CMD_MOTION_SENSE_CMD + ec->cmd_offset;
+	msg->outsize = sizeof(*params);
+	msg->insize = sizeof(*resp);
+	params = (struct ec_params_motion_sense *)msg->data;
+	resp = (struct ec_response_motion_sense *)msg->data;
 
 	id = 0;
 	for (i = 0; i < sensor_num; i++) {
-		sensorhub->params->cmd = MOTIONSENSE_CMD_INFO;
-		sensorhub->params->info.sensor_num = i;
+		params->cmd = MOTIONSENSE_CMD_INFO;
+		params->info.sensor_num = i;
 		ret = cros_ec_cmd_xfer_status(ec->ec_dev, msg);
 		if (ret < 0) {
 			dev_warn(dev, "no info for EC sensor %d : %d/%d\n",
 				 i, ret, msg->result);
 			continue;
 		}
-		switch (sensorhub->resp->info.type) {
+		switch (resp->info.type) {
 		case MOTIONSENSE_TYPE_ACCEL:
 			name = "cros-ec-accel";
 			break;
@@ -110,15 +121,14 @@ static int cros_ec_sensorhub_register(struct device *dev,
 			name = "cros-ec-sync";
 			break;
 		default:
-			dev_warn(dev, "unknown type %d\n",
-				 sensorhub->resp->info.type);
+			dev_warn(dev, "unknown type %d\n", resp->info.type);
 			continue;
 		}
 		ret = cros_ec_sensorhub_allocate_single_sensor(dev, name, i);
 		if (ret)
-			return ret;
+			goto error;
 
-		sensor_type[sensorhub->resp->info.type]++;
+		sensor_type[resp->info.type]++;
 	}
 
 	if (sensor_type[MOTIONSENSE_TYPE_ACCEL] >= 2)
@@ -129,9 +139,14 @@ static int cros_ec_sensorhub_register(struct device *dev,
 		ret = cros_ec_sensorhub_allocate_single_sensor(dev,
 							"cros-ec-lid-angle", 0);
 		if (ret)
-			return ret;
+			goto error;
 	}
+	kfree(msg);
 	return 0;
+
+error:
+	kfree(msg);
+	return ret;
 }
 
 static int cros_ec_sensorhub_probe(struct platform_device *sensorhub_pdev)
@@ -139,29 +154,13 @@ static int cros_ec_sensorhub_probe(struct platform_device *sensorhub_pdev)
 	struct device *dev = &sensorhub_pdev->dev;
 	struct cros_ec_dev *ec = dev_get_drvdata(dev->parent);
 	int ret, i;
-	struct cros_ec_sensorhub *data;
-	struct cros_ec_command *msg;
+	struct cros_ec_sensorhub *data =
+		devm_kzalloc(dev, sizeof(struct cros_ec_sensorhub), GFP_KERNEL);
 
-	msg = devm_kzalloc(dev, sizeof(struct cros_ec_command) +
-			max((u16)sizeof(struct ec_params_motion_sense),
-			    ec->ec_dev->max_response), GFP_KERNEL);
-	if (!msg)
-		return -ENOMEM;
-
-	msg->command = EC_CMD_MOTION_SENSE_CMD + ec->cmd_offset;
-
-	data = devm_kzalloc(dev, sizeof(struct cros_ec_sensorhub), GFP_KERNEL);
 	if (!data)
 		return -ENOMEM;
 
-	data->dev = dev;
 	data->ec = ec;
-
-	mutex_init(&data->cmd_lock);
-	data->msg = msg;
-	data->params = (struct ec_params_motion_sense *)msg->data;
-	data->resp = (struct ec_response_motion_sense *)msg->data;
-
 	dev_set_drvdata(dev, data);
 
 	/* Check whether this EC is a sensor hub. */
@@ -186,63 +185,12 @@ static int cros_ec_sensorhub_probe(struct platform_device *sensorhub_pdev)
 		}
 	}
 
-	/*
-	 * If the EC does not have a FIFO, the sensors will query their data
-	 * themselves via sysfs or a software trigger.
-	 */
-	if (cros_ec_check_features(ec, EC_FEATURE_MOTION_SENSE_FIFO)) {
-		ret = cros_ec_sensorhub_ring_add(data);
-		if (ret)
-			return ret;
-		/*
-		 * The msg and its data is not under the control of the ring
-		 * handler.
-		 */
-		return devm_add_action_or_reset(dev,
-						cros_ec_sensorhub_ring_remove,
-						data);
-	}
-
 	return 0;
 }
-
-#if CONFIG_PM_SLEEP
-/*
- * When the EC is suspending, we must stop sending interrupt,
- * we may use the same interrupt line for waking up the device.
- * Tell the EC to stop sending non-interrupt event on the iio ring.
- */
-static int cros_ec_ring_suspend(struct device *dev)
-{
-	struct platform_device *pdev = to_platform_device(dev);
-	struct cros_ec_sensorhub *sensorhub = platform_get_drvdata(pdev);
-	struct cros_ec_dev *ec = sensorhub->ec;
-
-	if (cros_ec_check_features(ec, EC_FEATURE_MOTION_SENSE_FIFO))
-		return cros_ec_sensorhub_ring_fifo_enable(sensorhub, false);
-	return 0;
-}
-
-static int cros_ec_ring_resume(struct device *dev)
-{
-	struct platform_device *pdev = to_platform_device(dev);
-	struct cros_ec_sensorhub *sensorhub = platform_get_drvdata(pdev);
-	struct cros_ec_dev *ec = sensorhub->ec;
-
-	if (cros_ec_check_features(ec, EC_FEATURE_MOTION_SENSE_FIFO))
-		return cros_ec_sensorhub_ring_fifo_enable(sensorhub, true);
-	return 0;
-}
-#endif
-
-static SIMPLE_DEV_PM_OPS(cros_ec_sensorhub_ring_pm_ops,
-		cros_ec_ring_suspend,
-		cros_ec_ring_resume);
 
 static struct platform_driver cros_ec_sensorhub_driver = {
 	.driver = {
 		.name = DRV_NAME,
-		.pm = &cros_ec_sensorhub_ring_pm_ops,
 	},
 	.probe = cros_ec_sensorhub_probe,
 };
