@@ -19,7 +19,6 @@
 #include <linux/slab.h>
 #include <linux/platform_data/cros_ec_commands.h>
 #include <linux/platform_data/cros_ec_proto.h>
-#include <linux/platform_data/cros_ec_sensorhub.h>
 #include <linux/platform_device.h>
 
 /*
@@ -197,8 +196,7 @@ int cros_ec_sensors_core_init(struct platform_device *pdev,
 {
 	struct device *dev = &pdev->dev;
 	struct cros_ec_sensors_core_state *state = iio_priv(indio_dev);
-	struct cros_ec_sensorhub *sensor_hub = dev_get_drvdata(dev->parent);
-	struct cros_ec_dev *ec = sensor_hub->ec;
+	struct cros_ec_dev *ec = dev_get_drvdata(pdev->dev.parent);
 	struct cros_ec_sensor_platform *sensor_platform = dev_get_platdata(dev);
 	u32 ver_mask;
 	int frequencies[ARRAY_SIZE(state->frequencies) / 2] = { 0 };
