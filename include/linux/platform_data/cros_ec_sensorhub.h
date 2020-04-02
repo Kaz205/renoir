@@ -68,44 +68,7 @@ struct cros_ec_sensors_ring_sample {
 	s64 timestamp;
 } __packed;
 
-/* State used for cros_ec_ring_fix_overflow */
-struct cros_ec_sensors_ec_overflow_state {
-	s64 offset;
-	s64 last;
-};
-
-/* Length of the filter, how long to remember entries for */
-#define CROS_EC_SENSORHUB_TS_HISTORY_SIZE 64
-
 /**
- * struct cros_ec_sensors_ts_filter_state - Timestamp filetr state.
- *
- * @x_offset: x is EC interrupt time. x_offset its last value.
- * @y_offset: y is the difference between AP and EC time, y_offset its last
- *            value.
- * @x_history: The past history of x, relative to x_offset.
- * @y_history: The past history of y, relative to y_offset.
- * @m_history: rate between y and x.
- * @history_len: Amount of valid historic data in the arrays.
- * @temp_buf: Temporary buffer used when updating the filter.
- * @median_m: median value of m_history
- * @median_error: final error to apply to AP interrupt timestamp to get the
- *                "true timestamp" the event occurred.
- */
-struct cros_ec_sensors_ts_filter_state {
-	s64 x_offset, y_offset;
-	s64 x_history[CROS_EC_SENSORHUB_TS_HISTORY_SIZE];
-	s64 y_history[CROS_EC_SENSORHUB_TS_HISTORY_SIZE];
-	s64 m_history[CROS_EC_SENSORHUB_TS_HISTORY_SIZE];
-	int history_len;
-
-	s64 temp_buf[CROS_EC_SENSORHUB_TS_HISTORY_SIZE];
-
-	s64 median_m;
-	s64 median_error;
-};
-
-/*
  * struct cros_ec_sensorhub - Sensor Hub device data.
  *
  * @dev:          Device object, mostly used for logging.
@@ -119,28 +82,6 @@ struct cros_ec_sensors_ts_filter_state {
  * @fifo_timestamp: array for event timestamp and spreading.
  * @fifo_info: copy of FIFO information coming from the EC.
  * @fifo_size: size of the ring.
- *
- * @penultimate_batch_timestamp: array of last but one batch timestamps.
- *  Used for timestamp spreading calculations when a batch shows up.
- * @penultimate_batch_len: array of last but one batch length.
- * @last_batch_timestamp: last batch timestamp array.
- * @last_batch_len: last batch length array.
- * @newest_sensor_event: last sensor timestamp.
- * @overflow_a: for handling timestamp overflow for a time (sensor events)
- * @overflow_b: for handling timestamp overflow for b time (ec interrupts)
- * @filter: medium fileter structure.
- * @tight_timestamps: Set to truen when EC support tight timestamping:
- *  The timestamps reported from the EC have low jitter.
- *  Timestamps also come before every sample.
- *  Set either by feature bits coming from the EC or userspace.
- *
- * @future_timestamp_count : Statistics used to compute shaved time.
- *  This occures when timestamp interpolation from EC time to AP time
- *  accidentally puts timestamps in the future. These timestamps are clamped
- *  to `now` and these count/total_ns maintain the statistics for
- *  how much time was removed in a given period.
- * @future_timestamp_total_ns: Total amount of time shaved.
- *
  * @push_data: array of callback to send datums to iio sensor object.
  */
 struct cros_ec_sensorhub {
@@ -159,22 +100,6 @@ struct cros_ec_sensorhub {
 	ktime_t fifo_timestamp[CROS_EC_SENSOR_ALL_TS];
 	struct cros_ec_fifo_info fifo_info;
 	int    fifo_size;
-
-	s64 penultimate_batch_timestamp[CROS_EC_SENSOR_MAX];
-	int penultimate_batch_len[CROS_EC_SENSOR_MAX];
-	s64 last_batch_timestamp[CROS_EC_SENSOR_MAX];
-	int last_batch_len[CROS_EC_SENSOR_MAX];
-	s64 newest_sensor_event[CROS_EC_SENSOR_MAX];
-
-	struct cros_ec_sensors_ec_overflow_state overflow_a;
-	struct cros_ec_sensors_ec_overflow_state overflow_b;
-
-	struct cros_ec_sensors_ts_filter_state filter;
-
-	int tight_timestamps;
-
-	s32 future_timestamp_count;
-	s64 future_timestamp_total_ns;
 
 	struct cros_ec_sensorhub_sensor_push_data push_data[
 		CROS_EC_SENSOR_PDEV_MAX];
