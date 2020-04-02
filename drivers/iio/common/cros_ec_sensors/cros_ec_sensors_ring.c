@@ -200,6 +200,14 @@ static const struct iio_info ec_sensors_info = {
 	.attrs = &cros_ec_ring_attribute_group,
 };
 
+static s64 cros_ec_get_time_ns(void)
+{
+	struct timespec ts;
+
+	get_monotonic_boottime(&ts);
+	return timespec_to_ns(&ts);
+}
+
 static int cros_ec_ring_fifo_toggle(struct cros_ec_sensors_ring_state *state,
 				    bool on)
 {
