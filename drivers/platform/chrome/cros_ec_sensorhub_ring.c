@@ -33,31 +33,6 @@
 /* To measure by how much the filter is overshooting, if it happens. */
 #define FUTURE_TS_ANALYTICS_COUNT_MAX 100
 
-#if IS_ENABLED(CONFIG_IIO_CROS_EC_SENSORS_RING)
-/*
- * To be compliant with existing code, device buffer is only for
- * triggered samples.
- */
-static inline int cros_sensorhub_send_sample(
-		struct cros_ec_sensorhub *sensorhub,
-		struct cros_ec_sensors_ring_sample *sample)
-{
-	int id = sample->sensor_id;
-	struct iio_dev *indio_dev;
-	cros_ec_sensorhub_push_samples_cb_t cb =
-		(cros_ec_sensorhub_push_samples_cb_t)
-		sensorhub->push_data[CROS_EC_SENSOR_BROADCAST].push_data_cb;
-
-	if (id > CROS_EC_SENSOR_MAX)
-		return -EINVAL;
-
-	indio_dev = sensorhub->push_data[CROS_EC_SENSOR_BROADCAST].indio_dev;
-	if (!indio_dev)
-		return 0;
-
-	return cb(indio_dev, sample);
-}
-#else
 static inline int cros_sensorhub_send_sample(
 		struct cros_ec_sensorhub *sensorhub,
 		struct cros_ec_sensors_ring_sample *sample)
@@ -65,6 +40,9 @@ static inline int cros_sensorhub_send_sample(
 	int id = sample->sensor_id;
 	cros_ec_sensorhub_push_data_cb_t cb;
 	struct iio_dev *indio_dev;
+
+	if (id > CROS_EC_SENSOR_MAX)
+		return -EINVAL;
 
 	cb = sensorhub->push_data[id].push_data_cb;
 	if (!cb)
@@ -77,7 +55,6 @@ static inline int cros_sensorhub_send_sample(
 
 	return cb(indio_dev, sample->vector, sample->timestamp);
 }
-#endif
 
 /**
  * cros_ec_sensorhub_register_push_data() - register the callback to the hub.
@@ -116,29 +93,6 @@ void cros_ec_sensorhub_unregister_push_data(struct cros_ec_sensorhub *sensorhub,
 	sensorhub->push_data[sensor_num].push_data_cb = NULL;
 }
 EXPORT_SYMBOL_GPL(cros_ec_sensorhub_unregister_push_data);
-
-#if IS_ENABLED(CONFIG_IIO_CROS_EC_SENSORS_RING)
-int cros_ec_sensorhub_register_push_sample(
-		struct cros_ec_sensorhub *sensor_hub,
-		struct iio_dev *indio_dev,
-		cros_ec_sensorhub_push_samples_cb_t cb)
-{
-	return cros_ec_sensorhub_register_push_data(
-			sensor_hub,
-			CROS_EC_SENSOR_BROADCAST,
-			indio_dev,
-			(cros_ec_sensorhub_push_data_cb_t)cb);
-}
-EXPORT_SYMBOL_GPL(cros_ec_sensorhub_register_push_sample);
-
-void cros_ec_sensorhub_unregister_push_sample(
-		struct cros_ec_sensorhub *sensor_hub)
-{
-	cros_ec_sensorhub_unregister_push_data(sensor_hub,
-			CROS_EC_SENSOR_BROADCAST);
-}
-EXPORT_SYMBOL_GPL(cros_ec_sensorhub_unregister_push_sample);
-#endif
 
 /**
  * cros_ec_sensorhub_ring_fifo_enable() - Enable or disable interrupt generation
