@@ -100,8 +100,8 @@ static int virtio_video_query_cap_resp_buf(struct virtio_video *vv, void
 	int resp_size = vv->max_caps_len;
 
 	*resp_buf = kzalloc(vv->max_caps_len, GFP_KERNEL);
-	if (IS_ERR(*resp_buf)) {
-		ret = PTR_ERR(*resp_buf);
+	if (!*resp_buf) {
+		ret = -ENOMEM;
 		goto err;
 	}
 
