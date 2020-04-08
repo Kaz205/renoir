@@ -176,6 +176,7 @@ config EXTCON_TCSS_CROS_EC
 	tristate "ChromeOS Embedded Controller TCSS EXTCON support"
 	depends on CROS_EC
 	depends on INTEL_SCU_IPC
+	depends on CROS_USBPD_NOTIFY
 	help
 	  Say Y here to enable TCSS extcon support when using Chrome OS
 	  EC based TCSS on Intel SOC with Integrated Mux.
