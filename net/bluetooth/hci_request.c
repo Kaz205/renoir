@@ -3112,6 +3112,8 @@ static int active_scan(struct hci_request *req, unsigned long opt)
 	u8 own_addr_type;
 	/* Default is to enable duplicates filter */
 	u8 filter_dup = LE_SCAN_FILTER_DUP_ENABLE;
+	/* White list is not used for discovery */
+	u8 filter_policy = 0x00;
 	int err;
 
 	BT_DBG("%s", hdev->name);
@@ -3152,8 +3154,9 @@ static int active_scan(struct hci_request *req, unsigned long opt)
 	}
 
 	hci_req_start_scan(req, LE_SCAN_ACTIVE, interval,
-			   hdev->le_scan_window_discovery, own_addr_type, 0,
-			   filter_dup);
+			   hdev->le_scan_window_discovery, own_addr_type,
+			   filter_policy, filter_dup);
+
 	return 0;
 }
 
