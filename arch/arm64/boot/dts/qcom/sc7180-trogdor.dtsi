@@ -121,21 +121,6 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&ap_edp_bklten>;
 	};
-
-	panel: panel {
-		compatible = "auo,b116xa01";
-		power-supply = <&pp3300_dx_edp>;
-		backlight = <&backlight>;
-		no-hpd; /*TODO: Evaluate hpd */
-
-		ports {
-			port {
-				panel_in_edp: endpoint {
-					remote-endpoint = <&sn65dsi86_out>;
-				};
-			};
-		};
-	};
 };
 
 &qspi {
@@ -553,6 +538,7 @@ ap_ts_pen_1v8: &i2c4 {
 
 	ap_pen: digitizer@9 {
 		compatible = "wacom,w9013", "hid-over-i2c";
+		status = "disabled";
 		reg = <0x9>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pen_irq_l>, <&pen_pdct_l>, <&pen_rst_odl>;
@@ -659,9 +645,7 @@ hp_i2c: &i2c9 {
 };
 
 &sdhc_2 {
-	status = "okay";
-
-	pinctrl-names = "default","sleep";
+	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&sdc2_on>;
 	pinctrl-1 = <&sdc2_off>;
 	vmmc-supply = <&pp2950_l9c>;
@@ -671,8 +655,6 @@ hp_i2c: &i2c9 {
 };
 
 ap_spi_fp: &spi10 {
-	status = "okay";
-
 	cros_ec_fp: ec@0 {
 		compatible = "google,cros-ec-spi";
 		reg = <0>;
