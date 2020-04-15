@@ -154,6 +154,30 @@ static int chromiumos_security_sb_mount(const char *dev_name,
 	return 0;
 }
 
+/*
+ * NOTE: The WARN() calls will emit a warning in cases of blocked symlink
+ * traversal attempts. These will show up in kernel warning reports
+ * collected by the crash reporter, so we have some insight on spurious
+ * failures that need addressing.
+ */
+static int chromiumos_security_inode_follow_link(struct dentry *dentry,
+						 struct inode *inode, bool rcu)
+{
+	static char accessed_path[PATH_MAX];
+	enum chromiumos_inode_security_policy policy;
+
+	policy = chromiumos_get_inode_security_policy(
+		dentry, inode,
+		CHROMIUMOS_SYMLINK_TRAVERSAL);
+
+	WARN(policy == CHROMIUMOS_INODE_POLICY_BLOCK,
+	     "Blocked symlink traversal for path %x:%x:%s (see https://goo.gl/8xICW6 for context and rationale)\n",
+	     MAJOR(dentry->d_sb->s_dev), MINOR(dentry->d_sb->s_dev),
+	     dentry_path(dentry, accessed_path, PATH_MAX));
+
+	return policy == CHROMIUMOS_INODE_POLICY_BLOCK ? -EACCES : 0;
+}
+
 static int chromiumos_security_file_open(struct file *file)
 {
 	static char accessed_path[PATH_MAX];
@@ -231,6 +255,7 @@ int chromiumos_sb_eat_lsm_opts(char *orig, void **mnt_opts)
 
 static struct security_hook_list chromiumos_security_hooks[] = {
 	LSM_HOOK_INIT(sb_mount, chromiumos_security_sb_mount),
+	LSM_HOOK_INIT(inode_follow_link, chromiumos_security_inode_follow_link),
 	LSM_HOOK_INIT(file_open, chromiumos_security_file_open),
 	LSM_HOOK_INIT(sb_eat_lsm_opts, chromiumos_sb_eat_lsm_opts),
 };
