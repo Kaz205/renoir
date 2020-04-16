@@ -567,6 +567,10 @@ static void icl_ctx_workarounds_init(struct intel_engine_cs *engine,
 static void tgl_ctx_workarounds_init(struct intel_engine_cs *engine,
 				     struct i915_wa_list *wal)
 {
+	/* WaDisableGPGPUMidThreadPreemption:tgl */
+	WA_SET_FIELD_MASKED(GEN8_CS_CHICKEN1,
+			    GEN9_PREEMPT_GPGPU_LEVEL_MASK,
+			    GEN9_PREEMPT_GPGPU_THREAD_GROUP_LEVEL);
 }
 
 static void
@@ -1342,8 +1346,11 @@ rcs_engine_wa_init(struct intel_engine_cs *engine, struct i915_wa_list *wal)
 				   0);
 	}
 
-	if (IS_GEN_RANGE(i915, 9, 11)) {
-		/* FtrPerCtxtPreemptionGranularityControl:skl,bxt,kbl,cfl,cnl,icl */
+	if (IS_GEN_RANGE(i915, 9, 12)) {
+		/*
+		 * FtrPerCtxtPreemptionGranularityControl:skl,bxt,kbl,cfl,cnl,
+		 * icl,tgl
+		 */
 		wa_masked_en(wal,
 			     GEN7_FF_SLICE_CS_CHICKEN1,
 			     GEN9_FFSC_PERCTX_PREEMPT_CTRL);
