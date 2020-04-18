@@ -44,22 +44,12 @@ ap_h1_spi: &spi6 {};
 	clock-frequency = <100000>;
 };
 
-/delete-node/ &brij_pp1200_en;
-
 &cr50 {
 	interrupts = <21 IRQ_TYPE_EDGE_RISING>;
 };
 
-/delete-node/ &pp1200_brij;
-pp1200_brij: &pp1200_l3c {};
-
 &sdhc_2 {
 	status = "okay";
-};
-
-&sn65dsi86_bridge {
-	vcca-supply = <&pp1200_brij>;
-	vcc-supply = <&pp1200_brij>;
 };
 
 /* PINCTRL - modifications to sc7180-trogdor.dtsi */

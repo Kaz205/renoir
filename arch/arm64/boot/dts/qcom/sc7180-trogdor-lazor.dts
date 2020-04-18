@@ -67,7 +67,7 @@ ap_h1_spi: &spi0 {};
 			  "",
 			  "HP_IRQ",
 			  "AP_RAM_ID0",
-			  "BRIJ_PP1200_EN",
+			  "",
 			  "AP_BRD_ID2",
 			  "BRIJ_SUSPEND",
 			  "AP_BRD_ID0",

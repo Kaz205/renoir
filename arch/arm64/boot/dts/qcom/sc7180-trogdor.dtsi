@@ -45,19 +45,6 @@
 		vin-supply = <&ppvar_sys>;
 	};
 
-	pp1200_brij: pp1200-brij-regulator {
-		compatible = "regulator-fixed";
-		regulator-name = "pp1200_brij";
-
-		regulator-min-microvolt = <1200000>;
-		regulator-max-microvolt = <1200000>;
-
-		gpio = <&tlmm 30 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
-		pinctrl-names = "default";
-		pinctrl-0 = <&brij_pp1200_en>;
-	};
-
 	pp5000_a: pp5000-a-regulator {
 		compatible = "regulator-fixed";
 		regulator-name = "pp5000_a";
@@ -342,6 +329,7 @@
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
 		};
 
+		pp1200_brij:
 		vdd_ufs1_1p2:
 		vdda_csi0_1p25:
 		vdda_csi1_1p25:
@@ -932,20 +920,6 @@ ap_spi_fp: &spi10 {
 			pins = "gpio66";
 			bias-disable;
 		};
-	};
-
-	brij_pp1200_en: brij-pp1200-en {
-		pinmux {
-			pins = "gpio30";
-			function = "gpio";
-		};
-
-		pinconf {
-			pins = "gpio30";
-			drive-strength = <2>;
-			bias-disable;
-		};
-
 	};
 
 	edp_brij_en: edp-brij-en {
