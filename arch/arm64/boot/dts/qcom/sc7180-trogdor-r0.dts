@@ -74,6 +74,16 @@ pp1200_brij: &pp1200_l3c {};
 	};
 };
 
+&bios_flash_wp_l {
+	pinmux  {
+		pins = "gpio42";
+	};
+
+	pinconf {
+		pins = "gpio42";
+	};
+};
+
 &edp_brij_en {
 	pinmux {
 		pins = "gpio14";

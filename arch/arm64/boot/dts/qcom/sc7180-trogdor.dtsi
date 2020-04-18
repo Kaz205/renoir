@@ -923,13 +923,13 @@ ap_spi_fp: &spi10 {
 
 	bios_flash_wp_l: bios-flash-wp-l {
 		pinmux {
-			pins = "gpio42";
+			pins = "gpio66";
 			function = "gpio";
 			input-enable;
 		};
 
 		pinconf {
-			pins = "gpio42";
+			pins = "gpio66";
 			bias-disable;
 		};
 	};
