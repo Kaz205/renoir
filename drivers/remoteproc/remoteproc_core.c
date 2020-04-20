@@ -1997,7 +1997,7 @@ static void rproc_type_release(struct device *dev)
 	if (rproc->index >= 0)
 		ida_simple_remove(&rproc_dev_index, rproc->index);
 
-	kfree(rproc->firmware);
+	kfree_const(rproc->firmware);
 	kfree(rproc->ops);
 	kfree(rproc);
 }
@@ -2010,7 +2010,7 @@ static const struct device_type rproc_type = {
 static int rproc_alloc_firmware(struct rproc *rproc,
 				const char *name, const char *firmware)
 {
-	char *p;
+	const char *p;
 
 	if (!firmware)
 		/*
@@ -2019,7 +2019,7 @@ static int rproc_alloc_firmware(struct rproc *rproc,
 		 */
 		p = kasprintf(GFP_KERNEL, "rproc-%s-fw", name);
 	else
-		p = kstrdup(firmware, GFP_KERNEL);
+		p = kstrdup_const(firmware, GFP_KERNEL);
 
 	if (!p)
 		return -ENOMEM;
@@ -2123,7 +2123,7 @@ struct rproc *rproc_alloc(struct device *dev, const char *name,
 	return rproc;
 
 free_firmware:
-	kfree(rproc->firmware);
+	kfree_const(rproc->firmware);
 free_rproc:
 	kfree(rproc);
 	return NULL;
