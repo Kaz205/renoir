@@ -52,6 +52,10 @@ ap_h1_spi: &spi6 {};
 	status = "okay";
 };
 
+&sn65dsi86_bridge {
+	enable-gpios = <&tlmm 14 GPIO_ACTIVE_HIGH>;
+};
+
 /* PINCTRL - modifications to sc7180-trogdor.dtsi */
 
 &ap_suspend_l_neuter {

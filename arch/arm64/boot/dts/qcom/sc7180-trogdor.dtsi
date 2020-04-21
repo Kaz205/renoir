@@ -513,7 +513,7 @@ edp_brij_i2c: &i2c2 {
 		interrupt-parent = <&tlmm>;
 		interrupts = <11 IRQ_TYPE_LEVEL_HIGH>;
 
-		enable-gpios = <&tlmm 14 GPIO_ACTIVE_HIGH>;
+		enable-gpios = <&tlmm 104 GPIO_ACTIVE_HIGH>;
 
 		vpll-supply = <&pp1800_edp_vpll>;
 		vccio-supply = <&pp1800_brij_vccio>;
