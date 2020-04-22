@@ -649,6 +649,10 @@ hp_i2c: &i2c9 {
 &sdhc_1 {
 	status = "okay";
 
+	// CQE is currently causing I/O hangs.  See b/153142831
+	// Hack it out while the problem is being investigated.
+	/delete-property/supports-cqe;
+
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&sdc1_on>;
 	pinctrl-1 = <&sdc1_off>;
