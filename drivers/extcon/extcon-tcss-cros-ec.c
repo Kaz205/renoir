@@ -719,10 +719,51 @@ destroy_mutex:
 }
 
 #ifdef CONFIG_PM_SLEEP
+/**
+ * cros_ec_pd_control() - Issue a pd_control command to EC for a given port
+ * @info: pointer to struct cros_ec_tcss_info
+ * @subcmd: sub-command to be issued
+ * @port: USB-C port number
+ *
+ * Return: status of cros_ec_pd_command()
+ */
+static int cros_ec_pd_control(struct cros_ec_tcss_info *info,
+			      u8 subcmd, u8 port)
+{
+	struct ec_params_pd_control pd_control;
+	int ret;
+
+	pd_control.subcmd = subcmd;
+	pd_control.chip = port;
+
+	ret = cros_ec_pd_command(info, EC_CMD_PD_CONTROL, 0, &pd_control,
+				 sizeof(pd_control), NULL, 0);
+	if (ret < 0)
+		dev_err(info->dev, "err %d for port %u subcmd %u\n", ret, port,
+			subcmd);
+
+	return ret;
+}
+
+static int cros_ec_tcss_suspend(struct device *dev)
+{
+	struct cros_ec_tcss_info *info = dev_get_drvdata(dev);
+	u8 i;
+
+	for (i = 0; i < info->num_ports; i++)
+		cros_ec_pd_control(info, PD_SUSPEND, i);
+
+	return 0;
+}
+
 static int cros_ec_tcss_resume(struct device *dev)
 {
 	struct cros_ec_tcss_info *info = dev_get_drvdata(dev);
 	int ret;
+	u8 i;
+
+	for (i = 0; i < info->num_ports; i++)
+		cros_ec_pd_control(info, PD_RESUME, i);
 
 	ret = cros_ec_tcss_initial_detect(info);
 	if (ret < 0)
@@ -732,7 +773,7 @@ static int cros_ec_tcss_resume(struct device *dev)
 }
 
 static const struct dev_pm_ops tcss_cros_ec_dev_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(NULL, cros_ec_tcss_resume)
+	SET_SYSTEM_SLEEP_PM_OPS(cros_ec_tcss_suspend, cros_ec_tcss_resume)
 };
 
 #define DEV_PM_OPS     (&tcss_cros_ec_dev_pm_ops)
