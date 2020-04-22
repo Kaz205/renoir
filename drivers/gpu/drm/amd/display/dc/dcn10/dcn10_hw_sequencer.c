@@ -1525,6 +1525,16 @@ static void dcn10_pipe_control_lock(
 		dcn10_verify_allow_pstate_change_high(dc);
 }
 
+void dcn10_cursor_lock(struct dc *dc, struct pipe_ctx *pipe, bool lock)
+{
+	/* cursor lock is per MPCC tree, so only need to lock one pipe per stream */
+	if (!pipe || pipe->top_pipe)
+		return;
+
+	dc->res_pool->mpc->funcs->cursor_lock(dc->res_pool->mpc,
+			pipe->stream_res.opp->inst, lock);
+}
+
 static bool wait_for_reset_trigger_to_occur(
 	struct dc_context *dc_ctx,
 	struct timing_generator *tg)
@@ -3398,6 +3408,7 @@ static const struct hw_sequencer_funcs dcn10_funcs = {
 	.disable_plane = dcn10_disable_plane,
 	.blank_pixel_data = dcn10_blank_pixel_data,
 	.pipe_control_lock = dcn10_pipe_control_lock,
+	.cursor_lock = dcn10_cursor_lock,
 	.prepare_bandwidth = dcn10_prepare_bandwidth,
 	.optimize_bandwidth = dcn10_optimize_bandwidth,
 	.reset_hw_ctx_wrap = dcn10_reset_hw_ctx_wrap,
