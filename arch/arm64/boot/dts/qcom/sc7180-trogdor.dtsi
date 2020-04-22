@@ -1175,9 +1175,3 @@ ap_spi_fp: &spi10 {
 		};
 	};
 };
-
-&venus {
-	video-firmware {
-		iommus = <&apps_smmu 0x0c42 0x0>;
-	};
-};
