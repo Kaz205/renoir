@@ -168,7 +168,11 @@ ap_h1_spi: &spi6 {};
 			  "BT_UART_RTS",
 			  "BT_UART_TXD",
 			  "BT_UART_RXD",
-			  "BIOS_FLASH_WP_L",
+			  /*
+			   * AP_FLASH_WP_L is crossystem ABI. Schematics
+			   * call it BIOS_FLASH_WP_L.
+			   */
+			  "AP_FLASH_WP_L",
 			  "P_SENSOR_INT_L",
 			  "UART_AP_TX_DBG_RX",
 			  "UART_DBG_TX_AP_RX",
