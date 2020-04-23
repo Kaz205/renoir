@@ -281,7 +281,5 @@ ap_ts_pen_1v8: &i2c4 {
 			  "AP_TS_PEN_I2C_SDA",
 			  "AP_TS_PEN_I2C_SCL",
 			  "DP_HOT_PLUG_DET",
-			  "EC_IN_RW_ODL",
-			  "",
-			  "";
+			  "EC_IN_RW_ODL";
 };
