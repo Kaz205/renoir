@@ -17,6 +17,7 @@
 #include <linux/interrupt.h>
 #include <linux/io-64-nonatomic-lo-hi.h>
 #include <linux/module.h>
+#include <linux/pci.h>
 #include <linux/platform_device.h>
 
 #include <asm/intel-family.h>
@@ -207,6 +208,50 @@ static int get_xtal_clock_freq(void)
 	}
 	return 0;
 }
+
+static int ipc_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+{
+	struct intel_pmc_ipc_dev *pmc = &ipcdev;
+	struct intel_scu_ipc_pdata pdata = {};
+	struct intel_scu_ipc_dev *scu;
+	int ret;
+
+	/* Only one PMC is supported */
+	if (pmc->dev)
+		return -EBUSY;
+
+	spin_lock_init(&ipcdev.gcr_lock);
+
+	ret = pcim_enable_device(pdev);
+	if (ret)
+		return ret;
+
+	pdata.mem = pdev->resource[0];
+
+	scu = devm_intel_scu_ipc_register(&pdev->dev, &pdata);
+	if (IS_ERR(scu))
+		return PTR_ERR(scu);
+
+	pmc->dev = &pdev->dev;
+
+	pci_set_drvdata(pdev, pmc);
+
+	return 0;
+}
+
+static const struct pci_device_id ipc_pci_ids[] = {
+	{PCI_VDEVICE(INTEL, 0x0a94), 0},
+	{PCI_VDEVICE(INTEL, 0x1a94), 0},
+	{PCI_VDEVICE(INTEL, 0x5a94), 0},
+	{ 0,}
+};
+MODULE_DEVICE_TABLE(pci, ipc_pci_ids);
+
+static struct pci_driver ipc_pci_driver = {
+	.name = "intel_pmc_ipc",
+	.id_table = ipc_pci_ids,
+	.probe = ipc_pci_probe,
+};
 
 static ssize_t intel_pmc_ipc_simple_cmd_store(struct device *dev,
 					      struct device_attribute *attr,
@@ -649,11 +694,25 @@ static struct platform_driver ipc_plat_driver = {
 
 static int __init intel_pmc_ipc_init(void)
 {
-	return platform_driver_register(&ipc_plat_driver);
+	int ret;
+
+	ret = platform_driver_register(&ipc_plat_driver);
+	if (ret) {
+		pr_err("Failed to register PMC ipc platform driver\n");
+		return ret;
+	}
+	ret = pci_register_driver(&ipc_pci_driver);
+	if (ret) {
+		pr_err("Failed to register PMC ipc pci driver\n");
+		platform_driver_unregister(&ipc_plat_driver);
+		return ret;
+	}
+	return ret;
 }
 
 static void __exit intel_pmc_ipc_exit(void)
 {
+	pci_unregister_driver(&ipc_pci_driver);
 	platform_driver_unregister(&ipc_plat_driver);
 }
 

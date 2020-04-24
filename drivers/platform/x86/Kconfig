@@ -991,18 +991,13 @@ config INTEL_SCU
 
 config INTEL_SCU_PCI
 	bool "Intel SCU PCI driver"
-	depends on PCI 
+	depends on X86_INTEL_MID
 	select INTEL_SCU
 	help
 	  This driver is used to bridge the communications between kernel
 	  and SCU on some embedded Intel x86 platforms. It also creates
-	  devices that are connected to the SoC through the SCU.
-	  Platforms supported:
-	    Medfield
-	    Clovertrail
-	    Merrifield
-	    Broxton
-	    Apollo Lake
+	  devices that are connected to the SoC through the SCU. This is
+	  not needed for PC-type machines.
 
 config INTEL_SCU_PLATFORM
 	tristate "Intel SCU platform driver"
@@ -1213,7 +1208,7 @@ config INTEL_SMARTCONNECT
 
 config INTEL_PMC_IPC
 	tristate "Intel PMC IPC Driver"
-	depends on ACPI
+	depends on ACPI && PCI
 	select INTEL_SCU_IPC
 	---help---
 	This driver provides support for PMC control on some Intel platforms.
