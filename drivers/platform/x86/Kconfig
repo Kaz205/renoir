@@ -1211,11 +1211,19 @@ config INTEL_SMARTCONNECT
 	  This driver checks to determine whether the device has Intel Smart
 	  Connect enabled, and if so disables it.
 
+config INTEL_PMC_IPC
+	tristate "Intel PMC IPC Driver"
+	depends on ACPI
+	select INTEL_SCU_IPC
+	---help---
+	This driver provides support for PMC control on some Intel platforms.
+	The PMC is an ARC processor which defines IPC commands for communication
+	with other entities in the CPU.
+
 config INTEL_BXTWC_PMIC_TMU
 	tristate "Intel BXT Whiskey Cove TMU Driver"
 	depends on REGMAP
-	depends on MFD_INTEL_PMC_BXT
-	depends on INTEL_SOC_PMIC_BXTWC
+	depends on INTEL_SOC_PMIC_BXTWC && INTEL_PMC_IPC
 	---help---
 	  Select this driver to use Intel BXT Whiskey Cove PMIC TMU feature.
 	  This driver enables the alarm wakeup functionality in the TMU unit
@@ -1241,9 +1249,7 @@ config INTEL_PUNIT_IPC
 
 config INTEL_TELEMETRY
 	tristate "Intel SoC Telemetry Driver"
-	depends on X86_64
-	depends on MFD_INTEL_PMC_BXT 
-	depends on INTEL_PUNIT_IPC
+	depends on INTEL_PMC_IPC && INTEL_PUNIT_IPC && X86_64
 	---help---
 	  This driver provides interfaces to configure and use
 	  telemetry for INTEL SoC from APL onwards. It is also
