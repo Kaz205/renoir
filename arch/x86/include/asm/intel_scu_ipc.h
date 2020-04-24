@@ -2,7 +2,6 @@
 #ifndef _ASM_X86_INTEL_SCU_IPC_H_
 #define  _ASM_X86_INTEL_SCU_IPC_H_
 
-#include <linux/ioport.h>
 #include <linux/notifier.h>
 
 #define IPCMSG_INDIRECT_READ	0x02
@@ -19,23 +18,6 @@
 	/* Command id associated with message IPCMSG_VRTC */
 	#define IPC_CMD_VRTC_SETTIME      1 /* Set time */
 	#define IPC_CMD_VRTC_SETALARM     2 /* Set alarm */
-
-struct device;
-struct intel_scu_ipc_dev;
-
-/**
- * struct intel_scu_ipc_pdata - Platform data for SCU IPC
- * @mem: Base address of SCU IPC MMIO registers
- * @irq: The IRQ number used for SCU (optional)
- */
-struct intel_scu_ipc_pdata {
-	struct resource mem;
-	int irq;
-};
-
-struct intel_scu_ipc_dev *
-intel_scu_ipc_register(struct device *parent,
-		       const struct intel_scu_ipc_pdata *pdata);
 
 /* Read single register */
 int intel_scu_ipc_ioread8(u16 addr, u8 *data);
