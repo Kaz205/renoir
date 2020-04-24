@@ -46,7 +46,6 @@ struct mid_pb_ddata {
 	unsigned short mirqlvl1_addr;
 	unsigned short pbstat_addr;
 	u8 pbstat_mask;
-	struct intel_scu_ipc_dev *scu;
 	int (*setup)(struct mid_pb_ddata *ddata);
 };
 
@@ -56,8 +55,7 @@ static int mid_pbstat(struct mid_pb_ddata *ddata, int *value)
 	int ret;
 	u8 pbstat;
 
-	ret = intel_scu_ipc_dev_ioread8(ddata->scu, ddata->pbstat_addr,
-					&pbstat);
+	ret = intel_scu_ipc_ioread8(ddata->pbstat_addr, &pbstat);
 	if (ret)
 		return ret;
 
@@ -69,15 +67,14 @@ static int mid_pbstat(struct mid_pb_ddata *ddata, int *value)
 
 static int mid_irq_ack(struct mid_pb_ddata *ddata)
 {
-	return intel_scu_ipc_dev_update(ddata->scu, ddata->mirqlvl1_addr, 0,
-					MSIC_PWRBTNM);
+	return intel_scu_ipc_update_register(ddata->mirqlvl1_addr, 0, MSIC_PWRBTNM);
 }
 
 static int mrfld_setup(struct mid_pb_ddata *ddata)
 {
 	/* Unmask the PBIRQ and MPBIRQ on Tangier */
-	intel_scu_ipc_dev_update(ddata->scu, BCOVE_PBIRQ, 0, MSIC_PWRBTNM);
-	intel_scu_ipc_dev_update(ddata->scu, BCOVE_PBIRQMASK, 0, MSIC_PWRBTNM);
+	intel_scu_ipc_update_register(BCOVE_PBIRQ, 0, MSIC_PWRBTNM);
+	intel_scu_ipc_update_register(BCOVE_PBIRQMASK, 0, MSIC_PWRBTNM);
 
 	return 0;
 }
@@ -163,10 +160,6 @@ static int mid_pb_probe(struct platform_device *pdev)
 		if (error)
 			return error;
 	}
-
-	ddata->scu = devm_intel_scu_ipc_dev_get(&pdev->dev);
-	if (!ddata->scu)
-		return -EPROBE_DEFER;
 
 	error = devm_request_threaded_irq(&pdev->dev, irq, NULL, mid_pb_isr,
 					  IRQF_ONESHOT, DRIVER_NAME, ddata);
