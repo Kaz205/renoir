@@ -4007,7 +4007,7 @@ static int ieee80211_set_tid_config(struct wiphy *wiphy,
 
 static int ieee80211_reset_tid_config(struct wiphy *wiphy,
 				      struct net_device *dev,
-				      const u8 *peer, u8 tid)
+				      const u8 *peer, u8 tids)
 {
 	struct ieee80211_sub_if_data *sdata = IEEE80211_DEV_TO_SUB_IF(dev);
 	struct sta_info *sta;
@@ -4017,7 +4017,7 @@ static int ieee80211_reset_tid_config(struct wiphy *wiphy,
 		return -EOPNOTSUPP;
 
 	if (!peer)
-		return drv_reset_tid_config(sdata->local, sdata, NULL, tid);
+		return drv_reset_tid_config(sdata->local, sdata, NULL, tids);
 
 	mutex_lock(&sdata->local->sta_mtx);
 	sta = sta_info_get_bss(sdata, peer);
@@ -4026,7 +4026,7 @@ static int ieee80211_reset_tid_config(struct wiphy *wiphy,
 		return -ENOENT;
 	}
 
-	ret = drv_reset_tid_config(sdata->local, sdata, &sta->sta, tid);
+	ret = drv_reset_tid_config(sdata->local, sdata, &sta->sta, tids);
 	mutex_unlock(&sdata->local->sta_mtx);
 
 	return ret;
