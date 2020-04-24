@@ -452,6 +452,46 @@ revert:
 	return ret;
 }
 
+/* helper to log DSP state */
+static void hda_dsp_state_log(struct snd_sof_dev *sdev)
+{
+	switch (sdev->dsp_power_state.state) {
+	case SOF_DSP_PM_D0:
+		switch (sdev->dsp_power_state.substate) {
+		case SOF_HDA_DSP_PM_D0I0:
+			dev_dbg(sdev->dev, "Current DSP power state: D0I0\n");
+			break;
+		case SOF_HDA_DSP_PM_D0I3:
+			dev_dbg(sdev->dev, "Current DSP power state: D0I3\n");
+			break;
+		default:
+			dev_dbg(sdev->dev, "Unknown DSP D0 substate: %d\n",
+				sdev->dsp_power_state.substate);
+			break;
+		}
+		break;
+	case SOF_DSP_PM_D1:
+		dev_dbg(sdev->dev, "Current DSP power state: D1\n");
+		break;
+	case SOF_DSP_PM_D2:
+		dev_dbg(sdev->dev, "Current DSP power state: D2\n");
+		break;
+	case SOF_DSP_PM_D3_HOT:
+		dev_dbg(sdev->dev, "Current DSP power state: D3_HOT\n");
+		break;
+	case SOF_DSP_PM_D3:
+		dev_dbg(sdev->dev, "Current DSP power state: D3\n");
+		break;
+	case SOF_DSP_PM_D3_COLD:
+		dev_dbg(sdev->dev, "Current DSP power state: D3_COLD\n");
+		break;
+	default:
+		dev_dbg(sdev->dev, "Unknown DSP power state: %d\n",
+			sdev->dsp_power_state.state);
+		break;
+	}
+}
+
 /*
  * All DSP power state transitions are initiated by the driver.
  * If the requested state change fails, the error is simply returned.
@@ -511,8 +551,7 @@ set_state:
 	}
 
 	sdev->dsp_power_state = *target_state;
-	dev_dbg(sdev->dev, "New DSP state %d substate %d\n",
-		target_state->state, target_state->substate);
+	hda_dsp_state_log(sdev);
 	return ret;
 }
 
@@ -554,6 +593,8 @@ static int hda_suspend(struct snd_sof_dev *sdev, bool runtime_suspend)
 	struct hdac_bus *bus = sof_to_bus(sdev);
 #endif
 	int ret;
+
+	hda_sdw_int_enable(sdev, false);
 
 	/* disable IPC interrupts */
 	hda_dsp_ipc_int_disable(sdev);
@@ -662,7 +703,7 @@ int hda_dsp_resume(struct snd_sof_dev *sdev)
 		hda_codec_i915_display_power(sdev, true);
 
 		/* Set DSP power state */
-		ret = hda_dsp_set_power_state(sdev, &target_state);
+		ret = snd_sof_dsp_set_power_state(sdev, &target_state);
 		if (ret < 0) {
 			dev_err(sdev->dev, "error: setting dsp state %d substate %d\n",
 				target_state.state, target_state.substate);
@@ -686,8 +727,7 @@ int hda_dsp_resume(struct snd_sof_dev *sdev)
 	if (ret < 0)
 		return ret;
 
-	hda_dsp_set_power_state(sdev, &target_state);
-	return ret;
+	return snd_sof_dsp_set_power_state(sdev, &target_state);
 }
 
 int hda_dsp_runtime_resume(struct snd_sof_dev *sdev)
@@ -702,7 +742,7 @@ int hda_dsp_runtime_resume(struct snd_sof_dev *sdev)
 	if (ret < 0)
 		return ret;
 
-	return hda_dsp_set_power_state(sdev, &target_state);
+	return snd_sof_dsp_set_power_state(sdev, &target_state);
 }
 
 int hda_dsp_runtime_idle(struct snd_sof_dev *sdev)
@@ -730,7 +770,7 @@ int hda_dsp_runtime_suspend(struct snd_sof_dev *sdev)
 	if (ret < 0)
 		return ret;
 
-	return hda_dsp_set_power_state(sdev, &target_state);
+	return snd_sof_dsp_set_power_state(sdev, &target_state);
 }
 
 int hda_dsp_suspend(struct snd_sof_dev *sdev, u32 target_state)
@@ -753,7 +793,7 @@ int hda_dsp_suspend(struct snd_sof_dev *sdev, u32 target_state)
 		hda_codec_i915_display_power(sdev, false);
 
 		/* Set DSP power state */
-		ret = hda_dsp_set_power_state(sdev, &target_dsp_state);
+		ret = snd_sof_dsp_set_power_state(sdev, &target_dsp_state);
 		if (ret < 0) {
 			dev_err(sdev->dev, "error: setting dsp state %d substate %d\n",
 				target_dsp_state.state,
@@ -781,7 +821,7 @@ int hda_dsp_suspend(struct snd_sof_dev *sdev, u32 target_state)
 		return ret;
 	}
 
-	return hda_dsp_set_power_state(sdev, &target_dsp_state);
+	return snd_sof_dsp_set_power_state(sdev, &target_dsp_state);
 }
 
 int hda_dsp_set_hw_params_upon_resume(struct snd_sof_dev *sdev)
@@ -807,7 +847,7 @@ int hda_dsp_set_hw_params_upon_resume(struct snd_sof_dev *sdev)
 		 */
 		if (stream->link_substream) {
 			rtd = snd_pcm_substream_chip(stream->link_substream);
-			name = rtd->codec_dai->component->name;
+			name = asoc_rtd_to_codec(rtd, 0)->component->name;
 			link = snd_hdac_ext_bus_get_link(bus, name);
 			if (!link)
 				return -EINVAL;
@@ -849,7 +889,7 @@ void hda_dsp_d0i3_work(struct work_struct *work)
 		return;
 
 	/* This can fail but error cannot be propagated */
-	ret = hda_dsp_set_power_state(sdev, &target_state);
+	ret = snd_sof_dsp_set_power_state(sdev, &target_state);
 	if (ret < 0)
 		dev_err_ratelimited(sdev->dev,
 				    "error: failed to set DSP state %d substate %d\n",
