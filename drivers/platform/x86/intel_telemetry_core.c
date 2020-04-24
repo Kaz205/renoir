@@ -353,16 +353,21 @@ int telemetry_clear_pltdata(void)
 EXPORT_SYMBOL_GPL(telemetry_clear_pltdata);
 
 /**
- * telemetry_get_pltdata() - Return telemetry platform config
+ * telemetry_pltconfig_valid() - Checkif platform config is valid
  *
- * May be used by other telemetry modules to get platform specific
- * configuration.
+ * Usage by other than telemetry module is invalid
+ *
+ * Return: 0 success, < 0 for failure
  */
-struct telemetry_plt_config *telemetry_get_pltdata(void)
+int telemetry_pltconfig_valid(void)
 {
-	return telm_core_conf.plt_config;
+	if (telm_core_conf.plt_config)
+		return 0;
+
+	else
+		return -EINVAL;
 }
-EXPORT_SYMBOL_GPL(telemetry_get_pltdata);
+EXPORT_SYMBOL_GPL(telemetry_pltconfig_valid);
 
 static inline int telemetry_get_pssevtname(enum telemetry_unit telem_unit,
 					   const char **name, int len)
