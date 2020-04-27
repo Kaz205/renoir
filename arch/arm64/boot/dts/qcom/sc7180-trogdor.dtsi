@@ -544,41 +544,6 @@ edp_brij_i2c: &i2c2 {
 	};
 };
 
-ap_ts_pen_1v8: &i2c4 {
-	status = "okay";
-	clock-frequency = <400000>;
-
-	ap_pen: digitizer@9 {
-		compatible = "wacom,w9013", "hid-over-i2c";
-		status = "disabled";
-		reg = <0x9>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pen_irq_l>, <&pen_pdct_l>, <&pen_rst_odl>;
-
-		vddl-supply = <&pp1800_pen>;
-		post-power-on-delay-ms = <100>;
-
-		interrupt-parent = <&tlmm>;
-		interrupts = <21 IRQ_TYPE_LEVEL_LOW>;
-
-		hid-descr-addr = <0x1>; /* TODO: Confirm */
-	};
-
-	ap_ts: touchscreen@10 {
-		compatible = "elan,ekth3500";
-		reg = <0x10>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&ts_int_l>, <&ts_reset_l>;
-
-		interrupt-parent = <&tlmm>;
-		interrupts = <9 IRQ_TYPE_LEVEL_LOW>;
-
-		vcc33-supply = <&pp3300_ts>;
-
-		reset-gpios = <&tlmm 8 GPIO_ACTIVE_LOW>;
-	};
-};
-
 ap_sar_sensor_i2c: &i2c5 {
 	status = "okay";
 	clock-frequency = <400000>;
