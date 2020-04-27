@@ -48,6 +48,10 @@ ap_h1_spi: &spi6 {};
 	interrupts = <21 IRQ_TYPE_EDGE_RISING>;
 };
 
+&pp3300_ts {
+	gpio = <&tlmm 106 GPIO_ACTIVE_HIGH>;
+};
+
 &sdhc_2 {
 	status = "okay";
 };
@@ -85,6 +89,16 @@ ap_h1_spi: &spi6 {};
 
 	pinconf {
 		pins = "gpio14";
+	};
+};
+
+&en_pp3300_dx_edp {
+	pinmux {
+		pins = "gpio106";
+	};
+
+	pinconf {
+		pins = "gpio106";
 	};
 };
 

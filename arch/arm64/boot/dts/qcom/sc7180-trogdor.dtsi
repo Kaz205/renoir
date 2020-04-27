@@ -80,7 +80,7 @@
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
 
-		gpio = <&tlmm 106 GPIO_ACTIVE_HIGH>;
+		gpio = <&tlmm 30 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
 		pinctrl-names = "default";
 		pinctrl-0 = <&en_pp3300_dx_edp>;
@@ -991,12 +991,12 @@ ap_spi_fp: &spi10 {
 
 	en_pp3300_dx_edp: en-pp3300-dx-edp {
 		pinmux {
-			pins = "gpio106";
+			pins = "gpio30";
 			function = "gpio";
 		};
 
 		pinconf {
-			pins = "gpio106";
+			pins = "gpio30";
 			drive-strength = <2>;
 			bias-disable;
 		};
