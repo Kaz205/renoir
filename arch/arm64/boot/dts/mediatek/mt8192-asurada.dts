@@ -48,6 +48,18 @@
 		};
 	};
 
+	pp1000_dpbrdg: pp1000-dpbrdg {
+		compatible = "regulator-fixed";
+		regulator-name = "pp1000_dpbrdg";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pp1000_dpbrdg_en>;
+
+		enable-active-high;
+		regulator-always-on;
+
+		gpio = <&pio 30 GPIO_ACTIVE_HIGH>;
+	};
+
 	pp1000_mipibrdg: pp1000-mipibrdg {
 		compatible = "regulator-fixed";
 		regulator-name = "pp1000_mipibrdg";
@@ -60,6 +72,18 @@
 		gpio = <&pio 129 GPIO_ACTIVE_HIGH>;
 	};
 
+	pp1800_dpbrdg: pp1800-dpbrdg {
+		compatible = "regulator-fixed";
+		regulator-name = "pp1800_dpbrdg";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pp1800_dpbrdg_en>;
+
+		enable-active-high;
+		regulator-always-on;
+
+		gpio = <&pio 126 GPIO_ACTIVE_HIGH>;
+	};
+
 	pp1800_mipibrdg: pp1800-mipibrdg {
 		compatible = "regulator-fixed";
 		regulator-name = "pp1800_mipibrdg";
@@ -70,6 +94,18 @@
 		regulator-always-on;
 
 		gpio = <&pio 128 GPIO_ACTIVE_HIGH>;
+	};
+
+	pp3300_dpbrdg: pp3300-dpbrdg {
+		compatible = "regulator-fixed";
+		regulator-name = "pp3300_dpbrdg";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pp3300_dpbrdg_en>;
+
+		enable-active-high;
+		regulator-always-on;
+
+		gpio = <&pio 26 GPIO_ACTIVE_HIGH>;
 	};
 
 	pp3300_mipibrdg: pp3300-mipibrdg {
@@ -326,6 +362,19 @@
 };
 
 &pio {
+	anx7625_dp_pins: anx7625-dp-pins {
+		pins1 {
+			pinmux = <PINMUX_GPIO8__FUNC_GPIO8>,
+				 <PINMUX_GPIO9__FUNC_GPIO9>;
+			output-low;
+		};
+		pins2 {
+			pinmux = <PINMUX_GPIO0__FUNC_GPIO0>;
+			input-enable;
+			bias-pull-up;
+		};
+	};
+
 	anx7625_pins: anx7625-pins {
 		pins1 {
 			pinmux = <PINMUX_GPIO41__FUNC_GPIO41>,
@@ -630,6 +679,13 @@
 		};
 	};
 
+	pp1000_dpbrdg_en: pp1000-dpbrdg-en {
+		pins1 {
+			pinmux = <PINMUX_GPIO30__FUNC_GPIO30>;
+			output-low;
+		};
+	};
+
 	pp1000_mipibrdg_en: pp1000-mipibrdg-en {
 		pins1 {
 			pinmux = <PINMUX_GPIO129__FUNC_GPIO129>;
@@ -637,9 +693,23 @@
 		};
 	};
 
+	pp1800_dpbrdg_en: pp1800-dpbrdg-en {
+		pins1 {
+			pinmux = <PINMUX_GPIO126__FUNC_GPIO126>;
+			output-low;
+		};
+	};
+
 	pp1800_mipibrdg_en: pp1800-mipibrd-en {
 		pins1 {
 			pinmux = <PINMUX_GPIO128__FUNC_GPIO128>;
+			output-low;
+		};
+	};
+
+	pp3300_dpbrdg_en: pp3300-dpbrdg-en {
+		pins1 {
+			pinmux = <PINMUX_GPIO26__FUNC_GPIO26>;
 			output-low;
 		};
 	};
