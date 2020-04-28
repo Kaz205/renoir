@@ -44,40 +44,6 @@ extern struct list_head cluster_head;
 #define for_each_sched_cluster(cluster) \
 	list_for_each_entry_rcu(cluster, &cluster_head, list)
 
-static inline void
-inc_nr_big_task(struct walt_sched_stats *stats, struct task_struct *p)
-{
-	if (sched_disable_window_stats)
-		return;
-
-	if (p->misfit)
-		stats->nr_big_tasks++;
-}
-
-static inline void
-dec_nr_big_task(struct walt_sched_stats *stats, struct task_struct *p)
-{
-	if (sched_disable_window_stats)
-		return;
-
-	if (p->misfit)
-		stats->nr_big_tasks--;
-
-	BUG_ON(stats->nr_big_tasks < 0);
-}
-
-static inline void
-walt_adjust_nr_big_tasks(struct rq *rq, int delta, bool inc)
-{
-	if (sched_disable_window_stats)
-		return;
-
-	sched_update_nr_prod(cpu_of(rq), 0, true);
-	rq->walt_stats.nr_big_tasks += inc ? delta : -delta;
-
-	BUG_ON(rq->walt_stats.nr_big_tasks < 0);
-}
-
 static inline u32 cpu_cycles_to_freq(u64 cycles, u64 period)
 {
 	return div64_u64(cycles, period);
