@@ -696,9 +696,9 @@ static const struct panel_desc auo_b101uan08_3_desc = {
 	.init_cmds = auo_b101uan08_3_init_cmd,
 };
 
-static int boe_panel_get_modes(struct drm_panel *panel)
+static int boe_panel_get_modes(struct drm_panel *panel,
+			       struct drm_connector *connector)
 {
-	struct drm_connector *connector = panel->connector;
 	struct boe_panel *boe = to_boe_panel(panel);
 	const struct drm_display_mode *m = boe->desc->modes;
 	struct drm_display_mode *mode;

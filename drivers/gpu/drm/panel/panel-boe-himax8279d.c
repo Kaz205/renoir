@@ -219,9 +219,9 @@ static int boe_panel_enable(struct drm_panel *panel)
 	return 0;
 }
 
-static int boe_panel_get_modes(struct drm_panel *panel)
+static int boe_panel_get_modes(struct drm_panel *panel,
+			       struct drm_connector *connector)
 {
-	struct drm_connector *connector = panel->connector;
 	struct panel_info *pinfo = to_panel_info(panel);
 	const struct drm_display_mode *m = pinfo->desc->display_mode;
 	struct drm_display_mode *mode;
