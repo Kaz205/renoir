@@ -3656,8 +3656,7 @@ static int live_lrc_layout(void *arg)
 		if (!engine->default_state)
 			continue;
 
-		hw = i915_gem_object_pin_map(engine->default_state,
-					     I915_MAP_WB);
+		hw = shmem_pin_map(engine->default_state);
 		if (IS_ERR(hw)) {
 			err = PTR_ERR(hw);
 			break;
@@ -3729,7 +3728,7 @@ static int live_lrc_layout(void *arg)
 			hexdump(lrc, PAGE_SIZE);
 		}
 
-		i915_gem_object_unpin_map(engine->default_state);
+		shmem_unpin_map(engine->default_state, hw);
 		if (err)
 			break;
 	}
@@ -3809,8 +3808,7 @@ static int live_lrc_fixed(void *arg)
 		if (!engine->default_state)
 			continue;
 
-		hw = i915_gem_object_pin_map(engine->default_state,
-					     I915_MAP_WB);
+		hw = shmem_pin_map(engine->default_state);
 		if (IS_ERR(hw)) {
 			err = PTR_ERR(hw);
 			break;
@@ -3831,7 +3829,7 @@ static int live_lrc_fixed(void *arg)
 			}
 		}
 
-		i915_gem_object_unpin_map(engine->default_state);
+		shmem_unpin_map(engine->default_state, hw);
 	}
 
 	return err;
