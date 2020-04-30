@@ -88,10 +88,10 @@ gt-y += \
 	gt/intel_engine_cs.o \
 	gt/intel_engine_heartbeat.o \
 	gt/intel_engine_pm.o \
-	gt/intel_engine_pool.o \
 	gt/intel_engine_user.o \
 	gt/intel_ggtt.o \
 	gt/intel_gt.o \
+	gt/intel_gt_buffer_pool.o \
 	gt/intel_gt_clock_utils.o \
 	gt/intel_gt_irq.o \
 	gt/intel_gt_pm.o \
