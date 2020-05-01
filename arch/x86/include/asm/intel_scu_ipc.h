@@ -8,32 +8,32 @@ struct device;
 struct intel_scu_ipc_dev;
 
 /**
- * struct intel_scu_ipc_pdata - Platform data for SCU IPC
+ * struct intel_scu_ipc_data - Data used to configure SCU IPC
  * @mem: Base address of SCU IPC MMIO registers
  * @irq: The IRQ number used for SCU (optional)
  */
-struct intel_scu_ipc_pdata {
+struct intel_scu_ipc_data {
 	struct resource mem;
 	int irq;
 };
 
 struct intel_scu_ipc_dev *
 __intel_scu_ipc_register(struct device *parent,
-			 const struct intel_scu_ipc_pdata *pdata,
+			 const struct intel_scu_ipc_data *scu_data,
 			 struct module *owner);
 
-#define intel_scu_ipc_register(parent, pdata)  \
-	__intel_scu_ipc_register(parent, pdata, THIS_MODULE)
+#define intel_scu_ipc_register(parent, scu_data)  \
+	__intel_scu_ipc_register(parent, scu_data, THIS_MODULE)
 
 void intel_scu_ipc_unregister(struct intel_scu_ipc_dev *scu);
 
 struct intel_scu_ipc_dev *
 __devm_intel_scu_ipc_register(struct device *parent,
-			      const struct intel_scu_ipc_pdata *pdata,
+			      const struct intel_scu_ipc_data *scu_data,
 			      struct module *owner);
 
-#define devm_intel_scu_ipc_register(parent, pdata)  \
-	__devm_intel_scu_ipc_register(parent, pdata, THIS_MODULE)
+#define devm_intel_scu_ipc_register(parent, scu_data)  \
+	__devm_intel_scu_ipc_register(parent, scu_data, THIS_MODULE)
 
 struct intel_scu_ipc_dev *intel_scu_ipc_dev_get(void);
 void intel_scu_ipc_dev_put(struct intel_scu_ipc_dev *scu);

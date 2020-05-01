@@ -18,7 +18,7 @@ static int intel_scu_pci_probe(struct pci_dev *pdev,
 			       const struct pci_device_id *id)
 {
 	void (*setup_fn)(void) = (void (*)(void))id->driver_data;
-	struct intel_scu_ipc_pdata pdata = {};
+	struct intel_scu_ipc_data scu_data = {};
 	struct intel_scu_ipc_dev *scu;
 	int ret;
 
@@ -26,10 +26,10 @@ static int intel_scu_pci_probe(struct pci_dev *pdev,
 	if (ret)
 		return ret;
 
-	pdata.mem = pdev->resource[0];
-	pdata.irq = pdev->irq;
+	scu_data.mem = pdev->resource[0];
+	scu_data.irq = pdev->irq;
 
-	scu = intel_scu_ipc_register(&pdev->dev, &pdata);
+	scu = intel_scu_ipc_register(&pdev->dev, &scu_data);
 	if (IS_ERR(scu))
 		return PTR_ERR(scu);
 

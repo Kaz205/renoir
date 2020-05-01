@@ -16,18 +16,18 @@
 
 static int intel_scu_platform_probe(struct platform_device *pdev)
 {
-	struct intel_scu_ipc_pdata pdata = {};
+	struct intel_scu_ipc_data data = {};
 	struct intel_scu_ipc_dev *scu;
 	const struct resource *res;
 
-	pdata.irq = platform_get_irq_optional(pdev, 0);
+	data.irq = platform_get_irq_optional(pdev, 0);
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res)
 		return -ENOMEM;
 
-	pdata.mem = *res;
+	data.mem = *res;
 
-	scu = devm_intel_scu_ipc_register(&pdev->dev, &pdata);
+	scu = devm_intel_scu_ipc_register(&pdev->dev, &data);
 	if (IS_ERR(scu))
 		return PTR_ERR(scu);
 

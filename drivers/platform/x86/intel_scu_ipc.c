@@ -549,7 +549,7 @@ static void intel_scu_ipc_release(struct device *dev)
 /**
  * __intel_scu_ipc_register() - Register SCU IPC device
  * @parent: Parent device
- * @pdata: Platform specific data for SCU IPC
+ * @scu_data: Data used to configure SCU IPC
  * @owner: Module registering the SCU IPC device
  *
  * Call this function to register SCU IPC mechanism under @parent.
@@ -559,7 +559,7 @@ static void intel_scu_ipc_release(struct device *dev)
  */
 struct intel_scu_ipc_dev *
 __intel_scu_ipc_register(struct device *parent,
-			 const struct intel_scu_ipc_pdata *pdata,
+			 const struct intel_scu_ipc_data *scu_data,
 			 struct module *owner)
 {
 	int err;
@@ -585,21 +585,21 @@ __intel_scu_ipc_register(struct device *parent,
 	scu->dev.release = intel_scu_ipc_release;
 	dev_set_name(&scu->dev, "intel_scu_ipc");
 
-	if (!request_mem_region(pdata->mem.start, resource_size(&pdata->mem),
+	if (!request_mem_region(scu_data->mem.start, resource_size(&scu_data->mem),
 				"intel_scu_ipc")) {
 		err = -EBUSY;
 		goto err_free;
 	}
 
-	ipc_base = ioremap(pdata->mem.start, resource_size(&pdata->mem));
+	ipc_base = ioremap(scu_data->mem.start, resource_size(&scu_data->mem));
 	if (!ipc_base) {
 		err = -ENOMEM;
 		goto err_release;
 	}
 
 	scu->ipc_base = ipc_base;
-	scu->mem = pdata->mem;
-	scu->irq = pdata->irq;
+	scu->mem = scu_data->mem;
+	scu->irq = scu_data->irq;
 	init_completion(&scu->cmd_complete);
 
 	if (scu->irq > 0) {
@@ -627,7 +627,7 @@ __intel_scu_ipc_register(struct device *parent,
 err_unmap:
 	iounmap(ipc_base);
 err_release:
-	release_mem_region(pdata->mem.start, resource_size(&pdata->mem));
+	release_mem_region(scu_data->mem.start, resource_size(&scu_data->mem));
 err_free:
 	kfree(scu);
 err_unlock:
@@ -666,7 +666,7 @@ static void devm_intel_scu_ipc_unregister(struct device *dev, void *res)
 /**
  * __devm_intel_scu_ipc_register() - Register managed SCU IPC device
  * @parent: Parent device
- * @pdata: Platform specific data
+ * @scu_data: Data used to configure SCU IPC
  * @owner: Module registering the SCU IPC device
  *
  * Call this function to register managed SCU IPC mechanism under
@@ -676,7 +676,7 @@ static void devm_intel_scu_ipc_unregister(struct device *dev, void *res)
  */
 struct intel_scu_ipc_dev *
 __devm_intel_scu_ipc_register(struct device *parent,
-			      const struct intel_scu_ipc_pdata *pdata,
+			      const struct intel_scu_ipc_data *scu_data,
 			      struct module *owner)
 {
 	struct intel_scu_ipc_devres *dr;
@@ -686,7 +686,7 @@ __devm_intel_scu_ipc_register(struct device *parent,
 	if (!dr)
 		return NULL;
 
-	scu = __intel_scu_ipc_register(parent, pdata, owner);
+	scu = __intel_scu_ipc_register(parent, scu_data, owner);
 	if (IS_ERR(scu)) {
 		devres_free(dr);
 		return scu;

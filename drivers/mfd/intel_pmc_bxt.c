@@ -7,9 +7,10 @@
  * This driver is based on Intel SCU IPC driver (intel_scu_ipc.c) by
  * Sreedhara DS <sreedhara.ds@intel.com>
  *
- * The PMC running on the ARC processor communicates with another entity
- * running in the IA core through an IPC mechanism which in turn sends
- * messages between the IA and the PMC.
+ * The PMC (Power Management Controller) running on the ARC processor
+ * communicates with another entity running in the IA (Intel Architecture)
+ * core through an IPC (Intel Processor Communications) mechanism which in
+ * turn sends messages between the IA and the PMC.
  */
 
 #include <linux/acpi.h>
@@ -53,41 +54,16 @@
  * functions. This driver is responsible for creating a child device and
  * to export resources for those functions.
  */
-#define TCO_DEVICE_NAME			"iTCO_wdt"
-#define SMI_EN_OFFSET			0x40
+#define SMI_EN_OFFSET			0x0040
 #define SMI_EN_SIZE			4
-#define TCO_BASE_OFFSET			0x60
+#define TCO_BASE_OFFSET			0x0060
 #define TCO_REGS_SIZE			16
-#define PUNIT_DEVICE_NAME		"intel_punit_ipc"
-#define TELEMETRY_DEVICE_NAME		"intel_telemetry"
 #define TELEM_SSRAM_SIZE		240
-#define TELEM_PMC_SSRAM_OFFSET		0x1B00
-#define TELEM_PUNIT_SSRAM_OFFSET	0x1A00
+#define TELEM_PMC_SSRAM_OFFSET		0x1b00
+#define TELEM_PUNIT_SSRAM_OFFSET	0x1a00
 
 /* Commands */
-#define PMC_NORTHPEAK_CTRL		0xED
-
-/* PMC_CFG_REG bit masks */
-#define PMC_CFG_NO_REBOOT_EN		BIT(4)
-
-/* Index to cells array in below struct */
-enum {
-	PMC_TCO,
-	PMC_PUNIT,
-	PMC_TELEM,
-};
-
-struct intel_pmc_dev {
-	struct device *dev;
-	struct intel_scu_ipc_dev *scu;
-
-	struct mfd_cell cells[PMC_TELEM + 1];
-
-	void __iomem *gcr_mem_base;
-	spinlock_t gcr_lock;
-
-	struct resource *telem_base;
-};
+#define PMC_NORTHPEAK_CTRL		0xed
 
 static inline bool is_gcr_valid(u32 offset)
 {
@@ -129,8 +105,7 @@ EXPORT_SYMBOL_GPL(intel_pmc_gcr_read64);
  *
  * Return: Negative value on error or 0 on success.
  */
-static int intel_pmc_gcr_update(struct intel_pmc_dev *pmc, u32 offset, u32 mask,
-				u32 val)
+int intel_pmc_gcr_update(struct intel_pmc_dev *pmc, u32 offset, u32 mask, u32 val)
 {
 	u32 new_val;
 
@@ -149,9 +124,10 @@ static int intel_pmc_gcr_update(struct intel_pmc_dev *pmc, u32 offset, u32 mask,
 	/* Check whether the bit update is successful */
 	return (new_val & mask) != (val & mask) ? -EIO : 0;
 }
+EXPORT_SYMBOL_GPL(intel_pmc_gcr_update);
 
 /**
- * intel_pmc_s0ix_counter_read() - Read S0ix residency.
+ * intel_pmc_s0ix_counter_read() - Read S0ix residency
  * @pmc: PMC device pointer
  * @data: Out param that contains current S0ix residency count.
  *
@@ -174,6 +150,19 @@ int intel_pmc_s0ix_counter_read(struct intel_pmc_dev *pmc, u64 *data)
 }
 EXPORT_SYMBOL_GPL(intel_pmc_s0ix_counter_read);
 
+/**
+ * simplecmd_store() - Send a simple IPC command
+ * @dev: Device under the attribute is
+ * @attr: Attribute in question
+ * @buf: Buffer holding data to be stored to the attribute
+ * @count: Number of bytes in @buf
+ *
+ * Expects a string with two integers separated with space. These two
+ * values hold command and subcommand that is send to PMC.
+ *
+ * Return: Number number of bytes written (@count) or negative errno in
+ *	   case of error.
+ */
 static ssize_t simplecmd_store(struct device *dev, struct device_attribute *attr,
 			       const char *buf, size_t count)
 {
@@ -190,10 +179,26 @@ static ssize_t simplecmd_store(struct device *dev, struct device_attribute *attr
 	}
 
 	ret = intel_scu_ipc_dev_simple_command(scu, cmd, subcmd);
-	return ret ?: count;
+	if (ret)
+		return ret;
+
+	return count;
 }
 static DEVICE_ATTR_WO(simplecmd);
 
+/**
+ * northpeak_store() - Enable or disable Northpeak
+ * @dev: Device under the attribute is
+ * @attr: Attribute in question
+ * @buf: Buffer holding data to be stored to the attribute
+ * @count: Number of bytes in @buf
+ *
+ * Expects an unsigned integer. Non-zero enables Northpeak and zero
+ * disables it.
+ *
+ * Return: Number number of bytes written (@count) or negative errno in
+ *	   case of error.
+ */
 static ssize_t northpeak_store(struct device *dev, struct device_attribute *attr,
 			       const char *buf, size_t count)
 {
@@ -207,13 +212,17 @@ static ssize_t northpeak_store(struct device *dev, struct device_attribute *attr
 	if (ret)
 		return ret;
 
+	/* Northpeak is enabled if subcmd == 1 and disabled if it is 0 */
 	if (val)
 		subcmd = 1;
 	else
 		subcmd = 0;
 
 	ret = intel_scu_ipc_dev_simple_command(scu, PMC_NORTHPEAK_CTRL, subcmd);
-	return ret ?: count;
+	if (ret)
+		return ret;
+
+	return count;
 }
 static DEVICE_ATTR_WO(northpeak);
 
@@ -232,30 +241,28 @@ static const struct attribute_group *intel_pmc_groups[] = {
 	NULL
 };
 
-/* Templates used to construct MFD cells */
+static struct resource punit_res[6];
 
-static const struct mfd_cell punit = {
-	.name = PUNIT_DEVICE_NAME,
+static struct mfd_cell punit = {
+	.name = "intel_punit_ipc",
+	.resources = punit_res,
 };
 
-static int update_no_reboot_bit(void *priv, bool set)
-{
-	struct intel_pmc_dev *pmc = priv;
-	u32 bits = PMC_CFG_NO_REBOOT_EN;
-	u32 value = set ? bits : 0;
-
-	return intel_pmc_gcr_update(pmc, PMC_GCR_PMC_CFG_REG, bits, value);
-}
-
-static const struct itco_wdt_platform_data tco_pdata = {
+static struct itco_wdt_platform_data tco_pdata = {
 	.name = "Apollo Lake SoC",
 	.version = 5,
-	.update_no_reboot_bit = update_no_reboot_bit,
+	.no_reboot_use_pmc = true,
 };
 
+static struct resource tco_res[2];
+
 static const struct mfd_cell tco = {
-	.name = TCO_DEVICE_NAME,
+	.name = "iTCO_wdt",
 	.ignore_resource_conflicts = true,
+	.resources = tco_res,
+	.num_resources = ARRAY_SIZE(tco_res),
+	.platform_data = &tco_pdata,
+	.pdata_size = sizeof(tco_pdata),
 };
 
 static const struct resource telem_res[] = {
@@ -264,16 +271,14 @@ static const struct resource telem_res[] = {
 };
 
 static const struct mfd_cell telem = {
-	.name = TELEMETRY_DEVICE_NAME,
+	.name = "intel_telemetry",
 	.resources = telem_res,
 	.num_resources = ARRAY_SIZE(telem_res),
 };
 
-static int intel_pmc_get_tco_resources(struct platform_device *pdev,
-				       struct intel_pmc_dev *pmc)
+static int intel_pmc_get_tco_resources(struct platform_device *pdev)
 {
-	struct itco_wdt_platform_data *pdata;
-	struct resource *res, *tco_res;
+	struct resource *res;
 
 	if (acpi_has_watchdog())
 		return 0;
@@ -285,10 +290,6 @@ static int intel_pmc_get_tco_resources(struct platform_device *pdev,
 		return -EINVAL;
 	}
 
-	tco_res = devm_kcalloc(&pdev->dev, 2, sizeof(*tco_res), GFP_KERNEL);
-	if (!tco_res)
-		return -ENOMEM;
-
 	tco_res[0].flags = IORESOURCE_IO;
 	tco_res[0].start = res->start + TCO_BASE_OFFSET;
 	tco_res[0].end = tco_res[0].start + TCO_REGS_SIZE - 1;
@@ -296,30 +297,19 @@ static int intel_pmc_get_tco_resources(struct platform_device *pdev,
 	tco_res[1].start = res->start + SMI_EN_OFFSET;
 	tco_res[1].end = tco_res[1].start + SMI_EN_SIZE - 1;
 
-	pmc->cells[PMC_TCO].resources = tco_res;
-	pmc->cells[PMC_TCO].num_resources = 2;
-
-	pdata = devm_kmemdup(&pdev->dev, &tco_pdata, sizeof(*pdata), GFP_KERNEL);
-	if (!pdata)
-		return -ENOMEM;
-
-	pdata->no_reboot_priv = pmc;
-	pmc->cells[PMC_TCO].platform_data = pdata;
-	pmc->cells[PMC_TCO].pdata_size = sizeof(*pdata);
-
 	return 0;
 }
 
 static int intel_pmc_get_resources(struct platform_device *pdev,
 				   struct intel_pmc_dev *pmc,
-				   struct intel_scu_ipc_pdata *pdata)
+				   struct intel_scu_ipc_data *scu_data)
 {
-	struct resource *res, *punit_res;
 	struct resource gcr_res;
 	size_t npunit_res = 0;
+	struct resource *res;
 	int ret;
 
-	pdata->irq = platform_get_irq_optional(pdev, 0);
+	scu_data->irq = platform_get_irq_optional(pdev, 0);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM,
 				    PLAT_RESOURCE_IPC_INDEX);
@@ -329,9 +319,9 @@ static int intel_pmc_get_resources(struct platform_device *pdev,
 	}
 
 	/* IPC registers */
-	pdata->mem.flags = res->flags;
-	pdata->mem.start = res->start;
-	pdata->mem.end = res->start + PLAT_RESOURCE_IPC_SIZE - 1;
+	scu_data->mem.flags = res->flags;
+	scu_data->mem.start = res->start;
+	scu_data->mem.end = res->start + PLAT_RESOURCE_IPC_SIZE - 1;
 
 	/* GCR registers */
 	gcr_res.flags = res->flags;
@@ -342,20 +332,12 @@ static int intel_pmc_get_resources(struct platform_device *pdev,
 	if (IS_ERR(pmc->gcr_mem_base))
 		return PTR_ERR(pmc->gcr_mem_base);
 
-	pmc->cells[PMC_TCO] = tco;
-	pmc->cells[PMC_PUNIT] = punit;
-	pmc->cells[PMC_TELEM] = telem;
-
-	/* iTCO watchdog only if there is no WDAT ACPI table */
-	ret = intel_pmc_get_tco_resources(pdev, pmc);
+	/* Only register iTCO watchdog if there is no WDAT ACPI table */
+	ret = intel_pmc_get_tco_resources(pdev);
 	if (ret)
 		return ret;
 
-	punit_res = devm_kcalloc(&pdev->dev, 6, sizeof(*punit_res), GFP_KERNEL);
-	if (!punit_res)
-		return -ENOMEM;
-
-	/* This is index 0 to cover BIOS data register */
+	/* BIOS data register */
 	res = platform_get_resource(pdev, IORESOURCE_MEM,
 				    PLAT_RESOURCE_BIOS_DATA_INDEX);
 	if (!res) {
@@ -364,7 +346,7 @@ static int intel_pmc_get_resources(struct platform_device *pdev,
 	}
 	punit_res[npunit_res++] = *res;
 
-	/* This is index 1 to cover BIOS interface register */
+	/* BIOS interface register */
 	res = platform_get_resource(pdev, IORESOURCE_MEM,
 				    PLAT_RESOURCE_BIOS_IFACE_INDEX);
 	if (!res) {
@@ -373,32 +355,31 @@ static int intel_pmc_get_resources(struct platform_device *pdev,
 	}
 	punit_res[npunit_res++] = *res;
 
-	/* This is index 2 to cover ISP data register, optional */
+	/* ISP data register, optional */
 	res = platform_get_resource(pdev, IORESOURCE_MEM,
 				    PLAT_RESOURCE_ISP_DATA_INDEX);
 	if (res)
 		punit_res[npunit_res++] = *res;
 
-	/* This is index 3 to cover ISP interface register, optional */
+	/* ISP interface register, optional */
 	res = platform_get_resource(pdev, IORESOURCE_MEM,
 				    PLAT_RESOURCE_ISP_IFACE_INDEX);
 	if (res)
 		punit_res[npunit_res++] = *res;
 
-	/* This is index 4 to cover GTD data register, optional */
+	/* GTD data register, optional */
 	res = platform_get_resource(pdev, IORESOURCE_MEM,
 				    PLAT_RESOURCE_GTD_DATA_INDEX);
 	if (res)
 		punit_res[npunit_res++] = *res;
 
-	/* This is index 5 to cover GTD interface register, optional */
+	/* GTD interface register, optional */
 	res = platform_get_resource(pdev, IORESOURCE_MEM,
 				    PLAT_RESOURCE_GTD_IFACE_INDEX);
 	if (res)
 		punit_res[npunit_res++] = *res;
 
-	pmc->cells[PMC_PUNIT].resources = punit_res;
-	pmc->cells[PMC_PUNIT].num_resources = npunit_res;
+	punit.num_resources = npunit_res;
 
 	/* Telemetry SSRAM is optional */
 	res = platform_get_resource(pdev, IORESOURCE_MEM,
@@ -413,22 +394,21 @@ static int intel_pmc_create_devices(struct intel_pmc_dev *pmc)
 {
 	int ret;
 
-	if (pmc->cells[PMC_TCO].num_resources) {
-		ret = devm_mfd_add_devices(pmc->dev, PLATFORM_DEVID_AUTO,
-					   &pmc->cells[PMC_TCO], 1, NULL, 0, NULL);
+	if (!acpi_has_watchdog()) {
+		ret = devm_mfd_add_devices(pmc->dev, PLATFORM_DEVID_AUTO, &tco,
+					   1, NULL, 0, NULL);
 		if (ret)
 			return ret;
 	}
 
-	ret = devm_mfd_add_devices(pmc->dev, PLATFORM_DEVID_AUTO,
-				   &pmc->cells[PMC_PUNIT], 1, NULL, 0, NULL);
+	ret = devm_mfd_add_devices(pmc->dev, PLATFORM_DEVID_AUTO, &punit, 1,
+				   NULL, 0, NULL);
 	if (ret)
 		return ret;
 
 	if (pmc->telem_base) {
 		ret = devm_mfd_add_devices(pmc->dev, PLATFORM_DEVID_AUTO,
-					   &pmc->cells[PMC_TELEM], 1,
-					   pmc->telem_base, 0, NULL);
+					   &telem, 1, pmc->telem_base, 0, NULL);
 	}
 
 	return ret;
@@ -442,7 +422,7 @@ MODULE_DEVICE_TABLE(acpi, intel_pmc_acpi_ids);
 
 static int intel_pmc_probe(struct platform_device *pdev)
 {
-	struct intel_scu_ipc_pdata pdata = {};
+	struct intel_scu_ipc_data scu_data = {};
 	struct intel_pmc_dev *pmc;
 	int ret;
 
@@ -453,13 +433,13 @@ static int intel_pmc_probe(struct platform_device *pdev)
 	pmc->dev = &pdev->dev;
 	spin_lock_init(&pmc->gcr_lock);
 
-	ret = intel_pmc_get_resources(pdev, pmc, &pdata);
+	ret = intel_pmc_get_resources(pdev, pmc, &scu_data);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to request resources\n");
 		return ret;
 	}
 
-	pmc->scu = devm_intel_scu_ipc_register(&pdev->dev, &pdata);
+	pmc->scu = devm_intel_scu_ipc_register(&pdev->dev, &scu_data);
 	if (IS_ERR(pmc->scu))
 		return PTR_ERR(pmc->scu);
 
@@ -480,7 +460,6 @@ static struct platform_driver intel_pmc_driver = {
 		.dev_groups = intel_pmc_groups,
 	},
 };
-
 module_platform_driver(intel_pmc_driver);
 
 MODULE_AUTHOR("Mika Westerberg <mika.westerberg@linux.intel.com>");
