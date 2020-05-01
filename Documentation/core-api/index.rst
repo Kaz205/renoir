@@ -30,6 +30,10 @@ Core utilities
    circular-buffers
    generic-radix-tree
    memory-allocation
+   dma-api
+   dma-api-howto
+   dma-attributes
+   dma-isa-lpc
    mm-api
    gfp_mask-from-fs-io
    timekeeping
