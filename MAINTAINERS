@@ -13614,7 +13614,7 @@ M:	Sean Tranchetti <stranche@codeaurora.org>
 L:	netdev@vger.kernel.org
 S:	Maintained
 F:	drivers/net/ethernet/qualcomm/rmnet/
-F:	Documentation/networking/device_drivers/qualcomm/rmnet.txt
+F:	Documentation/networking/device_drivers/qualcomm/rmnet.rst
 F:	include/linux/if_rmnet.h
 
 QUALCOMM TSENS THERMAL DRIVER
