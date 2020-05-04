@@ -605,4 +605,13 @@
 	INTEL_VGA_DEVICE(0x9A70, info), \
 	INTEL_VGA_DEVICE(0x9A78, info)
 
+/* RKL */
+#define INTEL_RKL_IDS(info) \
+	INTEL_VGA_DEVICE(0x4C80, info), \
+	INTEL_VGA_DEVICE(0x4C8A, info), \
+	INTEL_VGA_DEVICE(0x4C8B, info), \
+	INTEL_VGA_DEVICE(0x4C8C, info), \
+	INTEL_VGA_DEVICE(0x4C90, info), \
+	INTEL_VGA_DEVICE(0x4C9A, info)
+
 #endif /* _I915_PCIIDS_H */
