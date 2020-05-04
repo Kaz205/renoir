@@ -173,16 +173,12 @@ static void mtk_iommu_tlb_flush_all(void *cookie)
 	}
 }
 
-static void mtk_iommu_tlb_flush_range_sync(unsigned long iova, size_t size,
+static void mtk_iommu_tlb_add_flush_nosync(unsigned long iova, size_t size,
 					   size_t granule, void *cookie)
 {
 	struct mtk_iommu_data *data = cookie;
-	unsigned long flags;
-	int ret;
-	u32 tmp;
 
 	for_each_m4u(data) {
-		spin_lock_irqsave(&data->tlb_lock, flags);
 		writel_relaxed(F_INVLD_EN1 | F_INVLD_EN0,
 			       data->base + REG_MMU_INV_SEL);
 
@@ -191,8 +187,21 @@ static void mtk_iommu_tlb_flush_range_sync(unsigned long iova, size_t size,
 			       data->base + REG_MMU_INVLD_END_A);
 		writel_relaxed(F_MMU_INV_RANGE,
 			       data->base + REG_MMU_INVALIDATE);
+		data->tlb_flush_active = true;
+	}
+}
 
-		/* tlb sync */
+static void mtk_iommu_tlb_sync(void *cookie)
+{
+	struct mtk_iommu_data *data = cookie;
+	int ret;
+	u32 tmp;
+
+	for_each_m4u(data) {
+		/* Avoid timing out if there's nothing to wait for */
+		if (!data->tlb_flush_active)
+			return;
+
 		ret = readl_poll_timeout_atomic(data->base + REG_MMU_CPE_DONE,
 						tmp, tmp != 0, 10, 100000);
 		if (ret) {
@@ -202,8 +211,20 @@ static void mtk_iommu_tlb_flush_range_sync(unsigned long iova, size_t size,
 		}
 		/* Clear the CPE status */
 		writel_relaxed(0, data->base + REG_MMU_CPE_DONE);
-		spin_unlock_irqrestore(&data->tlb_lock, flags);
+		data->tlb_flush_active = false;
 	}
+}
+
+static void mtk_iommu_tlb_flush_walk(unsigned long iova, size_t size,
+				     size_t granule, void *cookie)
+{
+	struct mtk_iommu_data *data = cookie;
+	unsigned long flags;
+
+	spin_lock_irqsave(&data->tlb_lock, flags);
+	mtk_iommu_tlb_add_flush_nosync(iova, size, granule, cookie);
+	mtk_iommu_tlb_sync(cookie);
+	spin_unlock_irqrestore(&data->tlb_lock, flags);
 }
 
 static void mtk_iommu_tlb_flush_page_nosync(struct iommu_iotlb_gather *gather,
@@ -218,8 +239,8 @@ static void mtk_iommu_tlb_flush_page_nosync(struct iommu_iotlb_gather *gather,
 
 static const struct iommu_flush_ops mtk_iommu_flush_ops = {
 	.tlb_flush_all = mtk_iommu_tlb_flush_all,
-	.tlb_flush_walk = mtk_iommu_tlb_flush_range_sync,
-	.tlb_flush_leaf = mtk_iommu_tlb_flush_range_sync,
+	.tlb_flush_walk = mtk_iommu_tlb_flush_walk,
+	.tlb_flush_leaf = mtk_iommu_tlb_flush_walk,
 	.tlb_add_page = mtk_iommu_tlb_flush_page_nosync,
 };
 
@@ -434,12 +455,16 @@ static void mtk_iommu_iotlb_sync(struct iommu_domain *domain,
 {
 	struct mtk_iommu_data *data = mtk_iommu_get_m4u_data();
 	size_t length = gather->end - gather->start;
+	unsigned long flags;
 
 	if (gather->start == ULONG_MAX)
 		return;
 
-	mtk_iommu_tlb_flush_range_sync(gather->start, length, gather->pgsize,
+	spin_lock_irqsave(&data->tlb_lock, flags);
+	mtk_iommu_tlb_add_flush_nosync(gather->start, length, gather->pgsize,
 				       data);
+	mtk_iommu_tlb_sync(data);
+	spin_unlock_irqrestore(&data->tlb_lock, flags);
 }
 
 static phys_addr_t mtk_iommu_iova_to_phys(struct iommu_domain *domain,
