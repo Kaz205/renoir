@@ -54,6 +54,10 @@ ap_ts_pen_1v8: &i2c4 {
 	};
 };
 
+&sn65dsi86_out {
+	lane-polarities = <1 0>;
+};
+
 /* PINCTRL - modifications to sc7180-trogdor.dtsi */
 
 &ts_reset_l {
