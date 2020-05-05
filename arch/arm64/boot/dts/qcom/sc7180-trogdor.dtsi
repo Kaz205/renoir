@@ -562,6 +562,8 @@ edp_brij_i2c: &i2c2 {
 		reg = <0x2d>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&edp_brij_en>, <&edp_brij_irq>;
+		gpio-controller;
+		#gpio-cells = <2>;
 
 		interrupt-parent = <&tlmm>;
 		interrupts = <11 IRQ_TYPE_LEVEL_HIGH>;

@@ -22,7 +22,7 @@ ap_h1_spi: &spi0 {};
 		compatible = "boe,nv133fhm-n62";
 		power-supply = <&pp3300_dx_edp>;
 		backlight = <&backlight>;
-		no-hpd; /* TODO: Remove? */
+		hpd-gpios = <&sn65dsi86_bridge 2 GPIO_ACTIVE_HIGH>;
 
 		ports {
 			port {
