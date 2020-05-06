@@ -98,6 +98,23 @@
 
 		gpio = <&pio 136 GPIO_ACTIVE_HIGH>;
 	};
+
+	usb_vbus_3v3: fixedregulator@1 {
+		compatible = "regulator-fixed";
+		regulator-name = "usb vbus";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-always-on;
+	};
+
+	usb_vbus_5v0: fixedregulator@0 {
+		compatible = "regulator-fixed";
+		regulator-name = "vbus";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		regulator-type = "voltage";
+		regulator-always-on;
+	};
 };
 
 &dpi0 {
@@ -719,6 +736,13 @@
 };
 
 &uart0 {
+	status = "okay";
+};
+
+&xhci {
+	vusb33-supply = <&usb_vbus_3v3>;
+	vbus-supply = <&usb_vbus_5v0>;
+	wakeup-source;
 	status = "okay";
 };
 
