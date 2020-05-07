@@ -1622,7 +1622,8 @@ static void anx7625_bridge_detach(struct drm_bridge *bridge)
 		drm_connector_unregister(&ctx->connector);
 }
 
-static int anx7625_bridge_attach(struct drm_bridge *bridge)
+static int anx7625_bridge_attach(struct drm_bridge *bridge,
+				 enum drm_bridge_attach_flags flags)
 {
 	struct anx7625_data *ctx = bridge_to_anx7625(bridge);
 	int err;
