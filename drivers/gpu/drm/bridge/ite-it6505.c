@@ -986,7 +986,8 @@ static int it6505_use_notifier_module(struct it6505 *it6505)
 	return 0;
 }
 
-static int it6505_bridge_attach(struct drm_bridge *bridge)
+static int it6505_bridge_attach(struct drm_bridge *bridge,
+				enum drm_bridge_attach_flags flags)
 {
 	struct it6505 *it6505 = bridge_to_it6505(bridge);
 	struct device *dev;
