@@ -219,7 +219,6 @@ static bool i915_request_retire(struct i915_request *rq)
 {
 	struct i915_active_request *active, *next;
 
-	lockdep_assert_held(&rq->timeline->mutex);
 	if (!i915_request_completed(rq))
 		return false;
 
@@ -240,7 +239,8 @@ static bool i915_request_retire(struct i915_request *rq)
 	 * Note this requires that we are always called in request
 	 * completion order.
 	 */
-	GEM_BUG_ON(!list_is_first(&rq->link, &rq->timeline->requests));
+	GEM_BUG_ON(!list_is_first(&rq->link,
+				  &i915_request_timeline(rq)->requests));
 	rq->ring->head = rq->postfix;
 
 	/*
@@ -316,7 +316,7 @@ static bool i915_request_retire(struct i915_request *rq)
 
 void i915_request_retire_upto(struct i915_request *rq)
 {
-	struct intel_timeline * const tl = rq->timeline;
+	struct intel_timeline * const tl = i915_request_timeline(rq);
 	struct i915_request *tmp;
 
 	GEM_TRACE("%s fence %llx:%lld, current %d\n",
@@ -324,7 +324,6 @@ void i915_request_retire_upto(struct i915_request *rq)
 		  rq->fence.context, rq->fence.seqno,
 		  hwsp_seqno(rq));
 
-	lockdep_assert_held(&tl->mutex);
 	GEM_BUG_ON(!i915_request_completed(rq));
 
 	do {
@@ -560,19 +559,31 @@ submit_notify(struct i915_sw_fence *fence, enum i915_sw_fence_notify state)
 	return NOTIFY_DONE;
 }
 
+static void irq_semaphore_cb(struct irq_work *wrk)
+{
+	struct i915_request *rq =
+		container_of(wrk, typeof(*rq), semaphore_work);
+
+	i915_schedule_bump_priority(rq, I915_PRIORITY_NOSEMAPHORE);
+	i915_request_put(rq);
+}
+
 static int __i915_sw_fence_call
 semaphore_notify(struct i915_sw_fence *fence, enum i915_sw_fence_notify state)
 {
-	struct i915_request *request =
-		container_of(fence, typeof(*request), semaphore);
+	struct i915_request *rq = container_of(fence, typeof(*rq), semaphore);
 
 	switch (state) {
 	case FENCE_COMPLETE:
-		i915_schedule_bump_priority(request, I915_PRIORITY_NOSEMAPHORE);
+		if (!(READ_ONCE(rq->sched.attr.priority) & I915_PRIORITY_NOSEMAPHORE)) {
+			i915_request_get(rq);
+			init_irq_work(&rq->semaphore_work, irq_semaphore_cb);
+			irq_work_queue(&rq->semaphore_work);
+		}
 		break;
 
 	case FENCE_FREE:
-		i915_request_put(request);
+		i915_request_put(rq);
 		break;
 	}
 
@@ -680,9 +691,11 @@ __i915_request_create(struct intel_context *ce, gfp_t gfp)
 	rq->gem_context = ce->gem_context;
 	rq->engine = ce->engine;
 	rq->ring = ce->ring;
-	rq->timeline = tl;
+
+	rcu_assign_pointer(rq->timeline, tl);
 	rq->hwsp_seqno = tl->hwsp_seqno;
 	rq->hwsp_cacheline = tl->hwsp_cacheline;
+
 	rq->rcustate = get_state_synchronize_rcu(); /* acts as smp_mb() */
 
 	spin_lock_init(&rq->lock);
@@ -786,16 +799,43 @@ err_unlock:
 static int
 i915_request_await_start(struct i915_request *rq, struct i915_request *signal)
 {
-	if (list_is_first(&signal->link, &signal->timeline->requests))
+	struct intel_timeline *tl;
+	struct dma_fence *fence;
+	int err;
+
+	GEM_BUG_ON(i915_request_timeline(rq) ==
+		   rcu_access_pointer(signal->timeline));
+
+	rcu_read_lock();
+	tl = rcu_dereference(signal->timeline);
+	if (i915_request_started(signal) || !kref_get_unless_zero(&tl->kref))
+		tl = NULL;
+	rcu_read_unlock();
+	if (!tl) /* already started or maybe even completed */
 		return 0;
 
-	signal = list_prev_entry(signal, link);
-	if (intel_timeline_sync_is_later(rq->timeline, &signal->fence))
-		return 0;
+	fence = ERR_PTR(-EBUSY);
+	if (mutex_trylock(&tl->mutex)) {
+		fence = NULL;
+		if (!i915_request_started(signal) &&
+		    !list_is_first(&signal->link, &tl->requests)) {
+			signal = list_prev_entry(signal, link);
+			fence = dma_fence_get(&signal->fence);
+		}
+		mutex_unlock(&tl->mutex);
+	}
+	intel_timeline_put(tl);
+	if (IS_ERR_OR_NULL(fence))
+		return PTR_ERR_OR_ZERO(fence);
 
-	return i915_sw_fence_await_dma_fence(&rq->submit,
-					     &signal->fence, 0,
-					     I915_FENCE_GFP);
+	err = 0;
+	if (intel_timeline_sync_is_later(i915_request_timeline(rq), fence))
+		err = i915_sw_fence_await_dma_fence(&rq->submit,
+						    fence, 0,
+						    I915_FENCE_GFP);
+	dma_fence_put(fence);
+
+	return err;
 }
 
 static intel_engine_mask_t
@@ -821,34 +861,33 @@ emit_semaphore_wait(struct i915_request *to,
 		    struct i915_request *from,
 		    gfp_t gfp)
 {
+	const int has_token = INTEL_GEN(to->i915) >= 12;
 	u32 hwsp_offset;
+	int len;
 	u32 *cs;
-	int err;
 
-	GEM_BUG_ON(!from->timeline->has_initial_breadcrumb);
 	GEM_BUG_ON(INTEL_GEN(to->i915) < 8);
 
 	/* Just emit the first semaphore we see as request space is limited. */
 	if (already_busywaiting(to) & from->engine->mask)
-		return i915_sw_fence_await_dma_fence(&to->submit,
-						     &from->fence, 0,
-						     I915_FENCE_GFP);
+		goto await_fence;
 
-	err = i915_request_await_start(to, from);
-	if (err < 0)
-		return err;
+	if (i915_request_await_start(to, from) < 0)
+		goto await_fence;
 
 	/* Only submit our spinner after the signaler is running! */
-	err = __i915_request_await_execution(to, from, NULL, gfp);
-	if (err)
-		return err;
+	if (__i915_request_await_execution(to, from, NULL, gfp))
+		goto await_fence;
 
 	/* We need to pin the signaler's HWSP until we are finished reading. */
-	err = intel_timeline_read_hwsp(from, to, &hwsp_offset);
-	if (err)
-		return err;
+	if (intel_timeline_read_hwsp(from, to, &hwsp_offset))
+		goto await_fence;
 
-	cs = intel_ring_begin(to, 4);
+	len = 4;
+	if (has_token)
+		len += 2;
+
+	cs = intel_ring_begin(to, len);
 	if (IS_ERR(cs))
 		return PTR_ERR(cs);
 
@@ -860,18 +899,28 @@ emit_semaphore_wait(struct i915_request *to,
 	 * (post-wrap) values than they were expecting (and so wait
 	 * forever).
 	 */
-	*cs++ = MI_SEMAPHORE_WAIT |
-		MI_SEMAPHORE_GLOBAL_GTT |
-		MI_SEMAPHORE_POLL |
-		MI_SEMAPHORE_SAD_GTE_SDD;
+	*cs++ = (MI_SEMAPHORE_WAIT |
+		 MI_SEMAPHORE_GLOBAL_GTT |
+		 MI_SEMAPHORE_POLL |
+		 MI_SEMAPHORE_SAD_GTE_SDD) +
+		has_token;
 	*cs++ = from->fence.seqno;
 	*cs++ = hwsp_offset;
 	*cs++ = 0;
+	if (has_token) {
+		*cs++ = 0;
+		*cs++ = MI_NOOP;
+	}
 
 	intel_ring_advance(to, cs);
 	to->sched.semaphores |= from->engine->mask;
 	to->sched.flags |= I915_SCHED_HAS_SEMAPHORE_CHAIN;
 	return 0;
+
+await_fence:
+	return i915_sw_fence_await_dma_fence(&to->submit,
+					     &from->fence, 0,
+					     I915_FENCE_GFP);
 }
 
 static int
@@ -955,21 +1004,23 @@ i915_request_await_dma_fence(struct i915_request *rq, struct dma_fence *fence)
 
 		/* Squash repeated waits to the same timelines */
 		if (fence->context &&
-		    intel_timeline_sync_is_later(rq->timeline, fence))
+		    intel_timeline_sync_is_later(i915_request_timeline(rq),
+						 fence))
 			continue;
 
 		if (dma_fence_is_i915(fence))
 			ret = i915_request_await_request(rq, to_request(fence));
 		else
 			ret = i915_sw_fence_await_dma_fence(&rq->submit, fence,
-							    I915_FENCE_TIMEOUT,
+							    fence->context ? I915_FENCE_TIMEOUT : 0,
 							    I915_FENCE_GFP);
 		if (ret < 0)
 			return ret;
 
 		/* Record the latest fence used against each timeline */
 		if (fence->context)
-			intel_timeline_sync_set(rq->timeline, fence);
+			intel_timeline_sync_set(i915_request_timeline(rq),
+						fence);
 	} while (--nchild);
 
 	return 0;
@@ -1111,7 +1162,7 @@ void i915_request_skip(struct i915_request *rq, int error)
 static struct i915_request *
 __i915_request_add_to_timeline(struct i915_request *rq)
 {
-	struct intel_timeline *timeline = rq->timeline;
+	struct intel_timeline *timeline = i915_request_timeline(rq);
 	struct i915_request *prev;
 
 	/*
@@ -1215,16 +1266,16 @@ void __i915_request_queue(struct i915_request *rq,
 	 * decide whether to preempt the entire chain so that it is ready to
 	 * run at the earliest possible convenience.
 	 */
-	i915_sw_fence_commit(&rq->semaphore);
 	if (attr && rq->engine->schedule)
 		rq->engine->schedule(rq, attr);
+	i915_sw_fence_commit(&rq->semaphore);
 	i915_sw_fence_commit(&rq->submit);
 }
 
 void i915_request_add(struct i915_request *rq)
 {
 	struct i915_sched_attr attr = rq->gem_context->sched;
-	struct intel_timeline * const tl = rq->timeline;
+	struct intel_timeline * const tl = i915_request_timeline(rq);
 	struct i915_request *prev;
 
 	lockdep_assert_held(&tl->mutex);
@@ -1279,7 +1330,9 @@ void i915_request_add(struct i915_request *rq)
 	 * work on behalf of others -- but instead we should benefit from
 	 * improved resource management. (Well, that's the theory at least.)
 	 */
-	if (prev && i915_request_completed(prev) && prev->timeline == tl)
+	if (prev &&
+	    i915_request_completed(prev) &&
+	    rcu_access_pointer(prev->timeline) == tl)
 		i915_request_retire_upto(prev);
 
 	mutex_unlock(&tl->mutex);

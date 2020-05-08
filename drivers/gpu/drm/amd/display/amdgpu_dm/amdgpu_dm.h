@@ -88,15 +88,41 @@ struct dm_comressor_info {
 };
 
 /**
- * struct amdgpu_dm_backlight_caps - Usable range of backlight values from ACPI
- * @min_input_signal: minimum possible input in range 0-255
- * @max_input_signal: maximum possible input in range 0-255
- * @caps_valid: true if these values are from the ACPI interface
+ * struct amdgpu_dm_backlight_caps - Information about backlight
+ *
+ * Describe the backlight support for ACPI or eDP AUX.
  */
 struct amdgpu_dm_backlight_caps {
+	/**
+	 * @ext_caps: Keep the data struct with all the information about the
+	 * display support for HDR.
+	 */
+	union dpcd_sink_ext_caps *ext_caps;
+	/**
+	 * @aux_min_input_signal: Min brightness value supported by the display
+	 */
+	u32 aux_min_input_signal;
+	/**
+	 * @aux_max_input_signal: Max brightness value supported by the display
+	 * in nits.
+	 */
+	u32 aux_max_input_signal;
+	/**
+	 * @min_input_signal: minimum possible input in range 0-255.
+	 */
 	int min_input_signal;
+	/**
+	 * @max_input_signal: maximum possible input in range 0-255.
+	 */
 	int max_input_signal;
+	/**
+	 * @caps_valid: true if these values are from the ACPI interface.
+	 */
 	bool caps_valid;
+	/**
+	 * @aux_support: Describes if the display supports AUX backlight.
+	 */
+	bool aux_support;
 };
 
 /**
@@ -225,6 +251,9 @@ struct amdgpu_display_manager {
 	struct amdgpu_dm_backlight_caps backlight_caps;
 
 	struct mod_freesync *freesync_module;
+#ifdef CONFIG_DRM_AMD_DC_HDCP
+	struct hdcp_workqueue *hdcp_workqueue;
+#endif
 
 	struct drm_atomic_state *cached_state;
 
@@ -287,6 +316,7 @@ struct amdgpu_dm_connector {
 	uint32_t debugfs_dpcd_address;
 	uint32_t debugfs_dpcd_size;
 #endif
+	bool force_yuv420_output;
 };
 
 #define to_amdgpu_dm_connector(x) container_of(x, struct amdgpu_dm_connector, base)

@@ -2235,7 +2235,10 @@ static bool ath10k_htt_rx_proc_rx_ind_hl(struct ath10k_htt *htt,
 
 	hdr = (struct ieee80211_hdr *)skb->data;
 	qos = ieee80211_is_data_qos(hdr->frame_control);
+
 	rx_status = IEEE80211_SKB_RXCB(skb);
+	memset(rx_status, 0, sizeof(*rx_status));
+
 	rx_status->chains |= BIT(0);
 	if (rx->ppdu.combined_rssi == 0) {
 		/* SDIO firmware does not provide signal */
@@ -2726,7 +2729,7 @@ static void ath10k_htt_rx_tx_compl_ind(struct ath10k *ar,
 		spin_lock_bh(&ar->data_lock);
 
 		peer = ath10k_peer_find_by_id(ar, peer_id);
-		if (!peer) {
+		if (!peer || !peer->sta) {
 			spin_unlock_bh(&ar->data_lock);
 			rcu_read_unlock();
 			continue;

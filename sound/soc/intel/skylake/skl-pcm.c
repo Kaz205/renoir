@@ -118,10 +118,7 @@ static void skl_set_suspend_active(struct snd_pcm_substream *substream,
 	struct snd_soc_dapm_widget *w;
 	struct skl_dev *skl = bus_to_skl(bus);
 
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
-		w = dai->playback_widget;
-	else
-		w = dai->capture_widget;
+	w = snd_soc_dai_get_widget(dai, substream->stream);
 
 	if (w->ignore_suspend && enable)
 		skl->supend_active++;
@@ -482,10 +479,7 @@ static int skl_pcm_trigger(struct snd_pcm_substream *substream, int cmd,
 	if (!mconfig)
 		return -EIO;
 
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
-		w = dai->playback_widget;
-	else
-		w = dai->capture_widget;
+	w = snd_soc_dai_get_widget(dai, substream->stream);
 
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_RESUME:
@@ -558,7 +552,7 @@ static int skl_link_hw_params(struct snd_pcm_substream *substream,
 	struct hdac_bus *bus = dev_get_drvdata(dai->dev);
 	struct hdac_ext_stream *link_dev;
 	struct snd_soc_pcm_runtime *rtd = snd_pcm_substream_chip(substream);
-	struct snd_soc_dai *codec_dai = rtd->codec_dai;
+	struct snd_soc_dai *codec_dai = asoc_rtd_to_codec(rtd, 0);
 	struct skl_pipe_params p_params = {0};
 	struct hdac_ext_link *link;
 	int stream_tag;
@@ -657,7 +651,7 @@ static int skl_link_hw_free(struct snd_pcm_substream *substream,
 
 	link_dev->link_prepared = 0;
 
-	link = snd_hdac_ext_bus_get_link(bus, rtd->codec_dai->component->name);
+	link = snd_hdac_ext_bus_get_link(bus, asoc_rtd_to_codec(rtd, 0)->component->name);
 	if (!link)
 		return -EINVAL;
 
@@ -1081,12 +1075,13 @@ int skl_dai_load(struct snd_soc_component *cmp, int index,
 	return 0;
 }
 
-static int skl_platform_open(struct snd_pcm_substream *substream)
+static int skl_platform_soc_open(struct snd_soc_component *component,
+				 struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_dai_link *dai_link = rtd->dai_link;
 
-	dev_dbg(rtd->cpu_dai->dev, "In %s:%s\n", __func__,
+	dev_dbg(asoc_rtd_to_cpu(rtd, 0)->dev, "In %s:%s\n", __func__,
 					dai_link->cpus->dai_name);
 
 	snd_soc_set_runtime_hwparams(substream, &azx_pcm_hw);
@@ -1167,8 +1162,9 @@ static int skl_coupled_trigger(struct snd_pcm_substream *substream,
 	return 0;
 }
 
-static int skl_platform_pcm_trigger(struct snd_pcm_substream *substream,
-					int cmd)
+static int skl_platform_soc_trigger(struct snd_soc_component *component,
+				    struct snd_pcm_substream *substream,
+				    int cmd)
 {
 	struct hdac_bus *bus = get_bus_ctx(substream);
 
@@ -1178,8 +1174,9 @@ static int skl_platform_pcm_trigger(struct snd_pcm_substream *substream,
 	return 0;
 }
 
-static snd_pcm_uframes_t skl_platform_pcm_pointer
-			(struct snd_pcm_substream *substream)
+static snd_pcm_uframes_t skl_platform_soc_pointer(
+	struct snd_soc_component *component,
+	struct snd_pcm_substream *substream)
 {
 	struct hdac_ext_stream *hstream = get_hdac_ext_stream(substream);
 	struct hdac_bus *bus = get_bus_ctx(substream);
@@ -1225,11 +1222,18 @@ static snd_pcm_uframes_t skl_platform_pcm_pointer
 	return bytes_to_frames(substream->runtime, pos);
 }
 
+static int skl_platform_soc_mmap(struct snd_soc_component *component,
+				 struct snd_pcm_substream *substream,
+				 struct vm_area_struct *area)
+{
+	return snd_pcm_lib_default_mmap(substream, area);
+}
+
 static u64 skl_adjust_codec_delay(struct snd_pcm_substream *substream,
 				u64 nsec)
 {
 	struct snd_soc_pcm_runtime *rtd = snd_pcm_substream_chip(substream);
-	struct snd_soc_dai *codec_dai = rtd->codec_dai;
+	struct snd_soc_dai *codec_dai = asoc_rtd_to_codec(rtd, 0);
 	u64 codec_frames, codec_nsecs;
 
 	if (!codec_dai->driver->ops->delay)
@@ -1245,7 +1249,9 @@ static u64 skl_adjust_codec_delay(struct snd_pcm_substream *substream,
 	return (nsec > codec_nsecs) ? nsec - codec_nsecs : 0;
 }
 
-static int skl_get_time_info(struct snd_pcm_substream *substream,
+static int skl_platform_soc_get_time_info(
+			struct snd_soc_component *component,
+			struct snd_pcm_substream *substream,
 			struct timespec *system_ts, struct timespec *audio_ts,
 			struct snd_pcm_audio_tstamp_config *audio_tstamp_config,
 			struct snd_pcm_audio_tstamp_report *audio_tstamp_report)
@@ -1277,26 +1283,18 @@ static int skl_get_time_info(struct snd_pcm_substream *substream,
 	return 0;
 }
 
-static const struct snd_pcm_ops skl_platform_ops = {
-	.open = skl_platform_open,
-	.ioctl = snd_pcm_lib_ioctl,
-	.trigger = skl_platform_pcm_trigger,
-	.pointer = skl_platform_pcm_pointer,
-	.get_time_info =  skl_get_time_info,
-	.mmap = snd_pcm_lib_default_mmap,
-	.page = snd_pcm_sgbuf_ops_page,
-};
-
-static void skl_pcm_free(struct snd_pcm *pcm)
+static void skl_platform_soc_free(struct snd_soc_component *component,
+				  struct snd_pcm *pcm)
 {
 	snd_pcm_lib_preallocate_free_for_all(pcm);
 }
 
 #define MAX_PREALLOC_SIZE	(32 * 1024 * 1024)
 
-static int skl_pcm_new(struct snd_soc_pcm_runtime *rtd)
+static int skl_platform_soc_new(struct snd_soc_component *component,
+				struct snd_soc_pcm_runtime *rtd)
 {
-	struct snd_soc_dai *dai = rtd->cpu_dai;
+	struct snd_soc_dai *dai = asoc_rtd_to_cpu(rtd, 0);
 	struct hdac_bus *bus = dev_get_drvdata(dai->dev);
 	struct snd_pcm *pcm = rtd->pcm;
 	unsigned int size;
@@ -1310,7 +1308,7 @@ static int skl_pcm_new(struct snd_soc_pcm_runtime *rtd)
 			size = MAX_PREALLOC_SIZE;
 		snd_pcm_lib_preallocate_pages_for_all(pcm,
 						SNDRV_DMA_TYPE_DEV_SG,
-						snd_dma_pci_data(skl->pci),
+						&skl->pci->dev,
 						size, MAX_PREALLOC_SIZE);
 	}
 
@@ -1458,7 +1456,7 @@ static int skl_platform_soc_probe(struct snd_soc_component *component)
 	return 0;
 }
 
-static void skl_pcm_remove(struct snd_soc_component *component)
+static void skl_platform_soc_remove(struct snd_soc_component *component)
 {
 	struct hdac_bus *bus = dev_get_drvdata(component->dev);
 	struct skl_dev *skl = bus_to_skl(bus);
@@ -1471,10 +1469,14 @@ static void skl_pcm_remove(struct snd_soc_component *component)
 static const struct snd_soc_component_driver skl_component  = {
 	.name		= "pcm",
 	.probe		= skl_platform_soc_probe,
-	.remove		= skl_pcm_remove,
-	.ops		= &skl_platform_ops,
-	.pcm_new	= skl_pcm_new,
-	.pcm_free	= skl_pcm_free,
+	.remove		= skl_platform_soc_remove,
+	.open		= skl_platform_soc_open,
+	.trigger	= skl_platform_soc_trigger,
+	.pointer	= skl_platform_soc_pointer,
+	.get_time_info	= skl_platform_soc_get_time_info,
+	.mmap		= skl_platform_soc_mmap,
+	.pcm_construct	= skl_platform_soc_new,
+	.pcm_destruct	= skl_platform_soc_free,
 	.module_get_upon_open = 1, /* increment refcount when a pcm is opened */
 };
 

@@ -91,10 +91,18 @@ void __init hpet_time_init(void)
 
 static __init void x86_late_time_init(void)
 {
-	x86_init.timers.timer_init();
 	/*
-	 * After PIT/HPET timers init, select and setup
-	 * the final interrupt mode for delivering IRQs.
+	 * Before PIT/HPET init, select the interrupt mode. This is required
+	 * to make the decision whether PIT should be initialized correct.
+	 */
+	x86_init.irqs.intr_mode_select();
+
+	/* Setup the legacy timers */
+	x86_init.timers.timer_init();
+
+	/*
+	 * After PIT/HPET timers init, set up the final interrupt mode for
+	 * delivering IRQs.
 	 */
 	x86_init.irqs.intr_mode_init();
 	tsc_init();
@@ -114,18 +122,12 @@ void __init time_init(void)
  */
 void clocksource_arch_init(struct clocksource *cs)
 {
-	if (cs->archdata.vclock_mode == VCLOCK_NONE)
+	if (cs->vdso_clock_mode == VDSO_CLOCKMODE_NONE)
 		return;
 
-	if (cs->archdata.vclock_mode > VCLOCK_MAX) {
-		pr_warn("clocksource %s registered with invalid vclock_mode %d. Disabling vclock.\n",
-			cs->name, cs->archdata.vclock_mode);
-		cs->archdata.vclock_mode = VCLOCK_NONE;
-	}
-
 	if (cs->mask != CLOCKSOURCE_MASK(64)) {
-		pr_warn("clocksource %s registered with invalid mask %016llx. Disabling vclock.\n",
+		pr_warn("clocksource %s registered with invalid mask %016llx for VDSO. Disabling VDSO support.\n",
 			cs->name, cs->mask);
-		cs->archdata.vclock_mode = VCLOCK_NONE;
+		cs->vdso_clock_mode = VDSO_CLOCKMODE_NONE;
 	}
 }

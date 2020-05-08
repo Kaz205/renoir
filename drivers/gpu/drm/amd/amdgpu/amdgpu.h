@@ -151,6 +151,7 @@ extern int amdgpu_prim_buf_per_se;
 extern int amdgpu_pos_buf_per_se;
 extern int amdgpu_cntl_sb_buf_per_se;
 extern int amdgpu_param_buf_per_se;
+extern uint amdgpu_force_long_training;
 extern int amdgpu_job_hang_limit;
 extern int amdgpu_lbpw;
 extern int amdgpu_compute_multipipe;
@@ -813,6 +814,7 @@ struct amdgpu_device {
 	uint8_t				*bios;
 	uint32_t			bios_size;
 	struct amdgpu_bo		*stolen_vga_memory;
+	struct amdgpu_bo		*discovery_memory;
 	uint32_t			bios_scratch_reg_offset;
 	uint32_t			bios_scratch[AMDGPU_BIOS_NUM_SCRATCH];
 
@@ -1032,6 +1034,8 @@ int amdgpu_device_init(struct amdgpu_device *adev,
 void amdgpu_device_fini(struct amdgpu_device *adev);
 int amdgpu_gpu_wait_for_idle(struct amdgpu_device *adev);
 
+void amdgpu_device_vram_access(struct amdgpu_device *adev, loff_t pos,
+			       uint32_t *buf, size_t size, bool write);
 uint32_t amdgpu_mm_rreg(struct amdgpu_device *adev, uint32_t reg,
 			uint32_t acc_flags);
 void amdgpu_mm_wreg(struct amdgpu_device *adev, uint32_t reg, uint32_t v,

@@ -252,6 +252,7 @@ struct i915_execbuffer {
 		bool has_fence : 1;
 		bool needs_unfenced : 1;
 
+		struct intel_context *ce;
 		struct i915_request *rq;
 		u32 *rq_cmd;
 		unsigned int rq_size;
@@ -439,7 +440,8 @@ eb_validate_vma(struct i915_execbuffer *eb,
 	if (unlikely(entry->flags & eb->invalid_flags))
 		return -EINVAL;
 
-	if (unlikely(entry->alignment && !is_power_of_2(entry->alignment)))
+	if (unlikely(entry->alignment &&
+		     !is_power_of_2_u64(entry->alignment)))
 		return -EINVAL;
 
 	/*
@@ -882,6 +884,9 @@ static void eb_destroy(const struct i915_execbuffer *eb)
 {
 	GEM_BUG_ON(eb->reloc_cache.rq);
 
+	if (eb->reloc_cache.ce)
+		intel_context_put(eb->reloc_cache.ce);
+
 	if (eb->lut_size > 0)
 		kfree(eb->buckets);
 }
@@ -905,6 +910,7 @@ static void reloc_cache_init(struct reloc_cache *cache,
 	cache->has_fence = cache->gen < 4;
 	cache->needs_unfenced = INTEL_INFO(i915)->unfenced_needs_alignment;
 	cache->node.allocated = false;
+	cache->ce = NULL;
 	cache->rq = NULL;
 	cache->rq_size = 0;
 }
@@ -930,11 +936,13 @@ static inline struct i915_ggtt *cache_to_ggtt(struct reloc_cache *cache)
 
 static void reloc_gpu_flush(struct reloc_cache *cache)
 {
-	GEM_BUG_ON(cache->rq_size >= cache->rq->batch->obj->base.size / sizeof(u32));
+	struct drm_i915_gem_object *obj = cache->rq->batch->obj;
+
+	GEM_BUG_ON(cache->rq_size >= obj->base.size / sizeof(u32));
 	cache->rq_cmd[cache->rq_size] = MI_BATCH_BUFFER_END;
 
-	__i915_gem_object_flush_map(cache->rq->batch->obj, 0, cache->rq_size);
-	i915_gem_object_unpin_map(cache->rq->batch->obj);
+	__i915_gem_object_flush_map(obj, 0, sizeof(u32) * (cache->rq_size + 1));
+	i915_gem_object_unpin_map(obj);
 
 	intel_gt_chipset_flush(cache->rq->engine->gt);
 
@@ -1170,7 +1178,7 @@ static int __reloc_gpu_alloc(struct i915_execbuffer *eb,
 	if (err)
 		goto err_unmap;
 
-	rq = i915_request_create(eb->context);
+	rq = intel_context_create_request(cache->ce);
 	if (IS_ERR(rq)) {
 		err = PTR_ERR(rq);
 		goto err_unpin;
@@ -1240,6 +1248,29 @@ static u32 *reloc_gpu(struct i915_execbuffer *eb,
 
 		if (!intel_engine_can_store_dword(eb->engine))
 			return ERR_PTR(-ENODEV);
+
+		if (!cache->ce) {
+			struct intel_context *ce;
+
+			/*
+			 * The CS pre-parser can pre-fetch commands across
+			 * memory sync points and starting gen12 it is able to
+			 * pre-fetch across BB_START and BB_END boundaries
+			 * (within the same context). We therefore use a
+			 * separate context gen12+ to guarantee that the reloc
+			 * writes land before the parser gets to the target
+			 * memory location.
+			 */
+			if (cache->gen >= 12)
+				ce = intel_context_create(eb->context->gem_context,
+							  eb->engine);
+			else
+				ce = intel_context_get(eb->context);
+			if (IS_ERR(ce))
+				return ERR_CAST(ce);
+
+			cache->ce = ce;
+		}
 
 		err = __reloc_gpu_alloc(eb, vma, len);
 		if (unlikely(err))

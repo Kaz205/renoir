@@ -379,6 +379,9 @@ struct ath10k_hw_values {
 	u8 num_target_ce_config_wlan;
 	u16 ce_desc_meta_data_mask;
 	u8 ce_desc_meta_data_lsb;
+	u32 rfkill_pin;
+	u32 rfkill_cfg;
+	bool rfkill_on_level;
 };
 
 extern const struct ath10k_hw_values qca988x_values;
@@ -609,6 +612,9 @@ struct ath10k_hw_params {
 
 	/* target supporting fw download via diag ce */
 	bool fw_diag_ce_download;
+
+	/* target supporting fw download via large size BMI */
+	bool bmi_large_size_download;
 
 	/* need to set uart pin if disable uart print, workaround for a
 	 * firmware bug

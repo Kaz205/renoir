@@ -11,6 +11,7 @@
 #include <linux/property.h>
 #include <linux/dmi.h>
 #include <linux/ctype.h>
+#include <linux/pm_qos.h>
 #include <asm/byteorder.h>
 
 #include "core.h"
@@ -188,6 +189,7 @@ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
 		.num_wds_entries = 0x20,
 		.uart_pin_workaround = true,
 		.tx_stats_over_pktlog = false,
+		.bmi_large_size_download = true,
 	},
 	{
 		.id = QCA6174_HW_2_1_VERSION,
@@ -677,13 +679,22 @@ static void ath10k_send_suspend_complete(struct ath10k *ar)
 	complete(&ar->target_suspend);
 }
 
-static void ath10k_init_sdio(struct ath10k *ar, enum ath10k_firmware_mode mode)
+static int ath10k_init_sdio(struct ath10k *ar, enum ath10k_firmware_mode mode)
 {
+	int ret;
 	u32 param = 0;
 
-	ath10k_bmi_write32(ar, hi_mbox_io_block_sz, 256);
-	ath10k_bmi_write32(ar, hi_mbox_isr_yield_limit, 99);
-	ath10k_bmi_read32(ar, hi_acs_flags, &param);
+	ret = ath10k_bmi_write32(ar, hi_mbox_io_block_sz, 256);
+	if (ret)
+		return ret;
+
+	ret = ath10k_bmi_write32(ar, hi_mbox_isr_yield_limit, 99);
+	if (ret)
+		return ret;
+
+	ret = ath10k_bmi_read32(ar, hi_acs_flags, &param);
+	if (ret)
+		return ret;
 
 	/* Data transfer is not initiated, when reduced Tx completion
 	 * is used for SDIO. disable it until fixed
@@ -700,14 +711,23 @@ static void ath10k_init_sdio(struct ath10k *ar, enum ath10k_firmware_mode mode)
 	else
 		param |= HI_ACS_FLAGS_SDIO_SWAP_MAILBOX_SET;
 
-	ath10k_bmi_write32(ar, hi_acs_flags, param);
+	ret = ath10k_bmi_write32(ar, hi_acs_flags, param);
+	if (ret)
+		return ret;
 
 	/* Explicitly set fwlog prints to zero as target may turn it on
 	 * based on scratch registers.
 	 */
-	ath10k_bmi_read32(ar, hi_option_flag, &param);
+	ret = ath10k_bmi_read32(ar, hi_option_flag, &param);
+	if (ret)
+		return ret;
+
 	param |= HI_OPTION_DISABLE_DBGLOG;
-	ath10k_bmi_write32(ar, hi_option_flag, param);
+	ret = ath10k_bmi_write32(ar, hi_option_flag, param);
+	if (ret)
+		return ret;
+
+	return 0;
 }
 
 static int ath10k_init_configure_target(struct ath10k *ar)
@@ -1009,6 +1029,7 @@ static int ath10k_download_fw(struct ath10k *ar)
 	u32 address, data_len;
 	const void *data;
 	int ret;
+	struct pm_qos_request latency_qos;
 
 	address = ar->hw_params.patch_load_addr;
 
@@ -1042,8 +1063,14 @@ static int ath10k_download_fw(struct ath10k *ar)
 			    ret);
 	}
 
-	return ath10k_bmi_fast_download(ar, address,
-					data, data_len);
+	memset(&latency_qos, 0, sizeof(latency_qos));
+	pm_qos_add_request(&latency_qos, PM_QOS_CPU_DMA_LATENCY, 0);
+
+	ret = ath10k_bmi_fast_download(ar, address, data, data_len);
+
+	pm_qos_remove_request(&latency_qos);
+
+	return ret;
 }
 
 void ath10k_core_free_board_files(struct ath10k *ar)
@@ -2565,8 +2592,13 @@ int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode,
 		if (status)
 			goto err;
 
-		if (ar->hif.bus == ATH10K_BUS_SDIO)
-			ath10k_init_sdio(ar, mode);
+		if (ar->hif.bus == ATH10K_BUS_SDIO) {
+			status = ath10k_init_sdio(ar, mode);
+			if (status) {
+				ath10k_err(ar, "failed to init SDIO: %d\n", status);
+				goto err;
+			}
+		}
 	}
 
 	ar->htc.htc_ops.target_send_suspend_complete =

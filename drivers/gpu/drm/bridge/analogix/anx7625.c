@@ -1966,8 +1966,9 @@ static int anx7625_i2c_probe(struct i2c_client *client,
 		queue_work(platform->workqueue, &platform->work);
 
 	platform->bridge.funcs = &anx7625_bridge_funcs;
-	if (IS_ENABLED(CONFIG_OF))
-		platform->bridge.of_node = client->dev.of_node;
+#ifdef CONFIG_OF
+	platform->bridge.of_node = client->dev.of_node;
+#endif
 	drm_bridge_add(&platform->bridge);
 
 	DRM_DEV_DEBUG_DRIVER(dev, "probe done\n");

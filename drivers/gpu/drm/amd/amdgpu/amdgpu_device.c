@@ -151,6 +151,36 @@ bool amdgpu_device_is_px(struct drm_device *dev)
 	return false;
 }
 
+/**
+ * VRAM access helper functions.
+ *
+ * amdgpu_device_vram_access - read/write a buffer in vram
+ *
+ * @adev: amdgpu_device pointer
+ * @pos: offset of the buffer in vram
+ * @buf: virtual address of the buffer in system memory
+ * @size: read/write size, sizeof(@buf) must > @size
+ * @write: true - write to vram, otherwise - read from vram
+ */
+void amdgpu_device_vram_access(struct amdgpu_device *adev, loff_t pos,
+			       uint32_t *buf, size_t size, bool write)
+{
+	uint64_t last;
+	unsigned long flags;
+
+	last = size - 4;
+	for (last += pos; pos <= last; pos += 4) {
+		spin_lock_irqsave(&adev->mmio_idx_lock, flags);
+		WREG32_NO_KIQ(mmMM_INDEX, ((uint32_t)pos) | 0x80000000);
+		WREG32_NO_KIQ(mmMM_INDEX_HI, pos >> 31);
+		if (write)
+			WREG32_NO_KIQ(mmMM_DATA, *buf++);
+		else
+			*buf++ = RREG32_NO_KIQ(mmMM_DATA);
+		spin_unlock_irqrestore(&adev->mmio_idx_lock, flags);
+	}
+}
+
 /*
  * MMIO register access helper functions.
  */
@@ -3070,6 +3100,9 @@ int amdgpu_device_suspend(struct drm_device *dev, bool suspend, bool fbcon)
 		}
 	}
 
+	amdgpu_device_set_pg_state(adev, AMD_PG_STATE_UNGATE);
+	amdgpu_device_set_cg_state(adev, AMD_CG_STATE_UNGATE);
+
 	amdgpu_amdkfd_suspend(adev);
 
 	amdgpu_ras_suspend(adev);
@@ -3465,8 +3498,6 @@ static int amdgpu_device_reset_sriov(struct amdgpu_device *adev,
 		r = amdgpu_virt_reset_gpu(adev);
 	if (r)
 		return r;
-
-	amdgpu_amdkfd_pre_reset(adev);
 
 	/* Resume IP prior to SMC */
 	r = amdgpu_device_ip_reinit_early_sriov(adev);

@@ -136,7 +136,7 @@ i915_gem_phys_pwrite(struct drm_i915_gem_object *obj,
 		     struct drm_i915_gem_pwrite *args,
 		     struct drm_file *file)
 {
-	void *vaddr = obj->phys_handle->vaddr + args->offset;
+	void *vaddr = sg_page(obj->mm.pages->sgl) + args->offset;
 	char __user *user_data = u64_to_user_ptr(args->data_ptr);
 
 	/*
@@ -802,10 +802,10 @@ i915_gem_pwrite_ioctl(struct drm_device *dev, void *data,
 		ret = i915_gem_gtt_pwrite_fast(obj, args);
 
 	if (ret == -EFAULT || ret == -ENOSPC) {
-		if (obj->phys_handle)
-			ret = i915_gem_phys_pwrite(obj, args, file);
-		else
+		if (i915_gem_object_has_struct_page(obj))
 			ret = i915_gem_shmem_pwrite(obj, args);
+		else
+			ret = i915_gem_phys_pwrite(obj, args, file);
 	}
 
 	i915_gem_object_unpin_pages(obj);
@@ -1295,15 +1295,6 @@ static int __intel_engines_record_defaults(struct drm_i915_private *i915)
 		if (err)
 			goto err_rq;
 
-		/*
-		 * Failing to program the MOCS is non-fatal.The system will not
-		 * run at peak performance. So warn the user and carry on.
-		 */
-		err = intel_mocs_emit(rq);
-		if (err)
-			dev_notice(i915->drm.dev,
-				   "Failed to program MOCS registers; expect performance issues.\n");
-
 		err = intel_renderstate_emit(rq);
 		if (err)
 			goto err_rq;
@@ -1532,7 +1523,7 @@ int i915_gem_init(struct drm_i915_private *dev_priv)
 err_gt:
 	mutex_unlock(&dev_priv->drm.struct_mutex);
 
-	intel_gt_set_wedged(&dev_priv->gt);
+	intel_gt_set_wedged_on_init(&dev_priv->gt);
 	i915_gem_suspend(dev_priv);
 	i915_gem_suspend_late(dev_priv);
 

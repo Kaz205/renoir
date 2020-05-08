@@ -153,8 +153,6 @@ struct drm_i915_gem_object {
 
 	/** Count of VMA actually bound by this object */
 	atomic_t bind_count;
-	/** Count of how many global VMA are currently pinned for use by HW */
-	unsigned int pin_global;
 
 	struct {
 		struct mutex lock; /* protects the pages and their use */
@@ -240,9 +238,6 @@ struct drm_i915_gem_object {
 
 		void *gvt_info;
 	};
-
-	/** for phys allocated objects */
-	struct drm_dma_handle *phys_handle;
 };
 
 static inline struct drm_i915_gem_object *

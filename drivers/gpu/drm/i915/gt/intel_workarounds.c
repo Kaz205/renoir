@@ -567,6 +567,10 @@ static void icl_ctx_workarounds_init(struct intel_engine_cs *engine,
 static void tgl_ctx_workarounds_init(struct intel_engine_cs *engine,
 				     struct i915_wa_list *wal)
 {
+	/* WaDisableGPGPUMidThreadPreemption:tgl */
+	WA_SET_FIELD_MASKED(GEN8_CS_CHICKEN1,
+			    GEN9_PREEMPT_GPGPU_LEVEL_MASK,
+			    GEN9_PREEMPT_GPGPU_THREAD_GROUP_LEVEL);
 }
 
 static void
@@ -796,11 +800,10 @@ wa_init_mcr(struct drm_i915_private *i915, struct i915_wa_list *wal)
 	}
 
 	slice = fls(sseu->slice_mask) - 1;
-	GEM_BUG_ON(slice >= ARRAY_SIZE(sseu->subslice_mask));
-	subslice = fls(l3_en & sseu->subslice_mask[slice]);
+	subslice = fls(l3_en & intel_sseu_get_subslices(sseu, slice));
 	if (!subslice) {
 		DRM_WARN("No common index found between subslice mask %x and L3 bank mask %x!\n",
-			 sseu->subslice_mask[slice], l3_en);
+			 intel_sseu_get_subslices(sseu, slice), l3_en);
 		subslice = fls(l3_en);
 		WARN_ON(!subslice);
 	}
@@ -1197,6 +1200,26 @@ static void icl_whitelist_build(struct intel_engine_cs *engine)
 
 static void tgl_whitelist_build(struct intel_engine_cs *engine)
 {
+	struct i915_wa_list *w = &engine->whitelist;
+
+	switch (engine->class) {
+	case RENDER_CLASS:
+		/*
+		 * WaAllowPMDepthAndInvocationCountAccessFromUMD:tgl
+		 *
+		 * This covers 4 registers which are next to one another :
+		 *   - PS_INVOCATION_COUNT
+		 *   - PS_INVOCATION_COUNT_UDW
+		 *   - PS_DEPTH_COUNT
+		 *   - PS_DEPTH_COUNT_UDW
+		 */
+		whitelist_reg_ext(w, PS_INVOCATION_COUNT,
+				  RING_FORCE_TO_NONPRIV_ACCESS_RD |
+				  RING_FORCE_TO_NONPRIV_RANGE_4);
+		break;
+	default:
+		break;
+	}
 }
 
 void intel_engine_init_whitelist(struct intel_engine_cs *engine)
@@ -1323,8 +1346,11 @@ rcs_engine_wa_init(struct intel_engine_cs *engine, struct i915_wa_list *wal)
 				   0);
 	}
 
-	if (IS_GEN_RANGE(i915, 9, 11)) {
-		/* FtrPerCtxtPreemptionGranularityControl:skl,bxt,kbl,cfl,cnl,icl */
+	if (IS_GEN_RANGE(i915, 9, 12)) {
+		/*
+		 * FtrPerCtxtPreemptionGranularityControl:skl,bxt,kbl,cfl,cnl,
+		 * icl,tgl
+		 */
 		wa_masked_en(wal,
 			     GEN7_FF_SLICE_CS_CHICKEN1,
 			     GEN9_FFSC_PERCTX_PREEMPT_CTRL);
@@ -1452,7 +1478,7 @@ static bool mcr_range(struct drm_i915_private *i915, u32 offset)
 	 * which only controls CPU initiated MMIO. Routing does not
 	 * work for CS access so we cannot verify them on this path.
 	 */
-	if (INTEL_GEN(i915) >= 8 && (offset >= 0xb100 && offset <= 0xb3ff))
+	if (INTEL_GEN(i915) >= 8 && (offset >= 0xb000 && offset <= 0xb4ff))
 		return true;
 
 	return false;

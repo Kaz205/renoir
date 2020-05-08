@@ -246,6 +246,11 @@ enum wm_report_mode {
 	WM_REPORT_OVERRIDE = 1,
 };
 
+enum dcn_pwr_state {
+	DCN_PWR_STATE_OPTIMIZED = 0,
+	DCN_PWR_STATE_NORMAL = 1
+};
+
 /*
  * For any clocks that may differ per pipe
  * only the max is stored in this structure
@@ -264,7 +269,7 @@ struct dc_clocks {
 	int phyclk_khz;
 	int dramclk_khz;
 	bool p_state_change_support;
-
+	enum dcn_pwr_state pwr_state;
 	/*
 	 * Elements below are not compared for the purposes of
 	 * optimization required
@@ -553,7 +558,11 @@ struct dc_init_data {
 };
 
 struct dc_callback_init {
+#ifdef CONFIG_DRM_AMD_DC_HDCP
+	struct cp_psp cp_psp;
+#else
 	uint8_t reserved;
+#endif
 };
 
 struct dc *dc_create(const struct dc_init_data *init_params);
@@ -565,6 +574,7 @@ int dc_setup_system_context(struct dc *dc, struct dc_phy_addr_space_config *pa_c
 #endif
 void dc_init_callbacks(struct dc *dc,
 		const struct dc_callback_init *init_params);
+void dc_deinit_callbacks(struct dc *dc);
 void dc_destroy(struct dc **dc);
 
 /*******************************************************************************
@@ -960,6 +970,20 @@ struct dpcd_caps {
 	union dpcd_fec_capability fec_cap;
 	struct dpcd_dsc_capabilities dsc_caps;
 #endif
+};
+
+union dpcd_sink_ext_caps {
+	struct {
+		/* 0 - Sink supports backlight adjust via PWM during SDR/HDR mode
+		 * 1 - Sink supports backlight adjust via AUX during SDR/HDR mode.
+		 */
+		uint8_t sdr_aux_backlight_control : 1;
+		uint8_t hdr_aux_backlight_control : 1;
+		uint8_t reserved_1 : 2;
+		uint8_t oled : 1;
+		uint8_t reserved : 3;
+	} bits;
+	uint8_t raw;
 };
 
 #include "dc_link.h"

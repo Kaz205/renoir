@@ -64,7 +64,9 @@ obj-$(CONFIG_INTEL_CHT_INT33FE)	+= intel_cht_int33fe.o
 obj-$(CONFIG_INTEL_INT0002_VGPIO) += intel_int0002_vgpio.o
 obj-$(CONFIG_INTEL_HID_EVENT)	+= intel-hid.o
 obj-$(CONFIG_INTEL_VBTN)	+= intel-vbtn.o
+obj-$(CONFIG_INTEL_SCU_PLATFORM) += intel_scu_pltdrv.o
 obj-$(CONFIG_INTEL_SCU_IPC)	+= intel_scu_ipc.o
+obj-$(CONFIG_INTEL_SCU_PCI)	+= intel_scu_pcidrv.o
 obj-$(CONFIG_INTEL_SCU_IPC_UTIL) += intel_scu_ipcutil.o
 obj-$(CONFIG_INTEL_MFLD_THERMAL) += intel_mid_thermal.o
 obj-$(CONFIG_INTEL_IPS)		+= intel_ips.o
@@ -82,7 +84,6 @@ obj-$(CONFIG_INTEL_SMARTCONNECT)	+= intel-smartconnect.o
 obj-$(CONFIG_ACPI_CHROMEOS)	+= chromeos_acpi.o
 
 obj-$(CONFIG_ALIENWARE_WMI)	+= alienware-wmi.o
-obj-$(CONFIG_INTEL_PMC_IPC)	+= intel_pmc_ipc.o
 obj-$(CONFIG_TOUCHSCREEN_DMI)	+= touchscreen_dmi.o
 obj-$(CONFIG_SURFACE_PRO3_BUTTON)	+= surfacepro3_button.o
 obj-$(CONFIG_SURFACE_3_BUTTON)	+= surface3_button.o

@@ -133,6 +133,7 @@ int amdgpu_prim_buf_per_se = 0;
 int amdgpu_pos_buf_per_se = 0;
 int amdgpu_cntl_sb_buf_per_se = 0;
 int amdgpu_param_buf_per_se = 0;
+uint amdgpu_force_long_training = 0;
 int amdgpu_job_hang_limit = 0;
 int amdgpu_lbpw = -1;
 int amdgpu_compute_multipipe = -1;
@@ -145,7 +146,7 @@ int amdgpu_async_gfx_ring = 1;
 int amdgpu_mcbp = 0;
 int amdgpu_discovery = -1;
 int amdgpu_mes = 0;
-int amdgpu_noretry = 1;
+int amdgpu_noretry;
 
 struct amdgpu_mgpu_info mgpu_info = {
 	.mutex = __MUTEX_INITIALIZER(mgpu_info.mutex),
@@ -392,6 +393,14 @@ MODULE_PARM_DESC(ppfeaturemask, "all power features enabled (default))");
 module_param_named(ppfeaturemask, amdgpu_pp_feature_mask, uint, 0444);
 
 /**
+ * DOC: forcelongtraining (uint)
+ * Force long memory training in resume.
+ * The default is zero, indicates short training in resume.
+ */
+MODULE_PARM_DESC(forcelongtraining, "force memory long training");
+module_param_named(forcelongtraining, amdgpu_force_long_training, uint, 0444);
+
+/**
  * DOC: pcie_gen_cap (uint)
  * Override PCIE gen speed capabilities. See the CAIL flags in drivers/gpu/drm/amd/include/amd_pcie.h.
  * The default is 0 (automatic for each asic).
@@ -613,7 +622,7 @@ MODULE_PARM_DESC(mes,
 module_param_named(mes, amdgpu_mes, int, 0444);
 
 MODULE_PARM_DESC(noretry,
-	"Disable retry faults (0 = retry enabled, 1 = retry disabled (default))");
+	"Disable retry faults (0 = retry enabled (default), 1 = retry disabled)");
 module_param_named(noretry, amdgpu_noretry, int, 0644);
 
 #ifdef CONFIG_HSA_AMD
@@ -1023,6 +1032,7 @@ static const struct pci_device_id pciidlist[] = {
 
 	/* Navi12 */
 	{0x1002, 0x7360, PCI_ANY_ID, PCI_ANY_ID, 0, 0, CHIP_NAVI12|AMD_EXP_HW_SUPPORT},
+	{0x1002, 0x7362, PCI_ANY_ID, PCI_ANY_ID, 0, 0, CHIP_NAVI12|AMD_EXP_HW_SUPPORT},
 
 	{0, 0, 0}
 };
@@ -1420,7 +1430,7 @@ amdgpu_get_crtc_scanout_position(struct drm_device *dev, unsigned int pipe,
 
 static struct drm_driver kms_driver = {
 	.driver_features =
-	    DRIVER_USE_AGP | DRIVER_ATOMIC |
+	    DRIVER_ATOMIC |
 	    DRIVER_GEM |
 	    DRIVER_RENDER | DRIVER_MODESET | DRIVER_SYNCOBJ,
 	.load = amdgpu_driver_load_kms,

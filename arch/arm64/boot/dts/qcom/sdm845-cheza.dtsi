@@ -615,6 +615,11 @@ ap_ts_i2c: &i2c14 {
 	};
 };
 
+&ipa {
+	status = "okay";
+	modem-init;
+};
+
 &lpasscc {
 	status = "okay";
 };
@@ -625,6 +630,10 @@ ap_ts_i2c: &i2c14 {
 
 &mdss_mdp {
 	status = "okay";
+};
+
+&pm8998_pwrkey {
+	status = "disabled";
 };
 
 &qupv3_id_0 {
@@ -1338,5 +1347,11 @@ ap_ts_i2c: &i2c14 {
 			drive-strength = <2>;
 			output-high;
 		};
+	};
+};
+
+&venus {
+	video-firmware {
+		iommus = <&apps_smmu 0x10b2 0x0>;
 	};
 };

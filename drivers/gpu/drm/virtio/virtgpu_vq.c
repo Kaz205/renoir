@@ -979,8 +979,14 @@ static void virtio_gpu_cmd_resource_create_cb(struct virtio_gpu_device *vgdev,
 	 */
 	vbuf->data_buf = NULL;
 
-	if (resp_type != VIRTIO_GPU_RESP_OK_RESOURCE_PLANE_INFO)
+
+	switch (resp_type) {
+	case VIRTIO_GPU_RESP_OK_RESOURCE_PLANE_INFO:
+	case VIRTIO_GPU_RESP_OK_RESOURCE_PLANE_INFO_LEGACY:
+		break;
+	default:
 		goto finish_pending;
+	}
 
 	obj->num_planes = le32_to_cpu(resp->num_planes);
 	obj->format_modifier = le64_to_cpu(resp->format_modifier);
@@ -1014,8 +1020,11 @@ static void virtio_gpu_cmd_allocation_metadata_cb(struct virtio_gpu_device *vgde
 	if (!response)
 		return;
 
-	if (resp_type == VIRTIO_GPU_RESP_OK_ALLOCATION_METADATA)
+	switch (resp_type) {
+	case VIRTIO_GPU_RESP_OK_ALLOCATION_METADATA:
+	case VIRTIO_GPU_RESP_OK_ALLOCATION_METADATA_LEGACY:
 		memcpy(&response->info, resp, total_size);
+	}
 
 	response->callback_done = true;
 	wake_up_all(&vgdev->resp_wq);
@@ -1260,4 +1269,64 @@ void virtio_gpu_cursor_ping(struct virtio_gpu_device *vgdev,
 	cur_p = virtio_gpu_alloc_cursor(vgdev, &vbuf);
 	memcpy(cur_p, &output->cursor, sizeof(output->cursor));
 	virtio_gpu_queue_cursor(vgdev, vbuf);
+}
+
+static void virtio_gpu_cmd_resource_uuid_cb(struct virtio_gpu_device *vgdev,
+					    struct virtio_gpu_vbuffer *vbuf)
+{
+	struct virtio_gpu_resp_resource_uuid *resp =
+		(struct virtio_gpu_resp_resource_uuid *)vbuf->resp_buf;
+	struct virtio_gpu_object *obj =
+		(struct virtio_gpu_object *)vbuf->data_buf;
+	uint32_t resp_type = le32_to_cpu(resp->hdr.type);
+
+	/*
+	 * Keeps the data_buf, which points to this virtio_gpu_object, from
+	 * getting kfree'd after this cb returns.
+	 */
+	vbuf->data_buf = NULL;
+
+	spin_lock(&vgdev->resource_export_lock);
+	if (resp_type == VIRTIO_GPU_RESP_OK_RESOURCE_UUID &&
+			obj->uuid_state == UUID_INITIALIZING) {
+		memcpy(&obj->uuid.b, resp->uuid, sizeof(obj->uuid.b));
+		obj->uuid_state = UUID_INITIALIZED;
+	} else {
+		obj->uuid_state = UUID_INITIALIZATION_FAILED;
+	}
+	spin_unlock(&vgdev->resource_export_lock);
+
+	drm_gem_object_put_unlocked(&obj->gem_base);
+	wake_up_all(&vgdev->resp_wq);
+}
+
+int
+virtio_gpu_cmd_resource_assign_uuid(struct virtio_gpu_device *vgdev,
+				    struct virtio_gpu_object *bo)
+{
+	struct virtio_gpu_resource_assign_uuid *cmd_p;
+	struct virtio_gpu_vbuffer *vbuf;
+	struct virtio_gpu_resp_resource_uuid *resp_buf;
+
+	resp_buf = kzalloc(sizeof(*resp_buf), GFP_KERNEL);
+	if (!resp_buf) {
+		spin_lock(&vgdev->resource_export_lock);
+		bo->uuid_state = UUID_INITIALIZATION_FAILED;
+		spin_unlock(&vgdev->resource_export_lock);
+		return -ENOMEM;
+	}
+
+	cmd_p = virtio_gpu_alloc_cmd_resp(vgdev,
+		virtio_gpu_cmd_resource_uuid_cb, &vbuf, sizeof(*cmd_p),
+		sizeof(struct virtio_gpu_resp_resource_uuid), resp_buf);
+	memset(cmd_p, 0, sizeof(*cmd_p));
+
+	cmd_p->hdr.type = cpu_to_le32(VIRTIO_GPU_CMD_RESOURCE_ASSIGN_UUID);
+	cmd_p->resource_id = cpu_to_le32(bo->hw_res_handle);
+
+	/* Reuse the data_buf pointer for the object pointer. */
+	vbuf->data_buf = bo;
+	drm_gem_object_get(&bo->gem_base);
+	virtio_gpu_queue_ctrl_buffer(vgdev, vbuf);
+	return 0;
 }

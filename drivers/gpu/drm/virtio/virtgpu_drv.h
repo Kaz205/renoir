@@ -50,6 +50,10 @@
 #define DRIVER_MINOR 1
 #define DRIVER_PATCHLEVEL 0
 
+#define UUID_INITIALIZING 0
+#define UUID_INITIALIZED 1
+#define UUID_INITIALIZATION_FAILED 2
+
 struct virtio_gpu_object_params {
 	uint32_t format;
 	uint32_t width;
@@ -93,6 +97,9 @@ struct virtio_gpu_object {
 	bool created;
 	enum virtio_gpu_memory_type guest_memory_type;
 	enum virtio_gpu_caching_type caching_type;
+
+	int uuid_state;
+	uuid_t uuid;
 };
 #define gem_to_virtio_gpu_obj(gobj) \
 	container_of((gobj), struct virtio_gpu_object, gem_base)
@@ -221,6 +228,7 @@ struct virtio_gpu_device {
 
 	bool has_virgl_3d;
 	bool has_edid;
+	bool has_resource_assign_uuid;
 	bool has_resource_v2;
 	bool has_shared_guest;
 	bool has_host_coherent;
@@ -238,6 +246,8 @@ struct virtio_gpu_device {
 
 	struct idr request_idr;
 	spinlock_t request_idr_lock;
+
+	spinlock_t resource_export_lock;
 };
 
 struct virtio_gpu_fpriv {
@@ -373,6 +383,10 @@ void virtio_gpu_dequeue_ctrl_func(struct work_struct *work);
 void virtio_gpu_dequeue_cursor_func(struct work_struct *work);
 void virtio_gpu_dequeue_fence_func(struct work_struct *work);
 
+int
+virtio_gpu_cmd_resource_assign_uuid(struct virtio_gpu_device *vgdev,
+				    struct virtio_gpu_object *bo);
+
 /* virtio_gpu_display.c */
 int virtio_gpu_framebuffer_init(struct drm_device *dev,
 				struct virtio_gpu_framebuffer *vgfb,
@@ -415,12 +429,8 @@ void virtio_gpu_object_free_sg_table(struct virtio_gpu_object *bo);
 int virtio_gpu_object_wait(struct virtio_gpu_object *bo, bool no_wait);
 
 /* virtgpu_prime.c */
-struct dma_buf_ops;
-extern const struct dma_buf_ops virtgpu_dmabuf_ops;
 struct dma_buf *virtgpu_gem_prime_export(struct drm_gem_object *obj,
 					 int flags);
-struct drm_gem_object *virtgpu_gem_prime_import(struct drm_device *dev,
-						struct dma_buf *buf);
 struct sg_table *virtgpu_gem_prime_get_sg_table(struct drm_gem_object *obj);
 struct drm_gem_object *virtgpu_gem_prime_import_sg_table(
 	struct drm_device *dev, struct dma_buf_attachment *attach,
@@ -429,6 +439,8 @@ void *virtgpu_gem_prime_vmap(struct drm_gem_object *obj);
 void virtgpu_gem_prime_vunmap(struct drm_gem_object *obj, void *vaddr);
 int virtgpu_gem_prime_mmap(struct drm_gem_object *obj,
 			   struct vm_area_struct *vma);
+int virtgpu_gem_prime_get_uuid(struct drm_gem_object *obj,
+			       uuid_t *uuid);
 
 static inline struct virtio_gpu_object*
 virtio_gpu_object_ref(struct virtio_gpu_object *bo)
