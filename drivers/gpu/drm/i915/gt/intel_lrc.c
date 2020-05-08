@@ -1860,7 +1860,8 @@ static void defer_request(struct i915_request *rq, struct list_head * const pl)
 				continue;
 
 			/* No waiter should start before its signaler */
-			GEM_BUG_ON(i915_request_started(w) &&
+			GEM_BUG_ON(w->context->timeline->has_initial_breadcrumb &&
+				   i915_request_started(w) &&
 				   !i915_request_completed(rq));
 
 			GEM_BUG_ON(i915_request_is_active(w));
