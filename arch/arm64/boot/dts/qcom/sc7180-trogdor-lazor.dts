@@ -19,7 +19,7 @@ ap_h1_spi: &spi0 {};
 	compatible = "google,lazor", "qcom,sc7180";
 
 	panel: panel {
-		compatible = "boe,nv133fhmn62";
+		compatible = "boe,nv133fhm-n62";
 		power-supply = <&pp3300_dx_edp>;
 		backlight = <&backlight>;
 		no-hpd; /* TODO: Remove? */
