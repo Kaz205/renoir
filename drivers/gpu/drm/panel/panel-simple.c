@@ -1120,6 +1120,7 @@ static const struct panel_desc boe_nv101wxmn51 = {
 	},
 };
 
+/* Also used for boe_nv133fhm_n62 */
 static const struct drm_display_mode boe_nv133fhm_n61_modes = {
 	.clock = 147840,
 	.hdisplay = 1920,
@@ -1133,6 +1134,7 @@ static const struct drm_display_mode boe_nv133fhm_n61_modes = {
 	.vrefresh = 60,
 };
 
+/* Also used for boe_nv133fhm_n62 */
 static const struct panel_desc boe_nv133fhm_n61 = {
 	.modes = &boe_nv133fhm_n61_modes,
 	.num_modes = 1,
@@ -3345,6 +3347,9 @@ static const struct of_device_id platform_of_match[] = {
 		.data = &boe_nv101wxmn51,
 	}, {
 		.compatible = "boe,nv133fhm-n61",
+		.data = &boe_nv133fhm_n61,
+	}, {
+		.compatible = "boe,nv133fhm-n62",
 		.data = &boe_nv133fhm_n61,
 	}, {
 		.compatible = "boe,nv140fhmn49",
