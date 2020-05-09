@@ -15850,7 +15850,7 @@ intel_prepare_plane_fb(struct drm_plane *plane,
 	if (new_plane_state->uapi.fence) { /* explicit fencing */
 		ret = i915_sw_fence_await_dma_fence(&intel_state->commit_ready,
 						    new_plane_state->uapi.fence,
-						    I915_FENCE_TIMEOUT,
+						    i915_fence_timeout(dev_priv),
 						    GFP_KERNEL);
 		if (ret < 0)
 			return ret;
@@ -15877,7 +15877,8 @@ intel_prepare_plane_fb(struct drm_plane *plane,
 
 		ret = i915_sw_fence_await_reservation(&intel_state->commit_ready,
 						      obj->base.resv, NULL,
-						      false, I915_FENCE_TIMEOUT,
+						      false,
+						      i915_fence_timeout(dev_priv),
 						      GFP_KERNEL);
 		if (ret < 0)
 			return ret;
