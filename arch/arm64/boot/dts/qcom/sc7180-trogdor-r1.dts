@@ -58,6 +58,13 @@ ap_ts_pen_1v8: &i2c4 {
 	};
 };
 
+&sdhc_1 {
+	// HACK: due to b/155826689 we are temporarily overriding the
+	// compatible string which will cause us to restore the DLL config
+	// at runtime resume.
+	compatible = "qcom,sdm845-sdhci", "qcom,sdhci-msm-v5";
+};
+
 &sdhc_2 {
 	status = "okay";
 };
