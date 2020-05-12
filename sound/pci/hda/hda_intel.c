@@ -2022,6 +2022,7 @@ static void pcm_mmap_prepare(struct snd_pcm_substream *substream,
 static const struct snd_pci_quirk driver_blacklist[] = {
 	SND_PCI_QUIRK(0x1462, 0xcb59, "MSI TRX40 Creator", 0),
 	SND_PCI_QUIRK(0x1462, 0xcb60, "MSI TRX40", 0),
+	SND_PCI_QUIRK(0x1022, 0x15e3, "AMD AZ PCI", 0),
 	{}
 };
 
