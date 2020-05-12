@@ -770,6 +770,15 @@ hp_i2c: &i2c9 {
 	status = "okay";
 };
 
+&msm_dp {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&dp_hot_plug_det>;
+	data-lanes = <0 1>;
+	vdda-1p2-supply = <&vdda_usb_ss_dp_1p2>;
+	vdda-0p9-supply = <&vdda_usb_ss_dp_core>;
+};
+
 &pm6150_pwrkey {
 	status = "disabled";
 };
@@ -1125,6 +1134,20 @@ ap_spi_fp: &spi10 {
 			bias-disable;
 		};
 	};
+
+	dp_hot_plug_det: dp-hot-plug-det {
+		 pinmux {
+			 pins = "gpio117";
+			 function = "dp_hot";
+		 };
+
+		 config {
+			 pins = "gpio117";
+			 bias-disable;
+			 input-enable;
+			 drive-strength = <2>;
+		 };
+	 };
 
 	edp_brij_en: edp-brij-en {
 		pinmux {
