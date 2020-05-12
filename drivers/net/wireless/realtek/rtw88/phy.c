@@ -189,6 +189,7 @@ void rtw_phy_init(struct rtw_dev *rtwdev)
 	rtw_phy_cck_pd_init(rtwdev);
 
 	rtw_phy_adaptivity_init(rtwdev);
+	dm_info->iqk.done = false;
 }
 
 void rtw_phy_dig_write(struct rtw_dev *rtwdev, u8 igi)
