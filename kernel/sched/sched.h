@@ -2385,7 +2385,7 @@ static inline bool uclamp_boosted(struct task_struct *p)
 #endif /* CONFIG_UCLAMP_TASK */
 
 #ifdef CONFIG_UCLAMP_TASK_GROUP
-static inline bool uclamp_latency_sensitive(struct task_struct *p)
+static inline bool task_latency_sensitive(struct task_struct *p)
 {
 	struct cgroup_subsys_state *css = task_css(p, cpu_cgrp_id);
 	struct task_group *tg;
@@ -2397,7 +2397,7 @@ static inline bool uclamp_latency_sensitive(struct task_struct *p)
 	return tg->latency_sensitive;
 }
 #else
-static inline bool uclamp_latency_sensitive(struct task_struct *p)
+static inline bool task_latency_sensitive(struct task_struct *p)
 {
 	return false;
 }
