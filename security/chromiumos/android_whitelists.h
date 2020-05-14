@@ -43,7 +43,7 @@ static asmlinkage long android_keyctl(struct pt_regs *regs);
 static asmlinkage long android_setpriority(struct pt_regs *regs);
 static asmlinkage long android_sched_setscheduler(struct pt_regs *regs);
 static asmlinkage long android_sched_setparam(struct pt_regs *regs);
-static asmlinkage int __maybe_unused android_socket(struct pt_regs *regs);
+static asmlinkage long __maybe_unused android_socket(struct pt_regs *regs);
 static asmlinkage long android_perf_event_open(struct pt_regs *regs);
 static asmlinkage long android_adjtimex(struct pt_regs *regs);
 static asmlinkage long android_clock_adjtime(struct pt_regs *regs);

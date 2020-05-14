@@ -257,7 +257,7 @@ static asmlinkage long android_sched_setparam(struct pt_regs *regs)
         return do_android_sched_setscheduler(pid, SETPARAM_POLICY, param);
 }
 
-static asmlinkage int __maybe_unused android_socket(struct pt_regs *regs)
+static asmlinkage long __maybe_unused android_socket(struct pt_regs *regs)
 {
 	struct task_struct *task = current;
 	unsigned long args[6];
