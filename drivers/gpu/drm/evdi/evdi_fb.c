@@ -507,10 +507,10 @@ struct drm_framebuffer *evdi_fb_user_fb_create(
 	return &ufb->base;
 
  err_no_mem:
-	drm_gem_object_put(obj);
+	drm_gem_object_put_locked(obj);
 	return ERR_PTR(-ENOMEM);
  err_inval:
 	kfree(ufb);
-	drm_gem_object_put(obj);
+	drm_gem_object_put_locked(obj);
 	return ERR_PTR(-EINVAL);
 }
