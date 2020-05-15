@@ -1414,6 +1414,7 @@ static int gsi_channel_poll(struct napi_struct *napi, int budget)
 	while (count < budget) {
 		struct gsi_trans *trans;
 
+		count++;
 		trans = gsi_channel_poll_one(channel);
 		if (!trans)
 			break;
