@@ -73,7 +73,7 @@ evdi_gem_create(struct drm_file *file,
 		return ret;
 	}
 
-	drm_gem_object_put_unlocked(&obj->base);
+	drm_gem_object_put(&obj->base);
 	*handle_p = handle;
 	return 0;
 }

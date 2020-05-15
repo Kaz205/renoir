@@ -183,7 +183,7 @@ acquired and release by :c:func:`calling drm_gem_object_get()` and
 :c:func:`drm_gem_object_put_locked()` respectively. The caller must hold the
 :c:type:`struct drm_device <drm_device>` struct_mutex lock when calling
 :c:func:`drm_gem_object_get()`. As a convenience, GEM provides
-:c:func:`drm_gem_object_put_unlocked()` functions that can be called without
+:c:func:`drm_gem_object_put()` functions that can be called without
 holding the lock.
 
 When the last reference to a GEM object is released the GEM core calls

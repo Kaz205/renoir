@@ -70,7 +70,7 @@ fb_create(struct drm_device *dev, struct drm_file *filp,
 		goto fail;
 	}
 
-	drm_gem_object_put_unlocked(gem_obj);
+	drm_gem_object_put(gem_obj);
 
 	ret = xen_drm_front_fb_attach(drm_info->front_info,
 				      xen_drm_front_dbuf_to_cookie(gem_obj),
