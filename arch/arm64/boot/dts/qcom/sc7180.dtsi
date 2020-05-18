@@ -1474,11 +1474,11 @@
 					<GIC_SPI 369 IRQ_TYPE_EDGE_RISING>,
 					<GIC_SPI 370 IRQ_TYPE_EDGE_RISING>,
 					<GIC_SPI 371 IRQ_TYPE_EDGE_RISING>;
-			clocks = <&gcc GCC_GPU_MEMNOC_GFX_CLK>,
-				<&gcc GCC_GPU_CFG_AHB_CLK>,
-				<&gcc GCC_DDRSS_GPU_AXI_CLK>;
 
-			clock-names = "bus", "iface", "mem_iface_clk";
+			clocks = <&gcc GCC_GPU_MEMNOC_GFX_CLK>,
+				<&gcc GCC_GPU_CFG_AHB_CLK>;
+			clock-names = "bus", "iface";
+
 			power-domains = <&gpucc CX_GDSC>;
 		};
 
