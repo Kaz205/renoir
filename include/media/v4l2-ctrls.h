@@ -20,6 +20,7 @@
 #include <media/mpeg2-ctrls.h>
 #include <media/fwht-ctrls.h>
 #include <media/vp8-ctrls.h>
+#include <media/vp9-ctrls.h>
 
 /* forward references */
 struct file;
