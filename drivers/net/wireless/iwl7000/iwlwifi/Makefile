@@ -40,4 +40,3 @@ obj-$(CPTCFG_IWLMVM)	+= mvm/
 obj-$(CPTCFG_IWLXVT)	+= xvt/
 
 CFLAGS_iwl-devtrace.o := -I$(srctree)/$(src)
-CFLAGS_iwl-tm-gnl.o := -Wno-error=date-time
