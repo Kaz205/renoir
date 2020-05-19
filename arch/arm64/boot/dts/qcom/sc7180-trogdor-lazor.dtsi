@@ -5,8 +5,6 @@
  * Copyright 2020 Google LLC.
  */
 
-/dts-v1/;
-
 #include "sc7180.dtsi"
 
 ap_ec_spi: &spi6 {};
@@ -15,9 +13,6 @@ ap_h1_spi: &spi0 {};
 #include "sc7180-trogdor.dtsi"
 
 / {
-	model = "Google Lazor (rev0+)";
-	compatible = "google,lazor", "qcom,sc7180";
-
 	panel: panel {
 		compatible = "boe,nv133fhm-n62";
 		power-supply = <&pp3300_dx_edp>;
