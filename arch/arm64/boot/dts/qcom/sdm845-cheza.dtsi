@@ -549,6 +549,8 @@ edp_brij_i2c: &i2c3 {
 		clocks = <&rpmhcc RPMH_LN_BB_CLK2>;
 		clock-names = "refclk";
 
+		no-hpd;
+
 		ports {
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -615,6 +617,11 @@ ap_ts_i2c: &i2c14 {
 	};
 };
 
+&ipa {
+	status = "okay";
+	modem-init;
+};
+
 &lpasscc {
 	status = "okay";
 };
@@ -625,6 +632,15 @@ ap_ts_i2c: &i2c14 {
 
 &mdss_mdp {
 	status = "okay";
+};
+
+&mss_pil {
+	iommus = <&apps_smmu 0x780 0x1>,
+		 <&apps_smmu 0x724 0x3>;
+};
+
+&pm8998_pwrkey {
+	status = "disabled";
 };
 
 &qupv3_id_0 {
@@ -1338,5 +1354,11 @@ ap_ts_i2c: &i2c14 {
 			drive-strength = <2>;
 			output-high;
 		};
+	};
+};
+
+&venus {
+	video-firmware {
+		iommus = <&apps_smmu 0x10b2 0x0>;
 	};
 };

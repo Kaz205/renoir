@@ -9,6 +9,7 @@
 #include <linux/of_graph.h>
 
 #include <drm/drm_atomic_helper.h>
+#include <drm/drm_bridge.h>
 #include <drm/drm_dp_helper.h>
 #include <drm/drm_of.h>
 #include <drm/drm_panel.h>
@@ -135,14 +136,15 @@ struct rockchip_rgb *rockchip_rgb_init(struct device *dev,
 	drm_encoder_helper_add(encoder, &rockchip_rgb_encoder_helper_funcs);
 
 	if (panel) {
-		bridge = drm_panel_bridge_add(panel, DRM_MODE_CONNECTOR_LVDS);
+		bridge = drm_panel_bridge_add_typed(panel,
+						    DRM_MODE_CONNECTOR_LVDS);
 		if (IS_ERR(bridge))
 			return ERR_CAST(bridge);
 	}
 
 	rgb->bridge = bridge;
 
-	ret = drm_bridge_attach(encoder, rgb->bridge, NULL);
+	ret = drm_bridge_attach(encoder, rgb->bridge, NULL, 0);
 	if (ret) {
 		DRM_DEV_ERROR(drm_dev->dev,
 			      "failed to attach bridge: %d\n", ret);

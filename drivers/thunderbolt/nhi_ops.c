@@ -176,3 +176,17 @@ const struct tb_nhi_ops icl_nhi_ops = {
 	.runtime_resume = icl_nhi_resume,
 	.shutdown = icl_nhi_shutdown,
 };
+
+/* Tiger Lake specific NHI operations */
+
+static int tgl_nhi_resume(struct tb_nhi *nhi)
+{
+	return icl_nhi_force_power(nhi, true);
+}
+
+const struct tb_nhi_ops tgl_nhi_ops = {
+	.init = tgl_nhi_resume,
+	.resume_noirq = tgl_nhi_resume,
+	.runtime_resume = tgl_nhi_resume,
+	.shutdown = icl_nhi_shutdown,
+};

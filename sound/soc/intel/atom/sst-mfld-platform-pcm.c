@@ -597,7 +597,8 @@ static struct snd_soc_dai_driver sst_platform_dai[] = {
 },
 };
 
-static int sst_platform_open(struct snd_pcm_substream *substream)
+static int sst_soc_open(struct snd_soc_component *component,
+			struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime;
 
@@ -609,15 +610,15 @@ static int sst_platform_open(struct snd_pcm_substream *substream)
 	return 0;
 }
 
-static int sst_platform_pcm_trigger(struct snd_pcm_substream *substream,
-					int cmd)
+static int sst_soc_trigger(struct snd_soc_component *component,
+			   struct snd_pcm_substream *substream, int cmd)
 {
 	int ret_val = 0, str_id;
 	struct sst_runtime_stream *stream;
 	int status;
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 
-	dev_dbg(rtd->dev, "sst_platform_pcm_trigger called\n");
+	dev_dbg(rtd->dev, "%s called\n", __func__);
 	if (substream->pcm->internal)
 		return 0;
 	stream = substream->runtime->private_data;
@@ -657,8 +658,8 @@ static int sst_platform_pcm_trigger(struct snd_pcm_substream *substream,
 }
 
 
-static snd_pcm_uframes_t sst_platform_pcm_pointer
-			(struct snd_pcm_substream *substream)
+static snd_pcm_uframes_t sst_soc_pointer(struct snd_soc_component *component,
+					 struct snd_pcm_substream *substream)
 {
 	struct sst_runtime_stream *stream;
 	int status;
@@ -673,16 +674,10 @@ static snd_pcm_uframes_t sst_platform_pcm_pointer
 	return str_info->buffer_ptr;
 }
 
-static const struct snd_pcm_ops sst_platform_ops = {
-	.open = sst_platform_open,
-	.ioctl = snd_pcm_lib_ioctl,
-	.trigger = sst_platform_pcm_trigger,
-	.pointer = sst_platform_pcm_pointer,
-};
-
-static int sst_pcm_new(struct snd_soc_pcm_runtime *rtd)
+static int sst_soc_pcm_new(struct snd_soc_component *component,
+			   struct snd_soc_pcm_runtime *rtd)
 {
-	struct snd_soc_dai *dai = rtd->cpu_dai;
+	struct snd_soc_dai *dai = asoc_rtd_to_cpu(rtd, 0);
 	struct snd_pcm *pcm = rtd->pcm;
 
 	if (dai->driver->playback.channels_min ||
@@ -714,9 +709,11 @@ static const struct snd_soc_component_driver sst_soc_platform_drv  = {
 	.name		= DRV_NAME,
 	.probe		= sst_soc_probe,
 	.remove		= sst_soc_remove,
-	.ops		= &sst_platform_ops,
+	.open		= sst_soc_open,
+	.trigger	= sst_soc_trigger,
+	.pointer	= sst_soc_pointer,
 	.compr_ops	= &sst_platform_compr_ops,
-	.pcm_new	= sst_pcm_new,
+	.pcm_construct	= sst_soc_pcm_new,
 };
 
 static int sst_platform_probe(struct platform_device *pdev)
@@ -772,7 +769,7 @@ static int sst_soc_prepare(struct device *dev)
 
 	/* set the SSPs to idle */
 	for_each_card_rtds(drv->soc_card, rtd) {
-		struct snd_soc_dai *dai = rtd->cpu_dai;
+		struct snd_soc_dai *dai = asoc_rtd_to_cpu(rtd, 0);
 
 		if (dai->active) {
 			send_ssp_cmd(dai, dai->name, 0);
@@ -793,7 +790,7 @@ static void sst_soc_complete(struct device *dev)
 
 	/* restart SSPs */
 	for_each_card_rtds(drv->soc_card, rtd) {
-		struct snd_soc_dai *dai = rtd->cpu_dai;
+		struct snd_soc_dai *dai = asoc_rtd_to_cpu(rtd, 0);
 
 		if (dai->active) {
 			sst_handle_vb_timer(dai, true);

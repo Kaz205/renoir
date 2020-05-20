@@ -26,51 +26,37 @@
 #include <linux/dma-buf.h>
 #include "virtgpu_drv.h"
 
-/* Empty Implementations as there should not be any other driver for a virtual
- * device that might share buffers with virtgpu
- */
+int virtgpu_gem_prime_get_uuid(struct drm_gem_object *obj,
+			       uuid_t *uuid)
+{
+	struct virtio_gpu_object *bo = gem_to_virtio_gpu_obj(obj);
+	struct virtio_gpu_device *vgdev = obj->dev->dev_private;
 
-const struct dma_buf_ops virtgpu_dmabuf_ops =  {
-	.attach = drm_gem_map_attach,
-	.detach = drm_gem_map_detach,
-	.map_dma_buf = drm_gem_map_dma_buf,
-	.unmap_dma_buf = drm_gem_unmap_dma_buf,
-	.release = drm_gem_dmabuf_release,
-	.mmap = drm_gem_dmabuf_mmap,
-	.vmap = drm_gem_dmabuf_vmap,
-	.vunmap = drm_gem_dmabuf_vunmap,
-};
+	wait_event(vgdev->resp_wq, bo->uuid_state != UUID_INITIALIZING);
+	if (bo->uuid_state != UUID_INITIALIZED)
+		return -ENODEV;
+
+	uuid_copy(uuid, &bo->uuid);
+
+	return 0;
+}
 
 struct dma_buf *virtgpu_gem_prime_export(struct drm_gem_object *obj,
 					 int flags)
 {
-	struct dma_buf *buf;
+	struct virtio_gpu_object *bo = gem_to_virtio_gpu_obj(obj);
+	struct virtio_gpu_device *vgdev = obj->dev->dev_private;
+	int ret = 0;
 
-	buf = drm_gem_prime_export(obj, flags);
-	if (!IS_ERR(buf))
-		buf->ops = &virtgpu_dmabuf_ops;
-
-	return buf;
-}
-
-struct drm_gem_object *virtgpu_gem_prime_import(struct drm_device *dev,
-						struct dma_buf *buf)
-{
-	struct drm_gem_object *obj;
-
-	if (buf->ops == &virtgpu_dmabuf_ops) {
-		obj = buf->priv;
-		if (obj->dev == dev) {
-			/*
-			 * Importing dmabuf exported from our own gem increases
-			 * refcount on gem itself instead of f_count of dmabuf.
-			 */
-			drm_gem_object_get(obj);
-			return obj;
-		}
+	if (vgdev->has_resource_assign_uuid) {
+		ret = virtio_gpu_cmd_resource_assign_uuid(vgdev, bo);
+		if (ret)
+			return ERR_PTR(ret);
+	} else {
+		bo->uuid_state = UUID_INITIALIZATION_FAILED;
 	}
 
-	return drm_gem_prime_import(dev, buf);
+	return drm_gem_prime_export(obj, flags);
 }
 
 struct sg_table *virtgpu_gem_prime_get_sg_table(struct drm_gem_object *obj)

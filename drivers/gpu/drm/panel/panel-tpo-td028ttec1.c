@@ -287,9 +287,9 @@ static const struct drm_display_mode td028ttec1_mode = {
 	.height_mm = 58,
 };
 
-static int td028ttec1_get_modes(struct drm_panel *panel)
+static int td028ttec1_get_modes(struct drm_panel *panel,
+				struct drm_connector *connector)
 {
-	struct drm_connector *connector = panel->connector;
 	struct drm_display_mode *mode;
 
 	mode = drm_mode_duplicate(panel->drm, &td028ttec1_mode);
@@ -347,9 +347,8 @@ static int td028ttec1_probe(struct spi_device *spi)
 		return ret;
 	}
 
-	drm_panel_init(&lcd->panel);
-	lcd->panel.dev = &lcd->spi->dev;
-	lcd->panel.funcs = &td028ttec1_funcs;
+	drm_panel_init(&lcd->panel, &lcd->spi->dev, &td028ttec1_funcs,
+		       DRM_MODE_CONNECTOR_DPI);
 
 	return drm_panel_add(&lcd->panel);
 }

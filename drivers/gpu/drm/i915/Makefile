@@ -22,6 +22,7 @@ subdir-ccflags-y += $(call cc-disable-warning, sign-compare)
 subdir-ccflags-y += $(call cc-disable-warning, sometimes-uninitialized)
 subdir-ccflags-y += $(call cc-disable-warning, initializer-overrides)
 subdir-ccflags-y += $(call cc-disable-warning, uninitialized)
+subdir-ccflags-y += $(call cc-disable-warning, tautological-compare)
 subdir-ccflags-$(CONFIG_DRM_I915_WERROR) += -Werror
 
 # Fine grained warnings disable
@@ -172,6 +173,7 @@ i915-y += \
 	display/intel_display_power.o \
 	display/intel_dpio_phy.o \
 	display/intel_dpll_mgr.o \
+	display/intel_dsb.o \
 	display/intel_fbc.o \
 	display/intel_fifo_underrun.o \
 	display/intel_frontbuffer.o \

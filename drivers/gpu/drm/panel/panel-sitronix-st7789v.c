@@ -170,9 +170,9 @@ static const struct drm_display_mode default_mode = {
 	.vrefresh = 60,
 };
 
-static int st7789v_get_modes(struct drm_panel *panel)
+static int st7789v_get_modes(struct drm_panel *panel,
+			     struct drm_connector *connector)
 {
-	struct drm_connector *connector = panel->connector;
 	struct drm_display_mode *mode;
 
 	mode = drm_mode_duplicate(panel->drm, &default_mode);
@@ -188,8 +188,8 @@ static int st7789v_get_modes(struct drm_panel *panel)
 	mode->type = DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
 	drm_mode_probed_add(connector, mode);
 
-	panel->connector->display_info.width_mm = 61;
-	panel->connector->display_info.height_mm = 103;
+	connector->display_info.width_mm = 61;
+	connector->display_info.height_mm = 103;
 
 	return 1;
 }
@@ -381,8 +381,8 @@ static int st7789v_probe(struct spi_device *spi)
 	spi_set_drvdata(spi, ctx);
 	ctx->spi = spi;
 
-	ctx->panel.dev = &spi->dev;
-	ctx->panel.funcs = &st7789v_drm_funcs;
+	drm_panel_init(&ctx->panel, &spi->dev, &st7789v_drm_funcs,
+		       DRM_MODE_CONNECTOR_DPI);
 
 	ctx->power = devm_regulator_get(&spi->dev, "power");
 	if (IS_ERR(ctx->power))

@@ -645,7 +645,8 @@ static int cdns_dsi_check_conf(struct cdns_dsi *dsi,
 	return 0;
 }
 
-static int cdns_dsi_bridge_attach(struct drm_bridge *bridge)
+static int cdns_dsi_bridge_attach(struct drm_bridge *bridge,
+				  enum drm_bridge_attach_flags flags)
 {
 	struct cdns_dsi_input *input = bridge_to_cdns_dsi_input(bridge);
 	struct cdns_dsi *dsi = input_to_dsi(input);
@@ -657,7 +658,8 @@ static int cdns_dsi_bridge_attach(struct drm_bridge *bridge)
 		return -ENOTSUPP;
 	}
 
-	return drm_bridge_attach(bridge->encoder, output->bridge, bridge);
+	return drm_bridge_attach(bridge->encoder, output->bridge, bridge,
+				 flags);
 }
 
 static enum drm_mode_status
@@ -956,7 +958,8 @@ static int cdns_dsi_attach(struct mipi_dsi_host *host,
 
 	panel = of_drm_find_panel(np);
 	if (!IS_ERR(panel)) {
-		bridge = drm_panel_bridge_add(panel, DRM_MODE_CONNECTOR_DSI);
+		bridge = drm_panel_bridge_add_typed(panel,
+						    DRM_MODE_CONNECTOR_DSI);
 	} else {
 		bridge = of_drm_find_bridge(dev->dev.of_node);
 		if (!bridge)
