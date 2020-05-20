@@ -46,6 +46,11 @@
 #define VIRTIO_ID_IOMMU        23 /* virtio IOMMU */
 #define VIRTIO_ID_FS           26 /* virtio filesystem */
 #define VIRTIO_ID_PMEM         27 /* virtio pmem */
-#define VIRTIO_ID_WL           30 /* virtio wayland */
+#define VIRTIO_ID_VIDEO_ENC    30 /* virtio video encoder */
+#define VIRTIO_ID_VIDEO_DEC    31 /* virtio video decoder */
+
+/* Chrome OS-specific devices */
+#define VIRTIO_ID_WL           63 /* virtio wayland */
+#define VIRTIO_ID_TPM          62 /* virtio tpm */
 
 #endif /* _LINUX_VIRTIO_IDS_H */

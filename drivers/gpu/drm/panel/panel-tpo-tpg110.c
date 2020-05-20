@@ -384,9 +384,9 @@ static int tpg110_enable(struct drm_panel *panel)
  * presents the mode that is configured for the system under use,
  * and which is detected by reading the registers of the display.
  */
-static int tpg110_get_modes(struct drm_panel *panel)
+static int tpg110_get_modes(struct drm_panel *panel,
+			    struct drm_connector *connector)
 {
-	struct drm_connector *connector = panel->connector;
 	struct tpg110 *tpg = to_tpg110(panel);
 	struct drm_display_mode *mode;
 
@@ -457,9 +457,8 @@ static int tpg110_probe(struct spi_device *spi)
 	if (ret)
 		return ret;
 
-	drm_panel_init(&tpg->panel);
-	tpg->panel.dev = dev;
-	tpg->panel.funcs = &tpg110_drm_funcs;
+	drm_panel_init(&tpg->panel, dev, &tpg110_drm_funcs,
+		       DRM_MODE_CONNECTOR_DPI);
 	spi_set_drvdata(spi, tpg);
 
 	return drm_panel_add(&tpg->panel);

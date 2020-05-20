@@ -141,10 +141,10 @@ static int lcd_olinuxino_enable(struct drm_panel *panel)
 	return 0;
 }
 
-static int lcd_olinuxino_get_modes(struct drm_panel *panel)
+static int lcd_olinuxino_get_modes(struct drm_panel *panel,
+				   struct drm_connector *connector)
 {
 	struct lcd_olinuxino *lcd = to_lcd_olinuxino(panel);
-	struct drm_connector *connector = lcd->panel.connector;
 	struct lcd_olinuxino_info *lcd_info = &lcd->eeprom.info;
 	struct drm_device *drm = lcd->panel.drm;
 	struct lcd_olinuxino_mode *lcd_mode;
@@ -288,9 +288,8 @@ static int lcd_olinuxino_probe(struct i2c_client *client,
 	if (IS_ERR(lcd->backlight))
 		return PTR_ERR(lcd->backlight);
 
-	drm_panel_init(&lcd->panel);
-	lcd->panel.dev = dev;
-	lcd->panel.funcs = &lcd_olinuxino_funcs;
+	drm_panel_init(&lcd->panel, dev, &lcd_olinuxino_funcs,
+		       DRM_MODE_CONNECTOR_DPI);
 
 	return drm_panel_add(&lcd->panel);
 }

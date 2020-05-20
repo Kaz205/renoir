@@ -112,6 +112,7 @@
 #define MI_SEMAPHORE_SIGNAL	MI_INSTR(0x1b, 0) /* GEN8+ */
 #define   MI_SEMAPHORE_TARGET(engine)	((engine)<<15)
 #define MI_SEMAPHORE_WAIT	MI_INSTR(0x1c, 2) /* GEN8+ */
+#define MI_SEMAPHORE_WAIT_TOKEN	MI_INSTR(0x1c, 3) /* GEN12+ */
 #define   MI_SEMAPHORE_POLL		(1 << 15)
 #define   MI_SEMAPHORE_SAD_GT_SDD	(0 << 12)
 #define   MI_SEMAPHORE_SAD_GTE_SDD	(1 << 12)
@@ -119,6 +120,8 @@
 #define   MI_SEMAPHORE_SAD_LTE_SDD	(3 << 12)
 #define   MI_SEMAPHORE_SAD_EQ_SDD	(4 << 12)
 #define   MI_SEMAPHORE_SAD_NEQ_SDD	(5 << 12)
+#define   MI_SEMAPHORE_TOKEN_MASK	REG_GENMASK(9, 5)
+#define   MI_SEMAPHORE_TOKEN_SHIFT	5
 #define MI_STORE_DWORD_IMM	MI_INSTR(0x20, 1)
 #define MI_STORE_DWORD_IMM_GEN4	MI_INSTR(0x20, 2)
 #define   MI_MEM_VIRTUAL	(1 << 22) /* 945,g33,965 */
@@ -132,6 +135,8 @@
  *   address/value pairs. Don't overdue it, though, x <= 2^4 must hold!
  */
 #define MI_LOAD_REGISTER_IMM(x)	MI_INSTR(0x22, 2*(x)-1)
+/* Gen11+. addr = base + (ctx_restore ? offset & GENMASK(12,2) : offset) */
+#define   MI_LRI_CS_MMIO		(1<<19)
 #define   MI_LRI_FORCE_POSTED		(1<<12)
 #define MI_STORE_REGISTER_MEM        MI_INSTR(0x24, 1)
 #define MI_STORE_REGISTER_MEM_GEN8   MI_INSTR(0x24, 2)
@@ -147,6 +152,7 @@
 #define   MI_FLUSH_DW_USE_PPGTT		(0<<2)
 #define MI_LOAD_REGISTER_MEM	   MI_INSTR(0x29, 1)
 #define MI_LOAD_REGISTER_MEM_GEN8  MI_INSTR(0x29, 2)
+#define MI_LOAD_REGISTER_REG    MI_INSTR(0x2A, 1)
 #define MI_BATCH_BUFFER		MI_INSTR(0x30, 1)
 #define   MI_BATCH_NON_SECURE		(1)
 /* for snb/ivb/vlv this also means "batch in ppgtt" when ppgtt is enabled. */
@@ -251,7 +257,6 @@
 #define MI_CLFLUSH              MI_INSTR(0x27, 0)
 #define MI_REPORT_PERF_COUNT    MI_INSTR(0x28, 0)
 #define   MI_REPORT_PERF_COUNT_GGTT (1<<0)
-#define MI_LOAD_REGISTER_REG    MI_INSTR(0x2A, 0)
 #define MI_RS_STORE_DATA_IMM    MI_INSTR(0x2B, 0)
 #define MI_LOAD_URB_MEM         MI_INSTR(0x2C, 0)
 #define MI_STORE_URB_MEM        MI_INSTR(0x2D, 0)

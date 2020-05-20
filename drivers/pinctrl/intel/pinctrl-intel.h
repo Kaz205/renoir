@@ -10,7 +10,10 @@
 #ifndef PINCTRL_INTEL_H
 #define PINCTRL_INTEL_H
 
+#include <linux/gpio/driver.h>
+#include <linux/irq.h>
 #include <linux/pm.h>
+#include <linux/spinlock_types.h>
 
 struct pinctrl_pin_desc;
 struct platform_device;
@@ -50,8 +53,7 @@ struct intel_function {
  * @reg_num: GPI_IS register number
  * @base: Starting pin of this group
  * @size: Size of this group (maximum is 32).
- * @gpio_base: Starting GPIO base of this group (%0 if matches with @base,
- *	       and %-1 if no GPIO mapping should be created)
+ * @gpio_base: Starting GPIO base of this group
  * @padown_num: PAD_OWN register number (assigned by the core driver)
  *
  * If pad groups of a community are not the same size, use this structure
@@ -63,6 +65,19 @@ struct intel_padgroup {
 	unsigned int size;
 	int gpio_base;
 	unsigned int padown_num;
+};
+
+/**
+ * enum - Special treatment for GPIO base in pad group
+ *
+ * @INTEL_GPIO_BASE_ZERO:	force GPIO base to be 0
+ * @INTEL_GPIO_BASE_NOMAP:	no GPIO mapping should be created
+ * @INTEL_GPIO_BASE_MATCH:	matches with starting pin number
+ */
+enum {
+	INTEL_GPIO_BASE_ZERO	= -2,
+	INTEL_GPIO_BASE_NOMAP	= -1,
+	INTEL_GPIO_BASE_MATCH	= 0,
 };
 
 /**
@@ -172,6 +187,47 @@ struct intel_pinctrl_soc_data {
 	size_t nfunctions;
 	const struct intel_community *communities;
 	size_t ncommunities;
+};
+
+struct intel_pad_context;
+struct intel_community_context;
+
+/**
+ * struct intel_pinctrl_context - context to be saved during suspend-resume
+ * @pads: Opaque context per pad (driver dependent)
+ * @communities: Opaque context per community (driver dependent)
+ */
+struct intel_pinctrl_context {
+	struct intel_pad_context *pads;
+	struct intel_community_context *communities;
+};
+
+/**
+ * struct intel_pinctrl - Intel pinctrl private structure
+ * @dev: Pointer to the device structure
+ * @lock: Lock to serialize register access
+ * @pctldesc: Pin controller description
+ * @pctldev: Pointer to the pin controller device
+ * @chip: GPIO chip in this pin controller
+ * @irqchip: IRQ chip in this pin controller
+ * @soc: SoC/PCH specific pin configuration data
+ * @communities: All communities in this pin controller
+ * @ncommunities: Number of communities in this pin controller
+ * @context: Configuration saved over system sleep
+ * @irq: pinctrl/GPIO chip irq number
+ */
+struct intel_pinctrl {
+	struct device *dev;
+	raw_spinlock_t lock;
+	struct pinctrl_desc pctldesc;
+	struct pinctrl_dev *pctldev;
+	struct gpio_chip chip;
+	struct irq_chip irqchip;
+	const struct intel_pinctrl_soc_data *soc;
+	struct intel_community *communities;
+	size_t ncommunities;
+	struct intel_pinctrl_context context;
+	int irq;
 };
 
 int intel_pinctrl_probe_by_hid(struct platform_device *pdev);

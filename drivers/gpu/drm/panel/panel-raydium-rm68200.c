@@ -335,7 +335,8 @@ static int rm68200_enable(struct drm_panel *panel)
 	return 0;
 }
 
-static int rm68200_get_modes(struct drm_panel *panel)
+static int rm68200_get_modes(struct drm_panel *panel,
+			     struct drm_connector *connector)
 {
 	struct drm_display_mode *mode;
 
@@ -350,10 +351,10 @@ static int rm68200_get_modes(struct drm_panel *panel)
 	drm_mode_set_name(mode);
 
 	mode->type = DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
-	drm_mode_probed_add(panel->connector, mode);
+	drm_mode_probed_add(connector, mode);
 
-	panel->connector->display_info.width_mm = mode->width_mm;
-	panel->connector->display_info.height_mm = mode->height_mm;
+	connector->display_info.width_mm = mode->width_mm;
+	connector->display_info.height_mm = mode->height_mm;
 
 	return 1;
 }
@@ -404,9 +405,8 @@ static int rm68200_probe(struct mipi_dsi_device *dsi)
 	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST |
 			  MIPI_DSI_MODE_LPM;
 
-	drm_panel_init(&ctx->panel);
-	ctx->panel.dev = dev;
-	ctx->panel.funcs = &rm68200_drm_funcs;
+	drm_panel_init(&ctx->panel, dev, &rm68200_drm_funcs,
+		       DRM_MODE_CONNECTOR_DSI);
 
 	drm_panel_add(&ctx->panel);
 

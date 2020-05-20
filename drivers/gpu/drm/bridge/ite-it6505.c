@@ -21,6 +21,7 @@
 #include <crypto/sha.h>
 
 #include <drm/drm_atomic_helper.h>
+#include <drm/drm_bridge.h>
 #include <drm/drm_crtc.h>
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_dp_helper.h>
@@ -985,7 +986,8 @@ static int it6505_use_notifier_module(struct it6505 *it6505)
 	return 0;
 }
 
-static int it6505_bridge_attach(struct drm_bridge *bridge)
+static int it6505_bridge_attach(struct drm_bridge *bridge,
+				enum drm_bridge_attach_flags flags)
 {
 	struct it6505 *it6505 = bridge_to_it6505(bridge);
 	struct device *dev;

@@ -166,7 +166,8 @@ static const struct drm_display_mode default_mode = {
 	.vrefresh = 60,
 };
 
-static int wuxga_nt_panel_get_modes(struct drm_panel *panel)
+static int wuxga_nt_panel_get_modes(struct drm_panel *panel,
+				    struct drm_connector *connector)
 {
 	struct drm_display_mode *mode;
 
@@ -180,10 +181,10 @@ static int wuxga_nt_panel_get_modes(struct drm_panel *panel)
 
 	drm_mode_set_name(mode);
 
-	drm_mode_probed_add(panel->connector, mode);
+	drm_mode_probed_add(connector, mode);
 
-	panel->connector->display_info.width_mm = 217;
-	panel->connector->display_info.height_mm = 136;
+	connector->display_info.width_mm = 217;
+	connector->display_info.height_mm = 136;
 
 	return 1;
 }
@@ -223,9 +224,8 @@ static int wuxga_nt_panel_add(struct wuxga_nt_panel *wuxga_nt)
 			return -EPROBE_DEFER;
 	}
 
-	drm_panel_init(&wuxga_nt->base);
-	wuxga_nt->base.funcs = &wuxga_nt_panel_funcs;
-	wuxga_nt->base.dev = &wuxga_nt->dsi->dev;
+	drm_panel_init(&wuxga_nt->base, &wuxga_nt->dsi->dev,
+		       &wuxga_nt_panel_funcs, DRM_MODE_CONNECTOR_DSI);
 
 	ret = drm_panel_add(&wuxga_nt->base);
 	if (ret < 0)

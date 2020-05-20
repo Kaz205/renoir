@@ -421,6 +421,7 @@ static void err_compression_marker(struct drm_i915_error_state_buf *m)
 static void error_print_instdone(struct drm_i915_error_state_buf *m,
 				 const struct drm_i915_error_engine *ee)
 {
+	const struct sseu_dev_info *sseu = &RUNTIME_INFO(m->i915)->sseu;
 	int slice;
 	int subslice;
 
@@ -436,12 +437,12 @@ static void error_print_instdone(struct drm_i915_error_state_buf *m,
 	if (INTEL_GEN(m->i915) <= 6)
 		return;
 
-	for_each_instdone_slice_subslice(m->i915, slice, subslice)
+	for_each_instdone_slice_subslice(m->i915, sseu, slice, subslice)
 		err_printf(m, "  SAMPLER_INSTDONE[%d][%d]: 0x%08x\n",
 			   slice, subslice,
 			   ee->instdone.sampler[slice][subslice]);
 
-	for_each_instdone_slice_subslice(m->i915, slice, subslice)
+	for_each_instdone_slice_subslice(m->i915, sseu, slice, subslice)
 		err_printf(m, "  ROW_INSTDONE[%d][%d]: 0x%08x\n",
 			   slice, subslice,
 			   ee->instdone.row[slice][subslice]);
@@ -1768,7 +1769,8 @@ void i915_capture_error_state(struct drm_i915_private *i915,
 	if (!xchg(&warned, true) &&
 	    ktime_get_real_seconds() - DRIVER_TIMESTAMP < DAY_AS_SECONDS(180)) {
 		pr_info("GPU hangs can indicate a bug anywhere in the entire gfx stack, including userspace.\n");
-		pr_info("Please file a _new_ bug report on bugs.freedesktop.org against DRI -> DRM/Intel\n");
+		pr_info("Please file a _new_ bug report at https://gitlab.freedesktop.org/drm/intel/issues/new.\n");
+		pr_info("Please see https://gitlab.freedesktop.org/drm/intel/-/wikis/How-to-file-i915-bugs for details.\n");
 		pr_info("drm/i915 developers can then reassign to the right component if it's not a kernel issue.\n");
 		pr_info("The GPU crash dump is required to analyze GPU hangs, so please always attach it.\n");
 		pr_info("GPU crash dump saved to /sys/class/drm/card%d/error\n",

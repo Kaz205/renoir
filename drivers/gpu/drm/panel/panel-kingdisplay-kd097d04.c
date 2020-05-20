@@ -333,7 +333,8 @@ static const struct drm_display_mode default_mode = {
 	.vrefresh = 60,
 };
 
-static int kingdisplay_panel_get_modes(struct drm_panel *panel)
+static int kingdisplay_panel_get_modes(struct drm_panel *panel,
+				       struct drm_connector *connector)
 {
 	struct drm_display_mode *mode;
 
@@ -347,11 +348,11 @@ static int kingdisplay_panel_get_modes(struct drm_panel *panel)
 
 	drm_mode_set_name(mode);
 
-	drm_mode_probed_add(panel->connector, mode);
+	drm_mode_probed_add(connector, mode);
 
-	panel->connector->display_info.width_mm = 147;
-	panel->connector->display_info.height_mm = 196;
-	panel->connector->display_info.bpc = 8;
+	connector->display_info.width_mm = 147;
+	connector->display_info.height_mm = 196;
+	connector->display_info.bpc = 8;
 
 	return 1;
 }
@@ -391,9 +392,8 @@ static int kingdisplay_panel_add(struct kingdisplay_panel *kingdisplay)
 	if (IS_ERR(kingdisplay->backlight))
 		return PTR_ERR(kingdisplay->backlight);
 
-	drm_panel_init(&kingdisplay->base);
-	kingdisplay->base.funcs = &kingdisplay_panel_funcs;
-	kingdisplay->base.dev = &kingdisplay->link->dev;
+	drm_panel_init(&kingdisplay->base, &kingdisplay->link->dev,
+		       &kingdisplay_panel_funcs, DRM_MODE_CONNECTOR_DSI);
 
 	return drm_panel_add(&kingdisplay->base);
 }

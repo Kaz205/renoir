@@ -309,7 +309,7 @@ i915_active_request_isset(const struct i915_active_request *active)
  */
 static inline int __must_check
 i915_active_request_retire(struct i915_active_request *active,
-			   struct mutex *mutex)
+			   struct mutex *mutex, i915_active_retire_fn retire)
 {
 	struct i915_request *request;
 	long ret;
@@ -327,7 +327,7 @@ i915_active_request_retire(struct i915_active_request *active,
 	list_del_init(&active->link);
 	RCU_INIT_POINTER(active->request, NULL);
 
-	active->retire(active, request);
+	retire(active, request);
 
 	return 0;
 }
@@ -372,6 +372,12 @@ void __i915_active_init(struct drm_i915_private *i915,
 int i915_active_ref(struct i915_active *ref,
 		    struct intel_timeline *tl,
 		    struct i915_request *rq);
+
+static inline int
+i915_active_add_request(struct i915_active *ref, struct i915_request *rq)
+{
+	return i915_active_ref(ref, i915_request_timeline(rq), rq);
+}
 
 int i915_active_wait(struct i915_active *ref);
 

@@ -311,9 +311,9 @@ static int rpi_touchscreen_enable(struct drm_panel *panel)
 	return 0;
 }
 
-static int rpi_touchscreen_get_modes(struct drm_panel *panel)
+static int rpi_touchscreen_get_modes(struct drm_panel *panel,
+				     struct drm_connector *connector)
 {
-	struct drm_connector *connector = panel->connector;
 	struct drm_device *drm = panel->drm;
 	unsigned int i, num = 0;
 	static const u32 bus_format = MEDIA_BUS_FMT_RGB888_1X24;
@@ -426,8 +426,8 @@ static int rpi_touchscreen_probe(struct i2c_client *i2c,
 		return PTR_ERR(ts->dsi);
 	}
 
-	ts->base.dev = dev;
-	ts->base.funcs = &rpi_touchscreen_funcs;
+	drm_panel_init(&ts->base, dev, &rpi_touchscreen_funcs,
+		       DRM_MODE_CONNECTOR_DSI);
 
 	/* This appears last, as it's what will unblock the DSI host
 	 * driver's component bind function.

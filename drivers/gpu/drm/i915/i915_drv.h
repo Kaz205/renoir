@@ -67,6 +67,7 @@
 #include "display/intel_display.h"
 #include "display/intel_display_power.h"
 #include "display/intel_dpll_mgr.h"
+#include "display/intel_dsb.h"
 #include "display/intel_frontbuffer.h"
 #include "display/intel_gmbus.h"
 #include "display/intel_opregion.h"
@@ -272,6 +273,7 @@ struct drm_i915_display_funcs {
 	int (*compute_global_watermarks)(struct intel_atomic_state *state);
 	void (*update_wm)(struct intel_crtc *crtc);
 	int (*modeset_calc_cdclk)(struct intel_atomic_state *state);
+	u8 (*calc_voltage_level)(int cdclk);
 	/* Returns the active state of the crtc, and if the crtc is active,
 	 * fills out the pipe-config with the hw state. */
 	bool (*get_pipe_config)(struct intel_crtc *,
@@ -284,7 +286,8 @@ struct drm_i915_display_funcs {
 			    struct intel_atomic_state *old_state);
 	void (*crtc_disable)(struct intel_crtc_state *old_crtc_state,
 			     struct intel_atomic_state *old_state);
-	void (*update_crtcs)(struct intel_atomic_state *state);
+	void (*commit_modeset_enables)(struct intel_atomic_state *state);
+	void (*commit_modeset_disables)(struct intel_atomic_state *state);
 	void (*audio_codec_enable)(struct intel_encoder *encoder,
 				   const struct intel_crtc_state *crtc_state,
 				   const struct drm_connector_state *conn_state);
@@ -331,6 +334,7 @@ struct intel_csr {
 	i915_reg_t mmioaddr[20];
 	u32 mmiodata[20];
 	u32 dc_state;
+	u32 target_dc_state;
 	u32 allowed_dc_mask;
 	intel_wakeref_t wakeref;
 };
@@ -479,6 +483,7 @@ struct i915_psr {
 	bool enabled;
 	struct intel_dp *dp;
 	enum pipe pipe;
+	enum transcoder transcoder;
 	bool active;
 	struct work_struct work;
 	unsigned busy_frontbuffer_bits;
@@ -492,6 +497,9 @@ struct i915_psr {
 	bool sink_not_reliable;
 	bool irq_aux_error;
 	u16 su_x_granularity;
+	bool dc3co_enabled;
+	u32 dc3co_exit_delay;
+	struct delayed_work idle_work;
 };
 
 #define QUIRK_LVDS_SSC_DISABLE (1<<1)
@@ -1333,10 +1341,10 @@ struct drm_i915_private {
 	 */
 	u32 gpio_mmio_base;
 
+	u32 hsw_psr_mmio_adjust;
+
 	/* MMIO base address for MIPI regs */
 	u32 mipi_mmio_base;
-
-	u32 psr_mmio_base;
 
 	u32 pps_mmio_base;
 
@@ -1416,6 +1424,9 @@ struct drm_i915_private {
 		/* The current hardware cdclk state */
 		struct intel_cdclk_state hw;
 
+		/* cdclk, divider, and ratio table from bspec */
+		const struct intel_cdclk_vals *table;
+
 		int force_min_cdclk;
 	} cdclk;
 
@@ -1430,6 +1441,8 @@ struct drm_i915_private {
 
 	/* ordered wq for modesets */
 	struct workqueue_struct *modeset_wq;
+	/* unbound hipri wq for page flips/plane updates */
+	struct workqueue_struct *flip_wq;
 
 	/* Display functions */
 	struct drm_i915_display_funcs display;
@@ -1470,7 +1483,7 @@ struct drm_i915_private {
 	 */
 	struct mutex dpll_lock;
 
-	unsigned int active_crtcs;
+	u8 active_pipes;
 	/* minimum acceptable cdclk for each pipe */
 	int min_cdclk[I915_MAX_PIPES];
 	/* minimum acceptable voltage level for each pipe */
@@ -1530,6 +1543,7 @@ struct drm_i915_private {
 	 */
 	struct mutex av_mutex;
 	int audio_power_refcount;
+	u32 audio_freq_cntrl;
 
 	struct {
 		struct mutex mutex;
@@ -1855,6 +1869,8 @@ static inline struct drm_i915_private *pdev_to_i915(struct pci_dev *pdev)
 	(BUILD_BUG_ON_ZERO(!__builtin_constant_p(n)) + \
 	 INTEL_INFO(dev_priv)->gen == (n))
 
+#define HAS_DSB(dev_priv)	(INTEL_INFO(dev_priv)->display.has_dsb)
+
 /*
  * Return true if revision is in range [since,until] inclusive.
  *
@@ -1926,6 +1942,7 @@ IS_SUBPLATFORM(const struct drm_i915_private *i915,
 }
 
 #define IS_MOBILE(dev_priv)	(INTEL_INFO(dev_priv)->is_mobile)
+#define IS_DGFX(dev_priv)   (INTEL_INFO(dev_priv)->is_dgfx)
 
 #define IS_I830(dev_priv)	IS_PLATFORM(dev_priv, INTEL_I830)
 #define IS_I845G(dev_priv)	IS_PLATFORM(dev_priv, INTEL_I845G)
@@ -2189,7 +2206,12 @@ IS_SUBPLATFORM(const struct drm_i915_private *i915,
 #define GT_FREQUENCY_MULTIPLIER 50
 #define GEN9_FREQ_SCALER 3
 
-#define HAS_DISPLAY(dev_priv) (INTEL_INFO(dev_priv)->num_pipes > 0)
+#define INTEL_NUM_PIPES(dev_priv) (hweight8(INTEL_INFO(dev_priv)->pipe_mask))
+
+#define HAS_DISPLAY(dev_priv) (INTEL_INFO(dev_priv)->pipe_mask != 0)
+
+/* Only valid when HAS_DISPLAY() is true */
+#define INTEL_DISPLAY_ENABLED(dev_priv) (WARN_ON(!HAS_DISPLAY(dev_priv)), !i915_modparams.disable_display)
 
 static inline bool intel_vtd_active(void)
 {
@@ -2499,6 +2521,12 @@ static inline enum i915_map_type
 i915_coherent_map_type(struct drm_i915_private *i915)
 {
 	return HAS_LLC(i915) ? I915_MAP_WB : I915_MAP_WC;
+}
+
+static inline bool intel_guc_submission_is_enabled(struct intel_guc *guc)
+{
+	return intel_guc_is_submission_supported(guc) &&
+		intel_guc_is_running(guc);
 }
 
 #endif

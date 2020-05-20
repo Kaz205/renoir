@@ -1289,12 +1289,12 @@ struct drm_connector {
 	/** @override_edid: has the EDID been overwritten through debugfs for testing? */
 	bool override_edid;
 
-#define DRM_CONNECTOR_MAX_ENCODER 3
 	/**
-	 * @encoder_ids: Valid encoders for this connector. Please only use
-	 * drm_connector_for_each_possible_encoder() to enumerate these.
+	 * @possible_encoders: Bit mask of encoders that can drive this
+	 * connector, drm_encoder_index() determines the index into the bitfield
+	 * and the bits are set with drm_connector_attach_encoder().
 	 */
-	uint32_t encoder_ids[DRM_CONNECTOR_MAX_ENCODER];
+	u32 possible_encoders;
 
 	/**
 	 * @encoder: Currently bound encoder driving this connector, if any.
@@ -1394,6 +1394,12 @@ struct drm_connector {
 	 * rev1.1 4.2.2.6
 	 */
 	bool edid_corrupt;
+	/**
+	 * @real_edid_checksum: real edid checksum for corrupted edid block.
+	 * Required in Displayport 1.4 compliance testing
+	 * rev1.1 4.2.2.6
+	 */
+	u8 real_edid_checksum;
 
 	/** @debugfs_entry: debugfs directory for this connector */
 	struct dentry *debugfs_entry;
@@ -1579,7 +1585,7 @@ int drm_connector_attach_scaling_mode_property(struct drm_connector *connector,
 int drm_connector_attach_vrr_capable_property(
 		struct drm_connector *connector);
 int drm_mode_create_aspect_ratio_property(struct drm_device *dev);
-int drm_mode_create_colorspace_property(struct drm_connector *connector);
+int drm_mode_create_hdmi_colorspace_property(struct drm_connector *connector);
 int drm_mode_create_content_type_property(struct drm_device *dev);
 void drm_hdmi_avi_infoframe_content_type(struct hdmi_avi_infoframe *frame,
 					 const struct drm_connector_state *conn_state);
@@ -1666,13 +1672,9 @@ bool drm_connector_has_possible_encoder(struct drm_connector *connector,
  * drm_connector_for_each_possible_encoder - iterate connector's possible encoders
  * @connector: &struct drm_connector pointer
  * @encoder: &struct drm_encoder pointer used as cursor
- * @__i: int iteration cursor, for macro-internal use
  */
-#define drm_connector_for_each_possible_encoder(connector, encoder, __i) \
-	for ((__i) = 0; (__i) < ARRAY_SIZE((connector)->encoder_ids) && \
-		     (connector)->encoder_ids[(__i)] != 0; (__i)++) \
-		for_each_if((encoder) = \
-			    drm_encoder_find((connector)->dev, NULL, \
-					     (connector)->encoder_ids[(__i)])) \
+#define drm_connector_for_each_possible_encoder(connector, encoder) \
+	drm_for_each_encoder_mask(encoder, (connector)->dev, \
+				  (connector)->possible_encoders)
 
 #endif

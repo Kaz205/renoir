@@ -39,7 +39,6 @@ struct mcde_dsi {
 	struct device *dev;
 	struct mcde *mcde;
 	struct drm_bridge bridge;
-	struct drm_connector connector;
 	struct drm_panel *panel;
 	struct drm_bridge *bridge_out;
 	struct mipi_dsi_host dsi_host;
@@ -62,11 +61,6 @@ static inline struct mcde_dsi *bridge_to_mcde_dsi(struct drm_bridge *bridge)
 static inline struct mcde_dsi *host_to_mcde_dsi(struct mipi_dsi_host *h)
 {
 	return container_of(h, struct mcde_dsi, dsi_host);
-}
-
-static inline struct mcde_dsi *connector_to_mcde_dsi(struct drm_connector *c)
-{
-	return container_of(c, struct mcde_dsi, connector);
 }
 
 bool mcde_dsi_irq(struct mipi_dsi_device *mdsi)
@@ -811,67 +805,24 @@ static void mcde_dsi_bridge_disable(struct drm_bridge *bridge)
 	clk_disable_unprepare(d->lp_clk);
 }
 
-/*
- * This connector needs no special handling, just use the default
- * helpers for everything. It's pretty dummy.
- */
-static const struct drm_connector_funcs mcde_dsi_connector_funcs = {
-	.reset = drm_atomic_helper_connector_reset,
-	.fill_modes = drm_helper_probe_single_connector_modes,
-	.destroy = drm_connector_cleanup,
-	.atomic_duplicate_state = drm_atomic_helper_connector_duplicate_state,
-	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
-};
-
-static int mcde_dsi_get_modes(struct drm_connector *connector)
-{
-	struct mcde_dsi *d = connector_to_mcde_dsi(connector);
-
-	/* Just pass the question to the panel */
-	if (d->panel)
-		return drm_panel_get_modes(d->panel);
-
-	/* TODO: deal with bridges */
-
-	return 0;
-}
-
-static const struct drm_connector_helper_funcs
-mcde_dsi_connector_helper_funcs = {
-	.get_modes = mcde_dsi_get_modes,
-};
-
-static int mcde_dsi_bridge_attach(struct drm_bridge *bridge)
+static int mcde_dsi_bridge_attach(struct drm_bridge *bridge,
+				  enum drm_bridge_attach_flags flags)
 {
 	struct mcde_dsi *d = bridge_to_mcde_dsi(bridge);
 	struct drm_device *drm = bridge->dev;
 	int ret;
-
-	drm_connector_helper_add(&d->connector,
-				 &mcde_dsi_connector_helper_funcs);
 
 	if (!drm_core_check_feature(drm, DRIVER_ATOMIC)) {
 		dev_err(d->dev, "we need atomic updates\n");
 		return -ENOTSUPP;
 	}
 
-	ret = drm_connector_init(drm, &d->connector,
-				 &mcde_dsi_connector_funcs,
-				 DRM_MODE_CONNECTOR_DSI);
-	if (ret) {
-		dev_err(d->dev, "failed to initialize DSI bridge connector\n");
-		return ret;
-	}
-	d->connector.polled = DRM_CONNECTOR_POLL_CONNECT;
-	/* The encoder in the bridge attached to the DSI bridge */
-	drm_connector_attach_encoder(&d->connector, bridge->encoder);
-	/* Then we attach the DSI bridge to the output (panel etc) bridge */
-	ret = drm_bridge_attach(bridge->encoder, d->bridge_out, bridge);
+	/* Attach the DSI bridge to the output (panel etc) bridge */
+	ret = drm_bridge_attach(bridge->encoder, d->bridge_out, bridge, flags);
 	if (ret) {
 		dev_err(d->dev, "failed to attach the DSI bridge\n");
 		return ret;
 	}
-	d->connector.status = connector_status_connected;
 
 	return 0;
 }
@@ -935,19 +886,21 @@ static int mcde_dsi_bind(struct device *dev, struct device *master,
 	for_each_available_child_of_node(dev->of_node, child) {
 		panel = of_drm_find_panel(child);
 		if (IS_ERR(panel)) {
-			dev_err(dev, "failed to find panel try bridge (%lu)\n",
+			dev_err(dev, "failed to find panel try bridge (%ld)\n",
 				PTR_ERR(panel));
+			panel = NULL;
+
 			bridge = of_drm_find_bridge(child);
 			if (IS_ERR(bridge)) {
-				dev_err(dev, "failed to find bridge (%lu)\n",
+				dev_err(dev, "failed to find bridge (%ld)\n",
 					PTR_ERR(bridge));
 				return PTR_ERR(bridge);
 			}
 		}
 	}
 	if (panel) {
-		bridge = drm_panel_bridge_add(panel,
-					      DRM_MODE_CONNECTOR_DSI);
+		bridge = drm_panel_bridge_add_typed(panel,
+						    DRM_MODE_CONNECTOR_DSI);
 		if (IS_ERR(bridge)) {
 			dev_err(dev, "error adding panel bridge\n");
 			return PTR_ERR(bridge);

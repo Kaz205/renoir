@@ -915,7 +915,7 @@ static int context_barrier_task(struct i915_gem_context *ctx,
 		if (emit)
 			err = emit(rq, data);
 		if (err == 0)
-			err = i915_active_ref(&cb->base, rq->timeline, rq);
+			err = i915_active_add_request(&cb->base, rq);
 
 		i915_request_add(rq);
 		if (err)
@@ -2094,8 +2094,7 @@ int i915_gem_context_create_ioctl(struct drm_device *dev, void *data,
 	ext_data.fpriv = file->driver_priv;
 	if (client_is_banned(ext_data.fpriv)) {
 		DRM_DEBUG("client %s[%d] banned from creating ctx\n",
-			  current->comm,
-			  pid_nr(get_task_pid(current, PIDTYPE_PID)));
+			  current->comm, task_pid_nr(current));
 		return -EIO;
 	}
 

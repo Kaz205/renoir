@@ -230,7 +230,8 @@ static const struct drm_display_mode default_mode = {
 	.height_mm   = 130,
 };
 
-static int jh057n_get_modes(struct drm_panel *panel)
+static int jh057n_get_modes(struct drm_panel *panel,
+			    struct drm_connector *connector)
 {
 	struct jh057n *ctx = panel_to_jh057n(panel);
 	struct drm_display_mode *mode;
@@ -246,9 +247,9 @@ static int jh057n_get_modes(struct drm_panel *panel)
 	drm_mode_set_name(mode);
 
 	mode->type = DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
-	panel->connector->display_info.width_mm = mode->width_mm;
-	panel->connector->display_info.height_mm = mode->height_mm;
-	drm_mode_probed_add(panel->connector, mode);
+	connector->display_info.width_mm = mode->width_mm;
+	connector->display_info.height_mm = mode->height_mm;
+	drm_mode_probed_add(connector, mode);
 
 	return 1;
 }
@@ -343,9 +344,8 @@ static int jh057n_probe(struct mipi_dsi_device *dsi)
 		return ret;
 	}
 
-	drm_panel_init(&ctx->panel);
-	ctx->panel.dev = dev;
-	ctx->panel.funcs = &jh057n_drm_funcs;
+	drm_panel_init(&ctx->panel, dev, &jh057n_drm_funcs,
+		       DRM_MODE_CONNECTOR_DSI);
 
 	drm_panel_add(&ctx->panel);
 
