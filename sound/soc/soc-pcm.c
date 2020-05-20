@@ -950,13 +950,10 @@ static int soc_pcm_prepare(struct snd_pcm_substream *substream)
 		}
 	}
 
-	for_each_rtd_dais(rtd, i, dai) {
-		ret = snd_soc_dai_prepare(dai, substream);
-		if (ret < 0) {
-			dev_err(dai->dev,
-				"ASoC: DAI prepare error: %d\n", ret);
-			goto out;
-		}
+	ret = snd_soc_pcm_dai_prepare(substream);
+	if (ret < 0) {
+		dev_err(rtd->dev, "ASoC: DAI prepare error: %d\n", ret);
+		goto out;
 	}
 
 	/* cancel any delayed stream shutdown that is pending */
@@ -1195,7 +1192,6 @@ static int soc_pcm_trigger_start(struct snd_pcm_substream *substream, int cmd)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_component *component;
-	struct snd_soc_dai *dai;
 	int i, ret;
 
 	ret = soc_rtd_trigger(rtd, substream, cmd);
@@ -1208,27 +1204,18 @@ static int soc_pcm_trigger_start(struct snd_pcm_substream *substream, int cmd)
 			return ret;
 	}
 
-	for_each_rtd_dais(rtd, i, dai) {
-		ret = snd_soc_dai_trigger(dai, substream, cmd);
-		if (ret < 0)
-			return ret;
-	}
-
-	return 0;
+	return snd_soc_pcm_dai_trigger(substream, cmd);
 }
 
 static int soc_pcm_trigger_stop(struct snd_pcm_substream *substream, int cmd)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_component *component;
-	struct snd_soc_dai *dai;
 	int i, ret;
 
-	for_each_rtd_dais(rtd, i, dai) {
-		ret = snd_soc_dai_trigger(dai, substream, cmd);
-		if (ret < 0)
-			return ret;
-	}
+	ret = snd_soc_pcm_dai_trigger(substream, cmd);
+	if (ret < 0)
+		return ret;
 
 	for_each_rtd_components(rtd, i, component) {
 		ret = snd_soc_component_trigger(component, substream, cmd);
@@ -1265,21 +1252,6 @@ static int soc_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 	return ret;
 }
 
-static int soc_pcm_bespoke_trigger(struct snd_pcm_substream *substream,
-				   int cmd)
-{
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_dai *dai;
-	int i, ret;
-
-	for_each_rtd_dais(rtd, i, dai) {
-		ret = snd_soc_dai_bespoke_trigger(dai, substream, cmd);
-		if (ret < 0)
-			return ret;
-	}
-
-	return 0;
-}
 /*
  * soc level wrapper for pointer callback
  * If cpu_dai, codec_dai, component driver has the delay callback, then
@@ -2483,7 +2455,7 @@ static int dpcm_fe_dai_do_trigger(struct snd_pcm_substream *substream, int cmd)
 		dev_dbg(fe->dev, "ASoC: bespoke trigger FE %s cmd %d\n",
 				fe->dai_link->name, cmd);
 
-		ret = soc_pcm_bespoke_trigger(substream, cmd);
+		ret = snd_soc_pcm_dai_bespoke_trigger(substream, cmd);
 		break;
 	default:
 		dev_err(fe->dev, "ASoC: invalid trigger cmd %d for %s\n", cmd,
@@ -2628,7 +2600,7 @@ static int dpcm_run_update_shutdown(struct snd_soc_pcm_runtime *fe, int stream)
 		dev_dbg(fe->dev, "ASoC: bespoke trigger FE %s cmd stop\n",
 				fe->dai_link->name);
 
-		err = soc_pcm_bespoke_trigger(substream, SNDRV_PCM_TRIGGER_STOP);
+		err = snd_soc_pcm_dai_bespoke_trigger(substream, SNDRV_PCM_TRIGGER_STOP);
 		if (err < 0)
 			dev_err(fe->dev,"ASoC: trigger FE failed %d\n", err);
 	} else {
@@ -2706,7 +2678,7 @@ static int dpcm_run_update_startup(struct snd_soc_pcm_runtime *fe, int stream)
 		dev_dbg(fe->dev, "ASoC: bespoke trigger FE %s cmd start\n",
 				fe->dai_link->name);
 
-		ret = soc_pcm_bespoke_trigger(substream, SNDRV_PCM_TRIGGER_START);
+		ret = snd_soc_pcm_dai_bespoke_trigger(substream, SNDRV_PCM_TRIGGER_START);
 		if (ret < 0) {
 			dev_err(fe->dev,"ASoC: bespoke trigger FE failed %d\n", ret);
 			goto hw_free;
@@ -2911,8 +2883,17 @@ int soc_new_pcm(struct snd_soc_pcm_runtime *rtd, int num)
 	int i;
 
 	if (rtd->dai_link->dynamic || rtd->dai_link->no_pcm) {
-		playback = rtd->dai_link->dpcm_playback;
-		capture = rtd->dai_link->dpcm_capture;
+		cpu_dai = asoc_rtd_to_cpu(rtd, 0);
+		if (rtd->num_cpus > 1) {
+			dev_err(rtd->dev,
+				"DPCM doesn't support Multi CPU yet\n");
+			return -EINVAL;
+		}
+
+		playback = rtd->dai_link->dpcm_playback &&
+			   snd_soc_dai_stream_valid(cpu_dai, SNDRV_PCM_STREAM_PLAYBACK);
+		capture = rtd->dai_link->dpcm_capture &&
+			  snd_soc_dai_stream_valid(cpu_dai, SNDRV_PCM_STREAM_CAPTURE);
 	} else {
 		/* Adapt stream for codec2codec links */
 		int cpu_capture = rtd->dai_link->params ?
