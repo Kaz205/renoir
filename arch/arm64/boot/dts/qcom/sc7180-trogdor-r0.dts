@@ -16,7 +16,9 @@ ap_h1_spi: &spi6 {};
 
 / {
 	model = "Google Trogdor (rev0)";
-	compatible = "google,trogdor-rev0", "qcom,sc7180";
+	compatible = "google,trogdor-rev0-sku0",
+		     "google,trogdor-rev0-sku1",
+		     "qcom,sc7180";
 
 	panel: panel {
 		compatible = "auo,b116xa01";
