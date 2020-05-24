@@ -21,6 +21,7 @@
 #include <media/v4l2-ioctl.h>
 
 #include "virtio_video.h"
+#include "virtio_video_dec.h"
 
 static void virtio_video_dec_buf_queue(struct vb2_buffer *vb)
 {
@@ -335,8 +336,8 @@ static int virtio_video_dec_enum_fmt_vid_cap(struct file *file, void *fh,
 }
 
 
-int virtio_video_dec_enum_fmt_vid_out(struct file *file, void *fh,
-				      struct v4l2_fmtdesc *f)
+static int virtio_video_dec_enum_fmt_vid_out(struct file *file, void *fh,
+					     struct v4l2_fmtdesc *f)
 {
 	struct virtio_video_stream *stream = file2stream(file);
 	struct virtio_video_device *vvd = to_virtio_vd(stream->video_dev);
@@ -419,10 +420,8 @@ static const struct v4l2_ioctl_ops virtio_video_dec_ioctl_ops = {
 
 int virtio_video_dec_init(struct video_device *vd)
 {
-	ssize_t num;
-
 	vd->ioctl_ops = &virtio_video_dec_ioctl_ops;
-	num = strscpy(vd->name, "stateful-decoder", sizeof(vd->name));
+	strscpy(vd->name, "stateful-decoder", sizeof(vd->name));
 
 	return 0;
 }

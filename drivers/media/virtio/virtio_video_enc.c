@@ -21,6 +21,7 @@
 #include <media/v4l2-ioctl.h>
 
 #include "virtio_video.h"
+#include "virtio_video_enc.h"
 
 static void virtio_video_enc_buf_queue(struct vb2_buffer *vb)
 {
@@ -560,10 +561,8 @@ static const struct v4l2_ioctl_ops virtio_video_enc_ioctl_ops = {
 
 int virtio_video_enc_init(struct video_device *vd)
 {
-	ssize_t num;
-
 	vd->ioctl_ops = &virtio_video_enc_ioctl_ops;
-	num = strscpy(vd->name, "stateful-encoder", sizeof(vd->name));
+	strscpy(vd->name, "stateful-encoder", sizeof(vd->name));
 
 	return 0;
 }
