@@ -12,3 +12,7 @@
 	model = "Google Lazor (rev0) with LTE";
 	compatible = "google,lazor-rev0-sku0", "qcom,sc7180";
 };
+
+&keyboard_backlight {
+	status = "okay";
+};
