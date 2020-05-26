@@ -270,6 +270,13 @@
 		};
 	};
 
+	h1_int_od_l: h1_int_od_l {
+		pins1 {
+			pinmux = <PINMUX_GPIO171__FUNC_GPIO171>;
+			input-enable;
+		};
+	};
+
 	i2c0_pins: i2c0 {
 		pins_bus {
 			pinmux = <PINMUX_GPIO204__FUNC_SCL0>,
@@ -416,6 +423,16 @@
 		};
 	};
 
+	spi_pins_5: spi5@0 {
+		pins_spi{
+			pinmux = <PINMUX_GPIO38__FUNC_SPI5_A_MI>,
+				 <PINMUX_GPIO37__FUNC_GPIO37>,
+				 <PINMUX_GPIO39__FUNC_SPI5_A_MO>,
+				 <PINMUX_GPIO36__FUNC_SPI5_A_CLK>;
+			bias-disable;
+		};
+	};
+
 	touchpad_pins: touchpad-pins {
 		touchpad_int {
 			pinmux = <PINMUX_GPIO15__FUNC_GPIO15>;
@@ -434,6 +451,24 @@
 	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pwm0_pin_default>;
+};
+
+&spi5 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&spi_pins_5>;
+	mediatek,pad-select = <0>;
+	status = "okay";
+	cs-gpios = <&pio 37 GPIO_ACTIVE_LOW>;
+
+	cr50@0 {
+		compatible = "google,cr50";
+		reg = <0>;
+		spi-max-frequency = <1000000>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&h1_int_od_l>;
+		interrupt-parent = <&pio>;
+		interrupts = <171 IRQ_TYPE_EDGE_RISING>;
+	};
 };
 
 &spmi {
