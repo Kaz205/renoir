@@ -963,10 +963,16 @@
 			#clock-cells = <1>;
 		};
 
-		msdc: syscon@11f60000 {
-			compatible = "mediatek,mt8192-msdc", "syscon";
-			reg = <0 0x11f60000 0 0x1000>;
-			#clock-cells = <1>;
+		mmc0: mmc@11f60000 {
+			compatible = "mediatek,mt8192-mmc", "mediatek,mt8183-mmc";
+			reg = <0 0x11f60000 0 0x1000>,
+			      <0 0x11f50000 0 0x1000>;
+			interrupts = <GIC_SPI 99 IRQ_TYPE_LEVEL_HIGH 0>;
+			clocks = <&topckgen CLK_TOP_MSDC50_0_SEL>,
+				<&msdc_top CLK_MSDC_TOP_H_MST_0P>,
+				<&msdc_top CLK_MSDC_TOP_SRC_0P>;
+			clock-names = "source", "hclk", "source_cg";
+			status = "disabled";
 		};
 
 		mfgcfg: syscon@13fbf000 {
