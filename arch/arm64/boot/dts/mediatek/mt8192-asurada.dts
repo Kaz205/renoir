@@ -314,6 +314,21 @@
 		};
 	};
 
+	bt_pins: bt-pins {
+		bt_kill: bt_kill {
+			pinmux = <PINMUX_GPIO131__FUNC_GPIO131>; /* BT_KILL_L */
+			output-low;
+		};
+		bt_wake: bt_wake {
+			pinmux = <PINMUX_GPIO22__FUNC_GPIO22>;  /* bt to wake ap */
+			bias-pull-up;
+		};
+		ap_wake_bt: ap_wake_bt {
+			pinmux = <PINMUX_GPIO168__FUNC_GPIO168>; /* AP_WAKE_BT_L */
+			output-low;
+		};
+	};
+
 	dpi_pin_default: dpi_pin_default {
 		pins_cmd_dat {
 			pinmux = <PINMUX_GPIO96__FUNC_GPIO96>,
@@ -655,6 +670,44 @@
 			output-low;
 		};
 	};
+
+	uart1_pins: uart1-pins {
+		pins_rx {
+			pinmux = <PINMUX_GPIO94__FUNC_URXD1>;
+			input-enable;
+			bias-pull-up;
+		};
+		pins_tx {
+			pinmux = <PINMUX_GPIO95__FUNC_UTXD1>;
+		};
+		pins_cts {
+			pinmux = <PINMUX_GPIO166__FUNC_UCTS1>;
+			output-enable;
+		};
+		pins_rts {
+			pinmux = <PINMUX_GPIO167__FUNC_URTS1>;
+			input-enable;
+		};
+	};
+
+	uart1_pins_sleep: uart1-pins-sleep {
+		pins_rx {
+			pinmux = <PINMUX_GPIO94__FUNC_GPIO94>;
+			input-enable;
+			bias-pull-up;
+		};
+		pins_tx {
+			pinmux = <PINMUX_GPIO95__FUNC_UTXD1>;
+		};
+		pins_cts {
+			pinmux = <PINMUX_GPIO166__FUNC_UCTS1>;
+			output-enable;
+		};
+		pins_rts {
+			pinmux = <PINMUX_GPIO167__FUNC_URTS1>;
+			input-enable;
+		};
+	};
 };
 
 &pmic {
@@ -785,6 +838,23 @@
 
 &uart0 {
 	status = "okay";
+};
+
+&uart1 {
+	status = "okay";
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&uart1_pins>;
+	pinctrl-1 = <&uart1_pins_sleep>;
+	interrupts-extended = <&gic GIC_SPI 110 IRQ_TYPE_LEVEL_HIGH 0>,
+			      <&pio 94 IRQ_TYPE_EDGE_FALLING>;
+
+	bluetooth {
+		compatible = "realtek,rtl8822cs-bt";
+		pinctrl-names = "default";
+		pinctrl-0 = <&bt_pins>;
+
+		enable-gpios = <&pio 131 GPIO_ACTIVE_HIGH>;
+	};
 };
 
 &xhci {
