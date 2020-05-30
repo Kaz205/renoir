@@ -824,6 +824,7 @@ static int mtk_iommu_probe(struct platform_device *pdev)
 		return larb_nr;
 
 	for (i = 0; i < larb_nr; i++) {
+		bool larbdev_is_bound = false;
 		u32 id;
 
 		larbnode = of_parse_phandle(dev->of_node, "mediatek,larbs", i);
@@ -840,7 +841,12 @@ static int mtk_iommu_probe(struct platform_device *pdev)
 			id = i;
 
 		plarbdev = of_find_device_by_node(larbnode);
-		if (!plarbdev) {
+		if (plarbdev) {
+			device_lock(&plarbdev->dev);
+			larbdev_is_bound = device_is_bound(&plarbdev->dev);
+			device_unlock(&plarbdev->dev);
+		}
+		if (!plarbdev || !larbdev_is_bound) {
 			of_node_put(larbnode);
 			return -EPROBE_DEFER;
 		}
