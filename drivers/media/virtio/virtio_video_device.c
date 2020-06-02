@@ -1185,7 +1185,7 @@ err:
 	return ERR_CAST(m2m_dev);
 }
 
-void virtio_video_device_destroy(struct virtio_video_device *vvd)
+static void virtio_video_device_destroy(struct virtio_video_device *vvd)
 {
 	if (!vvd)
 		return;
