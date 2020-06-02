@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
  */
 
 #include "walt.h"
@@ -32,28 +32,28 @@ static inline s64 __rq_update_sum(struct rq *rq, bool curr, bool new)
 {
 	if (curr)
 		if (new)
-			return rq->nt_curr_runnable_sum;
+			return rq->wrq.nt_curr_runnable_sum;
 		else
-			return rq->curr_runnable_sum;
+			return rq->wrq.curr_runnable_sum;
 	else
 		if (new)
-			return rq->nt_prev_runnable_sum;
+			return rq->wrq.nt_prev_runnable_sum;
 		else
-			return rq->prev_runnable_sum;
+			return rq->wrq.prev_runnable_sum;
 }
 
 static inline s64 __grp_update_sum(struct rq *rq, bool curr, bool new)
 {
 	if (curr)
 		if (new)
-			return rq->grp_time.nt_curr_runnable_sum;
+			return rq->wrq.grp_time.nt_curr_runnable_sum;
 		else
-			return rq->grp_time.curr_runnable_sum;
+			return rq->wrq.grp_time.curr_runnable_sum;
 	else
 		if (new)
-			return rq->grp_time.nt_prev_runnable_sum;
+			return rq->wrq.grp_time.nt_prev_runnable_sum;
 		else
-			return rq->grp_time.prev_runnable_sum;
+			return rq->wrq.grp_time.prev_runnable_sum;
 }
 
 static inline s64
