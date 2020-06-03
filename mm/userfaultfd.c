@@ -93,7 +93,12 @@ static int mcopy_atomic_pte(struct mm_struct *dst_mm,
 			    unsigned long src_addr,
 			    struct page **pagep)
 {
+<<<<<<< HEAD
 	struct mem_cgroup *memcg;
+=======
+	pte_t _dst_pte, *dst_pte;
+	spinlock_t *ptl;
+>>>>>>> 1935b3979bc5 (mm: memcontrol: convert anon and file-thp to new mem_cgroup_charge() API)
 	void *page_kaddr;
 	int ret;
 	struct page *page;
@@ -132,7 +137,7 @@ static int mcopy_atomic_pte(struct mm_struct *dst_mm,
 	__SetPageUptodate(page);
 
 	ret = -ENOMEM;
-	if (mem_cgroup_try_charge(page, dst_mm, GFP_KERNEL, &memcg))
+	if (mem_cgroup_charge(page, dst_mm, GFP_KERNEL, false))
 		goto out_release;
 
 	ret = mfill_atomic_install_pte(dst_mm, dst_pmd, dst_vma, dst_addr,
@@ -141,7 +146,6 @@ static int mcopy_atomic_pte(struct mm_struct *dst_mm,
 		mem_cgroup_cancel_charge(page, memcg, false);
 		goto out_release;
 	}
-	mem_cgroup_commit_charge(page, memcg, false);
 out:
 	return ret;
 out_release:
