@@ -1680,8 +1680,7 @@ static int shmem_swapin_page(struct inode *inode, pgoff_t index,
 			goto failed;
 	}
 
-	error = mem_cgroup_try_charge_delay(page, charge_mm, gfp, &memcg,
-					    false);
+	error = mem_cgroup_try_charge_delay(page, charge_mm, gfp, &memcg);
 	if (!error) {
 		error = shmem_add_to_page_cache(page, mapping, index,
 						swp_to_radix_entry(swap), gfp);
@@ -1696,14 +1695,14 @@ static int shmem_swapin_page(struct inode *inode, pgoff_t index,
 		 * the rest.
 		 */
 		if (error) {
-			mem_cgroup_cancel_charge(page, memcg, false);
+			mem_cgroup_cancel_charge(page, memcg);
 			delete_from_swap_cache(page);
 		}
 	}
 	if (error)
 		goto failed;
 
-	mem_cgroup_commit_charge(page, memcg, true, false);
+	mem_cgroup_commit_charge(page, memcg, true);
 
 	spin_lock_irq(&info->lock);
 	info->swapped--;
@@ -1882,19 +1881,16 @@ alloc_nohuge:
 	if (sgp == SGP_WRITE)
 		__SetPageReferenced(page);
 
-	error = mem_cgroup_try_charge_delay(page, charge_mm, gfp, &memcg,
-					    PageTransHuge(page));
+	error = mem_cgroup_try_charge_delay(page, charge_mm, gfp, &memcg);
 	if (error)
 		goto unacct;
 	error = shmem_add_to_page_cache(page, mapping, hindex,
 					NULL, gfp & GFP_RECLAIM_MASK);
 	if (error) {
-		mem_cgroup_cancel_charge(page, memcg,
-					 PageTransHuge(page));
+		mem_cgroup_cancel_charge(page, memcg);
 		goto unacct;
 	}
-	mem_cgroup_commit_charge(page, memcg, false,
-				 PageTransHuge(page));
+	mem_cgroup_commit_charge(page, memcg, false);
 	lru_cache_add_anon(page);
 
 	spin_lock_irq(&info->lock);
@@ -2377,7 +2373,7 @@ int shmem_mfill_atomic_pte(struct mm_struct *dst_mm,
 	if (unlikely(pgoff >= max_off))
 		goto out_release;
 
-	ret = mem_cgroup_try_charge_delay(page, dst_mm, gfp, &memcg, false);
+	ret = mem_cgroup_try_charge_delay(page, dst_mm, gfp, &memcg);
 	if (ret)
 		goto out_release;
 
@@ -2386,7 +2382,7 @@ int shmem_mfill_atomic_pte(struct mm_struct *dst_mm,
 	if (ret)
 		goto out_release_uncharge;
 
-	mem_cgroup_commit_charge(page, memcg, false, false);
+	mem_cgroup_commit_charge(page, memcg, false);
 
 	ret = mfill_atomic_install_pte(dst_mm, dst_pmd, dst_vma, dst_addr,
 				       page, true);
@@ -2405,7 +2401,7 @@ int shmem_mfill_atomic_pte(struct mm_struct *dst_mm,
 out_delete_from_cache:
 	delete_from_page_cache(page);
 out_release_uncharge:
-	mem_cgroup_cancel_charge(page, memcg, false);
+	mem_cgroup_cancel_charge(page, memcg);
 out_release:
 	unlock_page(page);
 	put_page(page);
