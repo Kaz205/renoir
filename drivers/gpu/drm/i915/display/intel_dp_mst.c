@@ -33,6 +33,7 @@
 #include "intel_connector.h"
 #include "intel_ddi.h"
 #include "intel_display_types.h"
+#include "intel_hotplug.h"
 #include "intel_dp.h"
 #include "intel_dp_mst.h"
 #include "intel_dpio_phy.h"
@@ -763,10 +764,19 @@ static void intel_dp_destroy_mst_connector(struct drm_dp_mst_topology_mgr *mgr,
 	drm_connector_put(connector);
 }
 
+static void
+intel_dp_mst_poll_hpd_irq(struct drm_dp_mst_topology_mgr *mgr)
+{
+	struct intel_dp *intel_dp = container_of(mgr, struct intel_dp, mst_mgr);
+
+	intel_hpd_trigger_irq(dp_to_dig_port(intel_dp));
+}
+
 static const struct drm_dp_mst_topology_cbs mst_cbs = {
 	.add_connector = intel_dp_add_mst_connector,
 	.register_connector = intel_dp_register_mst_connector,
 	.destroy_connector = intel_dp_destroy_mst_connector,
+	.poll_hpd_irq = intel_dp_mst_poll_hpd_irq,
 };
 
 static struct intel_dp_mst_encoder *
