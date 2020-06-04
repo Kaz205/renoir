@@ -486,10 +486,23 @@
 	no-sdio;
 };
 
+/* for CORE */
+&mt6359_vgpu11_buck_reg {
+	regulator-always-on;
+};
+
 &mt6359_vgpu11_sshub_buck_reg {
 	regulator-always-on;
 	regulator-min-microvolt = <575000>;
 	regulator-max-microvolt = <575000>;
+};
+
+&mt6359_vrf12_ldo_reg {
+	regulator-always-on;
+};
+
+&mt6359_vufs_ldo_reg {
+	regulator-always-on;
 };
 
 &mt6359codec {
