@@ -2231,29 +2231,25 @@ put_table:
 	return r;
 }
 
-/*
+/**
  * dev_pm_opp_adjust_voltage() - helper to change the voltage of an OPP
  * @dev:		device for which we do this operation
  * @freq:		OPP frequency to adjust voltage of
- * @u_volt:		new OPP voltage
- *
- * Change the voltage of an OPP with an RCU operation.
+ * @u_volt:		new OPP target voltage
+ * @u_volt_min:		new OPP min voltage
+ * @u_volt_max:		new OPP max voltage
  *
  * Return: -EINVAL for bad pointers, -ENOMEM if no memory available for the
  * copy operation, returns 0 if no modifcation was done OR modification was
  * successful.
- *
- * Locking: The internal device_opp and opp structures are RCU protected.
- * Hence this function internally uses RCU updater strategy with mutex locks to
- * keep the integrity of the internal data structures. Callers should ensure
- * that this function is *NOT* called under RCU protection or in contexts where
- * mutex locking or synchronize_rcu() blocking calls cannot be used.
  */
 int dev_pm_opp_adjust_voltage(struct device *dev, unsigned long freq,
-			      unsigned long u_volt)
+			      unsigned long u_volt, unsigned long u_volt_min,
+			      unsigned long u_volt_max)
+
 {
 	struct opp_table *opp_table;
-	struct dev_pm_opp *new_opp, *tmp_opp, *opp = ERR_PTR(-ENODEV);
+	struct dev_pm_opp *tmp_opp, *opp = ERR_PTR(-ENODEV);
 	int r = 0;
 
 	/* Find the opp_table */
@@ -2263,11 +2259,6 @@ int dev_pm_opp_adjust_voltage(struct device *dev, unsigned long freq,
 		dev_warn(dev, "%s: Device OPP not found (%d)\n", __func__, r);
 		return r;
 	}
-
-	/* keep the node allocated */
-	new_opp = kmalloc(sizeof(*new_opp), GFP_KERNEL);
-	if (!new_opp)
-		return -ENOMEM;
 
 	mutex_lock(&opp_table->lock);
 
@@ -2281,31 +2272,31 @@ int dev_pm_opp_adjust_voltage(struct device *dev, unsigned long freq,
 
 	if (IS_ERR(opp)) {
 		r = PTR_ERR(opp);
-		goto unlock;
+		goto adjust_unlock;
 	}
 
 	/* Is update really needed? */
 	if (opp->supplies->u_volt == u_volt)
-		goto unlock;
+		goto adjust_unlock;
 
-	/* copy the old data over */
-	*new_opp = *opp;
+	opp->supplies->u_volt = u_volt;
+	opp->supplies->u_volt_min = u_volt_min;
+	opp->supplies->u_volt_max = u_volt_max;
 
-	/* plug in new node */
-	new_opp->supplies->u_volt = u_volt;
-
-	list_replace_rcu(&opp->node, &new_opp->node);
+	dev_pm_opp_get(opp);
 	mutex_unlock(&opp_table->lock);
 
-	/* Notify the change of the OPP */
+	/* Notify the voltage change of the OPP */
 	blocking_notifier_call_chain(&opp_table->head, OPP_EVENT_ADJUST_VOLTAGE,
 				     opp);
 
-	return 0;
+	dev_pm_opp_put(opp);
+	goto adjust_put_table;
 
-unlock:
+adjust_unlock:
 	mutex_unlock(&opp_table->lock);
-	kfree(new_opp);
+adjust_put_table:
+	dev_pm_opp_put_opp_table(opp_table);
 	return r;
 }
 
