@@ -4753,7 +4753,8 @@ static void gen9_dbuf_disable(struct drm_i915_private *dev_priv)
 
 static void icl_mbus_init(struct drm_i915_private *dev_priv)
 {
-	u32 mask, val;
+	unsigned long abox_regs = INTEL_INFO(dev_priv)->abox_mask;
+	u32 mask, val, i;
 
 	mask = MBUS_ABOX_BT_CREDIT_POOL1_MASK |
 		MBUS_ABOX_BT_CREDIT_POOL2_MASK |
@@ -4764,11 +4765,16 @@ static void icl_mbus_init(struct drm_i915_private *dev_priv)
 		MBUS_ABOX_B_CREDIT(1) |
 		MBUS_ABOX_BW_CREDIT(1);
 
-	intel_de_rmw(dev_priv, MBUS_ABOX_CTL, mask, val);
-	if (INTEL_GEN(dev_priv) >= 12) {
-		intel_de_rmw(dev_priv, MBUS_ABOX1_CTL, mask, val);
-		intel_de_rmw(dev_priv, MBUS_ABOX2_CTL, mask, val);
-	}
+	/*
+	 * gen12 platforms that use abox1 and abox2 for pixel data reads still
+	 * expect us to program the abox_ctl0 register as well, even though
+	 * we don't have to program other instance-0 registers like BW_BUDDY.
+	 */
+	if (IS_GEN(dev_priv, 12))
+		abox_regs |= BIT(0);
+
+	for_each_set_bit(i, &abox_regs, sizeof(abox_regs))
+		intel_de_rmw(dev_priv, MBUS_ABOX_CTL(i), mask, val);
 }
 
 static void hsw_assert_cdclk(struct drm_i915_private *dev_priv)
@@ -5247,7 +5253,8 @@ static void tgl_bw_buddy_init(struct drm_i915_private *dev_priv)
 	enum intel_dram_type type = dev_priv->dram_info.type;
 	u8 num_channels = dev_priv->dram_info.num_channels;
 	const struct buddy_page_mask *table;
-	int i;
+	unsigned long abox_mask = INTEL_INFO(dev_priv)->abox_mask;
+	int config, i;
 
 	if (IS_TGL_REVID(dev_priv, TGL_REVID_A0, TGL_REVID_B0))
 		/* Wa_1409767108: tgl */
@@ -5255,34 +5262,27 @@ static void tgl_bw_buddy_init(struct drm_i915_private *dev_priv)
 	else
 		table = tgl_buddy_page_masks;
 
-	for (i = 0; table[i].page_mask != 0; i++)
-		if (table[i].num_channels == num_channels &&
-		    table[i].type == type)
+	for (config = 0; table[config].page_mask != 0; config++)
+		if (table[config].num_channels == num_channels &&
+		    table[config].type == type)
 			break;
 
-	if (table[i].page_mask == 0) {
+	if (table[config].page_mask == 0) {
 		drm_dbg(&dev_priv->drm,
 			"Unknown memory configuration; disabling address buddy logic.\n");
-		intel_de_write(dev_priv, BW_BUDDY1_CTL, BW_BUDDY_DISABLE);
-		intel_de_write(dev_priv, BW_BUDDY2_CTL, BW_BUDDY_DISABLE);
+		for_each_set_bit(i, &abox_mask, sizeof(abox_mask))
+			intel_de_write(dev_priv, BW_BUDDY_CTL(i),
+				       BW_BUDDY_DISABLE);
 	} else {
-		u32 val;
+		for_each_set_bit(i, &abox_mask, sizeof(abox_mask)) {
+			intel_de_write(dev_priv, BW_BUDDY_PAGE_MASK(i),
+				       table[config].page_mask);
 
-		intel_de_write(dev_priv, BW_BUDDY1_PAGE_MASK,
-			       table[i].page_mask);
-		intel_de_write(dev_priv, BW_BUDDY2_PAGE_MASK,
-			       table[i].page_mask);
-
-		/* Wa_22010178259:tgl */
-		val = intel_de_read(dev_priv, BW_BUDDY1_CTL);
-		val &= ~BW_BUDDY_TLB_REQ_TIMER_MASK;
-		val |= REG_FIELD_PREP(BW_BUDDY_TLB_REQ_TIMER_MASK, 0x8);
-		intel_de_write(dev_priv, BW_BUDDY1_CTL, val);
-
-		val = intel_de_read(dev_priv, BW_BUDDY2_CTL);
-		val &= ~BW_BUDDY_TLB_REQ_TIMER_MASK;
-		val |= REG_FIELD_PREP(BW_BUDDY_TLB_REQ_TIMER_MASK, 0x8);
-		intel_de_write(dev_priv, BW_BUDDY2_CTL, val);
+			/* Wa_22010178259:tgl,rkl */
+			intel_de_rmw(dev_priv, BW_BUDDY_CTL(i),
+				     BW_BUDDY_TLB_REQ_TIMER_MASK,
+				     BW_BUDDY_TLB_REQ_TIMER(0x8));
+		}
 	}
 }
 
