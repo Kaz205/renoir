@@ -90,8 +90,8 @@ struct intel_framebuffer {
 	/* for each plane in the normal GTT view */
 	struct {
 		unsigned int x, y;
-	} normal[2];
-	/* for each plane in the rotated GTT view */
+	} normal[4];
+	/* for each plane in the rotated GTT view for no-CCS formats */
 	struct {
 		unsigned int x, y;
 		unsigned int pitch; /* pixels */
@@ -128,7 +128,8 @@ struct intel_encoder {
 
 	enum intel_output_type type;
 	enum port port;
-	unsigned int cloneable;
+	u16 cloneable;
+	u8 pipe_mask;
 	enum intel_hotplug_state (*hotplug)(struct intel_encoder *encoder,
 					    struct intel_connector *connector,
 					    bool irq_received);
@@ -187,7 +188,6 @@ struct intel_encoder {
 	 * device interrupts are disabled.
 	 */
 	void (*suspend)(struct intel_encoder *);
-	int crtc_mask;
 	enum hpd_pin hpd_pin;
 	enum intel_display_power_domain power_domain;
 	/* for communication with audio component; protected by av_mutex */
@@ -506,6 +506,14 @@ struct intel_atomic_state {
 
 	bool rps_interactive;
 
+	/*
+	 * active_pipes
+	 * min_cdclk[]
+	 * min_voltage_level[]
+	 * cdclk.*
+	 */
+	bool global_state_changed;
+
 	/* Gen9+ only */
 	struct skl_ddb_values wm_results;
 
@@ -515,7 +523,24 @@ struct intel_atomic_state {
 };
 
 struct intel_plane_state {
-	struct drm_plane_state base;
+	struct drm_plane_state uapi;
+
+	/*
+	 * actual hardware state, the state we program to the hardware.
+	 * The following members are used to verify the hardware state:
+	 * During initial hw readout, they need to be copied from uapi.
+	 */
+	struct {
+		struct drm_crtc *crtc;
+		struct drm_framebuffer *fb;
+
+		u16 alpha;
+		uint16_t pixel_blend_mode;
+		unsigned int rotation;
+		enum drm_color_encoding color_encoding;
+		enum drm_color_range color_range;
+	} hw;
+
 	struct i915_ggtt_view view;
 	struct i915_vma *vma;
 	unsigned long flags;
@@ -530,13 +555,16 @@ struct intel_plane_state {
 		 */
 		u32 stride;
 		int x, y;
-	} color_plane[2];
+	} color_plane[4];
 
 	/* plane control register */
 	u32 ctl;
 
 	/* plane color control register */
 	u32 color_ctl;
+
+	/* chroma upsampler control register */
+	u32 cus_ctl;
 
 	/*
 	 * scaler_id
@@ -749,7 +777,33 @@ enum intel_output_format {
 };
 
 struct intel_crtc_state {
-	struct drm_crtc_state base;
+	/*
+	 * uapi (drm) state. This is the software state shown to userspace.
+	 * In particular, the following members are used for bookkeeping:
+	 * - crtc
+	 * - state
+	 * - *_changed
+	 * - event
+	 * - commit
+	 * - mode_blob
+	 */
+	struct drm_crtc_state uapi;
+
+	/*
+	 * actual hardware state, the state we program to the hardware.
+	 * The following members are used to verify the hardware state:
+	 * - enable
+	 * - active
+	 * - mode / adjusted_mode
+	 * - color property blobs.
+	 *
+	 * During initial hw readout, they need to be copied to uapi.
+	 */
+	struct {
+		bool active, enable;
+		struct drm_property_blob *degamma_lut, *gamma_lut, *ctm;
+		struct drm_display_mode mode, adjusted_mode;
+	} hw;
 
 	/**
 	 * quirks - bitfield with hw state readout quirks
@@ -933,6 +987,8 @@ struct intel_crtc_state {
 
 	struct intel_crtc_wm_state wm;
 
+	int min_cdclk[I915_MAX_PLANES];
+
 	u32 data_rate[I915_MAX_PLANES];
 
 	/* Gamma mode programmed on the pipe */
@@ -987,11 +1043,20 @@ struct intel_crtc_state {
 		bool dsc_split;
 		u16 compressed_bpp;
 		u8 slice_count;
-	} dsc_params;
-	struct drm_dsc_config dp_dsc_cfg;
+		struct drm_dsc_config config;
+	} dsc;
 
 	/* Forward Error correction State */
 	bool fec_enable;
+
+	/* Pointer to master transcoder in case of tiled displays */
+	enum transcoder master_transcoder;
+
+	/* Bitmask to indicate slaves attached */
+	u8 sync_mode_slaves_mask;
+
+	/* Only valid on TGL+ */
+	enum transcoder mst_master_transcoder;
 };
 
 struct intel_crtc {
@@ -1064,14 +1129,13 @@ struct intel_plane {
 	void (*update_plane)(struct intel_plane *plane,
 			     const struct intel_crtc_state *crtc_state,
 			     const struct intel_plane_state *plane_state);
-	void (*update_slave)(struct intel_plane *plane,
-			     const struct intel_crtc_state *crtc_state,
-			     const struct intel_plane_state *plane_state);
 	void (*disable_plane)(struct intel_plane *plane,
 			      const struct intel_crtc_state *crtc_state);
 	bool (*get_hw_state)(struct intel_plane *plane, enum pipe *pipe);
 	int (*check_plane)(struct intel_crtc_state *crtc_state,
 			   struct intel_plane_state *plane_state);
+	int (*min_cdclk)(const struct intel_crtc_state *crtc_state,
+			 const struct intel_plane_state *plane_state);
 };
 
 struct intel_watermark_params {
@@ -1095,12 +1159,12 @@ struct cxsr_latency {
 
 #define to_intel_atomic_state(x) container_of(x, struct intel_atomic_state, base)
 #define to_intel_crtc(x) container_of(x, struct intel_crtc, base)
-#define to_intel_crtc_state(x) container_of(x, struct intel_crtc_state, base)
+#define to_intel_crtc_state(x) container_of(x, struct intel_crtc_state, uapi)
 #define to_intel_connector(x) container_of(x, struct intel_connector, base)
 #define to_intel_encoder(x) container_of(x, struct intel_encoder, base)
 #define to_intel_framebuffer(x) container_of(x, struct intel_framebuffer, base)
 #define to_intel_plane(x) container_of(x, struct intel_plane, base)
-#define to_intel_plane_state(x) container_of(x, struct intel_plane_state, base)
+#define to_intel_plane_state(x) container_of(x, struct intel_plane_state, uapi)
 #define intel_fb_obj(x) ((x) ? to_intel_bo((x)->obj[0]) : NULL)
 
 struct intel_hdmi {
@@ -1508,6 +1572,24 @@ intel_atomic_get_new_crtc_state(struct intel_atomic_state *state,
 {
 	return to_intel_crtc_state(drm_atomic_get_new_crtc_state(&state->base,
 								 &crtc->base));
+}
+
+static inline struct intel_digital_connector_state *
+intel_atomic_get_new_connector_state(struct intel_atomic_state *state,
+				     struct intel_connector *connector)
+{
+	return to_intel_digital_connector_state(
+			drm_atomic_get_new_connector_state(&state->base,
+			&connector->base));
+}
+
+static inline struct intel_digital_connector_state *
+intel_atomic_get_old_connector_state(struct intel_atomic_state *state,
+				     struct intel_connector *connector)
+{
+	return to_intel_digital_connector_state(
+			drm_atomic_get_old_connector_state(&state->base,
+			&connector->base));
 }
 
 /* intel_display.c */
