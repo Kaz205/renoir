@@ -372,7 +372,8 @@ void snd_soc_close_delayed_work(struct snd_soc_pcm_runtime *rtd)
 	dev_dbg(rtd->dev,
 		"ASoC: pop wq checking: %s status: %s waiting: %s\n",
 		codec_dai->driver->playback.stream_name,
-		codec_dai->stream_active[playback] ? "active" : "inactive",
+		snd_soc_dai_stream_active(codec_dai, playback) ?
+		"active" : "inactive",
 		rtd->pop_wait ? "yes" : "no");
 
 	/* are we waiting on this codec DAI stream */
@@ -548,7 +549,7 @@ int snd_soc_suspend(struct device *dev)
 			continue;
 
 		for_each_rtd_codec_dais(rtd, i, dai) {
-			if (dai->stream_active[playback])
+			if (snd_soc_dai_stream_active(dai, playback))
 				snd_soc_dai_digital_mute(dai, 1, playback);
 		}
 	}
@@ -690,7 +691,7 @@ static void soc_resume_deferred(struct work_struct *work)
 			continue;
 
 		for_each_rtd_codec_dais(rtd, i, dai) {
-			if (dai->stream_active[playback])
+			if (snd_soc_dai_stream_active(dai, playback))
 				snd_soc_dai_digital_mute(dai, 0, playback);
 		}
 	}
@@ -720,7 +721,7 @@ int snd_soc_resume(struct device *dev)
 
 	/* activate pins from sleep state */
 	for_each_card_components(card, component)
-		if (component->active)
+		if (snd_soc_component_active(component))
 			pinctrl_pm_select_default_state(component->dev);
 
 	dev_dbg(dev, "ASoC: Scheduling resume work\n");
@@ -1953,7 +1954,7 @@ static int snd_soc_bind_card(struct snd_soc_card *card)
 
 	/* deactivate pins to sleep state */
 	for_each_card_components(card, component)
-		if (!component->active)
+		if (!snd_soc_component_active(component))
 			pinctrl_pm_select_sleep_state(component->dev);
 
 probe_end:
