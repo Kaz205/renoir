@@ -4216,7 +4216,7 @@ static void ieee80211_8023_xmit(struct ieee80211_sub_if_data *sdata,
 	    (!sta || !test_sta_flag(sta, WLAN_STA_TDLS_PEER)))
 		ra = sdata->u.mgd.bssid;
 
-	if (!is_valid_ether_addr(ra))
+	if (is_zero_ether_addr(ra))
 		goto out_free;
 
 	if (local->ops->wake_tx_queue) {
