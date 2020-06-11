@@ -16,6 +16,7 @@
 #include <linux/sched/init.h>
 #include <linux/sched/isolation.h>
 #include <linux/sched/jobctl.h>
+#include <linux/sched/latsense.h>
 #include <linux/sched/loadavg.h>
 #include <linux/sched/mm.h>
 #include <linux/sched/nohz.h>
@@ -2390,6 +2391,12 @@ static inline bool task_latency_sensitive(struct task_struct *p)
 	struct cgroup_subsys_state *css = task_css(p, cpu_cgrp_id);
 	struct task_group *tg;
 
+#ifdef CONFIG_PROC_LATSENSE
+	/* Over CGroup interface with task-interface. */
+	if (p->proc_latency_sensitive)
+		return true;
+#endif
+
 	if (!css)
 		return false;
 	tg = container_of(css, struct task_group, css);
@@ -2397,10 +2404,15 @@ static inline bool task_latency_sensitive(struct task_struct *p)
 	return tg->latency_sensitive;
 }
 #else
+
 static inline bool task_latency_sensitive(struct task_struct *p)
 {
+#ifdef CONFIG_PROC_LATSENSE
+	return !!p->proc_latency_sensitive;
+#endif
 	return false;
 }
+
 #endif /* CONFIG_UCLAMP_TASK_GROUP */
 
 #ifdef arch_scale_freq_capacity
