@@ -62,6 +62,11 @@ static inline void walt_enable_frequency_aggregation(bool enable)
 {
 	sched_freq_aggr_en = enable;
 }
+
+#ifndef CONFIG_IRQ_TIME_ACCOUNTING
+static inline u64 irq_time_read(int cpu) { return 0; }
+#endif
+
 #else
 static inline unsigned int walt_big_tasks(int cpu)
 {
