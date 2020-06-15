@@ -99,7 +99,7 @@ static void __dma_direct_free_pages(struct device *dev, struct page *page, size_
 	dma_free_contiguous(dev, page, size);
 }
 
-struct page *__dma_direct_alloc_pages(struct device *dev, size_t size,
+static struct page *__dma_direct_alloc_pages(struct device *dev, size_t size,
 		gfp_t gfp, unsigned long attrs)
 {
 	size_t alloc_size = PAGE_ALIGN(size);
