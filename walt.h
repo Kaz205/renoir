@@ -14,10 +14,10 @@
  * Tick interval becomes to 3333333 due to
  * rounding error when HZ=300.
  */
-#define DEFAULT_SCHED_RAVG_WINDOW (3333333 * 6)
+#define DEFAULT_SCHED_RAVG_WINDOW (3333333 * 5)
 #else
-/* Min window size (in ns) = 20ms */
-#define DEFAULT_SCHED_RAVG_WINDOW 20000000
+/* Min window size (in ns) = 16ms */
+#define DEFAULT_SCHED_RAVG_WINDOW 16000000
 #endif
 
 /* Max window size (in ns) = 1s */
@@ -53,7 +53,7 @@ static inline unsigned int sched_cpu_legacy_freq(int cpu)
 {
 	unsigned long curr_cap = arch_scale_freq_capacity(cpu);
 
-	return (curr_cap * (u64) cpu_rq(cpu)->cluster->max_possible_freq) >>
+	return (curr_cap * (u64) cpu_rq(cpu)->wrq.cluster->max_possible_freq) >>
 		SCHED_CAPACITY_SHIFT;
 }
 
@@ -62,6 +62,11 @@ static inline void walt_enable_frequency_aggregation(bool enable)
 {
 	sched_freq_aggr_en = enable;
 }
+
+#ifndef CONFIG_IRQ_TIME_ACCOUNTING
+static inline u64 irq_time_read(int cpu) { return 0; }
+#endif
+
 #else
 static inline unsigned int walt_big_tasks(int cpu)
 {

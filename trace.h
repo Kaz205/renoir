@@ -39,7 +39,7 @@ TRACE_EVENT(sched_update_pred_demand,
 		__entry->runtime        = runtime;
 		__entry->pct            = pct;
 		__entry->pred_demand     = pred_demand;
-		memcpy(__entry->bucket, p->ravg.busy_buckets,
+		memcpy(__entry->bucket, p->wts.busy_buckets,
 					NUM_BUSY_BUCKETS * sizeof(u8));
 		__entry->cpu            = task_cpu(p);
 	),
@@ -80,12 +80,12 @@ TRACE_EVENT(sched_update_history,
 		__entry->runtime        = runtime;
 		__entry->samples        = samples;
 		__entry->evt            = evt;
-		__entry->demand         = p->ravg.demand;
-		__entry->coloc_demand   = p->ravg.coloc_demand;
-		__entry->pred_demand     = p->ravg.pred_demand;
-		memcpy(__entry->hist, p->ravg.sum_history,
+		__entry->demand         = p->wts.demand;
+		__entry->coloc_demand   = p->wts.coloc_demand;
+		__entry->pred_demand     = p->wts.pred_demand;
+		memcpy(__entry->hist, p->wts.sum_history,
 					RAVG_HIST_SIZE_MAX * sizeof(u32));
-		__entry->nr_big_tasks   = rq->walt_stats.nr_big_tasks;
+		__entry->nr_big_tasks   = rq->wrq.walt_stats.nr_big_tasks;
 		__entry->cpu            = rq->cpu;
 	),
 
@@ -180,40 +180,40 @@ TRACE_EVENT(sched_update_task_ravg,
 
 	TP_fast_assign(
 		__entry->wallclock      = wallclock;
-		__entry->win_start      = rq->window_start;
-		__entry->delta          = (wallclock - rq->window_start);
+		__entry->win_start      = rq->wrq.window_start;
+		__entry->delta          = (wallclock - rq->wrq.window_start);
 		__entry->evt            = evt;
 		__entry->cpu            = rq->cpu;
 		__entry->cur_pid        = rq->curr->pid;
-		__entry->cur_freq       = rq->task_exec_scale;
+		__entry->cur_freq       = rq->wrq.task_exec_scale;
 		memcpy(__entry->comm, p->comm, TASK_COMM_LEN);
 		__entry->pid            = p->pid;
-		__entry->mark_start     = p->ravg.mark_start;
-		__entry->delta_m        = (wallclock - p->ravg.mark_start);
-		__entry->demand         = p->ravg.demand;
-		__entry->coloc_demand	= p->ravg.coloc_demand;
-		__entry->sum            = p->ravg.sum;
+		__entry->mark_start     = p->wts.mark_start;
+		__entry->delta_m        = (wallclock - p->wts.mark_start);
+		__entry->demand         = p->wts.demand;
+		__entry->coloc_demand	= p->wts.coloc_demand;
+		__entry->sum            = p->wts.sum;
 		__entry->irqtime        = irqtime;
-		__entry->pred_demand     = p->ravg.pred_demand;
-		__entry->rq_cs          = rq->curr_runnable_sum;
-		__entry->rq_ps          = rq->prev_runnable_sum;
+		__entry->pred_demand     = p->wts.pred_demand;
+		__entry->rq_cs          = rq->wrq.curr_runnable_sum;
+		__entry->rq_ps          = rq->wrq.prev_runnable_sum;
 		__entry->grp_cs = cpu_time ? cpu_time->curr_runnable_sum : 0;
 		__entry->grp_ps = cpu_time ? cpu_time->prev_runnable_sum : 0;
 		__entry->grp_nt_cs = cpu_time ?
 					cpu_time->nt_curr_runnable_sum : 0;
 		__entry->grp_nt_ps = cpu_time ?
 					cpu_time->nt_prev_runnable_sum : 0;
-		__entry->curr_window	= p->ravg.curr_window;
-		__entry->prev_window	= p->ravg.prev_window;
+		__entry->curr_window	= p->wts.curr_window;
+		__entry->prev_window	= p->wts.prev_window;
 		__window_data(__get_dynamic_array(curr_sum),
-						p->ravg.curr_window_cpu);
+						p->wts.curr_window_cpu);
 		__window_data(__get_dynamic_array(prev_sum),
-						p->ravg.prev_window_cpu);
-		__entry->nt_cs		= rq->nt_curr_runnable_sum;
-		__entry->nt_ps		= rq->nt_prev_runnable_sum;
-		__entry->active_time	= p->ravg.active_time;
-		__entry->curr_top	= rq->curr_top;
-		__entry->prev_top	= rq->prev_top;
+						p->wts.prev_window_cpu);
+		__entry->nt_cs		= rq->wrq.nt_curr_runnable_sum;
+		__entry->nt_ps		= rq->wrq.nt_prev_runnable_sum;
+		__entry->active_time	= p->wts.active_time;
+		__entry->curr_top	= rq->wrq.curr_top;
+		__entry->prev_top	= rq->wrq.prev_top;
 	),
 
 	TP_printk("wc %llu ws %llu delta %llu event %s cpu %d cur_freq %u cur_pid %d task %d (%s) ms %llu delta %llu demand %u coloc_demand: %u sum %u irqtime %llu pred_demand %u rq_cs %llu rq_ps %llu cur_window %u (%s) prev_window %u (%s) nt_cs %llu nt_ps %llu active_time %u grp_cs %lld grp_ps %lld, grp_nt_cs %llu, grp_nt_ps: %llu curr_top %u prev_top %u",
@@ -262,21 +262,21 @@ TRACE_EVENT(sched_update_task_ravg_mini,
 
 	TP_fast_assign(
 		__entry->wallclock      = wallclock;
-		__entry->win_start      = rq->window_start;
-		__entry->delta          = (wallclock - rq->window_start);
+		__entry->win_start      = rq->wrq.window_start;
+		__entry->delta          = (wallclock - rq->wrq.window_start);
 		__entry->evt            = evt;
 		__entry->cpu            = rq->cpu;
 		memcpy(__entry->comm, p->comm, TASK_COMM_LEN);
 		__entry->pid            = p->pid;
-		__entry->mark_start     = p->ravg.mark_start;
-		__entry->delta_m        = (wallclock - p->ravg.mark_start);
-		__entry->demand         = p->ravg.demand;
-		__entry->rq_cs          = rq->curr_runnable_sum;
-		__entry->rq_ps          = rq->prev_runnable_sum;
+		__entry->mark_start     = p->wts.mark_start;
+		__entry->delta_m        = (wallclock - p->wts.mark_start);
+		__entry->demand         = p->wts.demand;
+		__entry->rq_cs          = rq->wrq.curr_runnable_sum;
+		__entry->rq_ps          = rq->wrq.prev_runnable_sum;
 		__entry->grp_cs = cpu_time ? cpu_time->curr_runnable_sum : 0;
 		__entry->grp_ps = cpu_time ? cpu_time->prev_runnable_sum : 0;
-		__entry->curr_window	= p->ravg.curr_window;
-		__entry->prev_window	= p->ravg.prev_window;
+		__entry->curr_window	= p->wts.curr_window;
+		__entry->prev_window	= p->wts.prev_window;
 	),
 
 	TP_printk("wc %llu ws %llu delta %llu event %s cpu %d task %d (%s) ms %llu delta %llu demand %u rq_cs %llu rq_ps %llu cur_window %u prev_window %u grp_cs %lld grp_ps %lld",
@@ -293,7 +293,7 @@ extern const char __weak *migrate_type_names[];
 
 TRACE_EVENT(sched_set_preferred_cluster,
 
-	TP_PROTO(struct related_thread_group *grp, u64 total_demand),
+	TP_PROTO(struct walt_related_thread_group *grp, u64 total_demand),
 
 	TP_ARGS(grp, total_demand),
 
@@ -411,16 +411,17 @@ TRACE_EVENT(sched_load_to_gov,
 	TP_fast_assign(
 		__entry->cpu		= cpu_of(rq);
 		__entry->policy		= policy;
-		__entry->ed_task_pid	= rq->ed_task ? rq->ed_task->pid : -1;
+		__entry->ed_task_pid	=
+				rq->wrq.ed_task ? rq->wrq.ed_task->pid : -1;
 		__entry->aggr_grp_load	= aggr_grp_load;
 		__entry->freq_aggr	= freq_aggr;
 		__entry->tt_load	= tt_load;
-		__entry->rq_ps		= rq->prev_runnable_sum;
-		__entry->grp_rq_ps	= rq->grp_time.prev_runnable_sum;
-		__entry->nt_ps		= rq->nt_prev_runnable_sum;
-		__entry->grp_nt_ps	= rq->grp_time.nt_prev_runnable_sum;
+		__entry->rq_ps		= rq->wrq.prev_runnable_sum;
+		__entry->grp_rq_ps	= rq->wrq.grp_time.prev_runnable_sum;
+		__entry->nt_ps		= rq->wrq.nt_prev_runnable_sum;
+		__entry->grp_nt_ps	= rq->wrq.grp_time.nt_prev_runnable_sum;
 		__entry->pl		=
-					rq->walt_stats.pred_demands_sum_scaled;
+				rq->wrq.walt_stats.pred_demands_sum_scaled;
 		__entry->load		= load;
 		__entry->big_task_rotation = big_task_rotation;
 		__entry->user_hint = user_hint;
