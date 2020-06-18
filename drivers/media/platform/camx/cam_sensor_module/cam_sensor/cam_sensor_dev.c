@@ -339,6 +339,8 @@ static int32_t cam_sensor_driver_platform_probe(
 	platform_set_drvdata(pdev, s_ctrl);
 	s_ctrl->sensor_state = CAM_SENSOR_INIT;
 
+	pr_info("%s driver probed successfully\n", KBUILD_MODNAME);
+
 	return rc;
 unreg_subdev:
 	cam_unregister_subdev(&(s_ctrl->v4l2_dev_str));

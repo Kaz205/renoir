@@ -375,7 +375,18 @@ static int cam_cci_platform_probe(struct platform_device *pdev)
 	struct cam_cpas_register_params cpas_parms;
 	struct cci_device *new_cci_dev;
 	struct cam_hw_soc_info *soc_info = NULL;
+	struct device_node *cpas_intf;
+	struct platform_device *cpas_pdev;
 	int rc = 0;
+
+	/* Check, that the CDM interface is available */
+	cpas_intf = of_parse_phandle(pdev->dev.of_node, "cpas_intf", 0);
+	cpas_pdev = of_find_device_by_node(cpas_intf);
+	if (!cpas_pdev || !cpas_pdev->dev.driver) {
+		CAM_DBG(CAM_CCI, "Probe deferred, until CPAS become ready");
+		return -EPROBE_DEFER;
+	}
+	put_device(&cpas_pdev->dev);
 
 	new_cci_dev = kzalloc(sizeof(struct cci_device),
 		GFP_KERNEL);
@@ -449,6 +460,9 @@ static int cam_cci_platform_probe(struct platform_device *pdev)
 	CAM_DBG(CAM_CCI, "CPAS registration successful handle=%d",
 		cpas_parms.client_handle);
 	new_cci_dev->cpas_handle = cpas_parms.client_handle;
+
+	pr_info("%s[%d] driver probed successfully\n", KBUILD_MODNAME,
+		cpas_parms.client_handle);
 
 	return rc;
 cci_no_resource:

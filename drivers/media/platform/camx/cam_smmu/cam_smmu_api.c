@@ -3630,6 +3630,8 @@ static int cam_smmu_probe(struct platform_device *pdev)
 		INIT_LIST_HEAD(&iommu_cb_set.payload_list);
 	}
 
+	pr_info("%s driver probed successfully\n", KBUILD_MODNAME);
+
 	return rc;
 }
 

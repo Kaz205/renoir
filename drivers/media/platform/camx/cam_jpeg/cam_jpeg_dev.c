@@ -126,13 +126,31 @@ static int cam_jpeg_dev_probe(struct platform_device *pdev)
 	struct cam_hw_mgr_intf hw_mgr_intf;
 	struct cam_node *node;
 	int iommu_hdl = -1;
+	struct device_node *cpas_intf;
+	struct platform_device *cpas_pdev;
+
+	/* Check, that the CPAS interface is available */
+	cpas_intf = of_parse_phandle(pdev->dev.of_node, "cpas_intf", 0);
+	cpas_pdev = of_find_device_by_node(cpas_intf);
+	if (!cpas_pdev || !cpas_pdev->dev.driver) {
+		CAM_DBG(CAM_JPEG, "Probe deferred, until CDM become ready");
+		return -EPROBE_DEFER;
+	}
+	put_device(&cpas_pdev->dev);
+
+	/* Probe child nodes, before the call of "cam_subdev_probe" */
+	rc = devm_of_platform_populate(&pdev->dev);
+	if (rc) {
+		CAM_ERR(CAM_JPEG, "Cannot initialize child nodes");
+		goto unregister;
+	}
 
 	g_jpeg_dev.sd.internal_ops = &cam_jpeg_subdev_internal_ops;
 	rc = cam_subdev_probe(&g_jpeg_dev.sd, pdev, CAM_JPEG_DEV_NAME,
 		CAM_JPEG_DEVICE_TYPE);
 	if (rc) {
 		CAM_ERR(CAM_JPEG, "JPEG cam_subdev_probe failed %d", rc);
-		goto err;
+		goto err_depopulate;
 	}
 	node = (struct cam_node *)g_jpeg_dev.sd.token;
 
@@ -167,7 +185,7 @@ static int cam_jpeg_dev_probe(struct platform_device *pdev)
 
 	mutex_init(&g_jpeg_dev.jpeg_mutex);
 
-	CAM_INFO(CAM_JPEG, "Camera JPEG probe complete");
+	pr_info("%s driver probed successfully\n", KBUILD_MODNAME);
 
 	return rc;
 
@@ -175,10 +193,12 @@ ctx_init_fail:
 	for (--i; i >= 0; i--)
 		if (cam_jpeg_context_deinit(&g_jpeg_dev.ctx_jpeg[i]))
 			CAM_ERR(CAM_JPEG, "deinit fail %d %d", i, rc);
+err_depopulate:
+	devm_of_platform_depopulate(&pdev->dev);
 unregister:
 	if (cam_subdev_remove(&g_jpeg_dev.sd))
 		CAM_ERR(CAM_JPEG, "remove fail %d", rc);
-err:
+
 	return rc;
 }
 

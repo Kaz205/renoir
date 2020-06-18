@@ -22,7 +22,7 @@
 static struct cam_hw_intf *cam_ife_csid_hw_list[CAM_IFE_CSID_HW_RES_MAX] = {
 	0, 0, 0, 0};
 
-static char csid_dev_name[8];
+static char csid_dev_name[32];
 
 int cam_ife_csid_probe(struct platform_device *pdev)
 {
@@ -89,14 +89,14 @@ int cam_ife_csid_probe(struct platform_device *pdev)
 		goto free_dev;
 
 	platform_set_drvdata(pdev, csid_dev);
-	CAM_DBG(CAM_ISP, "CSID:%d probe successful",
-		csid_hw_intf->hw_idx);
-
 
 	if (csid_hw_intf->hw_idx < CAM_IFE_CSID_HW_RES_MAX)
 		cam_ife_csid_hw_list[csid_hw_intf->hw_idx] = csid_hw_intf;
 	else
 		goto free_dev;
+
+	pr_info("%s[%d] driver probed successfully\n", KBUILD_MODNAME,
+		csid_hw_intf->hw_idx);
 
 	return 0;
 

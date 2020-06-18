@@ -671,6 +671,27 @@ static int cam_req_mgr_probe(struct platform_device *pdev)
 {
 	int rc;
 
+	struct device_node *smmu_intf, *sync_intf;
+	struct platform_device *smmu_pdev, *sync_pdev;
+
+	/* Check, that the SYNC interface is available */
+	sync_intf = of_parse_phandle(pdev->dev.of_node, "sync_intf", 0);
+	sync_pdev = of_find_device_by_node(sync_intf);
+	if (!sync_pdev || !sync_pdev->dev.driver) {
+		CAM_DBG(CAM_CRM, "Probe deferred, until SYNC become ready");
+		return -EPROBE_DEFER;
+	}
+	put_device(&sync_pdev->dev);
+
+	/* Check, that the SMMU interface is available */
+	smmu_intf = of_parse_phandle(pdev->dev.of_node, "smmu_intf", 0);
+	smmu_pdev = of_find_device_by_node(smmu_intf);
+	if (!smmu_pdev || !smmu_pdev->dev.driver) {
+		CAM_WARN(CAM_CRM, "Probe deferred, until SMMU become ready");
+		return -EPROBE_DEFER;
+	}
+	put_device(&smmu_pdev->dev);
+
 	rc = cam_v4l2_device_setup(&pdev->dev);
 	if (rc)
 		return rc;
@@ -717,6 +738,8 @@ static int cam_req_mgr_probe(struct platform_device *pdev)
 				g_cam_req_mgr_timer_cachep->name);
 #endif
 	}
+
+	pr_info("%s driver probed successfully\n", KBUILD_MODNAME);
 
 	return rc;
 

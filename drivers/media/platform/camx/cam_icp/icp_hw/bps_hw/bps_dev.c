@@ -101,6 +101,17 @@ int cam_bps_probe(struct platform_device *pdev)
 	struct cam_bps_device_core_info   *core_info = NULL;
 	struct cam_bps_device_hw_info     *hw_info = NULL;
 	int                                rc = 0;
+	struct device_node *cpas_intf;
+	struct platform_device *cpas_pdev;
+
+	/* Check, that the CPAS interface is available */
+	cpas_intf = of_parse_phandle(pdev->dev.of_node, "cpas_intf", 0);
+	cpas_pdev = of_find_device_by_node(cpas_intf);
+	if (!cpas_pdev || !cpas_pdev->dev.driver) {
+		CAM_DBG(CAM_ICP, "Probe deferred, until CDM Intf become ready");
+		return -EPROBE_DEFER;
+	}
+	put_device(&cpas_pdev->dev);
 
 	bps_dev_intf = kzalloc(sizeof(struct cam_hw_intf), GFP_KERNEL);
 	if (!bps_dev_intf)
@@ -174,7 +185,8 @@ int cam_bps_probe(struct platform_device *pdev)
 	mutex_init(&bps_dev->hw_mutex);
 	spin_lock_init(&bps_dev->hw_lock);
 	init_completion(&bps_dev->hw_complete);
-	CAM_DBG(CAM_ICP, "BPS%d probe successful",
+
+	pr_info("%s[%d] driver probed successfully\n", KBUILD_MODNAME,
 		bps_dev_intf->hw_idx);
 
 	return rc;

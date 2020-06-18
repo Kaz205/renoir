@@ -314,9 +314,11 @@ int cam_virtual_cdm_probe(struct platform_device *pdev)
 		CAM_ERR(CAM_CDM, "Virtual CDM Interface registration failed");
 		goto intf_registration_failed;
 	}
-	CAM_DBG(CAM_CDM, "CDM%d registered to intf successful",
-		cdm_hw_intf->hw_idx);
+
 	mutex_unlock(&cdm_hw->hw_mutex);
+
+	pr_info("%s[%d] driver probed successfully\n", KBUILD_MODNAME,
+		cdm_hw_intf->hw_idx);
 
 	return 0;
 intf_registration_failed:

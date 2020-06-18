@@ -157,11 +157,22 @@ static int cam_icp_probe(struct platform_device *pdev)
 	struct cam_node *node;
 	struct cam_hw_mgr_intf *hw_mgr_intf;
 	int iommu_hdl = -1;
+	struct device_node *cpas_intf;
+	struct platform_device *cpas_pdev;
 
 	if (!pdev) {
 		CAM_ERR(CAM_ICP, "pdev is NULL");
 		return -EINVAL;
 	}
+
+	/* Check, that the CPAS interface is available */
+	cpas_intf = of_parse_phandle(pdev->dev.of_node, "cpas_intf", 0);
+	cpas_pdev = of_find_device_by_node(cpas_intf);
+	if (!cpas_pdev || !cpas_pdev->dev.driver) {
+		CAM_DBG(CAM_ICP, "Probe deferred, until CDM Intf become ready");
+		return -EPROBE_DEFER;
+	}
+	put_device(&cpas_pdev->dev);
 
 	g_icp_dev.sd.pdev = pdev;
 	g_icp_dev.sd.internal_ops = &cam_icp_subdev_internal_ops;
@@ -210,7 +221,7 @@ static int cam_icp_probe(struct platform_device *pdev)
 	g_icp_dev.open_cnt = 0;
 	mutex_init(&g_icp_dev.icp_lock);
 
-	CAM_DBG(CAM_ICP, "ICP probe complete");
+	pr_info("%s driver probed successfully\n", KBUILD_MODNAME);
 
 	return rc;
 

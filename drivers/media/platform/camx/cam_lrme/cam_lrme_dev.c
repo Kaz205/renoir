@@ -16,6 +16,7 @@
 #include <linux/slab.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/of_platform.h>
 
 #include "cam_subdev.h"
 #include "cam_node.h"
@@ -124,6 +125,17 @@ static int cam_lrme_dev_probe(struct platform_device *pdev)
 	int i;
 	struct cam_hw_mgr_intf hw_mgr_intf;
 	struct cam_node *node;
+	struct device_node *cpas_intf;
+	struct platform_device *cpas_pdev;
+
+	/* Check, that the CPAS interface is available */
+	cpas_intf = of_parse_phandle(pdev->dev.of_node, "cpas_intf", 0);
+	cpas_pdev = of_find_device_by_node(cpas_intf);
+	if (!cpas_pdev || !cpas_pdev->dev.driver) {
+		CAM_DBG(CAM_LRME, "Probe deferred, until CDM become ready");
+		return -EPROBE_DEFER;
+	}
+	put_device(&cpas_pdev->dev);
 
 	g_lrme_dev = kzalloc(sizeof(struct cam_lrme_dev), GFP_KERNEL);
 	if (!g_lrme_dev) {
@@ -134,11 +146,18 @@ static int cam_lrme_dev_probe(struct platform_device *pdev)
 
 	mutex_init(&g_lrme_dev->lock);
 
+	/* Probe child nodes, before the call of "cam_subdev_probe" */
+	rc = devm_of_platform_populate(&pdev->dev);
+	if (rc) {
+		CAM_ERR(CAM_LRME, "Cannot initialize child nodes");
+		goto err_mutex_destroy;
+	}
+
 	rc = cam_subdev_probe(&g_lrme_dev->sd, pdev, CAM_LRME_DEV_NAME,
 		CAM_LRME_DEVICE_TYPE);
 	if (rc) {
 		CAM_ERR(CAM_LRME, "LRME cam_subdev_probe failed");
-		goto free_mem;
+		goto err_depopulate;
 	}
 	node = (struct cam_node *)g_lrme_dev->sd.token;
 
@@ -165,7 +184,7 @@ static int cam_lrme_dev_probe(struct platform_device *pdev)
 		goto deinit_ctx;
 	}
 
-	CAM_DBG(CAM_LRME, "%s probe complete", g_lrme_dev->sd.name);
+	pr_info("%s driver probed successfully\n", KBUILD_MODNAME);
 
 	return 0;
 
@@ -174,10 +193,13 @@ deinit_ctx:
 		if (cam_lrme_context_deinit(&g_lrme_dev->lrme_ctx[i]))
 			CAM_ERR(CAM_LRME, "LRME context %d deinit failed", i);
 	}
+err_depopulate:
+	devm_of_platform_depopulate(&pdev->dev);
 unregister:
 	if (cam_subdev_remove(&g_lrme_dev->sd))
 		CAM_ERR(CAM_LRME, "Failed in subdev remove");
-free_mem:
+err_mutex_destroy:
+	mutex_destroy(&g_lrme_dev->lock);
 	kfree(g_lrme_dev);
 
 	return rc;

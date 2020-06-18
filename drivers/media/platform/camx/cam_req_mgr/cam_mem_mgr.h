@@ -21,12 +21,6 @@
 
 #define CAM_MEM_BUFQ_MAX 1024
 
-/* Enum for possible mem mgr states */
-enum cam_mem_mgr_state {
-	CAM_MEM_MGR_UNINITIALIZED,
-	CAM_MEM_MGR_INITIALIZED,
-};
-
 /*Enum for possible SMMU operations */
 enum cam_smmu_mapping_client {
 	CAM_SMMU_MAPPING_USER,

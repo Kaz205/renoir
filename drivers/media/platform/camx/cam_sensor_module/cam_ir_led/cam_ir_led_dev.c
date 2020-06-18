@@ -519,8 +519,18 @@ static int32_t cam_ir_led_platform_probe(struct platform_device *pdev)
 {
 	int32_t rc = 0;
 	struct cam_ir_led_ctrl *ictrl = NULL;
+	struct device_node *cpas_intf;
+	struct platform_device *cpas_pdev;
 
-	CAM_DBG(CAM_IR_LED, "Enter");
+	/* Check, that the CRM interface is available */
+	cpas_intf = of_parse_phandle(pdev->dev.of_node, "cpas_intf", 0);
+	cpas_pdev = of_find_device_by_node(cpas_intf);
+	if (!cpas_pdev || !cpas_pdev->dev.driver) {
+		CAM_DBG(CAM_CPAS, "Probe deferred, until CPAS become ready");
+		return -EPROBE_DEFER;
+	}
+	put_device(&cpas_pdev->dev);
+
 	if (!pdev->dev.of_node) {
 		CAM_ERR(CAM_IR_LED, "of_node NULL");
 		return -EINVAL;
@@ -570,6 +580,9 @@ static int32_t cam_ir_led_platform_probe(struct platform_device *pdev)
 	v4l2_set_subdevdata(&ictrl->v4l2_dev_str.sd, ictrl);
 	mutex_init(&(ictrl->ir_led_mutex));
 	ictrl->ir_led_state = CAM_IR_LED_STATE_INIT;
+
+	pr_info("%s driver probed successfully\n", KBUILD_MODNAME);
+
 	return rc;
 }
 

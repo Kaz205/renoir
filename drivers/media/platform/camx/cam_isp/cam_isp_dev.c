@@ -126,6 +126,17 @@ static int cam_isp_dev_probe(struct platform_device *pdev)
 	struct cam_hw_mgr_intf         hw_mgr_intf;
 	struct cam_node               *node;
 	int iommu_hdl = -1;
+	struct device_node *cpas_intf;
+	struct platform_device *cpas_pdev;
+
+	/* Check, that the CDM interface is available */
+	cpas_intf = of_parse_phandle(pdev->dev.of_node, "cpas_intf", 0);
+	cpas_pdev = of_find_device_by_node(cpas_intf);
+	if (!cpas_pdev || !cpas_pdev->dev.driver) {
+		CAM_DBG(CAM_ISP, "Probe deferred, until CPAS become ready");
+		return -EPROBE_DEFER;
+	}
+	put_device(&cpas_pdev->dev);
 
 	g_isp_dev.sd.internal_ops = &cam_isp_subdev_internal_ops;
 	/* Initialize the v4l2 subdevice first. (create cam_node) */
@@ -133,15 +144,22 @@ static int cam_isp_dev_probe(struct platform_device *pdev)
 		CAM_IFE_DEVICE_TYPE);
 	if (rc) {
 		CAM_ERR(CAM_ISP, "ISP cam_subdev_probe failed!");
-		goto err;
+		return rc;
 	}
 	node = (struct cam_node *) g_isp_dev.sd.token;
+
+	/* Probe child nodes, before the call of "cam_icp_hw_mgr_init" */
+	rc = devm_of_platform_populate(&pdev->dev);
+	if (rc) {
+		CAM_ERR(CAM_ISP, "Cannot initialize child nodes");
+		goto unregister;
+	}
 
 	memset(&hw_mgr_intf, 0, sizeof(hw_mgr_intf));
 	rc = cam_isp_hw_mgr_init(pdev->dev.of_node, &hw_mgr_intf, &iommu_hdl);
 	if (rc != 0) {
 		CAM_ERR(CAM_ISP, "Can not initialized ISP HW manager!");
-		goto unregister;
+		goto err_depopulate;
 	}
 
 	for (i = 0; i < CAM_CTX_MAX; i++) {
@@ -168,12 +186,15 @@ static int cam_isp_dev_probe(struct platform_device *pdev)
 
 	mutex_init(&g_isp_dev.isp_mutex);
 
-	CAM_INFO(CAM_ISP, "Camera ISP probe complete");
+	pr_info("%s driver probed successfully\n", KBUILD_MODNAME);
 
 	return 0;
+
+err_depopulate:
+	devm_of_platform_depopulate(&pdev->dev);
 unregister:
 	rc = cam_subdev_remove(&g_isp_dev.sd);
-err:
+
 	return rc;
 }
 

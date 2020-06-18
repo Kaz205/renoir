@@ -191,9 +191,10 @@ static int32_t cam_csiphy_platform_probe(struct platform_device *pdev)
 		CAM_ERR(CAM_CSIPHY, "CPAS registration failed rc: %d", rc);
 		goto csiphy_unregister_subdev;
 	}
-	CAM_DBG(CAM_CSIPHY, "CPAS registration successful handle=%d",
-		cpas_parms.client_handle);
 	new_csiphy_dev->cpas_handle = cpas_parms.client_handle;
+
+	pr_info("%s%d driver probed successfully\n", KBUILD_MODNAME,
+		cpas_parms.client_handle);
 
 	return rc;
 

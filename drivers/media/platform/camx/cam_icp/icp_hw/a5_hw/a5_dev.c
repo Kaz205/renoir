@@ -116,6 +116,17 @@ int cam_a5_probe(struct platform_device *pdev)
 	const struct of_device_id *match_dev = NULL;
 	struct cam_a5_device_core_info *core_info = NULL;
 	struct cam_a5_device_hw_info *hw_info = NULL;
+	struct device_node *cpas_intf;
+	struct platform_device *cpas_pdev;
+
+	/* Check, that the CPAS interface is available */
+	cpas_intf = of_parse_phandle(pdev->dev.of_node, "cpas_intf", 0);
+	cpas_pdev = of_find_device_by_node(cpas_intf);
+	if (!cpas_pdev) {
+		CAM_DBG(CAM_ICP, "Probe deferred, until CPAS become ready");
+		return -EPROBE_DEFER;
+	}
+	put_device(&cpas_pdev->dev);
 
 	a5_dev_intf = kzalloc(sizeof(struct cam_hw_intf), GFP_KERNEL);
 	if (!a5_dev_intf)
@@ -185,8 +196,9 @@ int cam_a5_probe(struct platform_device *pdev)
 	spin_lock_init(&a5_dev->hw_lock);
 	init_completion(&a5_dev->hw_complete);
 
-	CAM_DBG(CAM_ICP, "A5%d probe successful",
+	pr_info("%s[%d] driver probed successfully\n", KBUILD_MODNAME,
 		a5_dev_intf->hw_idx);
+
 	return 0;
 
 cpas_reg_failed:

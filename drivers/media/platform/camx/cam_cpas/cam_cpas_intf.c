@@ -14,6 +14,7 @@
 #include <linux/of.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <media/v4l2-event.h>
 #include <media/v4l2-ioctl.h>
@@ -25,7 +26,6 @@
 #include "cam_cpas_hw_intf.h"
 
 #define CAM_CPAS_DEV_NAME    "cam-cpas"
-#define CAM_CPAS_INTF_INITIALIZED() (g_cpas_intf && g_cpas_intf->probe_done)
 
 /**
  * struct cam_cpas_intf : CPAS interface
@@ -36,8 +36,6 @@
  * @hw_caps: CPAS HW capabilities
  * @intf_lock: CPAS interface mutex
  * @open_cnt: CPAS subdev open count
- * @probe_done: Whether CPAS prove completed
- *
  */
 struct cam_cpas_intf {
 	struct platform_device *pdev;
@@ -46,7 +44,6 @@ struct cam_cpas_intf {
 	struct cam_cpas_hw_caps hw_caps;
 	struct mutex intf_lock;
 	uint32_t open_cnt;
-	bool probe_done;
 };
 
 static struct cam_cpas_intf *g_cpas_intf;
@@ -54,11 +51,6 @@ static struct cam_cpas_intf *g_cpas_intf;
 int cam_cpas_get_cpas_hw_version(uint32_t *hw_version)
 {
 	struct cam_hw_info *cpas_hw = NULL;
-
-	if (!CAM_CPAS_INTF_INITIALIZED()) {
-		CAM_ERR(CAM_CPAS, "cpas intf not initialized");
-		return -ENODEV;
-	}
 
 	if (!hw_version) {
 		CAM_ERR(CAM_CPAS, "invalid input %pK", hw_version);
@@ -83,11 +75,6 @@ int cam_cpas_get_hw_info(uint32_t *camera_family,
 	struct cam_hw_version *cpas_version,
 	uint32_t *cam_caps)
 {
-	if (!CAM_CPAS_INTF_INITIALIZED()) {
-		CAM_ERR(CAM_CPAS, "cpas intf not initialized");
-		return -ENODEV;
-	}
-
 	if (!camera_family || !camera_version || !cpas_version || !cam_caps) {
 		CAM_ERR(CAM_CPAS, "invalid input %pK %pK %pK %pK",
 			camera_family, camera_version, cpas_version, cam_caps);
@@ -108,11 +95,6 @@ int cam_cpas_reg_write(uint32_t client_handle,
 	uint32_t value)
 {
 	int rc;
-
-	if (!CAM_CPAS_INTF_INITIALIZED()) {
-		CAM_ERR(CAM_CPAS, "cpas intf not initialized");
-		return -ENODEV;
-	}
 
 	if (g_cpas_intf->hw_intf->hw_ops.process_cmd) {
 		struct cam_cpas_hw_cmd_reg_read_write cmd_reg_write;
@@ -143,11 +125,6 @@ int cam_cpas_reg_read(uint32_t client_handle,
 	uint32_t *value)
 {
 	int rc;
-
-	if (!CAM_CPAS_INTF_INITIALIZED()) {
-		CAM_ERR(CAM_CPAS, "cpas intf not initialized");
-		return -ENODEV;
-	}
 
 	if (!value) {
 		CAM_ERR(CAM_CPAS, "Invalid arg value");
@@ -187,11 +164,6 @@ int cam_cpas_update_axi_vote(uint32_t client_handle,
 {
 	int rc;
 
-	if (!CAM_CPAS_INTF_INITIALIZED()) {
-		CAM_ERR(CAM_CPAS, "cpas intf not initialized");
-		return -ENODEV;
-	}
-
 	if (g_cpas_intf->hw_intf->hw_ops.process_cmd) {
 		struct cam_cpas_hw_cmd_axi_vote cmd_axi_vote;
 
@@ -218,11 +190,6 @@ int cam_cpas_update_ahb_vote(uint32_t client_handle,
 {
 	int rc;
 
-	if (!CAM_CPAS_INTF_INITIALIZED()) {
-		CAM_ERR(CAM_CPAS, "cpas intf not initialized");
-		return -ENODEV;
-	}
-
 	if (g_cpas_intf->hw_intf->hw_ops.process_cmd) {
 		struct cam_cpas_hw_cmd_ahb_vote cmd_ahb_vote;
 
@@ -248,11 +215,6 @@ int cam_cpas_stop(uint32_t client_handle)
 {
 	int rc;
 
-	if (!CAM_CPAS_INTF_INITIALIZED()) {
-		CAM_ERR(CAM_CPAS, "cpas intf not initialized");
-		return -ENODEV;
-	}
-
 	if (g_cpas_intf->hw_intf->hw_ops.stop) {
 		struct cam_cpas_hw_cmd_stop cmd_hw_stop;
 
@@ -276,11 +238,6 @@ int cam_cpas_start(uint32_t client_handle,
 	struct cam_ahb_vote *ahb_vote, struct cam_axi_vote *axi_vote)
 {
 	int rc;
-
-	if (!CAM_CPAS_INTF_INITIALIZED()) {
-		CAM_ERR(CAM_CPAS, "cpas intf not initialized");
-		return -ENODEV;
-	}
 
 	if (g_cpas_intf->hw_intf->hw_ops.start) {
 		struct cam_cpas_hw_cmd_start cmd_hw_start;
@@ -307,11 +264,6 @@ int cam_cpas_unregister_client(uint32_t client_handle)
 {
 	int rc;
 
-	if (!CAM_CPAS_INTF_INITIALIZED()) {
-		CAM_ERR(CAM_CPAS, "cpas intf not initialized");
-		return -ENODEV;
-	}
-
 	if (g_cpas_intf->hw_intf->hw_ops.process_cmd) {
 		rc = g_cpas_intf->hw_intf->hw_ops.process_cmd(
 			g_cpas_intf->hw_intf->hw_priv,
@@ -332,11 +284,6 @@ int cam_cpas_register_client(
 	struct cam_cpas_register_params *register_params)
 {
 	int rc;
-
-	if (!CAM_CPAS_INTF_INITIALIZED()) {
-		CAM_ERR(CAM_CPAS, "cpas intf not initialized");
-		return -ENODEV;
-	}
 
 	if (g_cpas_intf->hw_intf->hw_ops.process_cmd) {
 		rc = g_cpas_intf->hw_intf->hw_ops.process_cmd(
@@ -405,7 +352,7 @@ static int cam_cpas_subdev_open(struct v4l2_subdev *sd,
 {
 	struct cam_cpas_intf *cpas_intf = v4l2_get_subdevdata(sd);
 
-	if (!cpas_intf || !cpas_intf->probe_done) {
+	if (!cpas_intf) {
 		CAM_ERR(CAM_CPAS, "CPAS not initialized");
 		return -ENODEV;
 	}
@@ -423,7 +370,7 @@ static int cam_cpas_subdev_close(struct v4l2_subdev *sd,
 {
 	struct cam_cpas_intf *cpas_intf = v4l2_get_subdevdata(sd);
 
-	if (!cpas_intf || !cpas_intf->probe_done) {
+	if (!cpas_intf) {
 		CAM_ERR(CAM_CPAS, "CPAS not initialized");
 		return -ENODEV;
 	}
@@ -442,7 +389,7 @@ static long cam_cpas_subdev_ioctl(struct v4l2_subdev *sd,
 	int32_t rc;
 	struct cam_cpas_intf *cpas_intf = v4l2_get_subdevdata(sd);
 
-	if (!cpas_intf || !cpas_intf->probe_done) {
+	if (!cpas_intf) {
 		CAM_ERR(CAM_CPAS, "CPAS not initialized");
 		return -ENODEV;
 	}
@@ -468,7 +415,7 @@ static long cam_cpas_subdev_compat_ioctl(struct v4l2_subdev *sd,
 	int32_t rc;
 	struct cam_cpas_intf *cpas_intf = v4l2_get_subdevdata(sd);
 
-	if (!cpas_intf || !cpas_intf->probe_done) {
+	if (!cpas_intf) {
 		CAM_ERR(CAM_CPAS, "CPAS not initialized");
 		return -ENODEV;
 	}
@@ -552,9 +499,20 @@ static int cam_cpas_subdev_register(struct platform_device *pdev)
 
 static int cam_cpas_dev_probe(struct platform_device *pdev)
 {
+	struct device_node *crm_intf;
+	struct platform_device *crm_pdev;
 	struct cam_cpas_hw_caps *hw_caps;
 	struct cam_hw_intf *hw_intf;
 	int rc;
+
+	/* Check, that the CRM interface is available */
+	crm_intf = of_parse_phandle(pdev->dev.of_node, "crm_intf", 0);
+	crm_pdev = of_find_device_by_node(crm_intf);
+	if (!crm_pdev || !crm_pdev->dev.driver) {
+		CAM_DBG(CAM_CPAS, "Probe deferred, until CRM become ready");
+		return -EPROBE_DEFER;
+	}
+	put_device(&crm_pdev->dev);
 
 	if (g_cpas_intf) {
 		CAM_ERR(CAM_CPAS, "cpas dev proble already done");
@@ -588,17 +546,22 @@ static int cam_cpas_dev_probe(struct platform_device *pdev)
 		goto error_hw_remove;
 	}
 
+	rc = devm_of_platform_populate(&pdev->dev);
+	if (rc)
+		goto error_hw_remove;
+
 	rc = cam_cpas_subdev_register(pdev);
 	if (rc)
 		goto error_hw_remove;
 
-	g_cpas_intf->probe_done = true;
 	CAM_DBG(CAM_CPAS,
 		"CPAS INTF Probe success %d, %d.%d.%d, %d.%d.%d, 0x%x",
 		hw_caps->camera_family, hw_caps->camera_version.major,
 		hw_caps->camera_version.minor, hw_caps->camera_version.incr,
 		hw_caps->cpas_version.major, hw_caps->cpas_version.minor,
 		hw_caps->cpas_version.incr, hw_caps->camera_capability);
+
+	pr_info("%s driver probed successfully\n", KBUILD_MODNAME);
 
 	return rc;
 
@@ -614,13 +577,7 @@ error_destroy_mem:
 
 static int cam_cpas_dev_remove(struct platform_device *dev)
 {
-	if (!CAM_CPAS_INTF_INITIALIZED()) {
-		CAM_ERR(CAM_CPAS, "cpas intf not initialized");
-		return -ENODEV;
-	}
-
 	mutex_lock(&g_cpas_intf->intf_lock);
-	g_cpas_intf->probe_done = false;
 	cam_unregister_subdev(&g_cpas_intf->subdev);
 	cam_cpas_hw_remove(g_cpas_intf->hw_intf);
 	mutex_unlock(&g_cpas_intf->intf_lock);

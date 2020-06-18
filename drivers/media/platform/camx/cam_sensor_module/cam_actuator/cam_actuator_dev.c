@@ -383,6 +383,8 @@ static int32_t cam_actuator_driver_platform_probe(
 	platform_set_drvdata(pdev, a_ctrl);
 	a_ctrl->cam_act_state = CAM_ACTUATOR_INIT;
 
+	pr_info("%s driver probed successfully\n", KBUILD_MODNAME);
+
 	return rc;
 
 free_mem:

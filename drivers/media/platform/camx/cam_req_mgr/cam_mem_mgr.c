@@ -28,7 +28,6 @@
 #include "cam_debug_util.h"
 
 static struct cam_mem_table tbl;
-static atomic_t cam_mem_mgr_state = ATOMIC_INIT(CAM_MEM_MGR_UNINITIALIZED);
 
 static int cam_mem_util_get_dma_dir(uint32_t flags)
 {
@@ -150,8 +149,6 @@ int cam_mem_mgr_init(void)
 	}
 	mutex_init(&tbl.m_lock);
 
-	atomic_set(&cam_mem_mgr_state, CAM_MEM_MGR_INITIALIZED);
-
 	return 0;
 }
 
@@ -191,11 +188,6 @@ int cam_mem_get_io_buf(int32_t buf_handle, int32_t mmu_handle,
 	int rc = 0, idx;
 
 	*len_ptr = 0;
-
-	if (!atomic_read(&cam_mem_mgr_state)) {
-		CAM_ERR(CAM_MEM, "failed. mem_mgr not initialized");
-		return -EINVAL;
-	}
 
 	idx = CAM_MEM_MGR_GET_HDL_IDX(buf_handle);
 	if (idx >= CAM_MEM_BUFQ_MAX || idx <= 0)
@@ -241,11 +233,6 @@ int cam_mem_get_cpu_buf(int32_t buf_handle, uintptr_t *vaddr_ptr, size_t *len)
 	int rc = 0;
 	int idx;
 	struct dma_buf *dmabuf = NULL;
-
-	if (!atomic_read(&cam_mem_mgr_state)) {
-		CAM_ERR(CAM_MEM, "failed. mem_mgr not initialized");
-		return -EINVAL;
-	}
 
 	if (!buf_handle || !vaddr_ptr || !len)
 		return -EINVAL;
@@ -308,11 +295,6 @@ int cam_mem_put_cpu_buf(int32_t buf_handle)
 	int idx;
 	struct dma_buf *dmabuf = NULL;
 
-	if (!atomic_read(&cam_mem_mgr_state)) {
-		CAM_ERR(CAM_MEM, "failed. mem_mgr not initialized");
-		return -EINVAL;
-	}
-
 	if (!buf_handle)
 		return -EINVAL;
 
@@ -361,11 +343,6 @@ int cam_mem_mgr_cache_ops(struct cam_mem_cache_ops_cmd *cmd)
 	int rc = 0, idx;
 	uint32_t cache_dir = DMA_BIDIRECTIONAL;
 	unsigned long dmabuf_flag = 0;
-
-	if (!atomic_read(&cam_mem_mgr_state)) {
-		CAM_ERR(CAM_MEM, "failed. mem_mgr not initialized");
-		return -EINVAL;
-	}
 
 	if (!cmd)
 		return -EINVAL;
@@ -665,11 +642,6 @@ int cam_mem_mgr_alloc_and_map(struct cam_mem_mgr_alloc_cmd *cmd)
 	uintptr_t kvaddr = 0;
 	size_t klen;
 
-	if (!atomic_read(&cam_mem_mgr_state)) {
-		CAM_ERR(CAM_MEM, "failed. mem_mgr not initialized");
-		return -EINVAL;
-	}
-
 	if (!cmd) {
 		CAM_ERR(CAM_MEM, " Invalid argument");
 		return -EINVAL;
@@ -786,11 +758,6 @@ int cam_mem_mgr_map(struct cam_mem_mgr_map_cmd *cmd)
 	struct dma_buf *dmabuf;
 	dma_addr_t hw_vaddr = 0;
 	size_t len = 0;
-
-	if (!atomic_read(&cam_mem_mgr_state)) {
-		CAM_ERR(CAM_MEM, "failed. mem_mgr not initialized");
-		return -EINVAL;
-	}
 
 	if (!cmd || (cmd->fd < 0)) {
 		CAM_ERR(CAM_MEM, "Invalid argument");
@@ -1001,7 +968,6 @@ static int cam_mem_mgr_cleanup_table(void)
 
 void cam_mem_mgr_deinit(void)
 {
-	atomic_set(&cam_mem_mgr_state, CAM_MEM_MGR_UNINITIALIZED);
 	cam_mem_mgr_cleanup_table();
 	mutex_lock(&tbl.m_lock);
 	bitmap_zero(tbl.bitmap, tbl.bits);
@@ -1099,11 +1065,6 @@ int cam_mem_mgr_release(struct cam_mem_mgr_release_cmd *cmd)
 	int idx;
 	int rc;
 
-	if (!atomic_read(&cam_mem_mgr_state)) {
-		CAM_ERR(CAM_MEM, "failed. mem_mgr not initialized");
-		return -EINVAL;
-	}
-
 	if (!cmd) {
 		CAM_ERR(CAM_MEM, "Invalid argument");
 		return -EINVAL;
@@ -1151,11 +1112,6 @@ int cam_mem_mgr_request_mem(struct cam_mem_mgr_request_desc *inp,
 	int32_t num_hdl = 0;
 
 	enum cam_smmu_region_id region = CAM_SMMU_REGION_SHARED;
-
-	if (!atomic_read(&cam_mem_mgr_state)) {
-		CAM_ERR(CAM_MEM, "failed. mem_mgr not initialized");
-		return -EINVAL;
-	}
 
 	if (!inp || !out) {
 		CAM_ERR(CAM_MEM, "Invalid params");
@@ -1278,11 +1234,6 @@ int cam_mem_mgr_release_mem(struct cam_mem_mgr_memory_desc *inp)
 	int32_t idx;
 	int rc;
 
-	if (!atomic_read(&cam_mem_mgr_state)) {
-		CAM_ERR(CAM_MEM, "failed. mem_mgr not initialized");
-		return -EINVAL;
-	}
-
 	if (!inp) {
 		CAM_ERR(CAM_MEM, "Invalid argument");
 		return -EINVAL;
@@ -1330,11 +1281,6 @@ int cam_mem_mgr_reserve_memory_region(struct cam_mem_mgr_request_desc *inp,
 	int32_t idx;
 	int32_t smmu_hdl = 0;
 	int32_t num_hdl = 0;
-
-	if (!atomic_read(&cam_mem_mgr_state)) {
-		CAM_ERR(CAM_MEM, "failed. mem_mgr not initialized");
-		return -EINVAL;
-	}
 
 	if (!inp || !out) {
 		CAM_ERR(CAM_MEM, "Invalid param(s)");
@@ -1426,11 +1372,6 @@ int cam_mem_mgr_free_memory_region(struct cam_mem_mgr_memory_desc *inp)
 	int32_t idx;
 	int rc;
 	int32_t smmu_hdl;
-
-	if (!atomic_read(&cam_mem_mgr_state)) {
-		CAM_ERR(CAM_MEM, "failed. mem_mgr not initialized");
-		return -EINVAL;
-	}
 
 	if (!inp) {
 		CAM_ERR(CAM_MEM, "Invalid argument");

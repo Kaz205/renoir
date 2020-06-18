@@ -5304,10 +5304,11 @@ static int cam_icp_mgr_init_devs(struct device_node *of_node)
 		child_dev_intf = (struct cam_hw_intf *)platform_get_drvdata(
 			child_pdev);
 		if (!child_dev_intf) {
-			CAM_ERR(CAM_ICP, "no child device");
+			CAM_DBG(CAM_ICP, "no child device");
 			of_node_put(child_node);
 			if (!icp_hw_mgr.ipe1_enable)
 				continue;
+			rc = -EPROBE_DEFER;
 			goto compat_hw_name_failed;
 		}
 		icp_hw_mgr.devices[child_dev_intf->hw_type]
@@ -5325,6 +5326,10 @@ static int cam_icp_mgr_init_devs(struct device_node *of_node)
 	if (icp_hw_mgr.ipe1_enable)
 		icp_hw_mgr.ipe1_dev_intf =
 			icp_hw_mgr.devices[CAM_ICP_DEV_IPE][1];
+
+	CAM_DBG(CAM_ICP, "A5 intf:0x%pK, BPS intf:0x%pK, IPE0 intf:0x%pK",
+		icp_hw_mgr.a5_dev_intf, icp_hw_mgr.bps_dev_intf,
+		icp_hw_mgr.ipe0_dev_intf);
 
 	return 0;
 compat_hw_name_failed:

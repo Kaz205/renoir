@@ -1700,6 +1700,9 @@ int cam_cpas_hw_probe(struct platform_device *pdev,
 		goto axi_cleanup;
 
 	*hw_intf = cpas_hw_intf;
+
+	pr_info("%s driver probed successfully\n", KBUILD_MODNAME);
+
 	return 0;
 
 disable_soc_res:

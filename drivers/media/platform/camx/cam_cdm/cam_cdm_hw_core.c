@@ -1051,7 +1051,8 @@ int cam_hw_cdm_probe(struct platform_device *pdev)
 	mutex_unlock(&cdm_hw->hw_mutex);
 	cam_hw_cdm_create_debugfs_entry();
 
-	CAM_DBG(CAM_CDM, "CDM%d probe successful", cdm_hw_intf->hw_idx);
+	pr_info("%s[%d] driver probed successfully\n", KBUILD_MODNAME,
+		cdm_hw_intf->hw_idx);
 
 	return rc;
 
