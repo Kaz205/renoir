@@ -19,6 +19,7 @@
 #include <linux/slab.h>
 #include <linux/types.h>
 
+#define PDC_MAX_IRQS_PER_REG	32
 #define PDC_MAX_IRQS		168
 #define PDC_MAX_GPIO_IRQS	256
 
@@ -339,6 +340,7 @@ static const struct irq_domain_ops qcom_pdc_gpio_ops = {
 static int pdc_setup_pin_mapping(struct device_node *np)
 {
 	int ret, n;
+	u32 reg, max_regs, max_pins = 0;
 
 	n = of_property_count_elems_of_size(np, "qcom,pdc-ranges", sizeof(u32));
 	if (n <= 0 || n % 3)
@@ -367,7 +369,18 @@ static int pdc_setup_pin_mapping(struct device_node *np)
 						 &pdc_region[n].cnt);
 		if (ret)
 			return ret;
+		max_pins += pdc_region[n].cnt;
 	}
+
+	if (max_pins > PDC_MAX_IRQS)
+		return -EINVAL;
+
+	max_regs = max_pins / PDC_MAX_IRQS_PER_REG;
+	if (max_pins % PDC_MAX_IRQS_PER_REG)
+		max_regs++;
+
+	for (reg = 0; reg < max_regs; reg++)
+		pdc_reg_write(IRQ_ENABLE_BANK, reg, 0);
 
 	return 0;
 }
