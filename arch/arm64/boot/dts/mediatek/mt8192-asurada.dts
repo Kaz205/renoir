@@ -242,6 +242,23 @@
 	non-removable;
 };
 
+&mmc1 {
+	status = "okay";
+	pinctrl-names = "default", "state_uhs";
+	pinctrl-0 = <&mmc1_pins_default>;
+	pinctrl-1 = <&mmc1_pins_uhs>;
+	bus-width = <4>;
+	max-frequency = <200000000>;
+	cap-sd-highspeed;
+	sd-uhs-sdr50;
+	sd-uhs-sdr104;
+	cd-gpios = <&pio 17 GPIO_ACTIVE_LOW>;
+	vmmc-supply = <&mt6360_ldo5_reg>;
+	vqmmc-supply = <&mt6360_ldo3_reg>;
+	no-mmc;
+	no-sdio;
+};
+
 &pio {
 	anx7625_pins: anx7625-pins {
 		pins1 {
@@ -430,6 +447,51 @@
 		};
 	};
 
+	mmc1_pins_default: mmc1default {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO54__FUNC_MSDC1_DAT0>,
+				 <PINMUX_GPIO56__FUNC_MSDC1_DAT1>,
+				 <PINMUX_GPIO55__FUNC_MSDC1_DAT2>,
+				 <PINMUX_GPIO53__FUNC_MSDC1_DAT3>,
+				 <PINMUX_GPIO52__FUNC_MSDC1_CMD>;
+			input-enable;
+			drive-strength = <3>;
+			mediatek,pull-up-adv = <1>;
+		};
+
+		pins_clk {
+			pinmux = <PINMUX_GPIO51__FUNC_MSDC1_CLK>;
+			drive-strength = <3>;
+			mediatek,pull-down-adv = <2>;
+		};
+
+		pins_insert {
+			pinmux = <PINMUX_GPIO17__FUNC_GPIO17>;
+			input-enable;
+			bias-pull-up;
+		};
+	};
+
+	mmc1_pins_uhs: mmc1@0 {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO54__FUNC_MSDC1_DAT0>,
+				 <PINMUX_GPIO56__FUNC_MSDC1_DAT1>,
+				 <PINMUX_GPIO55__FUNC_MSDC1_DAT2>,
+				 <PINMUX_GPIO53__FUNC_MSDC1_DAT3>,
+				 <PINMUX_GPIO52__FUNC_MSDC1_CMD>;
+			input-enable;
+			drive-strength = <3>;
+			mediatek,pull-up-adv = <1>;
+		};
+
+		pins_clk {
+			pinmux = <PINMUX_GPIO51__FUNC_MSDC1_CLK>;
+			drive-strength = <3>;
+			mediatek,pull-down-adv = <2>;
+			input-enable;
+		};
+	};
+
 	pp1000_mipibrdg_en: pp1000-mipibrdg-en {
 		pins1 {
 			pinmux = <PINMUX_GPIO129__FUNC_GPIO129>;
@@ -556,6 +618,9 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&ec_ap_int_odl>;
 
+		#address-cells = <1>;
+		#size-cells = <0>;
+
 		i2c_tunnel: i2c-tunnel {
 			compatible = "google,cros-ec-i2c-tunnel";
 			google,remote-bus = <0>;
@@ -571,6 +636,20 @@
 			compatible = "google,extcon-usbc-cros-ec";
 			google,usb-port-id = <0>;
 			#extcon-cells = <0>;
+		};
+
+		mt6360_ldo3_reg: regulator@0 {
+			compatible = "google,cros-ec-regulator";
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <3300000>;
+			reg = <0>;
+		};
+
+		mt6360_ldo5_reg: regulator@1 {
+			compatible = "google,cros-ec-regulator";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			reg = <1>;
 		};
 	};
 };
