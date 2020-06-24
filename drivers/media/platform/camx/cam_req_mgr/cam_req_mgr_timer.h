@@ -20,16 +20,18 @@
 #include "cam_req_mgr_core_defs.h"
 
 /** struct cam_req_mgr_timer
- * @expires   : timeout value for timer
- * @sys_timer : system timer variable
- * @parent    : priv data - link pointer
- * @timer_cb  : callback func which will be called when timeout expires
+ * @expires    : timeout value for timer
+ * @sys_timer  : system timer variable
+ * @tmr_cachep : tmr_cachep Common fields provided in kmem_cache
+ * @parent     : priv data - link pointer
+ * @timer_cb   : callback func which will be called when timeout expires
  */
 struct cam_req_mgr_timer {
 	int32_t             expires;
 	struct timer_list   sys_timer;
+	struct kmem_cache  *tmr_cachep;
 	void               *parent;
-	void              (*timer_cb)(unsigned long data);
+	void              (*timer_cb)(struct timer_list *tl);
 };
 
 /**
@@ -37,8 +39,7 @@ struct cam_req_mgr_timer {
  * @brief : allows ser to modify expiry time.
  * @timer : timer which will be reset to expires values
  */
-void crm_timer_modify(struct cam_req_mgr_timer *crm_timer,
-	int32_t expires);
+void crm_timer_modify(struct cam_req_mgr_timer *crm_timer, int32_t expires);
 
 /**
  * crm_timer_reset()
@@ -58,8 +59,8 @@ void crm_timer_reset(struct cam_req_mgr_timer *timer);
  *             timer fires the timeout. If no value is set timer util
  *             will use default.
  */
-int crm_timer_init(struct cam_req_mgr_timer **timer,
-	int32_t expires, void *parent, void (*timer_cb)(unsigned long));
+int crm_timer_init(struct cam_req_mgr_timer **timer, int32_t expires,
+		   void *parent, void (*timer_cb)(struct timer_list *));
 
 /**
  * crm_timer_exit()
@@ -68,5 +69,4 @@ int crm_timer_init(struct cam_req_mgr_timer **timer,
  */
 void crm_timer_exit(struct cam_req_mgr_timer **timer);
 
-extern struct kmem_cache *g_cam_req_mgr_timer_cachep;
 #endif

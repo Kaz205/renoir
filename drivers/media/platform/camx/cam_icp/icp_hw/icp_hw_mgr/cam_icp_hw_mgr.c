@@ -502,12 +502,13 @@ static int32_t cam_icp_ctx_timer(void *priv, void *data)
 	return 0;
 }
 
-static void cam_icp_ctx_timer_cb(unsigned long data)
+static void cam_icp_ctx_timer_cb(struct timer_list *timer_data)
 {
 	unsigned long flags;
 	struct crm_workq_task *task;
 	struct clk_work_data *task_data;
-	struct cam_req_mgr_timer *timer = (struct cam_req_mgr_timer *)data;
+	struct cam_req_mgr_timer *timer =
+		container_of(timer_data, struct cam_req_mgr_timer, sys_timer);
 
 	spin_lock_irqsave(&icp_hw_mgr.hw_mgr_lock, flags);
 	task = cam_req_mgr_workq_get_task(icp_hw_mgr.timer_work);
@@ -526,12 +527,13 @@ static void cam_icp_ctx_timer_cb(unsigned long data)
 	spin_unlock_irqrestore(&icp_hw_mgr.hw_mgr_lock, flags);
 }
 
-static void cam_icp_device_timer_cb(unsigned long data)
+static void cam_icp_device_timer_cb(struct timer_list *timer_data)
 {
 	unsigned long flags;
 	struct crm_workq_task *task;
 	struct clk_work_data *task_data;
-	struct cam_req_mgr_timer *timer = (struct cam_req_mgr_timer *)data;
+	struct cam_req_mgr_timer *timer =
+		container_of(timer_data, struct cam_req_mgr_timer, sys_timer);
 
 	spin_lock_irqsave(&icp_hw_mgr.hw_mgr_lock, flags);
 	task = cam_req_mgr_workq_get_task(icp_hw_mgr.timer_work);
@@ -575,8 +577,8 @@ static int cam_icp_ctx_timer_start(struct cam_icp_hw_ctx_data *ctx_data)
 {
 	int rc = 0;
 
-	rc = crm_timer_init(&ctx_data->watch_dog,
-		200, ctx_data, &cam_icp_ctx_timer_cb);
+	rc = crm_timer_init(&ctx_data->watch_dog, 200, ctx_data,
+			    &cam_icp_ctx_timer_cb);
 	if (rc)
 		CAM_ERR(CAM_ICP, "Failed to start timer");
 

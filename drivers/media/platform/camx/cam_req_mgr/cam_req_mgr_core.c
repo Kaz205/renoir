@@ -1593,30 +1593,31 @@ static int __cam_req_mgr_process_sof_freeze(void *priv, void *data)
 /**
  * __cam_req_mgr_sof_freeze()
  *
- * @brief : Callback function for timer timeout indicating SOF freeze
- * @data  : timer pointer
+ * @brief      : Callback function for timer timeout indicating SOF freeze
+ * @timer_data : Pointer to structure with list of grouped CRM timers
  *
  */
-static void __cam_req_mgr_sof_freeze(unsigned long data)
+static void __cam_req_mgr_sof_freeze(struct timer_list *timer_data)
 {
-	struct cam_req_mgr_timer     *timer = (struct cam_req_mgr_timer *)data;
-	struct crm_workq_task               *task = NULL;
-	struct cam_req_mgr_core_link        *link = NULL;
-	struct crm_task_payload             *task_data;
-
+	struct crm_workq_task *task = NULL;
+	struct cam_req_mgr_core_link *link = NULL;
+	struct crm_task_payload *task_data;
+	struct cam_req_mgr_timer *timer = container_of(timer_data,
+						       struct cam_req_mgr_timer,
+						       sys_timer);
 	if (!timer) {
 		CAM_ERR(CAM_CRM, "NULL timer");
 		return;
 	}
 
-	link = (struct cam_req_mgr_core_link *)timer->parent;
+	link = timer->parent;
 	task = cam_req_mgr_workq_get_task(link->workq);
 	if (!task) {
 		CAM_ERR(CAM_CRM, "No empty task");
 		return;
 	}
 
-	task_data = (struct crm_task_payload *)task->payload;
+	task_data = task->payload;
 	task_data->type = CRM_WORKQ_TASK_NOTIFY_FREEZE;
 	task->process_cb = &__cam_req_mgr_process_sof_freeze;
 	cam_req_mgr_workq_enqueue_task(task, link, CRM_TASK_PRIORITY_0);
