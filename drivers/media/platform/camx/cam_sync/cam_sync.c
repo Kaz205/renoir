@@ -1058,6 +1058,8 @@ static int cam_sync_probe(struct platform_device *pdev)
 	sync_dev->vdev->ioctl_ops = &g_cam_sync_ioctl_ops;
 	sync_dev->vdev->minor     = -1;
 	sync_dev->vdev->vfl_type  = VFL_TYPE_GRABBER;
+	sync_dev->vdev->device_caps = V4L2_CAP_DEVICE_CAPS;
+
 	rc = video_register_device(sync_dev->vdev,
 		VFL_TYPE_GRABBER, -1);
 	if (rc < 0)
@@ -1088,6 +1090,8 @@ static int cam_sync_probe(struct platform_device *pdev)
 	trigger_cb_without_switch = false;
 	cam_sync_create_debugfs();
 
+	pr_info("%s driver probed successfully\n", KBUILD_MODNAME);
+
 	return rc;
 
 v4l2_fail:
@@ -1115,29 +1119,24 @@ static int cam_sync_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static struct platform_device cam_sync_device = {
-	.name = "cam_sync",
-	.id = -1,
+static const struct of_device_id cam_sync_dt_match[] = {
+	{ .compatible = "qcom,cam-sync" },
+	{ }
 };
+
+MODULE_DEVICE_TABLE(of, cam_sync_dt_match);
 
 static struct platform_driver cam_sync_driver = {
 	.probe = cam_sync_probe,
 	.remove = cam_sync_remove,
 	.driver = {
 		.name = "cam_sync",
-		.owner = THIS_MODULE,
-		.suppress_bind_attrs = true,
+		.of_match_table = cam_sync_dt_match,
 	},
 };
 
 static int __init cam_sync_init(void)
 {
-	int rc;
-
-	rc = platform_device_register(&cam_sync_device);
-	if (rc)
-		return -ENODEV;
-
 	return platform_driver_register(&cam_sync_driver);
 }
 
@@ -1148,7 +1147,6 @@ static void __exit cam_sync_exit(void)
 	for (idx = 0; idx < CAM_SYNC_MAX_OBJS; idx++)
 		spin_lock_init(&sync_dev->row_spinlocks[idx]);
 	platform_driver_unregister(&cam_sync_driver);
-	platform_device_unregister(&cam_sync_device);
 	kfree(sync_dev);
 }
 
