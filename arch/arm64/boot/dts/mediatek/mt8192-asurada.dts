@@ -4,6 +4,7 @@
  * Author: Seiya Wang <seiya.wang@mediatek.com>
  */
 /dts-v1/;
+#include <dt-bindings/gpio/gpio.h>
 #include "mt8192.dtsi"
 #include "mt6359.dtsi"
 
@@ -15,6 +16,16 @@
 		serial0 = &uart0;
 	};
 
+	backlight_lcd0: backlight_lcd0 {
+		compatible = "pwm-backlight";
+		pwms = <&pwm0 0 500000>;
+		enable-gpios = <&pio 152 0>;
+		brightness-levels = < 0 1023 >;
+		num-interpolated-steps = <1023>;
+		default-brightness-level = <576>;
+		status = "okay";
+	};
+
 	chosen {
 		stdout-path = "serial0:115200n8";
 	};
@@ -23,6 +34,133 @@
 		device_type = "memory";
 		reg = <0 0x40000000 0 0x80000000>;
 	};
+
+	panel: panel {
+		compatible = "auo,b116xw03";
+		power-supply = <&pp3300_panel>;
+		ddc-i2c-bus = <&i2c3>;
+		backlight = <&backlight_lcd0>;
+
+		port {
+			panel_in: endpoint {
+				remote-endpoint = <&anx7625_out>;
+			};
+		};
+	};
+
+	pp1000_mipibrdg: pp1000-mipibrdg {
+		compatible = "regulator-fixed";
+		regulator-name = "pp1000_mipibrdg";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pp1000_mipibrdg_en>;
+
+		enable-active-high;
+		regulator-always-on;
+
+		gpio = <&pio 129 GPIO_ACTIVE_HIGH>;
+	};
+
+	pp1800_mipibrdg: pp1800-mipibrdg {
+		compatible = "regulator-fixed";
+		regulator-name = "pp1800_mipibrdg";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pp1800_mipibrdg_en>;
+
+		enable-active-high;
+		regulator-always-on;
+
+		gpio = <&pio 128 GPIO_ACTIVE_HIGH>;
+	};
+
+	pp3300_mipibrdg: pp3300-mipibrdg {
+		compatible = "regulator-fixed";
+		regulator-name = "pp3300_mipibrdg";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pp3300_mipibrdg_en>;
+
+		enable-active-high;
+		regulator-always-on;
+
+		gpio = <&pio 127 GPIO_ACTIVE_HIGH>;
+	};
+
+	/* Probably useless, as we use pp3300_mipibrdg for panel power */
+	pp3300_panel: pp3300-panel {
+		compatible = "regulator-fixed";
+		regulator-name = "pp3300_panel";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pp3300_panel_pins>;
+
+		enable-active-high;
+		regulator-always-on;
+
+		gpio = <&pio 136 GPIO_ACTIVE_HIGH>;
+	};
+};
+
+&dpi0 {
+	pinctrl-names = "sleep", "default";
+	pinctrl-0 = <&dpi_pin_default>;
+	pinctrl-1 = <&dpi_pin_func>;
+	status = "disabled";
+};
+
+&dsi0 {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	ports {
+		port {
+			dsi_out: endpoint {
+				remote-endpoint = <&anx7625_in>;
+			};
+		};
+	};
+};
+
+&i2c3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c3_pins>;
+	status = "okay";
+	clock-frequency = <100000>;
+
+	anx_bridge: anx7625@58 {
+		compatible = "analogix,anx7625";
+		reg = <0x58>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&anx7625_pins>;
+		panel_flags = <1>;
+		enable-gpios = <&pio 41 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&pio 42 GPIO_ACTIVE_HIGH>;
+		vdd10-supply = <&pp1000_mipibrdg>;
+		vdd18-supply = <&pp1800_mipibrdg>;
+		vdd33-supply = <&pp3300_mipibrdg>;
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			port@0 {
+				reg = <0>;
+				anx7625_in: endpoint {
+					remote-endpoint = <&dsi_out>;
+				};
+			};
+
+			port@1 {
+				reg = <1>;
+				anx7625_out: endpoint {
+					remote-endpoint = <&panel_in>;
+				};
+			};
+		};
+	};
+};
+
+&mipi_tx0 {
+	status = "okay";
 };
 
 &mmc0 {
@@ -46,6 +184,74 @@
 };
 
 &pio {
+	anx7625_pins: anx7625-pins {
+		pins1 {
+			pinmux = <PINMUX_GPIO41__FUNC_GPIO41>,
+				 <PINMUX_GPIO42__FUNC_GPIO42>;
+			output-low;
+		};
+		pins2 {
+			pinmux = <PINMUX_GPIO6__FUNC_GPIO6>;
+			input-enable;
+			bias-pull-up;
+		};
+	};
+
+	dpi_pin_default: dpi_pin_default {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO96__FUNC_GPIO96>,
+				<PINMUX_GPIO97__FUNC_GPIO97>,
+				<PINMUX_GPIO98__FUNC_GPIO98>,
+				<PINMUX_GPIO99__FUNC_GPIO99>,
+				<PINMUX_GPIO100__FUNC_GPIO100>,
+				<PINMUX_GPIO101__FUNC_GPIO101>,
+				<PINMUX_GPIO102__FUNC_GPIO102>,
+				<PINMUX_GPIO103__FUNC_GPIO103>,
+				<PINMUX_GPIO104__FUNC_GPIO104>,
+				<PINMUX_GPIO105__FUNC_GPIO105>,
+				<PINMUX_GPIO106__FUNC_GPIO106>,
+				<PINMUX_GPIO110__FUNC_GPIO110>,
+				<PINMUX_GPIO113__FUNC_GPIO113>,
+				<PINMUX_GPIO111__FUNC_GPIO111>,
+				<PINMUX_GPIO109__FUNC_GPIO109>,
+				<PINMUX_GPIO112__FUNC_GPIO112>;
+				drive-strength = <MTK_DRIVE_6mA>;
+				output-low;
+		};
+	};
+
+	dpi_pin_func: dpi_pin_func {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO96__FUNC_DPI_D0>,
+				<PINMUX_GPIO97__FUNC_DPI_D1>,
+				<PINMUX_GPIO98__FUNC_DPI_D2>,
+				<PINMUX_GPIO99__FUNC_DPI_D3>,
+				<PINMUX_GPIO100__FUNC_DPI_D4>,
+				<PINMUX_GPIO101__FUNC_DPI_D5>,
+				<PINMUX_GPIO102__FUNC_DPI_D6>,
+				<PINMUX_GPIO103__FUNC_DPI_D7>,
+				<PINMUX_GPIO104__FUNC_DPI_D8>,
+				<PINMUX_GPIO105__FUNC_DPI_D9>,
+				<PINMUX_GPIO106__FUNC_DPI_D10>,
+				<PINMUX_GPIO110__FUNC_DPI_D11>,
+				<PINMUX_GPIO113__FUNC_DPI_HSYNC>,
+				<PINMUX_GPIO111__FUNC_DPI_VSYNC>,
+				<PINMUX_GPIO109__FUNC_DPI_DE>,
+				<PINMUX_GPIO112__FUNC_DPI_CK>;
+				drive-strength = <MTK_DRIVE_6mA>;
+		};
+	};
+
+	i2c3_pins: i2c3 {
+		pins_bus {
+			pinmux = <PINMUX_GPIO160__FUNC_SCL3>,
+				 <PINMUX_GPIO161__FUNC_SDA3>;
+			bias-pull-up;
+			mediatek,pull-up-adv = <3>;
+			mediatek,drive-strength-adv = <7>;
+		};
+	};
+
 	mmc0_pins_default: mmc0default {
 		pins_cmd_dat {
 			pinmux = <PINMUX_GPIO184__FUNC_MSDC0_DAT0>,
@@ -109,11 +315,69 @@
 			mediatek,pull-down-adv = <2>;
 		};
 	};
+
+	pp1000_mipibrdg_en: pp1000-mipibrdg-en {
+		pins1 {
+			pinmux = <PINMUX_GPIO129__FUNC_GPIO129>;
+			output-low;
+		};
+	};
+
+	pp1800_mipibrdg_en: pp1800-mipibrd-en {
+		pins1 {
+			pinmux = <PINMUX_GPIO128__FUNC_GPIO128>;
+			output-low;
+		};
+	};
+
+	pp3300_mipibrdg_en: pp3300-mipibrdg-en {
+		pins1 {
+			pinmux = <PINMUX_GPIO127__FUNC_GPIO127>;
+			output-low;
+		};
+	};
+
+	pp3300_panel_pins: pp3300-panel-pins {
+		panel_3v3_enable: panel-3v3-enable {
+			pinmux = <PINMUX_GPIO136__FUNC_GPIO136>;
+			output-low;
+		};
+	};
+
+	ppvarn_lcd_en: ppvarn-lcd-en {
+		pins1 {
+			pinmux = <PINMUX_GPIO166__FUNC_GPIO166>;
+			output-low;
+		};
+	};
+
+	ppvarp_lcd_en: ppvarp-lcd-en {
+		pins1 {
+			pinmux = <PINMUX_GPIO66__FUNC_GPIO66>;
+			output-low;
+		};
+	};
+
+	pwm0_pin_default: pwm0_pin_default {
+		pins_pwm {
+			pinmux = <PINMUX_GPIO40__FUNC_DISP_PWM>;
+		};
+		pins_inhibit {
+			pinmux = <PINMUX_GPIO152__FUNC_GPIO152>;
+			output-high;
+		};
+	};
 };
 
 &pmic {
 	interrupt-parent = <&pio>;
 	interrupts = <214 IRQ_TYPE_LEVEL_HIGH>;
+};
+
+&pwm0 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pwm0_pin_default>;
 };
 
 &spmi {
