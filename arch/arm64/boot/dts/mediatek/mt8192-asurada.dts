@@ -294,6 +294,22 @@
 	no-sdio;
 };
 
+&nor_flash {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&nor_gpio1_pins>;
+	assigned-clocks = <&topckgen CLK_TOP_SFLASH_SEL>;
+	assigned-clock-parents = <&topckgen CLK_TOP_UNIVPLL_D6_D8>;
+
+	flash@0 {
+		compatible = "winbond,w25q64", "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <52000000>;
+		spi-rx-bus-width = <2>;
+		spi-tx-bus-width = <2>;
+	};
+};
+
 &pcie {
 	status = "okay";
 	pinctrl-names = "default";
@@ -545,6 +561,29 @@
 			drive-strength = <3>;
 			mediatek,pull-down-adv = <2>;
 			input-enable;
+		};
+	};
+
+	nor_gpio1_pins: nor {
+		pins1 {
+			pinmux = <PINMUX_GPIO24__FUNC_SPINOR_CS>,
+				 <PINMUX_GPIO28__FUNC_SPINOR_IO1>;
+			input-enable;
+			drive-strength = <MTK_DRIVE_4mA>;
+			bias-pull-up;
+		};
+
+		pins2 {
+			pinmux = <PINMUX_GPIO27__FUNC_SPINOR_IO0>;
+			drive-strength = <MTK_DRIVE_4mA>;
+			bias-pull-up;
+		};
+
+		pins_clk {
+			pinmux = <PINMUX_GPIO25__FUNC_SPINOR_CK>;
+			input-enable;
+			drive-strength = <MTK_DRIVE_4mA>;
+			bias-pull-up;
 		};
 	};
 
