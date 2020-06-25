@@ -3924,6 +3924,7 @@ F:	drivers/platform/chrome/
 CHROMEOS EC SUBDRIVERS
 M:	Benson Leung <bleung@chromium.org>
 M:	Enric Balletbo i Serra <enric.balletbo@collabora.com>
+M:	Bhanu Prakash Maiya <bhanumaiya@chromium.org>
 R:	Guenter Roeck <groeck@chromium.org>
 S:	Maintained
 N:	cros_ec
