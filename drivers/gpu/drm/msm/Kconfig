@@ -60,10 +60,18 @@ config DRM_MSM_HDMI_HDCP
 config DRM_MSM_DP
 	bool "Enable DP support in MSM DRM driver"
 	depends on DRM_MSM
+	default y
 	help
 	  Compile in support for DP driver in msm drm driver. DP external
 	  display support is enabled through this config option. It can
 	  be primary or secondary display on device.
+
+config DRM_MSM_DP_10NM_PLL
+	bool "Enable DP 10nm PLL driver in MSM DRM (used by sc7180)"
+	depends on DRM_MSM_DP
+	default y
+	help
+	  Choose this option if DP PLL on SC7180 is used on the platform.
 
 config DRM_MSM_DSI
 	bool "Enable DSI support in MSM DRM driver"

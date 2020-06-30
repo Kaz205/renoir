@@ -6,6 +6,7 @@
 #include <linux/of_gpio.h>
 
 #include "dp_parser.h"
+#include "dp_reg.h"
 
 static const struct dp_regulator_cfg sdm845_dp_reg_cfg = {
 	.num = 2,
@@ -52,10 +53,7 @@ static void dp_parser_unmap_io_resources(struct dp_parser *parser)
 	struct dp_io *io = &parser->io;
 
 	msm_dss_iounmap(&io->dp_controller);
-	msm_dss_iounmap(&io->phy_io);
-	msm_dss_iounmap(&io->ln_tx0_io);
-	msm_dss_iounmap(&io->ln_tx0_io);
-	msm_dss_iounmap(&io->dp_pll_io);
+	msm_dss_iounmap(&io->phy_reg);
 	msm_dss_iounmap(&io->usb3_dp_com);
 }
 
@@ -68,30 +66,6 @@ static int dp_parser_ctrl_res(struct dp_parser *parser)
 	rc = msm_dss_ioremap_byname(pdev, &io->dp_controller, "dp_controller");
 	if (rc) {
 		DRM_ERROR("unable to remap dp io resources, rc=%d\n", rc);
-		goto err;
-	}
-
-	rc = msm_dss_ioremap_byname(pdev, &io->phy_io, "dp_phy");
-	if (rc) {
-		DRM_ERROR("unable to remap dp PHY resources, rc=%d\n", rc);
-		goto err;
-	}
-
-	rc = msm_dss_ioremap_byname(pdev, &io->ln_tx0_io, "dp_ln_tx0");
-	if (rc) {
-		DRM_ERROR("unable to remap dp TX0 resources, rc=%d\n", rc);
-		goto err;
-	}
-
-	rc = msm_dss_ioremap_byname(pdev, &io->ln_tx1_io, "dp_ln_tx1");
-	if (rc) {
-		DRM_ERROR("unable to remap dp TX1 resources, rc=%d\n", rc);
-		goto err;
-	}
-
-	rc = msm_dss_ioremap_byname(pdev, &io->dp_pll_io, "dp_pll");
-	if (rc) {
-		DRM_ERROR("unable to remap DP PLL resources, rc=%d\n", rc);
 		goto err;
 	}
 
