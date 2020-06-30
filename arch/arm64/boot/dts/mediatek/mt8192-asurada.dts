@@ -126,6 +126,19 @@
 	pinctrl-0 = <&i2c0_pins>;
 	status = "okay";
 	clock-frequency = <100000>;
+
+	touchscreen: touchscreen@10 {
+		compatible = "hid-over-i2c";
+		reg = <0x10>;
+		interrupt-parent = <&pio>;
+		interrupts = <21 IRQ_TYPE_LEVEL_LOW>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&touchscreen_pins>;
+
+		post-power-on-delay-ms = <10>;
+		hid-descr-addr = <0x0001>;
+	};
 };
 
 &i2c1 {
@@ -497,6 +510,22 @@
 			pinmux = <PINMUX_GPIO15__FUNC_GPIO15>;
 			input-enable;
 			mediatek,pull-up-adv = <3>;
+		};
+	};
+
+	touchscreen_pins: touchscreen-pins {
+		pin_irq {
+			pinmux = <PINMUX_GPIO21__FUNC_GPIO21>;
+			input-enable;
+			bias-pull-up;
+		};
+		touch_pin_reset: pin_reset {
+			pinmux = <PINMUX_GPIO137__FUNC_GPIO137>;
+			output-high;
+		};
+		touch_pin_report_sw: pin_report_sw {
+			pinmux = <PINMUX_GPIO138__FUNC_GPIO138>;
+			output-low;
 		};
 	};
 };
