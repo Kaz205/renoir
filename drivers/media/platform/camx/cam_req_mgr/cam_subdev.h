@@ -98,9 +98,9 @@ void cam_register_subdev_fops(struct v4l2_file_operations *fops);
  *           subdevice node when it tries to register itself to the camera
  *           request manager
  *
- * @sd:                    Pointer to struct cam_subdev.
+ * @csd:                    Pointer to struct cam_subdev.
  */
-int cam_register_subdev(struct cam_subdev *sd);
+int cam_register_subdev(struct cam_subdev *csd);
 
 /**
  * cam_unregister_subdev()
