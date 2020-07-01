@@ -20,7 +20,6 @@
 #include "gt/intel_context_types.h"
 
 #include "i915_scheduler.h"
-#include "i915_sw_fence.h"
 
 struct pid;
 
@@ -31,12 +30,7 @@ struct intel_timeline;
 struct intel_ring;
 
 struct i915_gem_engines {
-	union {
-		struct list_head link;
-		struct rcu_head rcu;
-	};
-	struct i915_sw_fence fence;
-	struct i915_gem_context *ctx;
+	struct rcu_head rcu;
 	unsigned int num_engines;
 	struct intel_context *engines[];
 };
@@ -179,11 +173,6 @@ struct i915_gem_context {
 	 * context in messages.
 	 */
 	char name[TASK_COMM_LEN + 8];
-
-	struct {
-		struct spinlock lock;
-		struct list_head engines;
-	} stale;
 };
 
 #endif /* __I915_GEM_CONTEXT_TYPES_H__ */
