@@ -189,13 +189,19 @@ hsw_dip_data_reg(struct drm_i915_private *dev_priv,
 	}
 }
 
-static int hsw_dip_data_size(unsigned int type)
+static int hsw_dip_data_size(struct drm_i915_private *dev_priv,
+			     unsigned int type)
 {
 	switch (type) {
 	case DP_SDP_VSC:
 		return VIDEO_DIP_VSC_DATA_SIZE;
 	case DP_SDP_PPS:
 		return VIDEO_DIP_PPS_DATA_SIZE;
+	case HDMI_PACKET_TYPE_GAMUT_METADATA:
+		if (INTEL_GEN(dev_priv) >= 11)
+			return VIDEO_DIP_GMP_DATA_SIZE;
+		else
+			return VIDEO_DIP_DATA_SIZE;
 	default:
 		return VIDEO_DIP_DATA_SIZE;
 	}
@@ -279,7 +285,7 @@ static void ibx_write_infoframe(struct intel_encoder *encoder,
 {
 	const u32 *data = frame;
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	struct intel_crtc *intel_crtc = to_intel_crtc(crtc_state->base.crtc);
+	struct intel_crtc *intel_crtc = to_intel_crtc(crtc_state->uapi.crtc);
 	i915_reg_t reg = TVIDEO_DIP_CTL(intel_crtc->pipe);
 	u32 val = I915_READ(reg);
 	int i;
@@ -315,7 +321,7 @@ static void ibx_read_infoframe(struct intel_encoder *encoder,
 			       void *frame, ssize_t len)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	struct intel_crtc *crtc = to_intel_crtc(crtc_state->base.crtc);
+	struct intel_crtc *crtc = to_intel_crtc(crtc_state->uapi.crtc);
 	u32 val, *data = frame;
 	int i;
 
@@ -334,7 +340,7 @@ static u32 ibx_infoframes_enabled(struct intel_encoder *encoder,
 				  const struct intel_crtc_state *pipe_config)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	enum pipe pipe = to_intel_crtc(pipe_config->base.crtc)->pipe;
+	enum pipe pipe = to_intel_crtc(pipe_config->uapi.crtc)->pipe;
 	i915_reg_t reg = TVIDEO_DIP_CTL(pipe);
 	u32 val = I915_READ(reg);
 
@@ -356,7 +362,7 @@ static void cpt_write_infoframe(struct intel_encoder *encoder,
 {
 	const u32 *data = frame;
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	struct intel_crtc *intel_crtc = to_intel_crtc(crtc_state->base.crtc);
+	struct intel_crtc *intel_crtc = to_intel_crtc(crtc_state->uapi.crtc);
 	i915_reg_t reg = TVIDEO_DIP_CTL(intel_crtc->pipe);
 	u32 val = I915_READ(reg);
 	int i;
@@ -395,7 +401,7 @@ static void cpt_read_infoframe(struct intel_encoder *encoder,
 			       void *frame, ssize_t len)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	struct intel_crtc *crtc = to_intel_crtc(crtc_state->base.crtc);
+	struct intel_crtc *crtc = to_intel_crtc(crtc_state->uapi.crtc);
 	u32 val, *data = frame;
 	int i;
 
@@ -414,7 +420,7 @@ static u32 cpt_infoframes_enabled(struct intel_encoder *encoder,
 				  const struct intel_crtc_state *pipe_config)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	enum pipe pipe = to_intel_crtc(pipe_config->base.crtc)->pipe;
+	enum pipe pipe = to_intel_crtc(pipe_config->uapi.crtc)->pipe;
 	u32 val = I915_READ(TVIDEO_DIP_CTL(pipe));
 
 	if ((val & VIDEO_DIP_ENABLE) == 0)
@@ -432,7 +438,7 @@ static void vlv_write_infoframe(struct intel_encoder *encoder,
 {
 	const u32 *data = frame;
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	struct intel_crtc *intel_crtc = to_intel_crtc(crtc_state->base.crtc);
+	struct intel_crtc *intel_crtc = to_intel_crtc(crtc_state->uapi.crtc);
 	i915_reg_t reg = VLV_TVIDEO_DIP_CTL(intel_crtc->pipe);
 	u32 val = I915_READ(reg);
 	int i;
@@ -468,7 +474,7 @@ static void vlv_read_infoframe(struct intel_encoder *encoder,
 			       void *frame, ssize_t len)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	struct intel_crtc *crtc = to_intel_crtc(crtc_state->base.crtc);
+	struct intel_crtc *crtc = to_intel_crtc(crtc_state->uapi.crtc);
 	u32 val, *data = frame;
 	int i;
 
@@ -487,7 +493,7 @@ static u32 vlv_infoframes_enabled(struct intel_encoder *encoder,
 				  const struct intel_crtc_state *pipe_config)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	enum pipe pipe = to_intel_crtc(pipe_config->base.crtc)->pipe;
+	enum pipe pipe = to_intel_crtc(pipe_config->uapi.crtc)->pipe;
 	u32 val = I915_READ(VLV_TVIDEO_DIP_CTL(pipe));
 
 	if ((val & VIDEO_DIP_ENABLE) == 0)
@@ -514,7 +520,9 @@ static void hsw_write_infoframe(struct intel_encoder *encoder,
 	int i;
 	u32 val = I915_READ(ctl_reg);
 
-	data_size = hsw_dip_data_size(type);
+	data_size = hsw_dip_data_size(dev_priv, type);
+
+	WARN_ON(len > data_size);
 
 	val &= ~hsw_infoframe_enable(type);
 	I915_WRITE(ctl_reg, val);
@@ -700,7 +708,7 @@ intel_hdmi_compute_avi_infoframe(struct intel_encoder *encoder,
 {
 	struct hdmi_avi_infoframe *frame = &crtc_state->infoframes.avi.avi;
 	const struct drm_display_mode *adjusted_mode =
-		&crtc_state->base.adjusted_mode;
+		&crtc_state->hw.adjusted_mode;
 	struct drm_connector *connector = conn_state->connector;
 	int ret;
 
@@ -796,7 +804,7 @@ intel_hdmi_compute_hdmi_infoframe(struct intel_encoder *encoder,
 
 	ret = drm_hdmi_vendor_infoframe_from_display_mode(frame,
 							  conn_state->connector,
-							  &crtc_state->base.adjusted_mode);
+							  &crtc_state->hw.adjusted_mode);
 	if (WARN_ON(ret))
 		return false;
 
@@ -957,7 +965,7 @@ static bool intel_hdmi_set_gcp_infoframe(struct intel_encoder *encoder,
 					 const struct drm_connector_state *conn_state)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	struct intel_crtc *crtc = to_intel_crtc(crtc_state->base.crtc);
+	struct intel_crtc *crtc = to_intel_crtc(crtc_state->uapi.crtc);
 	i915_reg_t reg;
 
 	if ((crtc_state->infoframes.enable &
@@ -982,7 +990,7 @@ void intel_hdmi_read_gcp_infoframe(struct intel_encoder *encoder,
 				   struct intel_crtc_state *crtc_state)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	struct intel_crtc *crtc = to_intel_crtc(crtc_state->base.crtc);
+	struct intel_crtc *crtc = to_intel_crtc(crtc_state->uapi.crtc);
 	i915_reg_t reg;
 
 	if ((crtc_state->infoframes.enable &
@@ -1019,7 +1027,7 @@ static void intel_hdmi_compute_gcp_infoframe(struct intel_encoder *encoder,
 
 	/* Enable default_phase whenever the display mode is suitably aligned */
 	if (gcp_default_phase_possible(crtc_state->pipe_bpp,
-				       &crtc_state->base.adjusted_mode))
+				       &crtc_state->hw.adjusted_mode))
 		crtc_state->infoframes.gcp |= GCP_DEFAULT_PHASE_ENABLE;
 }
 
@@ -1029,7 +1037,7 @@ static void ibx_set_infoframes(struct intel_encoder *encoder,
 			       const struct drm_connector_state *conn_state)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	struct intel_crtc *intel_crtc = to_intel_crtc(crtc_state->base.crtc);
+	struct intel_crtc *intel_crtc = to_intel_crtc(crtc_state->uapi.crtc);
 	struct intel_digital_port *intel_dig_port = enc_to_dig_port(&encoder->base);
 	struct intel_hdmi *intel_hdmi = &intel_dig_port->hdmi;
 	i915_reg_t reg = TVIDEO_DIP_CTL(intel_crtc->pipe);
@@ -1088,7 +1096,7 @@ static void cpt_set_infoframes(struct intel_encoder *encoder,
 			       const struct drm_connector_state *conn_state)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	struct intel_crtc *intel_crtc = to_intel_crtc(crtc_state->base.crtc);
+	struct intel_crtc *intel_crtc = to_intel_crtc(crtc_state->uapi.crtc);
 	struct intel_hdmi *intel_hdmi = enc_to_intel_hdmi(&encoder->base);
 	i915_reg_t reg = TVIDEO_DIP_CTL(intel_crtc->pipe);
 	u32 val = I915_READ(reg);
@@ -1137,7 +1145,7 @@ static void vlv_set_infoframes(struct intel_encoder *encoder,
 			       const struct drm_connector_state *conn_state)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	struct intel_crtc *intel_crtc = to_intel_crtc(crtc_state->base.crtc);
+	struct intel_crtc *intel_crtc = to_intel_crtc(crtc_state->uapi.crtc);
 	struct intel_hdmi *intel_hdmi = enc_to_intel_hdmi(&encoder->base);
 	i915_reg_t reg = VLV_TVIDEO_DIP_CTL(intel_crtc->pipe);
 	u32 val = I915_READ(reg);
@@ -1527,27 +1535,17 @@ bool intel_hdmi_hdcp_check_link(struct intel_digital_port *intel_dig_port)
 	return true;
 }
 
-struct hdcp2_hdmi_msg_data {
+struct hdcp2_hdmi_msg_timeout {
 	u8 msg_id;
-	u32 timeout;
-	u32 timeout2;
+	u16 timeout;
 };
 
-static const struct hdcp2_hdmi_msg_data hdcp2_msg_data[] = {
-	{ HDCP_2_2_AKE_INIT, 0, 0 },
-	{ HDCP_2_2_AKE_SEND_CERT, HDCP_2_2_CERT_TIMEOUT_MS, 0 },
-	{ HDCP_2_2_AKE_NO_STORED_KM, 0, 0 },
-	{ HDCP_2_2_AKE_STORED_KM, 0, 0 },
-	{ HDCP_2_2_AKE_SEND_HPRIME, HDCP_2_2_HPRIME_PAIRED_TIMEOUT_MS,
-	  HDCP_2_2_HPRIME_NO_PAIRED_TIMEOUT_MS },
-	{ HDCP_2_2_AKE_SEND_PAIRING_INFO, HDCP_2_2_PAIRING_TIMEOUT_MS, 0 },
-	{ HDCP_2_2_LC_INIT, 0, 0 },
-	{ HDCP_2_2_LC_SEND_LPRIME, HDCP_2_2_HDMI_LPRIME_TIMEOUT_MS, 0 },
-	{ HDCP_2_2_SKE_SEND_EKS, 0, 0 },
-	{ HDCP_2_2_REP_SEND_RECVID_LIST, HDCP_2_2_RECVID_LIST_TIMEOUT_MS, 0 },
-	{ HDCP_2_2_REP_SEND_ACK, 0, 0 },
-	{ HDCP_2_2_REP_STREAM_MANAGE, 0, 0 },
-	{ HDCP_2_2_REP_STREAM_READY, HDCP_2_2_STREAM_READY_TIMEOUT_MS, 0 },
+static const struct hdcp2_hdmi_msg_timeout hdcp2_msg_timeout[] = {
+	{ HDCP_2_2_AKE_SEND_CERT, HDCP_2_2_CERT_TIMEOUT_MS, },
+	{ HDCP_2_2_AKE_SEND_PAIRING_INFO, HDCP_2_2_PAIRING_TIMEOUT_MS, },
+	{ HDCP_2_2_LC_SEND_LPRIME, HDCP_2_2_HDMI_LPRIME_TIMEOUT_MS, },
+	{ HDCP_2_2_REP_SEND_RECVID_LIST, HDCP_2_2_RECVID_LIST_TIMEOUT_MS, },
+	{ HDCP_2_2_REP_STREAM_READY, HDCP_2_2_STREAM_READY_TIMEOUT_MS, },
 };
 
 static
@@ -1564,12 +1562,17 @@ static int get_hdcp2_msg_timeout(u8 msg_id, bool is_paired)
 {
 	int i;
 
-	for (i = 0; i < ARRAY_SIZE(hdcp2_msg_data); i++)
-		if (hdcp2_msg_data[i].msg_id == msg_id &&
-		    (msg_id != HDCP_2_2_AKE_SEND_HPRIME || is_paired))
-			return hdcp2_msg_data[i].timeout;
-		else if (hdcp2_msg_data[i].msg_id == msg_id)
-			return hdcp2_msg_data[i].timeout2;
+	if (msg_id == HDCP_2_2_AKE_SEND_HPRIME) {
+		if (is_paired)
+			return HDCP_2_2_HPRIME_PAIRED_TIMEOUT_MS;
+		else
+			return HDCP_2_2_HPRIME_NO_PAIRED_TIMEOUT_MS;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(hdcp2_msg_timeout); i++) {
+		if (hdcp2_msg_timeout[i].msg_id == msg_id)
+			return hdcp2_msg_timeout[i].timeout;
+	}
 
 	return -EINVAL;
 }
@@ -1733,9 +1736,9 @@ static void intel_hdmi_prepare(struct intel_encoder *encoder,
 {
 	struct drm_device *dev = encoder->base.dev;
 	struct drm_i915_private *dev_priv = to_i915(dev);
-	struct intel_crtc *crtc = to_intel_crtc(crtc_state->base.crtc);
+	struct intel_crtc *crtc = to_intel_crtc(crtc_state->uapi.crtc);
 	struct intel_hdmi *intel_hdmi = enc_to_intel_hdmi(&encoder->base);
-	const struct drm_display_mode *adjusted_mode = &crtc_state->base.adjusted_mode;
+	const struct drm_display_mode *adjusted_mode = &crtc_state->hw.adjusted_mode;
 	u32 hdmi_val;
 
 	intel_dp_dual_mode_set_tmds_output(intel_hdmi, true);
@@ -1826,7 +1829,7 @@ static void intel_hdmi_get_config(struct intel_encoder *encoder,
 	    tmp & HDMI_COLOR_RANGE_16_235)
 		pipe_config->limited_color_range = true;
 
-	pipe_config->base.adjusted_mode.flags |= flags;
+	pipe_config->hw.adjusted_mode.flags |= flags;
 
 	if ((tmp & SDVO_COLOR_FORMAT_MASK) == HDMI_COLOR_FORMAT_12bpc)
 		dotclock = pipe_config->port_clock * 2 / 3;
@@ -1836,7 +1839,7 @@ static void intel_hdmi_get_config(struct intel_encoder *encoder,
 	if (pipe_config->pixel_multiplier)
 		dotclock /= pipe_config->pixel_multiplier;
 
-	pipe_config->base.adjusted_mode.crtc_clock = dotclock;
+	pipe_config->hw.adjusted_mode.crtc_clock = dotclock;
 
 	pipe_config->lane_count = 4;
 
@@ -1857,7 +1860,7 @@ static void intel_enable_hdmi_audio(struct intel_encoder *encoder,
 				    const struct intel_crtc_state *pipe_config,
 				    const struct drm_connector_state *conn_state)
 {
-	struct intel_crtc *crtc = to_intel_crtc(pipe_config->base.crtc);
+	struct intel_crtc *crtc = to_intel_crtc(pipe_config->uapi.crtc);
 
 	WARN_ON(!pipe_config->has_hdmi_sink);
 	DRM_DEBUG_DRIVER("Enabling HDMI audio on pipe %c\n",
@@ -1943,7 +1946,7 @@ static void cpt_enable_hdmi(struct intel_encoder *encoder,
 {
 	struct drm_device *dev = encoder->base.dev;
 	struct drm_i915_private *dev_priv = to_i915(dev);
-	struct intel_crtc *crtc = to_intel_crtc(pipe_config->base.crtc);
+	struct intel_crtc *crtc = to_intel_crtc(pipe_config->uapi.crtc);
 	struct intel_hdmi *intel_hdmi = enc_to_intel_hdmi(&encoder->base);
 	enum pipe pipe = crtc->pipe;
 	u32 temp;
@@ -2007,7 +2010,7 @@ static void intel_disable_hdmi(struct intel_encoder *encoder,
 	struct intel_hdmi *intel_hdmi = enc_to_intel_hdmi(&encoder->base);
 	struct intel_digital_port *intel_dig_port =
 		hdmi_to_dig_port(intel_hdmi);
-	struct intel_crtc *crtc = to_intel_crtc(old_crtc_state->base.crtc);
+	struct intel_crtc *crtc = to_intel_crtc(old_crtc_state->uapi.crtc);
 	u32 temp;
 
 	temp = I915_READ(intel_hdmi->hdmi_reg);
@@ -2197,20 +2200,22 @@ intel_hdmi_mode_valid(struct drm_connector *connector,
 			status = hdmi_port_clock_valid(hdmi, clock * 5 / 4,
 						       true, force_dvi);
 	}
+	if (status != MODE_OK)
+		return status;
 
-	return status;
+	return intel_mode_valid_max_plane_size(dev_priv, mode);
 }
 
 static bool hdmi_deep_color_possible(const struct intel_crtc_state *crtc_state,
 				     int bpc)
 {
 	struct drm_i915_private *dev_priv =
-		to_i915(crtc_state->base.crtc->dev);
-	struct drm_atomic_state *state = crtc_state->base.state;
+		to_i915(crtc_state->uapi.crtc->dev);
+	struct drm_atomic_state *state = crtc_state->uapi.state;
 	struct drm_connector_state *connector_state;
 	struct drm_connector *connector;
 	const struct drm_display_mode *adjusted_mode =
-		&crtc_state->base.adjusted_mode;
+		&crtc_state->hw.adjusted_mode;
 	int i;
 
 	if (HAS_GMCH(dev_priv))
@@ -2235,7 +2240,7 @@ static bool hdmi_deep_color_possible(const struct intel_crtc_state *crtc_state,
 	for_each_new_connector_in_state(state, connector, connector_state, i) {
 		const struct drm_display_info *info = &connector->display_info;
 
-		if (connector_state->crtc != crtc_state->base.crtc)
+		if (connector_state->crtc != crtc_state->uapi.crtc)
 			continue;
 
 		if (crtc_state->output_format == INTEL_OUTPUT_FORMAT_YCBCR420) {
@@ -2276,7 +2281,7 @@ static bool
 intel_hdmi_ycbcr420_config(struct drm_connector *connector,
 			   struct intel_crtc_state *config)
 {
-	struct intel_crtc *intel_crtc = to_intel_crtc(config->base.crtc);
+	struct intel_crtc *intel_crtc = to_intel_crtc(config->uapi.crtc);
 
 	if (!connector->ycbcr_420_allowed) {
 		DRM_ERROR("Platform doesn't support YCBCR420 output\n");
@@ -2331,7 +2336,7 @@ static int intel_hdmi_compute_clock(struct intel_encoder *encoder,
 {
 	struct intel_hdmi *intel_hdmi = enc_to_intel_hdmi(&encoder->base);
 	const struct drm_display_mode *adjusted_mode =
-		&crtc_state->base.adjusted_mode;
+		&crtc_state->hw.adjusted_mode;
 	int bpc, clock = adjusted_mode->crtc_clock;
 
 	if (adjusted_mode->flags & DRM_MODE_FLAG_DBLCLK)
@@ -2373,7 +2378,7 @@ static bool intel_hdmi_limited_color_range(const struct intel_crtc_state *crtc_s
 	const struct intel_digital_connector_state *intel_conn_state =
 		to_intel_digital_connector_state(conn_state);
 	const struct drm_display_mode *adjusted_mode =
-		&crtc_state->base.adjusted_mode;
+		&crtc_state->hw.adjusted_mode;
 
 	/*
 	 * Our YCbCr output is always limited range.
@@ -2401,7 +2406,7 @@ int intel_hdmi_compute_config(struct intel_encoder *encoder,
 {
 	struct intel_hdmi *intel_hdmi = enc_to_intel_hdmi(&encoder->base);
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	struct drm_display_mode *adjusted_mode = &pipe_config->base.adjusted_mode;
+	struct drm_display_mode *adjusted_mode = &pipe_config->hw.adjusted_mode;
 	struct drm_connector *connector = conn_state->connector;
 	struct drm_scdc *scdc = &connector->display_info.hdmi.scdc;
 	struct intel_digital_connector_state *intel_conn_state =
@@ -2446,8 +2451,9 @@ int intel_hdmi_compute_config(struct intel_encoder *encoder,
 	if (ret)
 		return ret;
 
-	/* Set user selected PAR to incoming mode's member */
-	adjusted_mode->picture_aspect_ratio = conn_state->picture_aspect_ratio;
+	if (conn_state->picture_aspect_ratio)
+		adjusted_mode->picture_aspect_ratio =
+			conn_state->picture_aspect_ratio;
 
 	pipe_config->lane_count = 4;
 
@@ -2867,7 +2873,6 @@ intel_hdmi_add_properties(struct intel_hdmi *intel_hdmi, struct drm_connector *c
 		intel_attach_colorspace_property(connector);
 
 	drm_connector_attach_content_type_property(connector);
-	connector->state->picture_aspect_ratio = HDMI_PICTURE_ASPECT_NONE;
 
 	if (INTEL_GEN(dev_priv) >= 10 || IS_GEMINILAKE(dev_priv))
 		drm_object_attach_property(&connector->base,
@@ -3126,6 +3131,7 @@ void intel_hdmi_init_connector(struct intel_digital_port *intel_dig_port,
 	struct intel_encoder *intel_encoder = &intel_dig_port->base;
 	struct drm_device *dev = intel_encoder->base.dev;
 	struct drm_i915_private *dev_priv = to_i915(dev);
+	struct i2c_adapter *ddc;
 	enum port port = intel_encoder->port;
 	struct cec_connector_info conn_info;
 
@@ -3141,8 +3147,13 @@ void intel_hdmi_init_connector(struct intel_digital_port *intel_dig_port,
 		 intel_encoder->base.name))
 		return;
 
-	drm_connector_init(dev, connector, &intel_hdmi_connector_funcs,
-			   DRM_MODE_CONNECTOR_HDMIA);
+	intel_hdmi->ddc_bus = intel_hdmi_ddc_pin(dev_priv, port);
+	ddc = intel_gmbus_get_adapter(dev_priv, intel_hdmi->ddc_bus);
+
+	drm_connector_init_with_ddc(dev, connector,
+				    &intel_hdmi_connector_funcs,
+				    DRM_MODE_CONNECTOR_HDMIA,
+				    ddc);
 	drm_connector_helper_add(connector, &intel_hdmi_connector_helper_funcs);
 
 	connector->interlace_allowed = 1;
@@ -3152,10 +3163,6 @@ void intel_hdmi_init_connector(struct intel_digital_port *intel_dig_port,
 	if (INTEL_GEN(dev_priv) >= 10 || IS_GEMINILAKE(dev_priv))
 		connector->ycbcr_420_allowed = true;
 
-	intel_hdmi->ddc_bus = intel_hdmi_ddc_pin(dev_priv, port);
-
-	if (WARN_ON(port == PORT_A))
-		return;
 	intel_encoder->hpd_pin = intel_hpd_pin_default(dev_priv, port);
 
 	if (HAS_DDI(dev_priv))
@@ -3278,11 +3285,11 @@ void intel_hdmi_init(struct drm_i915_private *dev_priv,
 	intel_encoder->port = port;
 	if (IS_CHERRYVIEW(dev_priv)) {
 		if (port == PORT_D)
-			intel_encoder->crtc_mask = 1 << 2;
+			intel_encoder->pipe_mask = BIT(PIPE_C);
 		else
-			intel_encoder->crtc_mask = (1 << 0) | (1 << 1);
+			intel_encoder->pipe_mask = BIT(PIPE_A) | BIT(PIPE_B);
 	} else {
-		intel_encoder->crtc_mask = (1 << 0) | (1 << 1) | (1 << 2);
+		intel_encoder->pipe_mask = ~0;
 	}
 	intel_encoder->cloneable = 1 << INTEL_OUTPUT_ANALOG;
 	/*

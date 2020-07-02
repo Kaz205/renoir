@@ -70,6 +70,7 @@
 		bluetooth0 = &bluetooth;
 		hsuart0 = &uart3;
 		serial0 = &uart8;
+		wifi0 = &wifi;
 	};
 
 	chosen {
@@ -160,6 +161,16 @@
 		power-supply = <&ppvar_sys>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&ap_edp_bklten>;
+	};
+
+	pwmleds {
+		compatible = "pwm-leds";
+		keyboard_backlight: keyboard-backlight {
+			status = "disabled";
+			label = "cros_ec::kbd_backlight";
+			pwms = <&cros_ec_pwm 0>;
+			max-brightness = <1023>;
+		};
 	};
 };
 
@@ -647,6 +658,17 @@ hp_i2c: &i2c9 {
 	};
 };
 
+&ipa {
+	status = "okay";
+
+	/*
+	 * Trogdor doesn't have QHEE (Qualcomm's EL2 blob), so the
+	 * modem needs to cover certain init steps (GSI init), and
+	 * the AP needs to wait for it.
+	 */
+	modem-init;
+};
+
 &mdp {
 	status = "okay";
 };
@@ -665,6 +687,17 @@ hp_i2c: &i2c9 {
 
 &qupv3_id_1 {
 	status = "okay";
+};
+
+&remoteproc_mpss {
+	status = "okay";
+	compatible = "qcom,sc7180-mss-pil";
+	iommus = <&apps_smmu 0x460 0x1>, <&apps_smmu 0x444 0x3>;
+	memory-region = <&mba_mem &mpss_mem>;
+
+	/* This gets overridden for SKUs with LTE support. */
+	firmware-name = "sc7180-mss/google-trogdor-nolte/mba.mbn",
+			"sc7180-mss/google-trogdor-nolte/modem.mdt";
 };
 
 &sdhc_1 {
@@ -734,15 +767,30 @@ ap_spi_fp: &spi10 {
 	vdda-pll-supply = <&vdda_qusb_hs0_1p8>;
 	vdda-phy-dpdm-supply = <&vdda_qusb_hs0_3p1>;
 	qcom,imp-res-offset-value = <8>;
-	qcom,hstx-trim-value = <QUSB2_V2_HSTX_TRIM_21_6_MA>;
-	qcom,preemphasis-level = <QUSB2_V2_PREEMPHASIS_5_PERCENT>;
+	qcom,preemphasis-level = <QUSB2_V2_PREEMPHASIS_15_PERCENT>;
 	qcom,preemphasis-width = <QUSB2_V2_PREEMPHASIS_WIDTH_HALF_BIT>;
+	qcom,bias-ctrl-value = <0x22>;
+	qcom,charge-ctrl-value = <3>;
+	qcom,hsdisc-trim-value = <0>;
 };
 
 &usb_1_qmpphy {
 	status = "okay";
 	vdda-phy-supply = <&vdda_usb_ss_dp_1p2>;
 	vdda-pll-supply = <&vdda_usb_ss_dp_core>;
+};
+
+&wifi {
+	status = "okay";
+
+	vdd-0.8-cx-mx-supply = <&vdd_cx_wlan>;
+	vdd-1.8-xo-supply = <&pp1800_l1c>;
+	vdd-1.3-rfa-supply = <&pp1300_l2c>;
+	vdd-3.3-ch0-supply = <&pp3300_l11c>;
+	/* TODO: Binding and driver doesn't turn on ch1 supply? */
+	wifi-firmware {
+		iommus = <&apps_smmu 0xc2 0x1>;
+	};
 };
 
 /* PINCTRL - additions to nodes defined in sdm845.dtsi */
@@ -1194,5 +1242,11 @@ ap_spi_fp: &spi10 {
 			bias-disable;
 			drive-strength = <2>;
 		};
+	};
+};
+
+&venus {
+	video-firmware {
+		iommus = <&apps_smmu 0x0c42 0x0>;
 	};
 };

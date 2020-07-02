@@ -428,9 +428,12 @@ static int cros_ec_lpc_probe(struct platform_device *pdev)
 	}
 
 	/* Revert this after we introduce Type C connector class driver. */
-	pdev_extcon = platform_device_register_data(dev, "extcon-tcss-cros-ec",
-						    PLATFORM_DEVID_NONE, NULL,
-						    0);
+	if (dmi_match(DMI_PRODUCT_NAME, "Volteer") ||
+	    dmi_match(DMI_PRODUCT_NAME, "Delbin") ||
+	    dmi_match(DMI_PRODUCT_NAME, "tglrvp"))
+		pdev_extcon = platform_device_register_data(dev,
+					"extcon-tcss-cros-ec",
+					PLATFORM_DEVID_NONE, NULL, 0);
 
 	return 0;
 }

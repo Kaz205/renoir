@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2020 Intel Corporation
 
 /*
@@ -97,7 +97,8 @@ static const struct dmi_system_id sof_sdw_quirk_table[] = {
 			DMI_MATCH(DMI_SYS_VENDOR, "Google"),
 			DMI_MATCH(DMI_PRODUCT_NAME, "Volteer"),
 		},
-		.driver_data = (void *)(SOF_SDW_TGL_HDMI | SOF_SDW_PCH_DMIC),
+		.driver_data = (void *)(SOF_SDW_TGL_HDMI | SOF_SDW_PCH_DMIC |
+					SOF_SDW_FOUR_SPK),
 	},
 
 	{}
@@ -135,6 +136,15 @@ static struct snd_soc_codec_conf codec_conf[] = {
 	{
 		.dlc = COMP_CODEC_CONF("sdw:3:25d:715:0"),
 		.name_prefix = "rt715",
+	},
+	/* two MAX98373s on link1 with different unique id */
+	{
+		.dlc = COMP_CODEC_CONF("sdw:1:19f:8373:0:3"),
+		.name_prefix = "mx8373-1",
+	},
+	{
+		.dlc = COMP_CODEC_CONF("sdw:1:19f:8373:0:7"),
+		.name_prefix = "mx8373-2",
 	},
 	{
 		.dlc = COMP_CODEC_CONF("sdw:0:25d:5682:0"),
@@ -198,6 +208,12 @@ static struct sof_sdw_codec_info codec_info_list[] = {
 		.direction = {false, true},
 		.dai_name = "rt715-aif2",
 		.init = sof_sdw_rt715_init,
+	},
+	{
+		.id = 0x8373,
+		.direction = {true, true},
+		.dai_name = "max98373-aif1",
+		.init = sof_sdw_mx8373_init,
 	},
 	{
 		.id = 0x5682,
@@ -411,25 +427,36 @@ static int create_codec_dai_name(struct device *dev,
 
 static int set_codec_init_func(const struct snd_soc_acpi_link_adr *link,
 			       struct snd_soc_dai_link *dai_links,
-			       bool playback)
+			       bool playback, int group_id)
 {
 	int i;
 
-	for (i = 0; i < link->num_adr; i++) {
-		unsigned int part_id;
-		int codec_index;
+	do {
+		/*
+		 * Initialize the codec. If codec is part of an aggregated
+		 * group (group_id>0), initialize all codecs belonging to
+		 * same group.
+		 */
+		for (i = 0; i < link->num_adr; i++) {
+			unsigned int part_id;
+			int codec_index;
 
-		part_id = SDW_PART_ID(link->adr_d[i].adr);
-		codec_index = find_codec_info_part(part_id);
+			part_id = SDW_PART_ID(link->adr_d[i].adr);
+			codec_index = find_codec_info_part(part_id);
 
-		if (codec_index < 0)
-			return codec_index;
-
-		if (codec_info_list[codec_index].init)
-			codec_info_list[codec_index].init(link, dai_links,
-						 &codec_info_list[codec_index],
-						 playback);
-	}
+			if (codec_index < 0)
+				return codec_index;
+			/* The group_id is > 0 iff the codec is aggregated */
+			if (link->adr_d[i].endpoints->group_id != group_id)
+				continue;
+			if (codec_info_list[codec_index].init)
+				codec_info_list[codec_index].init(link,
+						dai_links,
+						&codec_info_list[codec_index],
+						playback);
+		}
+		link++;
+	} while (link->mask && group_id);
 
 	return 0;
 }
@@ -623,7 +650,7 @@ static int create_sdw_dailink(struct device *dev, int *be_index,
 			      NULL, &sdw_ops);
 
 		ret = set_codec_init_func(link, dai_links + (*be_index)++,
-					  playback);
+					  playback, group_id);
 		if (ret < 0) {
 			dev_err(dev, "failed to init codec %d", codec_index);
 			return ret;
@@ -898,6 +925,7 @@ static int mc_probe(struct platform_device *pdev)
 	struct snd_soc_card *card = &card_sof_sdw;
 	struct snd_soc_acpi_mach *mach;
 	struct mc_private *ctx;
+	int amp_num = 0, i;
 	int ret;
 
 	dev_dbg(&pdev->dev, "Entry %s\n", __func__);
@@ -924,9 +952,18 @@ static int mc_probe(struct platform_device *pdev)
 
 	snd_soc_card_set_drvdata(card, ctx);
 
+	/*
+	 * the default amp_num is zero for each codec and
+	 * amp_num will only be increased for active amp
+	 * codecs on used platform
+	 */
+	for (i = 0; i < ARRAY_SIZE(codec_info_list); i++)
+		amp_num += codec_info_list[i].amp_num;
+
 	card->components = devm_kasprintf(card->dev, GFP_KERNEL,
-					  "cfg-spk:%d",
-					  (sof_sdw_quirk & SOF_SDW_FOUR_SPK) ? 4 : 2);
+					  "cfg-spk:%d cfg-amp:%d",
+					  (sof_sdw_quirk & SOF_SDW_FOUR_SPK)
+					  ? 4 : 2, amp_num);
 	if (!card->components)
 		return -ENOMEM;
 

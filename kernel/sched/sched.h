@@ -16,6 +16,7 @@
 #include <linux/sched/init.h>
 #include <linux/sched/isolation.h>
 #include <linux/sched/jobctl.h>
+#include <linux/sched/latsense.h>
 #include <linux/sched/loadavg.h>
 #include <linux/sched/mm.h>
 #include <linux/sched/nohz.h>
@@ -1899,6 +1900,8 @@ extern void init_dl_rq_bw_ratio(struct dl_rq *dl_rq);
 #define BW_SHIFT		20
 #define BW_UNIT			(1 << BW_SHIFT)
 #define RATIO_SHIFT		8
+#define MAX_BW_BITS		(64 - BW_SHIFT)
+#define MAX_BW			((1ULL << MAX_BW_BITS) - 1)
 unsigned long to_ratio(u64 period, u64 runtime);
 
 extern void init_entity_runnable_average(struct sched_entity *se);
@@ -2385,10 +2388,16 @@ static inline bool uclamp_boosted(struct task_struct *p)
 #endif /* CONFIG_UCLAMP_TASK */
 
 #ifdef CONFIG_UCLAMP_TASK_GROUP
-static inline bool uclamp_latency_sensitive(struct task_struct *p)
+static inline bool task_latency_sensitive(struct task_struct *p)
 {
 	struct cgroup_subsys_state *css = task_css(p, cpu_cgrp_id);
 	struct task_group *tg;
+
+#ifdef CONFIG_PROC_LATSENSE
+	/* Over CGroup interface with task-interface. */
+	if (p->proc_latency_sensitive)
+		return true;
+#endif
 
 	if (!css)
 		return false;
@@ -2397,10 +2406,15 @@ static inline bool uclamp_latency_sensitive(struct task_struct *p)
 	return tg->latency_sensitive;
 }
 #else
-static inline bool uclamp_latency_sensitive(struct task_struct *p)
+
+static inline bool task_latency_sensitive(struct task_struct *p)
 {
+#ifdef CONFIG_PROC_LATSENSE
+	return !!p->proc_latency_sensitive;
+#endif
 	return false;
 }
+
 #endif /* CONFIG_UCLAMP_TASK_GROUP */
 
 #ifdef arch_scale_freq_capacity

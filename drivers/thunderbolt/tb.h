@@ -686,17 +686,21 @@ static inline bool tb_switch_is_titan_ridge(const struct tb_switch *sw)
 	}
 }
 
+static bool tb_switch_is_tgl_es(const struct tb_switch *sw)
+{
+	return sw->config.thunderbolt_version != USB4_VERSION_1_0 &&
+	       (sw->config.device_id == PCI_DEVICE_ID_INTEL_TGL_NHI0 ||
+		sw->config.device_id == PCI_DEVICE_ID_INTEL_TGL_NHI1);
+}
+
 /**
- * tb_switch_is_usb4() - Is the switch USB4 compliant
- * @sw: Switch to check
- *
- * Returns true if the @sw is USB4 compliant router, false otherwise.
- */
+  * tb_switch_is_usb4() - Is the switch USB4 compliant
+  * @sw: Switch to check
+  */
 static inline bool tb_switch_is_usb4(const struct tb_switch *sw)
 {
 	return sw->config.thunderbolt_version == USB4_VERSION_1_0 ||
-	       sw->config.device_id == PCI_DEVICE_ID_INTEL_TGL_NHI0 ||
-	       sw->config.device_id == PCI_DEVICE_ID_INTEL_TGL_NHI1;
+	       tb_switch_is_tgl_es(sw);
 }
 
 /**

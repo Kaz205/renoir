@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Google Trogdor dts fragment for LTE SKUs
+ *
+ * Copyright 2020 Google LLC.
+ */
+
+&remoteproc_mpss {
+	firmware-name = "sc7180-mss/google-trogdor/mba.mbn",
+			"sc7180-mss/google-trogdor/modem.mdt";
+};

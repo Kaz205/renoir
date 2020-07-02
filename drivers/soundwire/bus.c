@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: (GPL-2.0 OR BSD-3-Clause)
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
 // Copyright(c) 2015-17 Intel Corporation.
 
 #include <linux/acpi.h>
@@ -8,26 +8,62 @@
 #include <linux/soundwire/sdw_registers.h>
 #include <linux/soundwire/sdw.h>
 #include "bus.h"
+#include "sysfs_local.h"
+
+static DEFINE_IDA(sdw_ida);
+
+static int sdw_get_id(struct sdw_bus *bus)
+{
+	int rc = ida_alloc(&sdw_ida, GFP_KERNEL);
+
+	if (rc < 0)
+		return rc;
+
+	bus->id = rc;
+	return 0;
+}
 
 /**
- * sdw_add_bus_master() - add a bus Master instance
+ * sdw_bus_master_add() - add a bus Master instance
  * @bus: bus instance
+ * @parent: parent device
+ * @fwnode: firmware node handle
  *
  * Initializes the bus instance, read properties and create child
  * devices.
  */
-int sdw_add_bus_master(struct sdw_bus *bus)
+int sdw_bus_master_add(struct sdw_bus *bus, struct device *parent,
+		       struct fwnode_handle *fwnode)
 {
 	struct sdw_master_prop *prop = NULL;
 	int ret;
 
-	if (!bus->dev) {
-		pr_err("SoundWire bus has no device\n");
+	if (!parent) {
+		pr_err("SoundWire parent device is not set\n");
 		return -ENODEV;
+	}
+
+	ret = sdw_get_id(bus);
+	if (ret) {
+		dev_err(parent, "Failed to get bus id\n");
+		return ret;
+	}
+
+	ret = sdw_master_device_add(bus, parent, fwnode);
+	if (ret) {
+		dev_err(parent, "Failed to add master device at link %d\n",
+			bus->link_id);
+		return ret;
 	}
 
 	if (!bus->ops) {
 		dev_err(bus->dev, "SoundWire Bus ops are not set\n");
+		return -EINVAL;
+	}
+
+	if (!bus->compute_params) {
+		dev_err(bus->dev,
+			"Bandwidth allocation not configured, compute_params no set\n");
 		return -EINVAL;
 	}
 
@@ -107,7 +143,7 @@ int sdw_add_bus_master(struct sdw_bus *bus)
 
 	return 0;
 }
-EXPORT_SYMBOL(sdw_add_bus_master);
+EXPORT_SYMBOL(sdw_bus_master_add);
 
 static int sdw_delete_slave(struct device *dev, void *data)
 {
@@ -131,18 +167,20 @@ static int sdw_delete_slave(struct device *dev, void *data)
 }
 
 /**
- * sdw_delete_bus_master() - delete the bus master instance
+ * sdw_bus_master_delete() - delete the bus master instance
  * @bus: bus to be deleted
  *
  * Remove the instance, delete the child devices.
  */
-void sdw_delete_bus_master(struct sdw_bus *bus)
+void sdw_bus_master_delete(struct sdw_bus *bus)
 {
 	device_for_each_child(bus->dev, NULL, sdw_delete_slave);
+	sdw_master_device_del(bus);
 
 	sdw_bus_debugfs_exit(bus);
+	ida_free(&sdw_ida, bus->id);
 }
-EXPORT_SYMBOL(sdw_delete_bus_master);
+EXPORT_SYMBOL(sdw_bus_master_delete);
 
 /*
  * SDW IO Calls
@@ -284,9 +322,10 @@ int sdw_fill_msg(struct sdw_msg *msg, struct sdw_slave *slave,
 	msg->flags = flags;
 	msg->buf = buf;
 
-	if (addr < SDW_REG_NO_PAGE) { /* no paging area */
+	if (addr < SDW_REG_NO_PAGE) /* no paging area */
 		return 0;
-	} else if (addr >= SDW_REG_MAX) { /* illegal addr */
+
+	if (addr >= SDW_REG_MAX) { /* illegal addr */
 		pr_err("SDW: Invalid address %x passed\n", addr);
 		return -EINVAL;
 	}
@@ -306,7 +345,9 @@ int sdw_fill_msg(struct sdw_msg *msg, struct sdw_slave *slave,
 	if (!slave) {
 		pr_err("SDW: No slave for paging addr\n");
 		return -EINVAL;
-	} else if (!slave->prop.paging_support) {
+	}
+
+	if (!slave->prop.paging_support) {
 		dev_err(&slave->dev,
 			"address %x needs paging but no support\n", addr);
 		return -EINVAL;
@@ -375,8 +416,8 @@ sdw_bread_no_pm(struct sdw_bus *bus, u16 dev_num, u32 addr)
 	ret = sdw_transfer(bus, &msg);
 	if (ret < 0)
 		return ret;
-	else
-		return buf;
+
+	return buf;
 }
 
 static int
@@ -471,8 +512,8 @@ int sdw_read(struct sdw_slave *slave, u32 addr)
 	ret = sdw_nread(slave, addr, 1, &buf);
 	if (ret < 0)
 		return ret;
-	else
-		return buf;
+
+	return buf;
 }
 EXPORT_SYMBOL(sdw_read);
 
@@ -563,9 +604,9 @@ static int sdw_assign_device_num(struct sdw_slave *slave)
 	}
 
 	if (!new_device)
-		dev_info(slave->bus->dev,
-			 "Slave already registered, reusing dev_num:%d\n",
-			 slave->dev_num);
+		dev_dbg(slave->bus->dev,
+			"Slave already registered, reusing dev_num:%d\n",
+			slave->dev_num);
 
 	/* Clear the slave->dev_num to transfer message on device 0 */
 	dev_num = slave->dev_num;
@@ -828,12 +869,12 @@ int sdw_bus_prep_clk_stop(struct sdw_bus *bus)
 		if (!slave->dev_num)
 			continue;
 
-		/* Identify if Slave(s) are available on Bus */
-		is_slave = true;
-
 		if (slave->status != SDW_SLAVE_ATTACHED &&
 		    slave->status != SDW_SLAVE_ALERT)
 			continue;
+
+		/* Identify if Slave(s) are available on Bus */
+		is_slave = true;
 
 		slave_mode = sdw_get_clk_stop_mode(slave);
 		slave->curr_clk_stop_mode = slave_mode;
@@ -864,6 +905,10 @@ int sdw_bus_prep_clk_stop(struct sdw_bus *bus)
 		if (ret < 0)
 			return ret;
 	}
+
+	/* Don't need to inform slaves if there is no slave attached */
+	if (!is_slave)
+		return ret;
 
 	/* Inform slaves that prep is done */
 	list_for_each_entry(slave, &bus->slaves, node) {
@@ -950,12 +995,12 @@ int sdw_bus_exit_clk_stop(struct sdw_bus *bus)
 		if (!slave->dev_num)
 			continue;
 
-		/* Identify if Slave(s) are available on Bus */
-		is_slave = true;
-
 		if (slave->status != SDW_SLAVE_ATTACHED &&
 		    slave->status != SDW_SLAVE_ALERT)
 			continue;
+
+		/* Identify if Slave(s) are available on Bus */
+		is_slave = true;
 
 		mode = slave->curr_clk_stop_mode;
 
@@ -981,6 +1026,13 @@ int sdw_bus_exit_clk_stop(struct sdw_bus *bus)
 	if (is_slave && !simple_clk_stop)
 		sdw_bus_wait_for_clk_prep_deprep(bus, SDW_BROADCAST_DEV_NUM);
 
+	/*
+	 * Don't need to call slave callback function if there is no slave
+	 * attached
+	 */
+	if (!is_slave)
+		return 0;
+
 	list_for_each_entry(slave, &bus->slaves, node) {
 		if (!slave->dev_num)
 			continue;
@@ -1004,6 +1056,12 @@ int sdw_configure_dpn_intr(struct sdw_slave *slave,
 	u32 addr;
 	int ret;
 	u8 val = 0;
+
+	if (slave->bus->params.s_data_mode != SDW_PORT_DATA_MODE_NORMAL) {
+		dev_dbg(&slave->dev, "TEST FAIL interrupt %s\n",
+			enable ? "on" : "off");
+		mask |= SDW_DPN_INT_TEST_FAIL;
+	}
 
 	addr = SDW_DPN_INTMASK(port);
 

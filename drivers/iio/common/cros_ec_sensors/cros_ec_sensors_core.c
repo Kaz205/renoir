@@ -15,7 +15,6 @@
 #include <linux/iio/trigger_consumer.h>
 #include <linux/iio/triggered_buffer.h>
 #include <linux/kernel.h>
-#include <linux/mfd/cros_ec.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/platform_data/cros_ec_commands.h>
@@ -112,12 +111,13 @@ static int cros_ec_sensor_set_ec_rate(struct cros_ec_sensors_core_state *st,
 {
 	int ret;
 
+	if (rate > U16_MAX)
+		rate = U16_MAX;
+
 	mutex_lock(&st->cmd_lock);
 	st->param.cmd = MOTIONSENSE_CMD_EC_RATE;
 	st->param.ec_rate.data = rate;
 	ret = cros_ec_motion_send_host_cmd(st, 0);
-	if (ret == 0)
-		st->curr_sampl_freq = rate;
 	mutex_unlock(&st->cmd_lock);
 	return ret;
 }
@@ -150,8 +150,8 @@ static IIO_DEVICE_ATTR(hwfifo_flush, 0644, NULL,
 		       cros_ec_sensors_flush, 0);
 
 static ssize_t cros_ec_sensor_set_report_latency(struct device *dev,
-					      struct device_attribute *attr,
-					      const char *buf, size_t len)
+						 struct device_attribute *attr,
+						 const char *buf, size_t len)
 {
 	struct iio_dev *indio_dev = dev_to_iio_dev(dev);
 	struct cros_ec_sensors_core_state *st = iio_priv(indio_dev);
@@ -171,10 +171,9 @@ static ssize_t cros_ec_sensor_set_report_latency(struct device *dev,
 	return len;
 }
 
-
 static ssize_t cros_ec_sensor_get_report_latency(struct device *dev,
-					      struct device_attribute *attr,
-					      char *buf)
+						 struct device_attribute *attr,
+						 char *buf)
 {
 	struct iio_dev *indio_dev = dev_to_iio_dev(dev);
 	struct cros_ec_sensors_core_state *st = iio_priv(indio_dev);
@@ -199,10 +198,9 @@ static IIO_DEVICE_ATTR(hwfifo_timeout, 0644,
 		       cros_ec_sensor_get_report_latency,
 		       cros_ec_sensor_set_report_latency, 0);
 
-static ssize_t hwfifo_watermark_max_show(
-		struct device *dev,
-		struct device_attribute *attr,
-		char *buf)
+static ssize_t hwfifo_watermark_max_show(struct device *dev,
+					 struct device_attribute *attr,
+					 char *buf)
 {
 	struct iio_dev *indio_dev = dev_to_iio_dev(dev);
 	struct cros_ec_sensors_core_state *st = iio_priv(indio_dev);
@@ -291,7 +289,7 @@ int cros_ec_sensors_core_init(struct platform_device *pdev,
 	struct cros_ec_sensorhub *sensor_hub = dev_get_drvdata(dev->parent);
 	struct cros_ec_dev *ec = sensor_hub->ec;
 	struct cros_ec_sensor_platform *sensor_platform = dev_get_platdata(dev);
-	u32 ver_mask;
+	u32 ver_mask, temp;
 	int frequencies[ARRAY_SIZE(state->frequencies) / 2] = { 0 };
 	int ret, i;
 
@@ -324,8 +322,6 @@ int cros_ec_sensors_core_init(struct platform_device *pdev,
 	indio_dev->name = pdev->name;
 
 	if (physical_device) {
-		indio_dev->modes = INDIO_DIRECT_MODE;
-
 		state->param.cmd = MOTIONSENSE_CMD_INFO;
 		state->param.info.sensor_num = sensor_platform->sensor_num;
 		ret = cros_ec_motion_send_host_cmd(state, 0);
@@ -349,10 +345,16 @@ int cros_ec_sensors_core_init(struct platform_device *pdev,
 						 &frequencies[2],
 						 &state->fifo_max_event_count);
 		} else {
-			frequencies[1] = state->resp->info_3.min_frequency;
-			frequencies[2] = state->resp->info_3.max_frequency;
-			state->fifo_max_event_count =
-			    state->resp->info_3.fifo_max_event_count;
+			if (state->resp->info_3.max_frequency == 0) {
+				get_default_min_max_freq(state->resp->info.type,
+							 &frequencies[1],
+							 &frequencies[2],
+							 &temp);
+			} else {
+				frequencies[1] = state->resp->info_3.min_frequency;
+				frequencies[2] = state->resp->info_3.max_frequency;
+			}
+			state->fifo_max_event_count = state->resp->info_3.fifo_max_event_count;
 		}
 		for (i = 0; i < ARRAY_SIZE(frequencies); i++) {
 			state->frequencies[2 * i] = frequencies[i] / 1000;
@@ -360,26 +362,56 @@ int cros_ec_sensors_core_init(struct platform_device *pdev,
 				(frequencies[i] % 1000) * 1000;
 		}
 
-		ret = devm_iio_triggered_buffer_setup(dev, indio_dev, NULL,
-						      trigger_capture, NULL);
-		if (ret)
-			return ret;
-
 		if (cros_ec_check_features(ec, EC_FEATURE_MOTION_SENSE_FIFO)) {
-			ret = cros_ec_sensorhub_register_push_data(sensor_hub,
-						sensor_platform->sensor_num,
-						indio_dev, push_data);
+			/*
+			 * Create a software buffer, feed by the EC FIFO.
+			 * We can not use trigger here, as events are generated
+			 * as soon as sample_frequency is set.
+			 */
+			struct iio_buffer *buffer;
+
+			buffer = devm_iio_kfifo_allocate(dev);
+			if (!buffer)
+				return -ENOMEM;
+
+#if IS_ENABLED(CONFIG_IIO_CROS_EC_SENSORS_RING)
+			/*
+			 * To preserve backward compatibility, when sensor ring
+			 * is set, all events are going to the ring buffer.
+			 * To pull event to the individual buffers,
+			 * we need triggers.
+			 */
+			ret = devm_iio_triggered_buffer_setup(dev, indio_dev,
+					NULL, trigger_capture, NULL);
+			if (ret)
+				return ret;
+#else
+			iio_device_attach_buffer(indio_dev, buffer);
+			indio_dev->modes = INDIO_BUFFER_SOFTWARE;
+#endif
+			ret = cros_ec_sensorhub_register_push_data(
+					sensor_hub, sensor_platform->sensor_num,
+					indio_dev, push_data);
 			if (ret)
 				return ret;
 
-			ret = devm_add_action_or_reset(dev,
-						cros_ec_sensors_core_clean,
-						pdev);
+			ret = devm_add_action_or_reset(
+					dev, cros_ec_sensors_core_clean, pdev);
 			if (ret)
 				return ret;
 
 			/* Timestamp coming from FIFO are in ns since boot. */
 			ret = iio_device_set_clock(indio_dev, CLOCK_BOOTTIME);
+			if (ret)
+				return ret;
+		} else {
+			/*
+			 * The only way to get samples in buffer is to set a
+			 * software tigger (systrig, hrtimer).
+			 */
+			ret = devm_iio_triggered_buffer_setup(
+					dev, indio_dev, NULL, trigger_capture,
+					NULL);
 			if (ret)
 				return ret;
 		}
@@ -853,8 +885,6 @@ int cros_ec_sensors_core_write(struct cros_ec_sensors_core_state *st,
 		st->param.sensor_odr.roundup = 1;
 
 		ret = cros_ec_motion_send_host_cmd(st, 0);
-		if (ret)
-			break;
 		break;
 	default:
 		ret = -EINVAL;

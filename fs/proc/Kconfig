@@ -109,3 +109,9 @@ config PROC_UID
 	depends on PROC_FS && RT_MUTEXES
 	help
 	Provides aggregated per-uid information under /proc/uid.
+
+config PROC_LATSENSE
+	def_bool y
+	depends on PROC_FS && UCLAMP_TASK
+	help
+	Enable /proc/pid/tasks/tid latency sensitive scheduler attribute
