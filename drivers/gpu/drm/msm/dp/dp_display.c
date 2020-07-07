@@ -9,6 +9,7 @@
 #include <linux/debugfs.h>
 #include <linux/component.h>
 #include <linux/of_irq.h>
+#include <linux/delay.h>
 
 #include "msm_drv.h"
 #include "msm_kms.h"
@@ -28,6 +29,43 @@
 static struct msm_dp *g_dp_display;
 #define HPD_STRING_SIZE 30
 
+enum {
+	ISR_DISCONNECTED,
+	ISR_CONNECT_PENDING,
+	ISR_CONNECTED,
+	ISR_HPD_REPLUG_COUNT,
+	ISR_IRQ_HPD_PULSE_COUNT,
+	ISR_HPD_LO_GLITH_COUNT,
+};
+
+/* event thread connection state */
+enum {
+	ST_DISCONNECTED,
+	ST_CONNECT_PENDING,
+	ST_CONNECTED,
+	ST_DISCONNECT_PENDING,
+};
+
+enum {
+	EV_NO_EVENT,
+	/* hpd events */
+	EV_HPD_INIT_SETUP,
+	EV_HPD_PLUG_INT,
+	EV_IRQ_HPD_INT,
+	EV_HPD_REPLUG_INT,
+	EV_HPD_UNPLUG_INT,
+	EV_USER_NOTIFICATION,
+};
+
+#define EVENT_TIMEOUT	(HZ/10)	/* 100ms */
+#define DP_EVENT_Q_MAX	8
+
+struct dp_event {
+	u32 event_id;
+	u32 data;
+	u32 delay;
+};
+
 struct dp_display_private {
 	char *name;
 	int irq;
@@ -37,11 +75,9 @@ struct dp_display_private {
 	bool power_on;
 	bool hpd_irq_on;
 	bool audio_supported;
-	atomic_t hpd_isr_status;
 
 	struct platform_device *pdev;
 	struct dentry *root;
-	struct completion notification_comp;
 
 	struct dp_usbpd   *usbpd;
 	struct dp_parser  *parser;
@@ -52,12 +88,20 @@ struct dp_display_private {
 	struct dp_link    *link;
 	struct dp_panel   *panel;
 	struct dp_ctrl    *ctrl;
+	struct dp_debug   *debug;
 
 	struct dp_usbpd_cb usbpd_cb;
 	struct dp_display_mode dp_mode;
 	struct msm_dp dp_display;
 
-	struct delayed_work config_hpd_work;
+	/* event related only access by event thread */
+	struct mutex event_mutex;
+	wait_queue_head_t event_q;
+	atomic_t hpd_state;
+	u32 event_pndx;
+	u32 event_gndx;
+	struct dp_event event_list[DP_EVENT_Q_MAX];
+	spinlock_t event_lock;
 };
 
 static const struct of_device_id dp_dt_match[] = {
@@ -65,79 +109,58 @@ static const struct of_device_id dp_dt_match[] = {
 	{}
 };
 
-static irqreturn_t dp_display_irq(int irq, void *dev_id)
+static int dp_add_event(struct dp_display_private *dp_priv, u32 event,
+						u32 data, u32 delay)
 {
-	struct dp_display_private *dp = dev_id;
-	irqreturn_t ret = IRQ_HANDLED;
-	u32 hpd_isr_status;
+	unsigned long flag;
+	struct dp_event *todo;
+	int pndx;
 
-	if (!dp) {
-		DRM_ERROR("invalid data\n");
-		return IRQ_NONE;
+	spin_lock_irqsave(&dp_priv->event_lock, flag);
+	pndx = dp_priv->event_pndx + 1;
+	pndx %= DP_EVENT_Q_MAX;
+	if (pndx == dp_priv->event_gndx) {
+		pr_err("event_q is full: pndx=%d gndx=%d\n",
+			dp_priv->event_pndx, dp_priv->event_gndx);
+		spin_unlock_irqrestore(&dp_priv->event_lock, flag);
+		return -EPERM;
 	}
+	todo = &dp_priv->event_list[dp_priv->event_pndx++];
+	dp_priv->event_pndx %= DP_EVENT_Q_MAX;
+	todo->event_id = event;
+	todo->data = data;
+	todo->delay = delay;
+	wake_up(&dp_priv->event_q);
+	spin_unlock_irqrestore(&dp_priv->event_lock, flag);
 
-	hpd_isr_status = dp_catalog_hpd_get_intr_status(dp->catalog);
-
-	if (hpd_isr_status & DP_DP_HPD_INT_MASK) {
-		atomic_set(&dp->hpd_isr_status, hpd_isr_status);
-		ret = IRQ_WAKE_THREAD;
-	}
-
-	/* DP controller isr */
-	dp_ctrl_isr(dp->ctrl);
-
-	/* DP aux isr */
-	dp_aux_isr(dp->aux);
-
-	return ret;
+	return 0;
 }
 
-static irqreturn_t dp_display_hpd_isr_work(int irq, void *data)
+static int dp_del_event(struct dp_display_private *dp_priv, u32 event)
 {
-	struct dp_display_private *dp;
-	struct dp_usbpd *hpd;
-	u32 isr = 0;
+	unsigned long flag;
+	struct dp_event *todo;
+	u32	gndx;
 
-	dp = (struct dp_display_private *)data;
-	if (!dp)
-		return IRQ_NONE;
-
-	isr = atomic_read(&dp->hpd_isr_status);
-
-	/* reset to default */
-	atomic_set(&dp->hpd_isr_status, 0);
-
-	hpd = dp->usbpd;
-	if (!hpd)
-		return IRQ_NONE;
-
-	if (isr & DP_DP_HPD_PLUG_INT_MASK &&
-		isr & DP_DP_HPD_STATE_STATUS_CONNECTED) {
-		hpd->hpd_high = 1;
-		dp->usbpd_cb.configure(&dp->pdev->dev);
-	} else if (isr & DP_DP_HPD_UNPLUG_INT_MASK &&
-		(isr & DP_DP_HPD_STATE_STATUS_MASK) ==
-			 DP_DP_HPD_STATE_STATUS_DISCONNECTED) {
-
-		/* disable HPD plug interrupt until disconnect is done
-		 */
-		dp_catalog_hpd_config_intr(dp->catalog,
-			DP_DP_HPD_PLUG_INT_MASK | DP_DP_IRQ_HPD_INT_MASK,
-			false);
-
-		hpd->hpd_high = 0;
-
-		/* We don't need separate work for disconnect as
-		 * connect/attention interrupts are disabled
-		 */
-		dp->usbpd_cb.disconnect(&dp->pdev->dev);
-
-		dp_catalog_hpd_config_intr(dp->catalog,
-			DP_DP_HPD_PLUG_INT_MASK | DP_DP_IRQ_HPD_INT_MASK,
-			true);
+	spin_lock_irqsave(&dp_priv->event_lock, flag);
+	if (dp_priv->event_pndx == dp_priv->event_gndx) {
+		spin_unlock_irqrestore(&dp_priv->event_lock, flag);
+		return -ENOENT;
 	}
 
-	return IRQ_HANDLED;
+	gndx = dp_priv->event_gndx;
+	while (dp_priv->event_pndx != gndx) {
+		todo = &dp_priv->event_list[gndx];
+		if (todo->event_id == event) {
+			todo->event_id = EV_NO_EVENT;	/* deleted */
+			todo->delay = 0;
+		}
+		gndx++;
+		gndx %= DP_EVENT_Q_MAX;
+	}
+	spin_unlock_irqrestore(&dp_priv->event_lock, flag);
+
+	return 0;
 }
 
 static int dp_display_bind(struct device *dev, struct device *master,
@@ -178,7 +201,6 @@ static int dp_display_bind(struct device *dev, struct device *master,
 		DRM_ERROR("Power client create failed\n");
 		goto end;
 	}
-
 end:
 	return rc;
 }
@@ -250,7 +272,6 @@ static int dp_display_send_hpd_notification(struct dp_display_private *dp,
 		dp->panel->video_test = false;
 
 	dp->dp_display.is_connected = hpd;
-	reinit_completion(&dp->notification_comp);
 
 	if (dp->dp_display.is_connected && dp->dp_display.encoder
 				&& !encoder_mode_set
@@ -263,12 +284,7 @@ static int dp_display_send_hpd_notification(struct dp_display_private *dp,
 
 	dp_display_send_hpd_event(&dp->dp_display);
 
-	if (!wait_for_completion_timeout(&dp->notification_comp, HZ * 2)) {
-		pr_warn("%s timeout\n", hpd ? "connect" : "disconnect");
-		mutex_unlock(&dp->dp_display.connect_mutex);
-		return -EINVAL;
-	}
-
+	/* release lock so that drm can issue complete */
 	mutex_unlock(&dp->dp_display.connect_mutex);
 	return 0;
 }
@@ -285,15 +301,9 @@ static int dp_display_process_hpd_high(struct dp_display_private *dp)
 
 	rc = dp_panel_read_sink_caps(dp->panel, dp->dp_display.connector);
 	if (rc)
-		goto notify;
+		goto end;
 
 	dp_link_process_request(dp->link);
-
-	if (dp_display_is_sink_count_zero(dp)) {
-		DRM_DEBUG_DP("no downstream devices connected\n");
-		rc = -EINVAL;
-		goto end;
-	}
 
 	edid = dp->panel->edid;
 
@@ -302,8 +312,15 @@ static int dp_display_process_hpd_high(struct dp_display_private *dp)
 
 	dp->dp_display.max_pclk_khz = DP_MAX_PIXEL_CLK_KHZ;
 	dp->dp_display.max_dp_lanes = dp->parser->max_dp_lanes;
+
+	rc = dp_ctrl_on_link(dp->ctrl);
+	if (rc) {
+		DRM_ERROR("failed to complete DP link training\n");
+		goto end;
+	}
 notify:
-	dp_display_send_hpd_notification(dp, true);
+	dp_add_event(dp, EV_USER_NOTIFICATION, true, 0);
+
 
 end:
 	return rc;
@@ -327,23 +344,6 @@ static void dp_display_host_init(struct dp_display_private *dp)
 	dp->core_initialized = true;
 }
 
-static void dp_display_host_deinit(struct dp_display_private *dp)
-{
-	if (!dp->core_initialized) {
-		DRM_DEBUG_DP("DP core already off\n");
-		return;
-	}
-
-	dp->core_initialized = false;
-}
-
-static void dp_display_process_hpd_low(struct dp_display_private *dp)
-{
-	dp_display_send_hpd_notification(dp, false);
-
-	dp_aux_deinit(dp->aux);
-}
-
 static int dp_display_usbpd_configure_cb(struct device *dev)
 {
 	int rc = 0;
@@ -365,15 +365,9 @@ static int dp_display_usbpd_configure_cb(struct device *dev)
 	dp_display_host_init(dp);
 
 	if (dp->usbpd->hpd_high)
-		dp_display_process_hpd_high(dp);
+		rc = dp_display_process_hpd_high(dp);
 end:
 	return rc;
-}
-
-static void dp_display_clean(struct dp_display_private *dp)
-{
-	dp_ctrl_push_idle(dp->ctrl);
-	dp_ctrl_off(dp->ctrl);
 }
 
 static int dp_display_usbpd_disconnect_cb(struct device *dev)
@@ -383,16 +377,12 @@ static int dp_display_usbpd_disconnect_cb(struct device *dev)
 
 	dp = dev_get_drvdata(dev);
 
-	rc = dp_display_send_hpd_notification(dp, false);
+	dp_add_event(dp, EV_USER_NOTIFICATION, false, 0);
 
 	/* if cable is disconnected, reset psm_enabled flag */
 	if (!dp->usbpd->alt_mode_cfg_done)
 		dp->link->psm_enabled = false;
 
-	if ((rc < 0) && dp->power_on)
-		dp_display_clean(dp);
-
-	dp_display_host_deinit(dp);
 	return rc;
 }
 
@@ -407,11 +397,14 @@ static void dp_display_handle_video_request(struct dp_display_private *dp)
 	}
 }
 
-static int dp_display_handle_hpd_irq(struct dp_display_private *dp)
+static int dp_display_handle_irq_hpd(struct dp_display_private *dp)
 {
-	if (dp->link->sink_request & DS_PORT_STATUS_CHANGED) {
-		dp_display_send_hpd_notification(dp, false);
+	u32 sink_request;
 
+	sink_request = dp->link->sink_request;
+
+	if (sink_request & DS_PORT_STATUS_CHANGED) {
+		dp_add_event(dp, EV_USER_NOTIFICATION, false, 0);
 		if (dp_display_is_sink_count_zero(dp)) {
 			DRM_DEBUG_DP("sink count is zero, nothing to do\n");
 			return 0;
@@ -422,7 +415,8 @@ static int dp_display_handle_hpd_irq(struct dp_display_private *dp)
 
 	dp_ctrl_handle_sink_request(dp->ctrl);
 
-	dp_display_handle_video_request(dp);
+	if (dp->link->sink_request & DP_TEST_LINK_VIDEO_PATTERN)
+		dp_display_handle_video_request(dp);
 
 	return 0;
 }
@@ -443,27 +437,114 @@ static int dp_display_usbpd_attention_cb(struct device *dev)
 		return -ENODEV;
 	}
 
-	if (dp->usbpd->hpd_irq) {
-		dp->hpd_irq_on = true;
+	/* check for any test request issued by sink */
+	rc = dp_link_process_request(dp->link);
+	if (!rc)
+		dp_display_handle_irq_hpd(dp);
 
-		rc = dp_link_process_request(dp->link);
-		/* check for any test request issued by sink */
-		if (!rc)
-			dp_display_handle_hpd_irq(dp);
-
-		dp->hpd_irq_on = false;
-		goto end;
-	}
-
-	if (!dp->usbpd->hpd_high) {
-		dp_display_process_hpd_low(dp);
-		goto end;
-	}
-
-	if (dp->usbpd->alt_mode_cfg_done)
-		dp_display_process_hpd_high(dp);
-end:
 	return rc;
+}
+
+static int dp_hpd_plug_handle(struct dp_display_private *dp, u32 data)
+{
+	struct dp_usbpd *hpd = dp->usbpd;
+	u32 state;
+	int ret;
+
+	if (!hpd)
+		return 0;
+
+	mutex_lock(&dp->event_mutex);
+
+	state =  atomic_read(&dp->hpd_state);
+	if (state == ST_CONNECT_PENDING || state == ST_CONNECTED) {
+		mutex_unlock(&dp->event_mutex);
+		return 0;
+	}
+
+	if (state == ST_DISCONNECT_PENDING) {
+		/* wait until ST_DISCONNECTED */
+		dp_add_event(dp, EV_HPD_PLUG_INT, 0, 1); /* delay = 1 */
+		mutex_unlock(&dp->event_mutex);
+		return 0;
+	}
+
+	/* stop sending uevent if it is still pending at event q */
+	dp_del_event(dp, EV_USER_NOTIFICATION);
+
+	atomic_set(&dp->hpd_state, ST_CONNECT_PENDING);
+
+	hpd->hpd_high = 1;
+
+	ret = dp_display_usbpd_configure_cb(&dp->pdev->dev);
+	if (ret) {	/* failed */
+		hpd->hpd_high = 0;
+		atomic_set(&dp->hpd_state, ST_DISCONNECTED);
+	}
+	mutex_unlock(&dp->event_mutex);
+
+	/* uevent will complete connection part */
+	return 0;
+};
+
+static int dp_hpd_unplug_handle(struct dp_display_private *dp, u32 data)
+{
+	struct dp_usbpd *hpd = dp->usbpd;
+	u32 state;
+
+	if (!hpd)
+		return 0;
+
+	mutex_lock(&dp->event_mutex);
+
+	state = atomic_read(&dp->hpd_state);
+	if (state == ST_DISCONNECT_PENDING || state == ST_DISCONNECTED) {
+		mutex_unlock(&dp->event_mutex);
+		return 0;
+	}
+
+	if (state == ST_CONNECT_PENDING) {
+		/* wait until CONNECTED */
+		dp_add_event(dp, EV_HPD_UNPLUG_INT, 0, 1); /* delay = 1 */
+		mutex_unlock(&dp->event_mutex);
+		return 0;
+	}
+
+	atomic_set(&dp->hpd_state, ST_DISCONNECT_PENDING);
+
+	/* stop sending uevent if it is still pending at event q */
+	dp_del_event(dp, EV_USER_NOTIFICATION);
+
+	/* disable HPD plug interrupt until disconnect is done */
+	dp_catalog_hpd_config_intr(dp->catalog, DP_DP_HPD_PLUG_INT_MASK
+				| DP_DP_IRQ_HPD_INT_MASK, false);
+
+	hpd->hpd_high = 0;
+
+	/*
+	 * We don't need separate work for disconnect as
+	 * connect/attention interrupts are disabled
+	 */
+	dp_display_usbpd_disconnect_cb(&dp->pdev->dev);
+
+	dp_catalog_hpd_config_intr(dp->catalog, DP_DP_HPD_PLUG_INT_MASK |
+					DP_DP_IRQ_HPD_INT_MASK, true);
+
+	/* uevent will complete disconnection part */
+	mutex_unlock(&dp->event_mutex);
+	return 0;
+}
+
+static int dp_irq_hpd_handle(struct dp_display_private *dp, u32 data)
+{
+	/* irq_hpd can happen at either connected or disconnected state */
+	mutex_lock(&dp->event_mutex);
+
+	dp_display_usbpd_attention_cb(&dp->pdev->dev);
+
+	mutex_unlock(&dp->event_mutex);
+
+	return 0;
 }
 
 static void dp_display_deinit_sub_modules(struct dp_display_private *dp)
@@ -599,45 +680,24 @@ static int dp_display_prepare(struct msm_dp *dp)
 	return 0;
 }
 
-static void dp_display_dump(struct msm_dp *dp_display)
-{
-	struct dp_display_private *dp;
-
-	dp = container_of(dp_display, struct dp_display_private, dp_display);
-
-	dp_panel_dump_regs(dp->panel);
-}
-
-static int dp_display_enable(struct msm_dp *dp_display)
+static int dp_display_enable(struct dp_display_private *dp, u32 data)
 {
 	int rc = 0;
-	struct dp_display_private *dp;
-	bool dump_dp = false;
-
-	dp = container_of(dp_display, struct dp_display_private, dp_display);
 
 	if (dp->power_on) {
 		DRM_DEBUG_DP("Link already setup, return\n");
 		return 0;
 	}
 
-	rc = dp_ctrl_on(dp->ctrl);
+	rc = dp_ctrl_on_stream(dp->ctrl);
 	if (!rc)
 		dp->power_on = true;
-
-	if (dump_dp != false)
-		dp_display_dump(dp_display);
 
 	return rc;
 }
 
 static int dp_display_post_enable(struct msm_dp *dp_display)
 {
-	struct dp_display_private *dp;
-
-	dp = container_of(dp_display, struct dp_display_private, dp_display);
-
-	complete_all(&dp->notification_comp);
 	return 0;
 }
 
@@ -650,55 +710,19 @@ static int dp_display_pre_disable(struct msm_dp *dp_display)
 	if (dp->usbpd->alt_mode_cfg_done)
 		dp_link_psm_config(dp->link, &dp->panel->link_info, true);
 
-	dp_ctrl_push_idle(dp->ctrl);
 	return 0;
 }
 
-static int dp_display_disable(struct msm_dp *dp_display)
+static int dp_display_disable(struct dp_display_private *dp, u32 data)
 {
-	struct dp_display_private *dp;
-
-	dp = container_of(dp_display, struct dp_display_private, dp_display);
-
-	if (!dp->power_on || !dp->core_initialized)
+	if (!dp->power_on)
 		return -EINVAL;
 
 	dp_ctrl_off(dp->ctrl);
 
+	dp->core_initialized = false;
+
 	dp->power_on = false;
-
-	complete_all(&dp->notification_comp);
-	return 0;
-}
-
-int dp_display_request_irq(struct msm_dp *dp_display)
-{
-	int rc = 0;
-	struct dp_display_private *dp;
-
-	if (!dp_display) {
-		DRM_ERROR("invalid input\n");
-		return -EINVAL;
-	}
-
-	dp = container_of(dp_display, struct dp_display_private, dp_display);
-
-	dp->irq = irq_of_parse_and_map(dp->pdev->dev.of_node, 0);
-	if (dp->irq < 0) {
-		rc = dp->irq;
-		DRM_ERROR("failed to get irq: %d\n", rc);
-		return rc;
-	}
-
-	rc = devm_request_threaded_irq(&dp->pdev->dev, dp->irq,
-		dp_display_irq, dp_display_hpd_isr_work,
-		IRQF_TRIGGER_HIGH, "dp_display_isr", dp);
-	if (rc < 0) {
-		DRM_ERROR("failed to request IRQ%u: %d\n",
-				dp->irq, rc);
-		return rc;
-	}
-	disable_irq(dp->irq);
 
 	return 0;
 }
@@ -783,6 +807,182 @@ int dp_display_get_test_bpp(struct msm_dp *dp)
 		dp_display->link->test_video.test_bit_depth);
 }
 
+static void dp_display_config_hpd(struct dp_display_private *dp)
+{
+
+	dp_display_host_init(dp);
+	dp_catalog_ctrl_hpd_config(dp->catalog);
+
+	/* Enable interrupt first time
+	 * we are leaving dp clocks on during disconnect
+	 * and never disable interrupt
+	 */
+	enable_irq(dp->irq);
+}
+
+static int hpd_event_thread(void *data)
+{
+	struct dp_display_private *dp_priv;
+	unsigned long flag;
+	struct dp_event *todo;
+	int timeout_mode = 0;
+	int ret;
+
+	dp_priv = (struct dp_display_private *)data;
+
+	while (1) {
+		if (timeout_mode) {
+			ret = wait_event_timeout(dp_priv->event_q,
+				(dp_priv->event_pndx == dp_priv->event_gndx),
+						EVENT_TIMEOUT);
+		} else {
+			ret = wait_event_timeout(dp_priv->event_q,
+				(dp_priv->event_pndx != dp_priv->event_gndx),
+						EVENT_TIMEOUT);
+		}
+		spin_lock_irqsave(&dp_priv->event_lock, flag);
+		todo = &dp_priv->event_list[dp_priv->event_gndx];
+		if (todo->delay) {
+			struct dp_event *todo_next;
+
+			dp_priv->event_gndx++;
+			dp_priv->event_gndx %= DP_EVENT_Q_MAX;
+
+			/* re enter delay event into q */
+			todo_next = &dp_priv->event_list[dp_priv->event_pndx++];
+			dp_priv->event_pndx %= DP_EVENT_Q_MAX;
+			todo_next->event_id = todo->event_id;
+			todo_next->data = todo->data;
+			todo_next->delay = todo->delay - 1;
+
+			/* clean up older event */
+			todo->event_id = EV_NO_EVENT;
+			todo->delay = 0;
+
+			/* switch to timeout mode */
+			timeout_mode = 1;
+			spin_unlock_irqrestore(&dp_priv->event_lock, flag);
+			continue;
+		}
+
+		/* timeout with no events in q */
+		if (dp_priv->event_pndx == dp_priv->event_gndx) {
+			spin_unlock_irqrestore(&dp_priv->event_lock, flag);
+			continue;
+		}
+
+		dp_priv->event_gndx++;
+		dp_priv->event_gndx %= DP_EVENT_Q_MAX;
+		timeout_mode = 0;
+		spin_unlock_irqrestore(&dp_priv->event_lock, flag);
+
+		switch (todo->event_id) {
+		case EV_HPD_INIT_SETUP:
+			dp_display_config_hpd(dp_priv);
+			break;
+		case EV_HPD_PLUG_INT:
+			dp_hpd_plug_handle(dp_priv, todo->data);
+			break;
+		case EV_HPD_UNPLUG_INT:
+			dp_hpd_unplug_handle(dp_priv, todo->data);
+			break;
+		case EV_IRQ_HPD_INT:
+			dp_irq_hpd_handle(dp_priv, todo->data);
+			break;
+		case EV_HPD_REPLUG_INT:
+			/* do nothing */
+			break;
+		case EV_USER_NOTIFICATION:
+			dp_display_send_hpd_notification(dp_priv,
+						todo->data);
+			break;
+		default:
+			break;
+		}
+	}
+
+	return 0;
+}
+
+static void dp_hpd_event_setup(struct dp_display_private *dp_priv)
+{
+	init_waitqueue_head(&dp_priv->event_q);
+	spin_lock_init(&dp_priv->event_lock);
+
+	kthread_run(hpd_event_thread, (void *)dp_priv, "dp_hpd_handler");
+}
+
+static irqreturn_t dp_display_irq_handler(int irq, void *dev_id)
+{
+	struct dp_display_private *dp = dev_id;
+	irqreturn_t ret = IRQ_HANDLED;
+	u32 hpd_isr_status;
+
+	if (!dp) {
+		DRM_ERROR("invalid data\n");
+		return IRQ_NONE;
+	}
+
+	hpd_isr_status = dp_catalog_hpd_get_intr_status(dp->catalog);
+
+	if (hpd_isr_status & 0x0F) {
+		/* hpd related interrupts */
+		if (hpd_isr_status & DP_DP_HPD_PLUG_INT_MASK ||
+			hpd_isr_status & DP_DP_HPD_REPLUG_INT_MASK) {
+			dp_add_event(dp, EV_HPD_PLUG_INT, 0, 0);
+		}
+
+		if (hpd_isr_status & DP_DP_IRQ_HPD_INT_MASK)
+			dp_add_event(dp, EV_IRQ_HPD_INT, 0, 0);
+
+		if (hpd_isr_status & DP_DP_HPD_REPLUG_INT_MASK)
+			dp_add_event(dp, EV_HPD_REPLUG_INT, 0, 0);
+
+		if (hpd_isr_status & DP_DP_HPD_UNPLUG_INT_MASK)
+			dp_add_event(dp, EV_HPD_UNPLUG_INT, 0, 0);
+	}
+
+	/* DP controller isr */
+	dp_ctrl_isr(dp->ctrl);
+
+	/* DP aux isr */
+	dp_aux_isr(dp->aux);
+
+	return ret;
+}
+
+int dp_display_request_irq(struct msm_dp *dp_display)
+{
+	int rc = 0;
+	struct dp_display_private *dp;
+
+	if (!dp_display) {
+		DRM_ERROR("invalid input\n");
+		return -EINVAL;
+	}
+
+	dp = container_of(dp_display, struct dp_display_private, dp_display);
+
+	dp->irq = irq_of_parse_and_map(dp->pdev->dev.of_node, 0);
+	if (dp->irq < 0) {
+		rc = dp->irq;
+		DRM_ERROR("failed to get irq: %d\n", rc);
+		return rc;
+	}
+
+	rc = devm_request_irq(&dp->pdev->dev, dp->irq,
+			dp_display_irq_handler,
+			IRQF_TRIGGER_HIGH, "dp_display_isr", dp);
+	if (rc < 0) {
+		DRM_ERROR("failed to request IRQ%u: %d\n",
+				dp->irq, rc);
+		return rc;
+	}
+	disable_irq(dp->irq);
+
+	return 0;
+}
+
 static int dp_display_probe(struct platform_device *pdev)
 {
 	int rc = 0;
@@ -797,8 +997,6 @@ static int dp_display_probe(struct platform_device *pdev)
 	if (!dp)
 		return -ENOMEM;
 
-	init_completion(&dp->notification_comp);
-
 	dp->pdev = pdev;
 	dp->name = "drm_dp";
 
@@ -810,6 +1008,7 @@ static int dp_display_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, dp);
 
+	mutex_init(&dp->event_mutex);
 	mutex_init(&dp->dp_display.connect_mutex);
 	g_dp_display = &dp->dp_display;
 
@@ -861,26 +1060,6 @@ void __exit msm_dp_unregister(void)
 	platform_driver_unregister(&dp_display_driver);
 }
 
-static void dp_display_config_hpd_work(struct work_struct *work)
-{
-	struct dp_display_private *dp;
-	struct delayed_work *dw = to_delayed_work(work);
-
-	dp = container_of(dw, struct dp_display_private, config_hpd_work);
-
-	dp_display_host_init(dp);
-	dp_catalog_ctrl_hpd_config(dp->catalog);
-
-	/* set default to 0 */
-	atomic_set(&dp->hpd_isr_status, 0);
-
-	/* Enable interrupt first time
-	 * we are leaving dp clocks on during disconnect
-	 * and never disable interrupt
-	 */
-	enable_irq(dp->irq);
-}
-
 void msm_dp_irq_postinstall(struct msm_dp *dp_display)
 {
 	struct dp_display_private *dp;
@@ -890,8 +1069,13 @@ void msm_dp_irq_postinstall(struct msm_dp *dp_display)
 
 	dp = container_of(dp_display, struct dp_display_private, dp_display);
 
-	INIT_DELAYED_WORK(&dp->config_hpd_work, dp_display_config_hpd_work);
-	queue_delayed_work(system_wq, &dp->config_hpd_work, HZ * 10);
+	dp_hpd_event_setup(dp);
+
+	/* This hack Delays HPD configuration by 10 sec
+	 * ToDo(User): Implement correct boot sequence of
+	 * HPD configuration and remove this hack
+	 */
+	dp_add_event(dp, EV_HPD_INIT_SETUP, 0, 100);
 }
 
 int msm_dp_modeset_init(struct msm_dp *dp_display, struct drm_device *dev,
@@ -938,37 +1122,47 @@ int msm_dp_display_enable(struct msm_dp *dp, struct drm_encoder *encoder)
 		return -EINVAL;
 	}
 
+	mutex_lock(&dp_display->event_mutex);
+
 	rc = dp_display_set_mode(dp, &dp_display->dp_mode);
 	if (rc) {
 		DRM_ERROR("Failed to perform a mode set, rc=%d\n", rc);
+		mutex_unlock(&dp_display->event_mutex);
 		return rc;
 	}
 
 	rc = dp_display_prepare(dp);
 	if (rc) {
 		DRM_ERROR("DP display prepare failed, rc=%d\n", rc);
+		mutex_unlock(&dp_display->event_mutex);
 		return rc;
 	}
 
-	rc = dp_display_enable(dp);
-	if (rc) {
-		DRM_ERROR("DP display enable failed, rc=%d\n", rc);
-		dp_display_unprepare(dp);
-		return rc;
-	}
+	dp_display_enable(dp_display, 0);
 
 	rc = dp_display_post_enable(dp);
 	if (rc) {
 		DRM_ERROR("DP display post enable failed, rc=%d\n", rc);
-		dp_display_disable(dp);
+		dp_display_disable(dp_display, 0);
 		dp_display_unprepare(dp);
 	}
+
+	/* completed connection */
+	atomic_set(&dp_display->hpd_state, ST_CONNECTED);
+
+	mutex_unlock(&dp_display->event_mutex);
+
 	return rc;
 }
 
 int msm_dp_display_disable(struct msm_dp *dp, struct drm_encoder *encoder)
 {
 	int rc = 0;
+	struct dp_display_private *dp_display;
+
+	dp_display = container_of(dp, struct dp_display_private, dp_display);
+
+	mutex_lock(&dp_display->event_mutex);
 
 	rc = dp_display_pre_disable(dp);
 	if (rc) {
@@ -976,16 +1170,16 @@ int msm_dp_display_disable(struct msm_dp *dp, struct drm_encoder *encoder)
 		return rc;
 	}
 
-	rc = dp_display_disable(dp);
-	if (rc) {
-		DRM_ERROR("DP display disable failed, rc=%d\n", rc);
-		return rc;
-	}
+	dp_display_disable(dp_display, 0);
 
 	rc = dp_display_unprepare(dp);
 	if (rc)
 		DRM_ERROR("DP display unprepare failed, rc=%d\n", rc);
 
+	/* completed disconnection */
+	atomic_set(&dp_display->hpd_state, ST_DISCONNECTED);
+
+	mutex_unlock(&dp_display->event_mutex);
 	return rc;
 }
 

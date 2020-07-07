@@ -19,6 +19,7 @@
 struct dp_power {
 	bool core_clks_on;
 	bool link_clks_on;
+	bool stream_clks_on;
 };
 
 /**

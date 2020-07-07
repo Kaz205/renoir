@@ -8,8 +8,6 @@
 #include <drm/drm_connector.h>
 #include <drm/drm_edid.h>
 
-#define DP_MAX_DS_PORT_COUNT 1
-
 struct dp_panel_private {
 	struct device *dev;
 	struct dp_panel dp_panel;
@@ -23,11 +21,11 @@ struct dp_panel_private {
 static int dp_panel_read_dpcd(struct dp_panel *dp_panel)
 {
 	int rc = 0;
-	size_t rlen;
+	size_t len, rlen;
 	struct dp_panel_private *panel;
 	struct dp_link_info *link_info;
 	u8 *dpcd, major = 0, minor = 0, temp;
-	u32 dfp_count = 0, offset = DP_DPCD_REV;
+	u32 offset = DP_DPCD_REV;
 
 	dpcd = dp_panel->dpcd;
 
@@ -85,13 +83,23 @@ static int dp_panel_read_dpcd(struct dp_panel *dp_panel)
 	if (drm_dp_enhanced_frame_cap(dpcd))
 		link_info->capabilities |= DP_LINK_CAP_ENHANCED_FRAMING;
 
-	dfp_count = dpcd[DP_DOWN_STREAM_PORT_COUNT] &
-						DP_DOWN_STREAM_PORT_COUNT;
 
-	if (dfp_count > DP_MAX_DS_PORT_COUNT) {
-		DRM_ERROR("DS port count %d greater that max (%d) supported\n",
-			dfp_count, DP_MAX_DS_PORT_COUNT);
-		return -EINVAL;
+	len = DP_MAX_DOWNSTREAM_PORTS;
+
+	dp_panel->dfp_present = dpcd[DP_DOWNSTREAMPORT_PRESENT];
+	dp_panel->dfp_present &= DP_DWN_STRM_PORT_PRESENT;
+
+	if (dp_panel->dfp_present && (dpcd[DP_DPCD_REV] > 0x10)) {
+		dp_panel->ds_port_cnt = dpcd[DP_DOWN_STREAM_PORT_COUNT];
+		dp_panel->ds_port_cnt &= DP_PORT_COUNT_MASK;
+
+		rlen = drm_dp_dpcd_read(panel->aux,
+			DP_DOWNSTREAM_PORT_0, dp_panel->ds_cap_info, len);
+		if (rlen < len) {
+			DRM_ERROR("ds port status failed, rlen=%d\n", rlen);
+			rc = -EINVAL;
+			goto end;
+		}
 	}
 end:
 	return rc;
@@ -185,6 +193,7 @@ int dp_panel_read_sink_caps(struct dp_panel *dp_panel,
 	struct drm_connector *connector)
 {
 	int rc = 0, bw_code;
+	int rlen, count;
 	struct dp_panel_private *panel;
 
 	if (!dp_panel || !connector) {
@@ -202,11 +211,19 @@ int dp_panel_read_sink_caps(struct dp_panel *dp_panel,
 		DRM_ERROR("read dpcd failed %d\n", rc);
 		return rc;
 	}
-	rc = drm_dp_read_desc(panel->aux, &dp_panel->desc,
-			      drm_dp_is_branch(dp_panel->dpcd));
-	if (rc) {
-		DRM_ERROR("read sink/branch descriptor failed %d\n", rc);
-		return rc;
+
+	if (dp_panel->dfp_present) {
+		rlen = drm_dp_dpcd_read(panel->aux, DP_SINK_COUNT,
+				&count, 1);
+		if (rlen == 1) {
+			count = DP_GET_SINK_COUNT(count);
+			if (!count) {
+				DRM_ERROR("no downstream ports connected\n");
+				panel->link->sink_count = 0;
+				rc = -ENOTCONN;
+				goto end;
+			}
+		}
 	}
 
 	kfree(dp_panel->edid);
@@ -216,7 +233,10 @@ int dp_panel_read_sink_caps(struct dp_panel *dp_panel,
 					      &panel->aux->ddc);
 	if (!dp_panel->edid) {
 		DRM_ERROR("panel edid read failed\n");
-		return -EINVAL;
+
+		/* fail safe edid */
+		if (drm_add_modes_noedid(connector, 640, 480))
+			drm_set_preferred_mode(connector, 640, 480);
 	}
 
 	if (panel->aux_cfg_update_done) {
@@ -231,8 +251,8 @@ int dp_panel_read_sink_caps(struct dp_panel *dp_panel,
 		}
 		panel->aux_cfg_update_done = false;
 	}
-
-	return 0;
+end:
+	return rc;
 }
 
 u32 dp_panel_get_mode_bpp(struct dp_panel *dp_panel,
