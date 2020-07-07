@@ -2359,8 +2359,8 @@ static void pci_init_capabilities(struct pci_dev *dev)
 	/* Process Address Space ID */
 	pci_pasid_init(dev);
 
-	/* Enable ACS P2P upstream forwarding */
-	pci_enable_acs(dev);
+	/* Access Control Services */
+	pci_acs_init(dev);
 
 	/* Precision Time Measurement */
 	pci_ptm_init(dev);
