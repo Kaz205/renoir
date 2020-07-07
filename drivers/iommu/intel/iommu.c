@@ -4839,12 +4839,12 @@ const struct attribute_group *intel_iommu_groups[] = {
 	NULL,
 };
 
-static inline bool has_untrusted_dev(void)
+static inline bool has_external_pci(void)
 {
 	struct pci_dev *pdev = NULL;
 
 	for_each_pci_dev(pdev)
-		if (pdev->untrusted)
+		if (pdev->external_facing)
 			return true;
 
 	return false;
@@ -4852,7 +4852,7 @@ static inline bool has_untrusted_dev(void)
 
 static int __init platform_optin_force_iommu(void)
 {
-	if (!dmar_platform_optin() || no_platform_optin || !has_untrusted_dev())
+	if (!dmar_platform_optin() || no_platform_optin || !has_external_pci())
 		return 0;
 
 	if (no_iommu || dmar_disabled)
@@ -5014,7 +5014,7 @@ int __init intel_iommu_init(void)
 	 * Mark this and the pre-allocated bounce pages will be released
 	 * later.
 	 */
-	if (!has_untrusted_dev() || intel_no_bounce)
+	if (!has_external_pci() || intel_no_bounce)
 		swiotlb = 0;
 #endif
 	dma_ops = &intel_dma_ops;

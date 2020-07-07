@@ -413,6 +413,12 @@ struct pci_dev {
 	 * mappings to make sure they cannot access arbitrary memory.
 	 */
 	unsigned int	untrusted:1;
+	/*
+	 * Info from the platform, e.g., ACPI or device tree, may mark a
+	 * device as "external-facing".  An external-facing device is
+	 * itself internal but devices downstream from it are external.
+	 */
+	unsigned int	external_facing:1;
 	unsigned int	__aer_firmware_first_valid:1;
 	unsigned int	__aer_firmware_first:1;
 	unsigned int	broken_intx_masking:1;	/* INTx masking can't be used */
