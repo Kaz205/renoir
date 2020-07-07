@@ -1056,7 +1056,6 @@ static int soc_tplg_denum_create(struct soc_tplg *tplg, unsigned int count,
 				dev_err(tplg->dev,
 					"ASoC: could not create values for %s\n",
 					ec->hdr.name);
-				kfree(se);
 				goto err_denum;
 			}
 			/* fall through */
@@ -1068,7 +1067,6 @@ static int soc_tplg_denum_create(struct soc_tplg *tplg, unsigned int count,
 				dev_err(tplg->dev,
 					"ASoC: could not create texts for %s\n",
 					ec->hdr.name);
-				kfree(se);
 				goto err_denum;
 			}
 			break;
@@ -1077,7 +1075,6 @@ static int soc_tplg_denum_create(struct soc_tplg *tplg, unsigned int count,
 			dev_err(tplg->dev,
 				"ASoC: invalid enum control type %d for %s\n",
 				ec->hdr.ops.info, ec->hdr.name);
-			kfree(se);
 			goto err_denum;
 		}
 
@@ -1085,7 +1082,6 @@ static int soc_tplg_denum_create(struct soc_tplg *tplg, unsigned int count,
 		err = soc_tplg_kcontrol_bind_io(&ec->hdr, &kc, tplg);
 		if (err) {
 			soc_control_err(tplg, &ec->hdr, ec->hdr.name);
-			kfree(se);
 			goto err_denum;
 		}
 
@@ -1095,7 +1091,6 @@ static int soc_tplg_denum_create(struct soc_tplg *tplg, unsigned int count,
 		if (err < 0) {
 			dev_err(tplg->dev, "ASoC: failed to init %s\n",
 				ec->hdr.name);
-			kfree(se);
 			goto err_denum;
 		}
 
@@ -1105,13 +1100,15 @@ static int soc_tplg_denum_create(struct soc_tplg *tplg, unsigned int count,
 		if (err < 0) {
 			dev_err(tplg->dev, "ASoC: could not add kcontrol %s\n",
 				ec->hdr.name);
-			kfree(se);
 			goto err_denum;
 		}
 
 		list_add(&se->dobj.list, &tplg->comp->dobj_list);
 	}
+	return 0;
+
 err_denum:
+	kfree(se);
 	return err;
 }
 
