@@ -1431,11 +1431,12 @@ static int get_ringsize(struct i915_gem_context *ctx,
 }
 
 int
-i915_gem_user_to_context_sseu(struct drm_i915_private *i915,
+i915_gem_user_to_context_sseu(struct intel_gt *gt,
 			      const struct drm_i915_gem_context_param_sseu *user,
 			      struct intel_sseu *context)
 {
-	const struct sseu_dev_info *device = &RUNTIME_INFO(i915)->sseu;
+	const struct sseu_dev_info *device = &gt->info.sseu;
+	struct drm_i915_private *i915 = gt->i915;
 
 	/* No zeros in any field. */
 	if (!user->slice_mask || !user->subslice_mask ||
@@ -1568,7 +1569,7 @@ static int set_sseu(struct i915_gem_context *ctx,
 		goto out_ce;
 	}
 
-	ret = i915_gem_user_to_context_sseu(i915, &user_sseu, &sseu);
+	ret = i915_gem_user_to_context_sseu(ce->engine->gt, &user_sseu, &sseu);
 	if (ret)
 		goto out_ce;
 
