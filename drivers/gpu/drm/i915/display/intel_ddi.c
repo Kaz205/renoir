@@ -829,8 +829,7 @@ static int skl_buf_trans_num_entries(enum port port, int n_entries)
 }
 
 static const struct ddi_buf_trans *
-intel_ddi_get_buf_trans_dp(struct intel_encoder *encoder,
-			   enum port port, int *n_entries)
+intel_ddi_get_buf_trans_dp(struct intel_encoder *encoder, int *n_entries)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
 
@@ -839,12 +838,12 @@ intel_ddi_get_buf_trans_dp(struct intel_encoder *encoder,
 	    IS_COMETLAKE(dev_priv)) {
 		const struct ddi_buf_trans *ddi_translations =
 			kbl_get_buf_trans_dp(encoder, n_entries);
-		*n_entries = skl_buf_trans_num_entries(port, *n_entries);
+		*n_entries = skl_buf_trans_num_entries(encoder->port, *n_entries);
 		return ddi_translations;
 	} else if (IS_SKYLAKE(dev_priv)) {
 		const struct ddi_buf_trans *ddi_translations =
 			skl_get_buf_trans_dp(encoder, n_entries);
-		*n_entries = skl_buf_trans_num_entries(port, *n_entries);
+		*n_entries = skl_buf_trans_num_entries(encoder->port, *n_entries);
 		return ddi_translations;
 	} else if (IS_BROADWELL(dev_priv)) {
 		*n_entries = ARRAY_SIZE(bdw_ddi_translations_dp);
@@ -859,15 +858,14 @@ intel_ddi_get_buf_trans_dp(struct intel_encoder *encoder,
 }
 
 static const struct ddi_buf_trans *
-intel_ddi_get_buf_trans_edp(struct intel_encoder *encoder,
-			    enum port port, int *n_entries)
+intel_ddi_get_buf_trans_edp(struct intel_encoder *encoder, int *n_entries)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
 
 	if (IS_GEN9_BC(dev_priv)) {
 		const struct ddi_buf_trans *ddi_translations =
 			skl_get_buf_trans_edp(encoder, n_entries);
-		*n_entries = skl_buf_trans_num_entries(port, *n_entries);
+		*n_entries = skl_buf_trans_num_entries(encoder->port, *n_entries);
 		return ddi_translations;
 	} else if (IS_BROADWELL(dev_priv)) {
 		return bdw_get_buf_trans_edp(encoder, n_entries);
@@ -1171,10 +1169,10 @@ static void intel_prepare_dp_ddi_buffers(struct intel_encoder *encoder,
 		ddi_translations = intel_ddi_get_buf_trans_fdi(dev_priv,
 							       &n_entries);
 	else if (intel_crtc_has_type(crtc_state, INTEL_OUTPUT_EDP))
-		ddi_translations = intel_ddi_get_buf_trans_edp(encoder, port,
+		ddi_translations = intel_ddi_get_buf_trans_edp(encoder,
 							       &n_entries);
 	else
-		ddi_translations = intel_ddi_get_buf_trans_dp(encoder, port,
+		ddi_translations = intel_ddi_get_buf_trans_dp(encoder,
 							      &n_entries);
 
 	/* If we're boosting the current, set bit 31 of trans1 */
@@ -2108,7 +2106,6 @@ static void skl_ddi_set_iboost(struct intel_encoder *encoder,
 {
 	struct intel_digital_port *dig_port = enc_to_dig_port(encoder);
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	enum port port = encoder->port;
 	u8 iboost;
 
 	if (type == INTEL_OUTPUT_HDMI)
@@ -2124,11 +2121,9 @@ static void skl_ddi_set_iboost(struct intel_encoder *encoder,
 			ddi_translations = intel_ddi_get_buf_trans_hdmi(encoder, &n_entries);
 		else if (type == INTEL_OUTPUT_EDP)
 			ddi_translations = intel_ddi_get_buf_trans_edp(encoder,
-								       port,
 								       &n_entries);
 		else
 			ddi_translations = intel_ddi_get_buf_trans_dp(encoder,
-								      port,
 								      &n_entries);
 
 		if (drm_WARN_ON_ONCE(&dev_priv->drm, !ddi_translations))
@@ -2145,9 +2140,9 @@ static void skl_ddi_set_iboost(struct intel_encoder *encoder,
 		return;
 	}
 
-	_skl_ddi_set_iboost(dev_priv, port, iboost);
+	_skl_ddi_set_iboost(dev_priv, encoder->port, iboost);
 
-	if (port == PORT_A && dig_port->max_lanes == 4)
+	if (encoder->port == PORT_A && dig_port->max_lanes == 4)
 		_skl_ddi_set_iboost(dev_priv, PORT_E, iboost);
 }
 
@@ -2215,9 +2210,9 @@ static u8 intel_ddi_dp_voltage_max(struct intel_dp *intel_dp)
 			bxt_get_buf_trans_dp(encoder, &n_entries);
 	} else {
 		if (encoder->type == INTEL_OUTPUT_EDP)
-			intel_ddi_get_buf_trans_edp(encoder, port, &n_entries);
+			intel_ddi_get_buf_trans_edp(encoder, &n_entries);
 		else
-			intel_ddi_get_buf_trans_dp(encoder, port, &n_entries);
+			intel_ddi_get_buf_trans_dp(encoder, &n_entries);
 	}
 
 	if (drm_WARN_ON(&dev_priv->drm, n_entries < 1))
@@ -2372,10 +2367,10 @@ static void cnl_ddi_vswing_sequence(struct intel_encoder *encoder,
 }
 
 static void icl_ddi_combo_vswing_program(struct intel_encoder *encoder,
-					 u32 level, enum phy phy, int type,
-					 int rate)
+					 u32 level, int type, int rate)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
+	enum phy phy = intel_port_to_phy(dev_priv, encoder->port);
 	const struct cnl_ddi_buf_trans *ddi_translations = NULL;
 	u32 n_entries, val;
 	int ln;
@@ -2499,7 +2494,7 @@ static void icl_combo_phy_ddi_vswing_sequence(struct intel_encoder *encoder,
 	intel_de_write(dev_priv, ICL_PORT_TX_DW5_GRP(phy), val);
 
 	/* 5. Program swing and de-emphasis */
-	icl_ddi_combo_vswing_program(encoder, level, phy, type, rate);
+	icl_ddi_combo_vswing_program(encoder, level, type, rate);
 
 	/* 6. Set training enable to trigger update */
 	val = intel_de_read(dev_priv, ICL_PORT_TX_DW5_LN0(phy));
