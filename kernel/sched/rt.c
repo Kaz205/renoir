@@ -1517,15 +1517,12 @@ static void check_preempt_curr_rt(struct rq *rq, struct task_struct *p, int flag
 #endif
 }
 
-static inline void set_next_task_rt(struct rq *rq, struct task_struct *p, bool first)
+static inline void set_next_task_rt(struct rq *rq, struct task_struct *p)
 {
 	p->se.exec_start = rq_clock_task(rq);
 
 	/* The running task is never eligible for pushing */
 	dequeue_pushable_task(rq, p);
-
-	if (!first)
-		return;
 
 	/*
 	 * If prev task was rt, put_prev_task() has already updated the
@@ -1580,7 +1577,7 @@ pick_next_task_rt(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 		return NULL;
 
 	p = _pick_next_task_rt(rq);
-	set_next_task_rt(rq, p, true);
+	set_next_task_rt(rq, p);
 	return p;
 }
 
