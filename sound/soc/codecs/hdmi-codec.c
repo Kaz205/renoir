@@ -562,7 +562,7 @@ static int hdmi_codec_digital_mute(struct snd_soc_dai *dai, int mute)
 		return hcp->hcd.ops->digital_mute(dai->dev->parent,
 						  hcp->hcd.data, mute);
 
-	return 0;
+	return -ENOTSUPP;
 }
 
 static int hdmi_codec_trigger(struct snd_pcm_substream *substream, int cmd,
