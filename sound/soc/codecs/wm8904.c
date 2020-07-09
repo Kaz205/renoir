@@ -1824,7 +1824,7 @@ out:
 	return 0;
 }
 
-static int wm8904_digital_mute(struct snd_soc_dai *codec_dai, int mute)
+static int wm8904_mute(struct snd_soc_dai *codec_dai, int mute, int direction)
 {
 	struct snd_soc_component *component = codec_dai->component;
 	int val;
@@ -1940,7 +1940,8 @@ static const struct snd_soc_dai_ops wm8904_dai_ops = {
 	.set_tdm_slot = wm8904_set_tdm_slot,
 	.set_pll = wm8904_set_fll,
 	.hw_params = wm8904_hw_params,
-	.digital_mute = wm8904_digital_mute,
+	.mute_stream = wm8904_mute,
+	.no_capture_mute = 1,
 };
 
 static struct snd_soc_dai_driver wm8904_dai = {
