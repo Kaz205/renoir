@@ -687,4 +687,6 @@ static inline int pci_acpi_program_hp_params(struct pci_dev *dev)
 }
 #endif
 
+extern bool pci_drv_allowed_for_untrusted_devs(struct device_driver *drvr);
+
 #endif /* DRIVERS_PCI_H */
