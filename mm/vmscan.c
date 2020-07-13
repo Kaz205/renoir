@@ -1942,7 +1942,7 @@ static unsigned noinline_for_stack move_pages_to_lru(struct lruvec *lruvec,
 						     struct list_head *list)
 {
 	struct pglist_data *pgdat = lruvec_pgdat(lruvec);
-	int nr_pages, nr_moved = 0;
+	int nr_moved = 0;
 	LIST_HEAD(pages_to_free);
 	struct page *page;
 	enum lru_list lru;
@@ -1950,8 +1950,8 @@ static unsigned noinline_for_stack move_pages_to_lru(struct lruvec *lruvec,
 	while (!list_empty(list)) {
 		page = lru_to_page(list);
 		VM_BUG_ON_PAGE(PageLRU(page), page);
+		list_del(&page->lru);
 		if (unlikely(!page_evictable(page))) {
-			list_del(&page->lru);
 			spin_unlock_irq(&pgdat->lru_lock);
 			putback_lru_page(page);
 			spin_lock_irq(&pgdat->lru_lock);
@@ -1961,10 +1961,7 @@ static unsigned noinline_for_stack move_pages_to_lru(struct lruvec *lruvec,
 
 		SetPageLRU(page);
 		lru = page_lru(page);
-
-		nr_pages = hpage_nr_pages(page);
-		update_lru_size(lruvec, lru, page_zonenum(page), nr_pages);
-		list_move(&page->lru, &lruvec->lists[lru]);
+		add_page_to_lru_list(page, lruvec, lru);
 
 		if (put_page_testzero(page)) {
 			__ClearPageLRU(page);
@@ -1978,7 +1975,7 @@ static unsigned noinline_for_stack move_pages_to_lru(struct lruvec *lruvec,
 			} else
 				list_add(&page->lru, &pages_to_free);
 		} else {
-			nr_moved += nr_pages;
+			nr_moved += hpage_nr_pages(page);
 		}
 	}
 
