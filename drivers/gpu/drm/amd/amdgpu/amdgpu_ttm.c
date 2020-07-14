@@ -1892,6 +1892,8 @@ void amdgpu_ttm_set_buffer_funcs_status(struct amdgpu_device *adev, bool enable)
 	adev->mman.buffer_funcs_enabled = enable;
 }
 
+int amdgpu_try_dma_buf_mmap(struct file *filp, struct vm_area_struct *vma);
+
 int amdgpu_mmap(struct file *filp, struct vm_area_struct *vma)
 {
 	struct drm_file *file_priv = filp->private_data;
@@ -1899,6 +1901,9 @@ int amdgpu_mmap(struct file *filp, struct vm_area_struct *vma)
 
 	if (adev == NULL)
 		return -EINVAL;
+
+	if (0 == amdgpu_try_dma_buf_mmap(filp, vma))
+		return 0;
 
 	return ttm_bo_mmap(filp, vma, &adev->mman.bdev);
 }
