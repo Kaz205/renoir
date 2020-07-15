@@ -33,7 +33,6 @@
 
 #define SHARED_MEM_POOL_GRANULARITY 16
 
-#define IOMMU_INVALID_DIR -1
 #define BYTE_SIZE 8
 #define COOKIE_NUM_BYTE 2
 #define COOKIE_SIZE (BYTE_SIZE*COOKIE_NUM_BYTE)
@@ -171,7 +170,6 @@ struct cam_dma_buff_info {
 	struct sg_table *table;
 	enum dma_data_direction dir;
 	enum cam_smmu_region_id region_id;
-	int iommu_dir;
 	int ref_count;
 	dma_addr_t paddr;
 	struct list_head list;
@@ -197,9 +195,6 @@ static struct cam_iommu_cb_set iommu_cb_set;
 static struct dentry *smmu_dentry;
 
 static bool smmu_fatal_flag = true;
-
-static enum dma_data_direction cam_smmu_translate_dir(
-	enum cam_smmu_map_dir dir);
 
 static int cam_smmu_check_handle_unique(int hdl);
 
@@ -612,39 +607,20 @@ static int cam_smmu_iommu_fault_handler(struct iommu_domain *domain,
 }
 
 static int cam_smmu_translate_dir_to_iommu_dir(
-	enum cam_smmu_map_dir dir)
+	enum dma_data_direction dir)
 {
 	switch (dir) {
-	case CAM_SMMU_MAP_READ:
+	case DMA_FROM_DEVICE:
 		return IOMMU_READ;
-	case CAM_SMMU_MAP_WRITE:
+	case DMA_TO_DEVICE:
 		return IOMMU_WRITE;
-	case CAM_SMMU_MAP_RW:
+	case DMA_BIDIRECTIONAL:
 		return IOMMU_READ|IOMMU_WRITE;
-	case CAM_SMMU_MAP_INVALID:
+	case DMA_NONE:
 	default:
 		CAM_ERR(CAM_SMMU, "Error: Direction is invalid. dir = %d", dir);
 		break;
 	};
-	return IOMMU_INVALID_DIR;
-}
-
-static enum dma_data_direction cam_smmu_translate_dir(
-	enum cam_smmu_map_dir dir)
-{
-	switch (dir) {
-	case CAM_SMMU_MAP_READ:
-		return DMA_FROM_DEVICE;
-	case CAM_SMMU_MAP_WRITE:
-		return DMA_TO_DEVICE;
-	case CAM_SMMU_MAP_RW:
-		return DMA_BIDIRECTIONAL;
-	case CAM_SMMU_MAP_INVALID:
-	default:
-		CAM_ERR(CAM_SMMU, "Error: Direction is invalid. dir = %d",
-			(int)dir);
-		break;
-	}
 	return DMA_NONE;
 }
 
@@ -2212,7 +2188,7 @@ static int cam_smmu_alloc_scratch_buffer_add_to_list(int idx,
 	mapping_info->table = table;
 	mapping_info->paddr = iova;
 	mapping_info->len = virt_len;
-	mapping_info->iommu_dir = iommu_dir;
+	mapping_info->dir = iommu_dir;
 	mapping_info->ref_count = 1;
 	mapping_info->phys_len = phys_len;
 	mapping_info->region_id = CAM_SMMU_REGION_SCRATCH;
@@ -2295,7 +2271,7 @@ static int cam_smmu_free_scratch_buffer_remove_from_list(
 }
 
 int cam_smmu_get_scratch_iova(int handle,
-	enum cam_smmu_map_dir dir,
+	enum dma_data_direction dir,
 	dma_addr_t *paddr_ptr,
 	size_t virt_len,
 	size_t phys_len)
@@ -2319,7 +2295,7 @@ int cam_smmu_get_scratch_iova(int handle,
 	}
 
 	iommu_dir = cam_smmu_translate_dir_to_iommu_dir(dir);
-	if (iommu_dir == IOMMU_INVALID_DIR) {
+	if (iommu_dir == DMA_NONE) {
 		CAM_ERR(CAM_SMMU,
 			"Error: translate direction failed. dir = %d", dir);
 		return -EINVAL;
@@ -2533,11 +2509,10 @@ err_out:
 }
 
 int cam_smmu_map_stage2_iova(int handle,
-		int ion_fd, enum cam_smmu_map_dir dir,
+		int ion_fd, enum dma_data_direction dir,
 		dma_addr_t *paddr_ptr, size_t *len_ptr)
 {
 	int idx, rc;
-	enum dma_data_direction dma_dir;
 	enum cam_smmu_buf_state buf_state;
 
 	if (!paddr_ptr || !len_ptr) {
@@ -2549,13 +2524,6 @@ int cam_smmu_map_stage2_iova(int handle,
 	/* clean the content from clients */
 	*paddr_ptr = (dma_addr_t)NULL;
 	*len_ptr = (size_t)0;
-
-	dma_dir = cam_smmu_translate_dir(dir);
-	if (dma_dir == DMA_NONE) {
-		CAM_ERR(CAM_SMMU,
-			"Error: translate direction failed. dir = %d", dir);
-		return -EINVAL;
-	}
 
 	idx = GET_SMMU_TABLE_IDX(handle);
 	if ((handle == HANDLE_INIT) ||
@@ -2592,8 +2560,8 @@ int cam_smmu_map_stage2_iova(int handle,
 		rc = 0;
 		goto get_addr_end;
 	}
-	rc = cam_smmu_map_stage2_buffer_and_add_to_list(idx, ion_fd, dma_dir,
-			paddr_ptr, len_ptr);
+	rc = cam_smmu_map_stage2_buffer_and_add_to_list(idx, ion_fd, dir,
+							paddr_ptr, len_ptr);
 	if (rc < 0) {
 		CAM_ERR(CAM_SMMU,
 			"Error: mapping or add list fail, idx=%d, handle=%d, fd=%d, rc=%d",
@@ -2690,12 +2658,11 @@ put_addr_end:
 EXPORT_SYMBOL(cam_smmu_unmap_stage2_iova);
 
 static int cam_smmu_map_iova_validate_params(int handle,
-	enum cam_smmu_map_dir dir,
+	enum dma_data_direction dir,
 	dma_addr_t *paddr_ptr, size_t *len_ptr,
 	enum cam_smmu_region_id region_id)
 {
 	int idx, rc = 0;
-	enum dma_data_direction dma_dir;
 
 	if (!paddr_ptr || !len_ptr) {
 		CAM_ERR(CAM_SMMU, "Input pointers are invalid");
@@ -2712,12 +2679,6 @@ static int cam_smmu_map_iova_validate_params(int handle,
 	if (region_id != CAM_SMMU_REGION_SHARED)
 		*len_ptr = (size_t)0;
 
-	dma_dir = cam_smmu_translate_dir(dir);
-	if (dma_dir == DMA_NONE) {
-		CAM_ERR(CAM_SMMU, "translate direction failed. dir = %d", dir);
-		return -EINVAL;
-	}
-
 	idx = GET_SMMU_TABLE_IDX(handle);
 	if (idx < 0 || idx >= iommu_cb_set.cb_num) {
 		CAM_ERR(CAM_SMMU, "handle or index invalid. idx = %d hdl = %x",
@@ -2729,7 +2690,7 @@ static int cam_smmu_map_iova_validate_params(int handle,
 }
 
 int cam_smmu_map_user_iova(int handle, int ion_fd,
-	enum cam_smmu_map_dir dir, dma_addr_t *paddr_ptr,
+	enum dma_data_direction dir, dma_addr_t *paddr_ptr,
 	size_t *len_ptr, enum cam_smmu_region_id region_id)
 {
 	int idx, rc = 0;
@@ -2793,12 +2754,11 @@ get_addr_end:
 EXPORT_SYMBOL(cam_smmu_map_user_iova);
 
 int cam_smmu_map_kernel_iova(int handle, struct dma_buf *buf,
-	enum cam_smmu_map_dir dir, dma_addr_t *paddr_ptr,
+	enum dma_data_direction dir, dma_addr_t *paddr_ptr,
 	size_t *len_ptr, enum cam_smmu_region_id region_id)
 {
 	int idx, rc = 0;
 	enum cam_smmu_buf_state buf_state;
-	enum dma_data_direction dma_dir;
 
 	rc = cam_smmu_map_iova_validate_params(handle, dir, paddr_ptr,
 		len_ptr, region_id);
@@ -2807,7 +2767,6 @@ int cam_smmu_map_kernel_iova(int handle, struct dma_buf *buf,
 		return rc;
 	}
 
-	dma_dir = cam_smmu_translate_dir(dir);
 	idx = GET_SMMU_TABLE_IDX(handle);
 	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
 	if (iommu_cb_set.cb_info[idx].is_secure) {
@@ -2841,8 +2800,9 @@ int cam_smmu_map_kernel_iova(int handle, struct dma_buf *buf,
 		goto get_addr_end;
 	}
 
-	rc = cam_smmu_map_kernel_buffer_and_add_to_list(idx, buf, dma_dir,
-			paddr_ptr, len_ptr, region_id);
+	rc = cam_smmu_map_kernel_buffer_and_add_to_list(idx, buf, dir,
+							paddr_ptr, len_ptr,
+							region_id);
 	if (rc < 0)
 		CAM_ERR(CAM_SMMU, "mapping or add list fail");
 

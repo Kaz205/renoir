@@ -33,13 +33,6 @@ enum cam_smmu_ops_param {
 	CAM_SMMU_OPS_INVALID
 };
 
-enum cam_smmu_map_dir {
-	CAM_SMMU_MAP_READ,
-	CAM_SMMU_MAP_WRITE,
-	CAM_SMMU_MAP_RW,
-	CAM_SMMU_MAP_INVALID
-};
-
 enum cam_smmu_region_id {
 	CAM_SMMU_REGION_FIRMWARE,
 	CAM_SMMU_REGION_SHARED,
@@ -115,7 +108,7 @@ int cam_smmu_ops(int handle, enum cam_smmu_ops_param op);
  * @return Status of operation. Negative in case of error. Zero otherwise.
  */
 int cam_smmu_map_user_iova(int handle,
-	int ion_fd, enum cam_smmu_map_dir dir,
+	int ion_fd, enum dma_data_direction dir,
 	dma_addr_t *dma_addr, size_t *len_ptr,
 	enum cam_smmu_region_id region_id);
 
@@ -134,7 +127,7 @@ int cam_smmu_map_user_iova(int handle,
  * @return Status of operation. Negative in case of error. Zero otherwise.
  */
 int cam_smmu_map_kernel_iova(int handle,
-	struct dma_buf *buf, enum cam_smmu_map_dir dir,
+	struct dma_buf *buf, enum dma_data_direction dir,
 	dma_addr_t *dma_addr, size_t *len_ptr,
 	enum cam_smmu_region_id region_id);
 
@@ -187,7 +180,7 @@ int cam_smmu_unmap_kernel_iova(int handle,
  */
 
 int cam_smmu_get_scratch_iova(int handle,
-	enum cam_smmu_map_dir dir,
+	enum dma_data_direction dir,
 	dma_addr_t *paddr_ptr,
 	size_t virt_len,
 	size_t phys_len);
@@ -291,7 +284,7 @@ int cam_smmu_put_iova(int handle, int ion_fd);
  * @return Status of operation. Negative in case of error. Zero otherwise.
  */
 int cam_smmu_map_stage2_iova(int handle,
-	int ion_fd, enum cam_smmu_map_dir dir, dma_addr_t *dma_addr,
+	int ion_fd, enum dma_data_direction dir, dma_addr_t *dma_addr,
 	size_t *len_ptr);
 
 /**

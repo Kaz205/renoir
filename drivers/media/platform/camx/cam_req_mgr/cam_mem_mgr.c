@@ -1173,7 +1173,7 @@ int cam_mem_mgr_request_mem(struct cam_mem_mgr_request_desc *inp,
 
 	rc = cam_smmu_map_kernel_iova(inp->smmu_hdl,
 		buf,
-		CAM_SMMU_MAP_RW,
+		DMA_BIDIRECTIONAL,
 		&iova,
 		&request_len,
 		region);
