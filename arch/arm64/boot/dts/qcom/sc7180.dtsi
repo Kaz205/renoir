@@ -677,6 +677,34 @@
 			};
 		};
 
+		lpass_cpu: lpass {
+			compatible = "qcom,lpass-cpu-sc7180";
+
+			reg = <0 0x62F00000 0 0x29000>;
+			reg-names = "lpass-lpaif";
+
+			iommus = <&apps_smmu 0x1020 0>;
+
+			power-domains = <&lpass_hm LPASS_CORE_HM_GDSCR>;
+
+			status = "disabled";
+
+			clocks = <&gcc GCC_LPASS_CFG_NOC_SWAY_CLK>,
+				 <&lpasscc LPASS_AUDIO_CORE_CORE_CLK>,
+				 <&lpasscc LPASS_AUDIO_CORE_EXT_MCLK0_CLK>,
+				 <&lpasscc LPASS_AUDIO_CORE_SYSNOC_MPORT_CORE_CLK>,
+				 <&lpasscc LPASS_AUDIO_CORE_LPAIF_PRI_IBIT_CLK>,
+				 <&lpasscc LPASS_AUDIO_CORE_LPAIF_SEC_IBIT_CLK>;
+
+			clock-names = "noc", "audio-core", "mclk0", "sysnoc_mport",
+				      "pri_ibit", "sec_ibit";
+
+			#sound-dai-cells = <1>;
+
+			interrupts = <0 160 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "lpass-irq-lpaif";
+		};
+
 		sdhc_1: sdhci@7c4000 {
 			compatible = "qcom,sc7180-sdhci", "qcom,sdhci-msm-v5";
 			reg = <0 0x7c4000 0 0x1000>,
@@ -1719,6 +1747,110 @@
 					pins = "gpio53", "gpio54",
 					       "gpio55", "gpio56";
 					function = "qup15";
+				};
+			};
+
+			sec_mi2s_active: sec-mi2s-active {
+				pinmux {
+					pins = "gpio49";
+					function = "mi2s_1";
+				};
+
+				pinconf {
+					pins = "gpio49";
+					drive-strength = <8>;
+					bias-pull-up;
+				};
+			};
+
+			sec_mi2s_ws_active: sec-mi2s-ws-active {
+				pinmux {
+					pins = "gpio50";
+					function = "mi2s_1";
+				};
+
+				pinconf {
+					pins = "gpio50";
+					drive-strength = <8>;
+					bias-pull-up;
+				};
+			};
+
+			sec_mi2s_dout_active: sec-mi2s-dout-active {
+				pinmux {
+					pins = "gpio51";
+					function = "mi2s_1";
+				};
+
+				pinconf {
+					pins = "gpio51";
+					drive-strength = <8>;
+					bias-pull-up;
+				};
+			};
+
+			pri_mi2s_active: pri-mi2s-active {
+				pinmux {
+					pins = "gpio53";
+					function = "mi2s_0";
+				};
+
+				pinconf {
+					pins = "gpio53";
+					drive-strength = <8>;
+					bias-pull-up;
+				};
+			};
+
+			pri_mi2s_ws_active: pri-mi2s-ws-active {
+				pinmux {
+					pins = "gpio54";
+					function = "mi2s_0";
+				};
+
+				pinconf {
+					pins = "gpio54";
+					drive-strength = <8>;
+					bias-pull-up;
+				};
+			};
+
+			pri_mi2s_dout_active: pri-mi2s-dout-active {
+				pinmux {
+					pins = "gpio55";
+					function = "mi2s_0";
+				};
+
+				pinconf {
+					pins = "gpio55";
+					drive-strength = <8>;
+					bias-pull-up;
+				};
+			};
+
+			pri_mi2s_din_active: pri-mi2s-din-active {
+				pinmux {
+					pins = "gpio56";
+					function = "mi2s_0";
+				};
+
+				pinconf {
+					pins = "gpio56";
+					drive-strength = <8>;
+					bias-pull-up;
+				};
+			};
+
+			pri_mi2s_mclk_active: pri-mi2s-mclk-active {
+				pinmux {
+					pins = "gpio57";
+					function = "lpass_ext";
+				};
+
+				pinconf {
+					pins = "gpio57";
+					drive-strength = <8>;
+					bias-pull-up;
 				};
 			};
 
