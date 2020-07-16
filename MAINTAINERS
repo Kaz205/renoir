@@ -3921,10 +3921,15 @@ S:	Maintained
 T:	git git://git.kernel.org/pub/scm/linux/kernel/git/chrome-platform/linux.git
 F:	drivers/platform/chrome/
 
+CHROMEOS EC UART DRIVER
+M:	Bhanu Prakash Maiya <bhanumaiya@chromium.org>
+R:	Enric Balletbo i Serra <enric.balletbo@collabora.com>
+S:	Maintained
+F:	drivers/platform/chrome/cros_ec_uart.c
+
 CHROMEOS EC SUBDRIVERS
 M:	Benson Leung <bleung@chromium.org>
 M:	Enric Balletbo i Serra <enric.balletbo@collabora.com>
-M:	Bhanu Prakash Maiya <bhanumaiya@chromium.org>
 R:	Guenter Roeck <groeck@chromium.org>
 S:	Maintained
 N:	cros_ec

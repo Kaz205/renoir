@@ -14,15 +14,21 @@
 #include <linux/of.h>
 #include <linux/platform_data/cros_ec_commands.h>
 #include <linux/platform_data/cros_ec_proto.h>
-#include <linux/platform_device.h>
 #include <linux/serdev.h>
 #include <linux/slab.h>
 #include <uapi/linux/sched/types.h>
 
 /*
- * Allow for a long time for EC to respond.
+ * EC sends contiguous bytes of response packet on UART AP RX.
+ * TTY driver in AP accumulates incoming bytes and calls the registered callback
+ * function. Byte count can range from 1 to Max count supported by TTY driver.
+ * This driver should wait for long time for all callbacks to be processed.
+ * Considering the worst case scenario, wait for ~3 secs. This timeout should
+ * account for max latency and some additional guard time.
+ * In case the packet is received in ms, wait queue will be released and packet
+ * will be processed.
  */
-#define EC_MSG_DEADLINE_MS		200
+#define EC_MSG_DEADLINE_MS		(300 * 10)
 
 /**
  * struct response_info - Encapsulate EC response related
@@ -35,7 +41,7 @@
  * @size:		Actual size of data received from EC. This is also
  *			used to accumulate byte count with response is received
  *			in dma chunks.
- * @exp_len:		Expected bytes of response from EC.
+ * @exp_len:		Expected bytes of response from EC including header.
  * @error:		0 for success, negative error code for a failure.
  * @received:		Set to true on receiving a valid EC response.
  * @wait_queue:		Wait queue EC response where the cros_ec sends request
@@ -74,14 +80,13 @@ static int cros_ec_uart_rx_bytes(struct serdev_device *serdev,
 				 size_t count)
 {
 	struct ec_host_response *response;
-	struct cros_ec_device *ec_dev =   serdev_device_get_drvdata(serdev);
+	struct cros_ec_device *ec_dev = serdev_device_get_drvdata(serdev);
 	struct cros_ec_uart *ec_uart = ec_dev->priv;
 
 	/* Check if bytes were sent out of band */
-	if (!ec_uart->response.data) {
+	if (!ec_uart->response.data)
 		/* Discard all bytes */
 		return count;
-	}
 
 	/*
 	 * Check if incoming bytes + response.size are less than allocated
@@ -110,8 +115,12 @@ static int cros_ec_uart_rx_bytes(struct serdev_device *serdev,
 				sizeof(*response);
 		}
 
-		/* Check if we received all response bytes from EC */
-		if (ec_uart->response.size >= ec_uart->response.exp_len) {
+		/*
+		 * If driver received response header and payload from EC,
+		 * Wake up the wait queue.
+		 */
+		if (ec_uart->response.size >= sizeof(*response) &&
+		    ec_uart->response.size == ec_uart->response.exp_len) {
 			/* Set flag before waking up the caller */
 			ec_uart->response.received = true;
 
