@@ -2518,9 +2518,7 @@ static int cam_ife_csid_get_time_stamp(
 	const struct cam_ife_csid_reg_offset       *csid_reg;
 	struct cam_hw_soc_info                     *soc_info;
 	const struct cam_ife_csid_rdi_reg_offset   *rdi_reg;
-#if defined(CONFIG_ARCH_SM6150)
 	struct timespec64 ts;
-#endif
 	uint32_t  time_32, id;
 	uint64_t  time_delta;
 
@@ -2577,12 +2575,10 @@ static int cam_ife_csid_get_time_stamp(
 		CAM_IFE_CSID_QTIMER_DIV_FACTOR);
 
 	if (!csid_hw->prev_boot_timestamp) {
-#if defined(CONFIG_ARCH_SM6150)
-		get_monotonic_boottime64(&ts);
+		getboottime64(&ts);
 		time_stamp->boot_timestamp =
 			(uint64_t)((ts.tv_sec * 1000000000) +
 			ts.tv_nsec);
-#endif
 		csid_hw->prev_qtimer_ts = 0;
 		CAM_DBG(CAM_ISP, "timestamp:%lld",
 			time_stamp->boot_timestamp);

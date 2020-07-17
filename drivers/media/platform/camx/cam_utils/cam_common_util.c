@@ -68,12 +68,10 @@ uint64_t cam_common_util_get_time_diff(struct timeval *t1, struct timeval *t2)
 
 void cam_common_util_get_curr_timestamp(struct timeval *time_stamp)
 {
-#if defined(CONFIG_ARCH_SM6150)
 	struct timespec ts;
 
-	get_monotonic_boottime(&ts);
+	getboottime(&ts);
 	time_stamp->tv_sec    = ts.tv_sec;
 	time_stamp->tv_usec   = ts.tv_nsec/1000;
-#endif
 }
 
