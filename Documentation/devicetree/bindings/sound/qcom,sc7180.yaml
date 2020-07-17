@@ -1,0 +1,123 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/sound/qcom,sc7180.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Qualcomm Technologies Inc. SC7180 ASoC sound card driver
+
+maintainers:
+  - Rohit kumar <rohitkr@codeaurora.org>
+  - Cheng-Yi Chiang <cychiang@chromium.org>
+
+description: |
+  This binding describes the SC7180 sound card, which uses LPASS for audio.
+
+definitions:
+
+  link-name:
+    description: Indicates dai-link name and PCM stream name.
+    $ref: /schemas/types.yaml#/definitions/string
+    maxItems: 1
+
+  dai:
+    type: object
+    properties:
+      sound-dai:
+        maxItems: 1
+        $ref: /schemas/types.yaml#/definitions/phandle-array
+        description: phandle array of the codec or CPU DAI
+
+    required:
+      - sound-dai
+
+  unidirectional:
+    description: Specify direction of unidirectional dai link.
+                 0 for playback only. 1 for capture only.
+    $ref: /schemas/types.yaml#/definitions/uint32
+
+properties:
+  compatible:
+    contains:
+      enum:
+        - qcom,sc7180-sndcard
+
+  audio-routing:
+    $ref: /schemas/types.yaml#/definitions/non-unique-string-array
+    description: |-
+      A list of the connections between audio components. Each entry is a
+      pair of strings, the first being the connection's sink, the second
+      being the connection's source.
+
+  model:
+    $ref: /schemas/types.yaml#/definitions/string
+    description: User specified audio sound card name
+
+patternProperties:
+  "^dai-link-[0-9]+$":
+    description: |
+      Each subnode represents a dai link. Subnodes of each dai links would be
+      cpu/codec dais.
+
+    type: object
+
+    properties:
+      link-name:
+        $ref: "#/definitions/link-name"
+
+      unidirectional:
+        $ref: "#/definitions/unidirectional"
+
+      cpu:
+        $ref: "#/definitions/dai"
+
+      codec:
+        $ref: "#/definitions/dai"
+
+    required:
+      - link-name
+      - cpu
+      - codec
+
+    additionalProperties: false
+
+examples:
+
+  - |
+    snd {
+        compatible = "qcom,sc7180-sndcard";
+        model = "sc7180-snd-card";
+
+        pinctrl-names = "default";
+        pinctrl-0 = <&sec_mi2s_active &sec_mi2s_dout_active
+                     &sec_mi2s_ws_active &pri_mi2s_active
+                     &pri_mi2s_dout_active &pri_mi2s_ws_active
+                     &pri_mi2s_din_active &pri_mi2s_mclk_active>;
+
+        audio-routing =
+                    "Headphone Jack", "HPOL",
+                    "Headphone Jack", "HPOR";
+
+        dai-link-0 {
+            link-name = "MultiMedia0";
+            cpu {
+                sound-dai = <&lpass_cpu 0>;
+            };
+
+            codec {
+                sound-dai = <&alc5682 0>;
+            };
+        };
+
+        dai-link-1 {
+            link-name = "MultiMedia1";
+            unidirectional = <0>;
+            cpu {
+                sound-dai = <&lpass_cpu 1>;
+            };
+
+            codec {
+                sound-dai = <&max98357a>;
+            };
+        };
+    };
