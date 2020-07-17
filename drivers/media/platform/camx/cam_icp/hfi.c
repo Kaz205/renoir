@@ -658,9 +658,6 @@ int cam_hfi_init(uint8_t event_driven_mode, struct hfi_mem_info *hfi_mem,
 	uint32_t hw_version, fw_version, status = 0;
 	uint32_t retry_cnt = 0;
 	struct sfr_buf *sfr_buffer;
-#if defined(CONFIG_ARCH_SM6150)
-	uint32_t soc_version;
-#endif
 
 	mutex_lock(&hfi_cmd_q_mutex);
 	mutex_lock(&hfi_msg_q_mutex);
@@ -680,9 +677,6 @@ int cam_hfi_init(uint8_t event_driven_mode, struct hfi_mem_info *hfi_mem,
 
 	memcpy(&g_hfi->map, hfi_mem, sizeof(g_hfi->map));
 	g_hfi->hfi_state = HFI_DEINIT;
-#if defined(CONFIG_ARCH_SM6150)
-	soc_version = socinfo_get_version();
-#endif
 	if (debug) {
 		cam_io_w_mb(
 		(uint32_t)(ICP_FLAG_CSR_A5_EN | ICP_FLAG_CSR_WAKE_UP_EN |
