@@ -266,3 +266,5 @@ i2c_wlc: &i2c5 {
 			  "DP_HOT_PLUG_DET",
 			  "EC_IN_RW_ODL";
 };
+
+#include "sc7180-trogdor-coachz-camera.dtsi"
