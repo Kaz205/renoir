@@ -23,7 +23,7 @@
 #define DEFAULT_MCLK_RATE		19200000
 #define RT5682_PLL1_FREQ (48000 * 512)
 
-int sc7180_parse_of(struct snd_soc_card *card)
+static int sc7180_parse_of(struct snd_soc_card *card)
 {
 	struct device_node *np;
 	struct device_node *codec = NULL;
