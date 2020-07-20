@@ -1077,6 +1077,9 @@ ap_spi_fp: &spi10 {
 			pins = "gpio12";
 			drive-strength = <2>;
 			bias-disable;
+
+			/* Force backlight to be disabled to match state at boot. */
+			output-low;
 		};
 	};
 
