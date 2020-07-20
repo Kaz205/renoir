@@ -24,7 +24,6 @@
 #include <asm/dma-iommu.h>
 #include <linux/msm_dma_iommu_mapping.h>
 #include <soc/qcom/scm.h>
-#include <soc/qcom/secure_buffer.h>
 #endif
 #include <uapi/media/cam_req_mgr.h>
 #include <linux/debugfs.h>
@@ -64,13 +63,6 @@ struct cam_smmu_work_payload {
 	struct list_head list;
 };
 
-enum cam_protection_type {
-	CAM_PROT_INVALID,
-	CAM_NON_SECURE,
-	CAM_SECURE,
-	CAM_PROT_MAX,
-};
-
 enum cam_iommu_type {
 	CAM_SMMU_INVALID,
 	CAM_QSMMU,
@@ -86,13 +78,6 @@ enum cam_smmu_buf_state {
 enum cam_smmu_init_dir {
 	CAM_SMMU_TABLE_INIT,
 	CAM_SMMU_TABLE_DEINIT,
-};
-
-struct scratch_mapping {
-	void *bitmap;
-	size_t bits;
-	unsigned int order;
-	dma_addr_t base;
 };
 
 struct secheap_buf_info {
@@ -111,8 +96,6 @@ struct cam_context_bank_info {
 	dma_addr_t va_start;
 	size_t va_len;
 	const char *name;
-	bool is_secure;
-	uint8_t scratch_buf_support;
 	uint8_t firmware_support;
 	uint8_t shared_support;
 	uint8_t io_support;
@@ -123,10 +106,8 @@ struct cam_context_bank_info {
 	bool is_secheap_allocated;
 	bool is_qdss_allocated;
 
-	struct scratch_mapping scratch_map;
 	struct gen_pool *shared_mem_pool;
 
-	struct cam_smmu_region_info scratch_info;
 	struct cam_smmu_region_info firmware_info;
 	struct cam_smmu_region_info shared_info;
 	struct cam_smmu_region_info io_info;
@@ -143,7 +124,6 @@ struct cam_context_bank_info {
 	cam_smmu_client_page_fault_handler handler[CAM_SMMU_CB_MAX];
 	void *token[CAM_SMMU_CB_MAX];
 	int cb_count;
-	int secure_count;
 	int pf_count;
 };
 
@@ -178,16 +158,6 @@ struct cam_dma_buff_info {
 	size_t phys_len;
 };
 
-struct cam_sec_buff_info {
-	struct dma_buf *buf;
-	enum dma_data_direction dir;
-	int ref_count;
-	dma_addr_t paddr;
-	struct list_head list;
-	int dma_fd;
-	size_t len;
-};
-
 static const char *qdss_region_name = "qdss";
 
 static struct cam_iommu_cb_set iommu_cb_set;
@@ -209,23 +179,6 @@ static struct cam_dma_buff_info *cam_smmu_find_mapping_by_ion_index(int idx,
 static struct cam_dma_buff_info *cam_smmu_find_mapping_by_dma_buf(int idx,
 	struct dma_buf *buf);
 
-static struct cam_sec_buff_info *cam_smmu_find_mapping_by_sec_buf_idx(int idx,
-	int dma_fd);
-
-static int cam_smmu_init_scratch_map(struct scratch_mapping *scratch_map,
-	dma_addr_t base, size_t size,
-	int order);
-
-static int cam_smmu_alloc_scratch_va(struct scratch_mapping *mapping,
-	size_t size,
-	dma_addr_t *iova);
-
-static int cam_smmu_free_scratch_va(struct scratch_mapping *mapping,
-	dma_addr_t addr, size_t size);
-
-static struct cam_dma_buff_info *cam_smmu_find_mapping_by_virt_address(int idx,
-	dma_addr_t virt_addr);
-
 static int cam_smmu_map_buffer_and_add_to_list(int idx, int dma_fd,
 	enum dma_data_direction dma_dir, dma_addr_t *paddr_ptr,
 	size_t *len_ptr, enum cam_smmu_region_id region_id);
@@ -235,18 +188,8 @@ static int cam_smmu_map_kernel_buffer_and_add_to_list(int idx,
 	dma_addr_t *paddr_ptr, size_t *len_ptr,
 	enum cam_smmu_region_id region_id);
 
-static int cam_smmu_alloc_scratch_buffer_add_to_list(int idx,
-	size_t virt_len,
-	size_t phys_len,
-	unsigned int iommu_dir,
-	dma_addr_t *virt_addr);
-
 static int cam_smmu_unmap_buf_and_remove_from_list(
 	struct cam_dma_buff_info *mapping_info, int idx);
-
-static int cam_smmu_free_scratch_buffer_remove_from_list(
-	struct cam_dma_buff_info *mapping_info,
-	int idx);
 
 static void cam_smmu_clean_user_buffer_list(int idx);
 
@@ -606,24 +549,6 @@ static int cam_smmu_iommu_fault_handler(struct iommu_domain *domain,
 	return -EINVAL;
 }
 
-static int cam_smmu_translate_dir_to_iommu_dir(
-	enum dma_data_direction dir)
-{
-	switch (dir) {
-	case DMA_FROM_DEVICE:
-		return IOMMU_READ;
-	case DMA_TO_DEVICE:
-		return IOMMU_WRITE;
-	case DMA_BIDIRECTIONAL:
-		return IOMMU_READ|IOMMU_WRITE;
-	case DMA_NONE:
-	default:
-		CAM_ERR(CAM_SMMU, "Error: Direction is invalid. dir = %d", dir);
-		break;
-	};
-	return DMA_NONE;
-}
-
 void cam_smmu_reset_iommu_table(enum cam_smmu_init_dir ops)
 {
 	unsigned int i;
@@ -712,15 +637,7 @@ static int cam_smmu_create_add_handle_in_table(char *name,
 		if (!strcmp(iommu_cb_set.cb_info[i].name, name)) {
 			mutex_lock(&iommu_cb_set.cb_info[i].lock);
 			if (iommu_cb_set.cb_info[i].handle != HANDLE_INIT) {
-				if (iommu_cb_set.cb_info[i].is_secure)
-					iommu_cb_set.cb_info[i].secure_count++;
-
 				mutex_unlock(&iommu_cb_set.cb_info[i].lock);
-				if (iommu_cb_set.cb_info[i].is_secure) {
-					*hdl = iommu_cb_set.cb_info[i].handle;
-					return 0;
-				}
-
 				CAM_ERR(CAM_SMMU,
 					"Error: %s already got handle 0x%x",
 					name, iommu_cb_set.cb_info[i].handle);
@@ -736,8 +653,6 @@ static int cam_smmu_create_add_handle_in_table(char *name,
 			/* put handle in the table */
 			iommu_cb_set.cb_info[i].handle = handle;
 			iommu_cb_set.cb_info[i].cb_count = 0;
-			if (iommu_cb_set.cb_info[i].is_secure)
-				iommu_cb_set.cb_info[i].secure_count++;
 			*hdl = handle;
 			CAM_DBG(CAM_SMMU, "%s creates handle 0x%x",
 				name, handle);
@@ -750,114 +665,6 @@ static int cam_smmu_create_add_handle_in_table(char *name,
 		name);
 	cam_smmu_print_table();
 	return -EINVAL;
-}
-
-static int cam_smmu_init_scratch_map(struct scratch_mapping *scratch_map,
-					dma_addr_t base, size_t size,
-					int order)
-{
-	unsigned int count = size >> (PAGE_SHIFT + order);
-	unsigned int bitmap_size = BITS_TO_LONGS(count) * sizeof(long);
-	int err = 0;
-
-	if (!count) {
-		err = -EINVAL;
-		CAM_ERR(CAM_SMMU, "Page count is zero, size passed = %zu",
-			size);
-		goto bail;
-	}
-
-	scratch_map->bitmap = kzalloc(bitmap_size, GFP_KERNEL);
-	if (!scratch_map->bitmap) {
-		err = -ENOMEM;
-		goto bail;
-	}
-
-	scratch_map->base = base;
-	scratch_map->bits = BITS_PER_BYTE * bitmap_size;
-	scratch_map->order = order;
-
-bail:
-	return err;
-}
-
-static int cam_smmu_alloc_scratch_va(struct scratch_mapping *mapping,
-	size_t size,
-	dma_addr_t *iova)
-{
-	unsigned int order = get_order(size);
-	unsigned int align = 0;
-	unsigned int count, start;
-
-	count = ((PAGE_ALIGN(size) >> PAGE_SHIFT) +
-		 (1 << mapping->order) - 1) >> mapping->order;
-
-	/*
-	 * Transparently, add a guard page to the total count of pages
-	 * to be allocated
-	 */
-	count++;
-
-	if (order > mapping->order)
-		align = (1 << (order - mapping->order)) - 1;
-
-	start = bitmap_find_next_zero_area(mapping->bitmap, mapping->bits, 0,
-					   count, align);
-
-	if (start > mapping->bits)
-		return -ENOMEM;
-
-	bitmap_set(mapping->bitmap, start, count);
-	*iova = mapping->base + (start << (mapping->order + PAGE_SHIFT));
-
-	return 0;
-}
-
-static int cam_smmu_free_scratch_va(struct scratch_mapping *mapping,
-	dma_addr_t addr, size_t size)
-{
-	unsigned int start = (addr - mapping->base) >>
-			     (mapping->order + PAGE_SHIFT);
-	unsigned int count = ((size >> PAGE_SHIFT) +
-			      (1 << mapping->order) - 1) >> mapping->order;
-
-	if (!addr) {
-		CAM_ERR(CAM_SMMU, "Error: Invalid address");
-		return -EINVAL;
-	}
-
-	if (start + count > mapping->bits) {
-		CAM_ERR(CAM_SMMU, "Error: Invalid page bits in scratch map");
-		return -EINVAL;
-	}
-
-	/*
-	 * Transparently, add a guard page to the total count of pages
-	 * to be freed
-	 */
-	count++;
-	bitmap_clear(mapping->bitmap, start, count);
-
-	return 0;
-}
-
-static struct cam_dma_buff_info *cam_smmu_find_mapping_by_virt_address(int idx,
-	dma_addr_t virt_addr)
-{
-	struct cam_dma_buff_info *mapping;
-
-	list_for_each_entry(mapping, &iommu_cb_set.cb_info[idx].smmu_buf_list,
-			list) {
-		if (mapping->paddr == virt_addr) {
-			CAM_DBG(CAM_SMMU, "Found virtual address %lx",
-				 (unsigned long)virt_addr);
-			return mapping;
-		}
-	}
-
-	CAM_ERR(CAM_SMMU, "Error: Cannot find virtual address %lx by index %d",
-		(unsigned long)virt_addr, idx);
-	return NULL;
 }
 
 static struct cam_dma_buff_info *cam_smmu_find_mapping_by_ion_index(int idx,
@@ -908,23 +715,6 @@ static struct cam_dma_buff_info *cam_smmu_find_mapping_by_dma_buf(int idx,
 	return NULL;
 }
 
-static struct cam_sec_buff_info *cam_smmu_find_mapping_by_sec_buf_idx(int idx,
-	int dma_fd)
-{
-	struct cam_sec_buff_info *mapping;
-
-	list_for_each_entry(mapping, &iommu_cb_set.cb_info[idx].smmu_buf_list,
-		list) {
-		if (mapping->dma_fd == dma_fd) {
-			CAM_DBG(CAM_SMMU, "find dma_fd %d", dma_fd);
-			return mapping;
-		}
-	}
-	CAM_ERR(CAM_SMMU, "Error: Cannot find fd %d by index %d",
-		dma_fd, idx);
-	return NULL;
-}
-
 static void cam_smmu_clean_user_buffer_list(int idx)
 {
 	int ret;
@@ -936,16 +726,10 @@ static void cam_smmu_clean_user_buffer_list(int idx)
 			(void *)mapping_info->paddr, idx,
 			mapping_info->dma_fd);
 
-		if (mapping_info->dma_fd == 0xDEADBEEF)
-			/* Clean up scratch buffers */
-			ret = cam_smmu_free_scratch_buffer_remove_from_list(
-							mapping_info, idx);
-		else
-			/* Clean up regular mapped buffers */
-			ret = cam_smmu_unmap_buf_and_remove_from_list(
-					mapping_info,
-					idx);
-
+		/* Clean up regular mapped buffers */
+		ret = cam_smmu_unmap_buf_and_remove_from_list(
+				mapping_info,
+				idx);
 		if (ret < 0) {
 			CAM_ERR(CAM_SMMU, "Buffer delete failed: idx = %d",
 				idx);
@@ -1495,15 +1279,6 @@ int cam_smmu_get_region_info(int32_t smmu_hdl,
 		region_info->iova_start = cb->shared_info.iova_start;
 		region_info->iova_len = cb->shared_info.iova_len;
 		break;
-	case CAM_SMMU_REGION_SCRATCH:
-		if (!cb->scratch_buf_support) {
-			CAM_ERR(CAM_SMMU, "Scratch memory not supported");
-			mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
-			return -ENODEV;
-		}
-		region_info->iova_start = cb->scratch_info.iova_start;
-		region_info->iova_len = cb->scratch_info.iova_len;
-		break;
 	case CAM_SMMU_REGION_IO:
 		if (!cb->io_support) {
 			CAM_ERR(CAM_SMMU, "IO memory not supported");
@@ -1533,155 +1308,6 @@ int cam_smmu_get_region_info(int32_t smmu_hdl,
 	return 0;
 }
 EXPORT_SYMBOL(cam_smmu_get_region_info);
-
-int cam_smmu_reserve_sec_heap(int32_t smmu_hdl,
-	struct dma_buf *buf,
-	dma_addr_t *iova,
-	size_t *request_len)
-{
-	struct secheap_buf_info *secheap_buf = NULL;
-	size_t size = 0;
-	uint32_t sec_heap_iova = 0;
-	size_t sec_heap_iova_len = 0;
-	int idx;
-	int rc = 0;
-
-	idx = GET_SMMU_TABLE_IDX(smmu_hdl);
-	if (idx < 0 || idx >= iommu_cb_set.cb_num) {
-		CAM_ERR(CAM_SMMU,
-			"Error: handle or index invalid. idx = %d hdl = %x",
-			idx, smmu_hdl);
-		return -EINVAL;
-	}
-
-	if (!iommu_cb_set.cb_info[idx].secheap_support) {
-		CAM_ERR(CAM_SMMU, "Secondary heap not supported");
-		return -EINVAL;
-	}
-
-	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
-
-	if (iommu_cb_set.cb_info[idx].is_secheap_allocated) {
-		CAM_ERR(CAM_SMMU, "Trying to allocate secheap twice");
-		rc = -ENOMEM;
-		mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
-		return rc;
-	}
-
-	if (IS_ERR_OR_NULL(buf)) {
-		rc = PTR_ERR(buf);
-		CAM_ERR(CAM_SMMU,
-			"Error: dma get buf failed. rc = %d", rc);
-		goto err_out;
-	}
-
-	secheap_buf = &iommu_cb_set.cb_info[idx].secheap_buf;
-	secheap_buf->buf = buf;
-	secheap_buf->attach = dma_buf_attach(secheap_buf->buf,
-		iommu_cb_set.cb_info[idx].dev);
-	if (IS_ERR_OR_NULL(secheap_buf->attach)) {
-		rc = PTR_ERR(secheap_buf->attach);
-		CAM_ERR(CAM_SMMU, "Error: dma buf attach failed");
-		goto err_put;
-	}
-
-	secheap_buf->table = dma_buf_map_attachment(secheap_buf->attach,
-		DMA_BIDIRECTIONAL);
-	if (IS_ERR_OR_NULL(secheap_buf->table)) {
-		rc = PTR_ERR(secheap_buf->table);
-		CAM_ERR(CAM_SMMU, "Error: dma buf map attachment failed");
-		goto err_detach;
-	}
-
-	sec_heap_iova = iommu_cb_set.cb_info[idx].secheap_info.iova_start;
-	sec_heap_iova_len = iommu_cb_set.cb_info[idx].secheap_info.iova_len;
-#if defined(CONFIG_ARCH_SM6150)
-	size = iommu_map_sg(iommu_cb_set.cb_info[idx].mapping->domain,
-		sec_heap_iova,
-		secheap_buf->table->sgl,
-		secheap_buf->table->nents,
-		IOMMU_READ | IOMMU_WRITE);
-#endif
-	if (size != sec_heap_iova_len) {
-		CAM_ERR(CAM_SMMU, "IOMMU mapping failed");
-		goto err_unmap_sg;
-	}
-
-	iommu_cb_set.cb_info[idx].is_secheap_allocated = true;
-	*iova = (uint32_t)sec_heap_iova;
-	*request_len = sec_heap_iova_len;
-	mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
-
-	return rc;
-
-err_unmap_sg:
-	dma_buf_unmap_attachment(secheap_buf->attach,
-		secheap_buf->table,
-		DMA_BIDIRECTIONAL);
-err_detach:
-	dma_buf_detach(secheap_buf->buf,
-		secheap_buf->attach);
-err_put:
-	dma_buf_put(secheap_buf->buf);
-err_out:
-	mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
-	return rc;
-}
-EXPORT_SYMBOL(cam_smmu_reserve_sec_heap);
-
-int cam_smmu_release_sec_heap(int32_t smmu_hdl)
-{
-	int idx;
-	size_t size = 0;
-	uint32_t sec_heap_iova = 0;
-	size_t sec_heap_iova_len = 0;
-	struct secheap_buf_info *secheap_buf = NULL;
-
-	idx = GET_SMMU_TABLE_IDX(smmu_hdl);
-	if (idx < 0 || idx >= iommu_cb_set.cb_num) {
-		CAM_ERR(CAM_SMMU,
-			"Error: handle or index invalid. idx = %d hdl = %x",
-			idx, smmu_hdl);
-		return -EINVAL;
-	}
-
-	if (!iommu_cb_set.cb_info[idx].secheap_support) {
-		CAM_ERR(CAM_SMMU, "Secondary heap not supported");
-		return -EINVAL;
-	}
-	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
-
-	if (!iommu_cb_set.cb_info[idx].is_secheap_allocated) {
-		CAM_ERR(CAM_SMMU, "Trying to release secheap twice");
-		mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
-		return -ENOMEM;
-	}
-
-	secheap_buf = &iommu_cb_set.cb_info[idx].secheap_buf;
-	sec_heap_iova = iommu_cb_set.cb_info[idx].secheap_info.iova_start;
-	sec_heap_iova_len = iommu_cb_set.cb_info[idx].secheap_info.iova_len;
-
-#if defined(CONFIG_ARCH_SM6150)
-	size = iommu_unmap(iommu_cb_set.cb_info[idx].mapping->domain,
-		sec_heap_iova,
-		sec_heap_iova_len);
-#endif
-	if (size != sec_heap_iova_len) {
-		CAM_ERR(CAM_SMMU, "Failed: Unmapped = %zu, requested = %zu",
-			size,
-			sec_heap_iova_len);
-	}
-
-	dma_buf_unmap_attachment(secheap_buf->attach,
-		secheap_buf->table, DMA_BIDIRECTIONAL);
-	dma_buf_detach(secheap_buf->buf, secheap_buf->attach);
-	dma_buf_put(secheap_buf->buf);
-	iommu_cb_set.cb_info[idx].is_secheap_allocated = false;
-	mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
-
-	return 0;
-}
-EXPORT_SYMBOL(cam_smmu_release_sec_heap);
 
 static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 	int idx, enum dma_data_direction dma_dir, dma_addr_t *paddr_ptr,
@@ -1998,44 +1624,6 @@ static enum cam_smmu_buf_state cam_smmu_check_dma_buf_in_list(int idx,
 	return CAM_SMMU_BUFF_NOT_EXIST;
 }
 
-static enum cam_smmu_buf_state cam_smmu_check_secure_fd_in_list(int idx,
-					int dma_fd, dma_addr_t *paddr_ptr,
-					size_t *len_ptr)
-{
-	struct cam_sec_buff_info *mapping;
-
-	list_for_each_entry(mapping,
-			&iommu_cb_set.cb_info[idx].smmu_buf_list,
-			list) {
-		if (mapping->dma_fd == dma_fd) {
-			*paddr_ptr = mapping->paddr;
-			*len_ptr = mapping->len;
-			mapping->ref_count++;
-			return CAM_SMMU_BUFF_EXIST;
-		}
-	}
-
-	return CAM_SMMU_BUFF_NOT_EXIST;
-}
-
-static enum cam_smmu_buf_state cam_smmu_validate_secure_fd_in_list(int idx,
-	int dma_fd, dma_addr_t *paddr_ptr, size_t *len_ptr)
-{
-	struct cam_sec_buff_info *mapping;
-
-	list_for_each_entry(mapping,
-			&iommu_cb_set.cb_info[idx].smmu_buf_list,
-			list) {
-		if (mapping->dma_fd == dma_fd) {
-			*paddr_ptr = mapping->paddr;
-			*len_ptr = mapping->len;
-			return CAM_SMMU_BUFF_EXIST;
-		}
-	}
-
-	return CAM_SMMU_BUFF_NOT_EXIST;
-}
-
 int cam_smmu_get_handle(char *identifier, int *handle_ptr)
 {
 	int ret = 0;
@@ -2104,558 +1692,6 @@ int cam_smmu_ops(int handle, enum cam_smmu_ops_param ops)
 }
 EXPORT_SYMBOL(cam_smmu_ops);
 
-static int cam_smmu_alloc_scratch_buffer_add_to_list(int idx,
-	size_t virt_len,
-	size_t phys_len,
-	unsigned int iommu_dir,
-	dma_addr_t *virt_addr)
-{
-	unsigned long nents = virt_len / phys_len;
-	struct cam_dma_buff_info *mapping_info = NULL;
-	size_t unmapped;
-	dma_addr_t iova = 0;
-	struct scatterlist *sg;
-	int i = 0;
-	int rc;
-	struct iommu_domain *domain = NULL;
-	struct page *page;
-	struct sg_table *table = NULL;
-
-	CAM_DBG(CAM_SMMU, "nents = %lu, idx = %d, virt_len  = %zx",
-		nents, idx, virt_len);
-	CAM_DBG(CAM_SMMU, "phys_len = %zx, iommu_dir = %d, virt_addr = %pK",
-		phys_len, iommu_dir, virt_addr);
-
-	/*
-	 * This table will go inside the 'mapping' structure
-	 * where it will be held until put_scratch_buffer is called
-	 */
-	table = kzalloc(sizeof(struct sg_table), GFP_KERNEL);
-	if (!table) {
-		rc = -ENOMEM;
-		goto err_table_alloc;
-	}
-
-	rc = sg_alloc_table(table, nents, GFP_KERNEL);
-	if (rc < 0) {
-		rc = -EINVAL;
-		goto err_sg_alloc;
-	}
-
-	page = alloc_pages(GFP_KERNEL, get_order(phys_len));
-	if (!page) {
-		rc = -ENOMEM;
-		goto err_page_alloc;
-	}
-
-	/* Now we create the sg list */
-	for_each_sg(table->sgl, sg, table->nents, i)
-		sg_set_page(sg, page, phys_len, 0);
-
-
-	/* Get the domain from within our cb_set struct and map it*/
-#if defined(CONFIG_ARCH_SM6150)
-	domain = iommu_cb_set.cb_info[idx].mapping->domain;
-#endif
-	rc = cam_smmu_alloc_scratch_va(&iommu_cb_set.cb_info[idx].scratch_map,
-		virt_len, &iova);
-
-	if (rc < 0) {
-		CAM_ERR(CAM_SMMU,
-			"Could not find valid iova for scratch buffer");
-		goto err_iommu_map;
-	}
-
-	if (iommu_map_sg(domain,
-		iova,
-		table->sgl,
-		table->nents,
-		iommu_dir) != virt_len) {
-		CAM_ERR(CAM_SMMU, "iommu_map_sg() failed");
-		goto err_iommu_map;
-	}
-
-	/* Now update our mapping information within the cb_set struct */
-	mapping_info = kzalloc(sizeof(struct cam_dma_buff_info), GFP_KERNEL);
-	if (!mapping_info) {
-		rc = -ENOMEM;
-		goto err_mapping_info;
-	}
-
-	mapping_info->dma_fd = 0xDEADBEEF;
-	mapping_info->buf = NULL;
-	mapping_info->attach = NULL;
-	mapping_info->table = table;
-	mapping_info->paddr = iova;
-	mapping_info->len = virt_len;
-	mapping_info->dir = iommu_dir;
-	mapping_info->ref_count = 1;
-	mapping_info->phys_len = phys_len;
-	mapping_info->region_id = CAM_SMMU_REGION_SCRATCH;
-
-	CAM_DBG(CAM_SMMU, "paddr = %pK, len = %zx, phys_len = %zx",
-		(void *)mapping_info->paddr,
-		mapping_info->len, mapping_info->phys_len);
-
-	list_add(&mapping_info->list, &iommu_cb_set.cb_info[idx].smmu_buf_list);
-
-	*virt_addr = (dma_addr_t)iova;
-
-	CAM_DBG(CAM_SMMU, "mapped virtual address = %lx",
-		(unsigned long)*virt_addr);
-	return 0;
-
-err_mapping_info:
-	unmapped = iommu_unmap(domain, iova,  virt_len);
-	if (unmapped != virt_len)
-		CAM_ERR(CAM_SMMU, "Unmapped only %zx instead of %zx",
-			unmapped, virt_len);
-err_iommu_map:
-	__free_pages(page, get_order(phys_len));
-err_page_alloc:
-	sg_free_table(table);
-err_sg_alloc:
-	kfree(table);
-err_table_alloc:
-	return rc;
-}
-
-static int cam_smmu_free_scratch_buffer_remove_from_list(
-	struct cam_dma_buff_info *mapping_info,
-	int idx)
-{
-	int rc = 0;
-	size_t unmapped = 0;
-#if defined(CONFIG_ARCH_SM6150)
-	struct iommu_domain *domain =
-		iommu_cb_set.cb_info[idx].mapping->domain;
-#endif
-	struct scratch_mapping *scratch_map =
-		&iommu_cb_set.cb_info[idx].scratch_map;
-
-	if (!mapping_info->table) {
-		CAM_ERR(CAM_SMMU,
-			"Error: Invalid params: dev = %pK, table = %pK",
-			(void *)iommu_cb_set.cb_info[idx].dev,
-			(void *)mapping_info->table);
-		return -EINVAL;
-	}
-
-	/* Clean up the mapping_info struct from the list */
-#if defined(CONFIG_ARCH_SM6150)
-	unmapped = iommu_unmap(domain, mapping_info->paddr, mapping_info->len);
-#endif
-	if (unmapped != mapping_info->len)
-		CAM_ERR(CAM_SMMU, "Unmapped only %zx instead of %zx",
-			unmapped, mapping_info->len);
-
-	rc = cam_smmu_free_scratch_va(scratch_map,
-		mapping_info->paddr,
-		mapping_info->len);
-	if (rc < 0) {
-		CAM_ERR(CAM_SMMU,
-			"Error: Invalid iova while freeing scratch buffer");
-		rc = -EINVAL;
-	}
-
-	__free_pages(sg_page(mapping_info->table->sgl),
-			get_order(mapping_info->phys_len));
-	sg_free_table(mapping_info->table);
-	kfree(mapping_info->table);
-	list_del_init(&mapping_info->list);
-
-	kfree(mapping_info);
-	mapping_info = NULL;
-
-	return rc;
-}
-
-int cam_smmu_get_scratch_iova(int handle,
-	enum dma_data_direction dir,
-	dma_addr_t *paddr_ptr,
-	size_t virt_len,
-	size_t phys_len)
-{
-	int idx, rc;
-	unsigned int iommu_dir;
-
-	if (!paddr_ptr || !virt_len || !phys_len) {
-		CAM_ERR(CAM_SMMU, "Error: Input pointer or lengths invalid");
-		return -EINVAL;
-	}
-
-	if (virt_len < phys_len) {
-		CAM_ERR(CAM_SMMU, "Error: virt_len > phys_len");
-		return -EINVAL;
-	}
-
-	if (handle == HANDLE_INIT) {
-		CAM_ERR(CAM_SMMU, "Error: Invalid handle");
-		return -EINVAL;
-	}
-
-	iommu_dir = cam_smmu_translate_dir_to_iommu_dir(dir);
-	if (iommu_dir == DMA_NONE) {
-		CAM_ERR(CAM_SMMU,
-			"Error: translate direction failed. dir = %d", dir);
-		return -EINVAL;
-	}
-
-	idx = GET_SMMU_TABLE_IDX(handle);
-	if (idx < 0 || idx >= iommu_cb_set.cb_num) {
-		CAM_ERR(CAM_SMMU,
-			"Error: handle or index invalid. idx = %d hdl = %x",
-			idx, handle);
-		return -EINVAL;
-	}
-
-	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
-	if (iommu_cb_set.cb_info[idx].handle != handle) {
-		CAM_ERR(CAM_SMMU,
-			"Error: hdl is not valid, table_hdl = %x, hdl = %x",
-			iommu_cb_set.cb_info[idx].handle, handle);
-		rc = -EINVAL;
-		goto error;
-	}
-
-	if (!iommu_cb_set.cb_info[idx].scratch_buf_support) {
-		CAM_ERR(CAM_SMMU,
-			"Error: Context bank does not support scratch bufs");
-		rc = -EINVAL;
-		goto error;
-	}
-
-	CAM_DBG(CAM_SMMU, "smmu handle = %x, idx = %d, dir = %d",
-		handle, idx, dir);
-	CAM_DBG(CAM_SMMU, "virt_len = %zx, phys_len  = %zx",
-		phys_len, virt_len);
-
-	if (iommu_cb_set.cb_info[idx].state != CAM_SMMU_ATTACH) {
-		CAM_ERR(CAM_SMMU,
-			"Err:Dev %s should call SMMU attach before map buffer",
-			iommu_cb_set.cb_info[idx].name);
-		rc = -EINVAL;
-		goto error;
-	}
-
-	if (!IS_ALIGNED(virt_len, PAGE_SIZE)) {
-		CAM_ERR(CAM_SMMU,
-			"Requested scratch buffer length not page aligned");
-		rc = -EINVAL;
-		goto error;
-	}
-
-	if (!IS_ALIGNED(virt_len, phys_len)) {
-		CAM_ERR(CAM_SMMU,
-			"Requested virt length not aligned with phys length");
-		rc = -EINVAL;
-		goto error;
-	}
-
-	rc = cam_smmu_alloc_scratch_buffer_add_to_list(idx,
-		virt_len,
-		phys_len,
-		iommu_dir,
-		paddr_ptr);
-	if (rc < 0)
-		CAM_ERR(CAM_SMMU, "Error: mapping or add list fail");
-
-error:
-	mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
-	return rc;
-}
-
-int cam_smmu_put_scratch_iova(int handle,
-	dma_addr_t paddr)
-{
-	int idx;
-	int rc = -1;
-	struct cam_dma_buff_info *mapping_info;
-
-	if (handle == HANDLE_INIT) {
-		CAM_ERR(CAM_SMMU, "Error: Invalid handle");
-		return -EINVAL;
-	}
-
-	/* find index in the iommu_cb_set.cb_info */
-	idx = GET_SMMU_TABLE_IDX(handle);
-	if (idx < 0 || idx >= iommu_cb_set.cb_num) {
-		CAM_ERR(CAM_SMMU,
-			"Error: handle or index invalid. idx = %d hdl = %x",
-			idx, handle);
-		return -EINVAL;
-	}
-
-	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
-	if (iommu_cb_set.cb_info[idx].handle != handle) {
-		CAM_ERR(CAM_SMMU,
-			"Error: hdl is not valid, table_hdl = %x, hdl = %x",
-			iommu_cb_set.cb_info[idx].handle, handle);
-		rc = -EINVAL;
-		goto handle_err;
-	}
-
-	if (!iommu_cb_set.cb_info[idx].scratch_buf_support) {
-		CAM_ERR(CAM_SMMU,
-			"Error: Context bank does not support scratch buffers");
-		rc = -EINVAL;
-		goto handle_err;
-	}
-
-	/* Based on virtual address and index, we can find mapping info
-	 * of the scratch buffer
-	 */
-	mapping_info = cam_smmu_find_mapping_by_virt_address(idx, paddr);
-	if (!mapping_info) {
-		CAM_ERR(CAM_SMMU, "Error: Invalid params");
-		rc = -ENODEV;
-		goto handle_err;
-	}
-
-	/* unmapping one buffer from device */
-	rc = cam_smmu_free_scratch_buffer_remove_from_list(mapping_info, idx);
-	if (rc < 0) {
-		CAM_ERR(CAM_SMMU, "Error: unmap or remove list fail");
-		goto handle_err;
-	}
-
-handle_err:
-	mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
-	return rc;
-}
-
-static int cam_smmu_map_stage2_buffer_and_add_to_list(int idx, int dma_fd,
-		 enum dma_data_direction dma_dir, dma_addr_t *paddr_ptr,
-		 size_t *len_ptr)
-{
-	int rc = 0;
-	struct dma_buf *dmabuf = NULL;
-	struct dma_buf_attachment *attach = NULL;
-	struct sg_table *table = NULL;
-	struct cam_sec_buff_info *mapping_info;
-
-	/* clean the content from clients */
-	*paddr_ptr = (dma_addr_t)NULL;
-	*len_ptr = (size_t)0;
-
-	dmabuf = dma_buf_get(dma_fd);
-	if (IS_ERR_OR_NULL((void *)(dmabuf))) {
-		CAM_ERR(CAM_SMMU,
-			"Error: dma buf get failed, idx=%d, dma_fd=%d",
-			idx, dma_fd);
-		rc = PTR_ERR(dmabuf);
-		goto err_out;
-	}
-
-	/*
-	 * Call dma_buf_attach() and dma_buf_map_attachment() to get
-	 * the buffer's physical address.
-	 */
-	attach = dma_buf_attach(dmabuf, iommu_cb_set.cb_info[idx].dev);
-	if (IS_ERR_OR_NULL(attach)) {
-		CAM_ERR(CAM_SMMU,
-			"Error: dma buf attach failed, idx=%d, dma_fd=%d",
-			idx, dma_fd);
-		rc = PTR_ERR(attach);
-		goto err_put;
-	}
-
-	attach->dma_map_attrs |= DMA_ATTR_SKIP_CPU_SYNC;
-
-	table = dma_buf_map_attachment(attach, dma_dir);
-	if (IS_ERR_OR_NULL(table)) {
-		CAM_ERR(CAM_SMMU, "Error: dma buf map attachment failed");
-		rc = PTR_ERR(table);
-		goto err_detach;
-	}
-
-	/* return addr and len to client */
-	*paddr_ptr = sg_phys(table->sgl);
-	*len_ptr = (size_t)sg_dma_len(table->sgl);
-
-	/* fill up mapping_info */
-	mapping_info = kzalloc(sizeof(struct cam_sec_buff_info), GFP_KERNEL);
-	if (!mapping_info) {
-		rc = -ENOMEM;
-		goto err_unmap_sg;
-	}
-
-	mapping_info->dma_fd = dma_fd;
-	mapping_info->paddr = *paddr_ptr;
-	mapping_info->len = *len_ptr;
-	mapping_info->dir = dma_dir;
-	mapping_info->ref_count = 1;
-	mapping_info->buf = dmabuf;
-
-	CAM_DBG(CAM_SMMU, "idx=%d, dma_fd=%d, dev=%pK, paddr=%pK, len=%u",
-			idx, dma_fd,
-			(void *)iommu_cb_set.cb_info[idx].dev,
-			(void *)*paddr_ptr, (unsigned int)*len_ptr);
-
-	/* add to the list */
-	list_add(&mapping_info->list, &iommu_cb_set.cb_info[idx].smmu_buf_list);
-
-	return 0;
-
-err_unmap_sg:
-	dma_buf_unmap_attachment(attach, table, dma_dir);
-err_detach:
-	dma_buf_detach(dmabuf, attach);
-err_put:
-	dma_buf_put(dmabuf);
-err_out:
-	return rc;
-}
-
-int cam_smmu_map_stage2_iova(int handle,
-		int dma_fd, enum dma_data_direction dir,
-		dma_addr_t *paddr_ptr, size_t *len_ptr)
-{
-	int idx, rc;
-	enum cam_smmu_buf_state buf_state;
-
-	if (!paddr_ptr || !len_ptr) {
-		CAM_ERR(CAM_SMMU,
-			"Error: Invalid inputs, paddr_ptr:%pK, len_ptr: %pK",
-			paddr_ptr, len_ptr);
-		return -EINVAL;
-	}
-	/* clean the content from clients */
-	*paddr_ptr = (dma_addr_t)NULL;
-	*len_ptr = (size_t)0;
-
-	idx = GET_SMMU_TABLE_IDX(handle);
-	if ((handle == HANDLE_INIT) ||
-		(idx < 0) ||
-		(idx >= iommu_cb_set.cb_num)) {
-		CAM_ERR(CAM_SMMU,
-			"Error: handle or index invalid. idx = %d hdl = %x",
-			idx, handle);
-		return -EINVAL;
-	}
-
-	if (!iommu_cb_set.cb_info[idx].is_secure) {
-		CAM_ERR(CAM_SMMU,
-			"Error: can't map secure mem to non secure cb, idx=%d",
-			idx);
-		return -EINVAL;
-	}
-
-	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
-	if (iommu_cb_set.cb_info[idx].handle != handle) {
-		CAM_ERR(CAM_SMMU,
-			"Error: hdl is not valid, idx=%d, table_hdl=%x, hdl=%x",
-			idx, iommu_cb_set.cb_info[idx].handle, handle);
-		rc = -EINVAL;
-		goto get_addr_end;
-	}
-
-	buf_state = cam_smmu_check_secure_fd_in_list(idx, dma_fd, paddr_ptr,
-						     len_ptr);
-	if (buf_state == CAM_SMMU_BUFF_EXIST) {
-		CAM_DBG(CAM_SMMU,
-			"fd:%d already in list idx:%d, handle=%d give same addr back",
-			dma_fd, idx, handle);
-		rc = 0;
-		goto get_addr_end;
-	}
-	rc = cam_smmu_map_stage2_buffer_and_add_to_list(idx, dma_fd, dir,
-							paddr_ptr, len_ptr);
-	if (rc < 0) {
-		CAM_ERR(CAM_SMMU,
-			"Error: mapping or add list fail, idx=%d, handle=%d, fd=%d, rc=%d",
-			idx, handle, dma_fd, rc);
-		goto get_addr_end;
-	}
-
-get_addr_end:
-	mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
-	return rc;
-}
-EXPORT_SYMBOL(cam_smmu_map_stage2_iova);
-
-static int cam_smmu_secure_unmap_buf_and_remove_from_list(
-		struct cam_sec_buff_info *mapping_info,
-		int idx)
-{
-	if (!mapping_info) {
-		CAM_ERR(CAM_SMMU, "Error: List doesn't exist");
-		return -EINVAL;
-	}
-	dma_buf_put(mapping_info->buf);
-	list_del_init(&mapping_info->list);
-
-	CAM_DBG(CAM_SMMU, "unmap fd: %d, idx : %d", mapping_info->dma_fd, idx);
-
-	/* free one buffer */
-	kfree(mapping_info);
-	return 0;
-}
-
-int cam_smmu_unmap_stage2_iova(int handle, int dma_fd)
-{
-	int idx, rc;
-	struct cam_sec_buff_info *mapping_info;
-
-	/* find index in the iommu_cb_set.cb_info */
-	idx = GET_SMMU_TABLE_IDX(handle);
-	if ((handle == HANDLE_INIT) ||
-		(idx < 0) ||
-		(idx >= iommu_cb_set.cb_num)) {
-		CAM_ERR(CAM_SMMU,
-			"Error: handle or index invalid. idx = %d hdl = %x",
-			idx, handle);
-		return -EINVAL;
-	}
-
-	if (!iommu_cb_set.cb_info[idx].is_secure) {
-		CAM_ERR(CAM_SMMU,
-			"Error: can't unmap secure mem from non secure cb");
-		return -EINVAL;
-	}
-
-	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
-	if (iommu_cb_set.cb_info[idx].handle != handle) {
-		CAM_ERR(CAM_SMMU,
-			"Error: hdl is not valid, table_hdl = %x, hdl = %x",
-			iommu_cb_set.cb_info[idx].handle, handle);
-		rc = -EINVAL;
-		goto put_addr_end;
-	}
-
-	/* based on fd and index, we can find mapping info of buffer */
-	mapping_info = cam_smmu_find_mapping_by_sec_buf_idx(idx, dma_fd);
-	if (!mapping_info) {
-		CAM_ERR(CAM_SMMU,
-			"Error: Invalid params! idx = %d, fd = %d",
-			idx, dma_fd);
-		rc = -EINVAL;
-		goto put_addr_end;
-	}
-
-	mapping_info->ref_count--;
-	if (mapping_info->ref_count > 0) {
-		CAM_DBG(CAM_SMMU,
-			"idx: %d fd = %d ref_count: %d",
-			idx, dma_fd, mapping_info->ref_count);
-		rc = 0;
-		goto put_addr_end;
-	}
-	mapping_info->ref_count = 0;
-
-	/* unmapping one buffer from device */
-	rc = cam_smmu_secure_unmap_buf_and_remove_from_list(mapping_info, idx);
-	if (rc) {
-		CAM_ERR(CAM_SMMU, "Error: unmap or remove list fail");
-		goto put_addr_end;
-	}
-
-put_addr_end:
-	mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
-	return rc;
-}
-EXPORT_SYMBOL(cam_smmu_unmap_stage2_iova);
-
 static int cam_smmu_map_iova_validate_params(int handle,
 	enum dma_data_direction dir,
 	dma_addr_t *paddr_ptr, size_t *len_ptr,
@@ -2706,14 +1742,6 @@ int cam_smmu_map_user_iova(int handle, int dma_fd, enum dma_data_direction dir,
 	dma_dir = (enum dma_data_direction)dir;
 	idx = GET_SMMU_TABLE_IDX(handle);
 	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
-	if (iommu_cb_set.cb_info[idx].is_secure) {
-		CAM_ERR(CAM_SMMU,
-			"Error: can't map non-secure mem to secure cb idx=%d",
-			idx);
-		rc = -EINVAL;
-		goto get_addr_end;
-	}
-
 	if (iommu_cb_set.cb_info[idx].handle != handle) {
 		CAM_ERR(CAM_SMMU,
 			"hdl is not valid, idx=%d, table_hdl = %x, hdl = %x",
@@ -2768,13 +1796,6 @@ int cam_smmu_map_kernel_iova(int handle, struct dma_buf *buf,
 
 	idx = GET_SMMU_TABLE_IDX(handle);
 	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
-	if (iommu_cb_set.cb_info[idx].is_secure) {
-		CAM_ERR(CAM_SMMU,
-			"Error: can't map non-secure mem to secure cb");
-		rc = -EINVAL;
-		goto get_addr_end;
-	}
-
 	if (iommu_cb_set.cb_info[idx].handle != handle) {
 		CAM_ERR(CAM_SMMU, "hdl is not valid, table_hdl = %x, hdl = %x",
 			iommu_cb_set.cb_info[idx].handle, handle);
@@ -2839,12 +1860,6 @@ int cam_smmu_get_iova(int handle, int dma_fd, dma_addr_t *paddr_ptr,
 		return -EINVAL;
 	}
 
-	if (iommu_cb_set.cb_info[idx].is_secure) {
-		CAM_ERR(CAM_SMMU,
-			"Error: can't get non-secure mem from secure cb");
-		return -EINVAL;
-	}
-
 	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
 	if (iommu_cb_set.cb_info[idx].handle != handle) {
 		CAM_ERR(CAM_SMMU,
@@ -2866,66 +1881,6 @@ get_addr_end:
 	return rc;
 }
 EXPORT_SYMBOL(cam_smmu_get_iova);
-
-int cam_smmu_get_stage2_iova(int handle, int dma_fd, dma_addr_t *paddr_ptr,
-			     size_t *len_ptr)
-{
-	int idx, rc = 0;
-	enum cam_smmu_buf_state buf_state;
-
-	if (!paddr_ptr || !len_ptr) {
-		CAM_ERR(CAM_SMMU, "Error: Input pointers are invalid");
-		return -EINVAL;
-	}
-
-	if (handle == HANDLE_INIT) {
-		CAM_ERR(CAM_SMMU, "Error: Invalid handle");
-		return -EINVAL;
-	}
-
-	/* clean the content from clients */
-	*paddr_ptr = (dma_addr_t)NULL;
-	*len_ptr = (size_t)0;
-
-	idx = GET_SMMU_TABLE_IDX(handle);
-	if (idx < 0 || idx >= iommu_cb_set.cb_num) {
-		CAM_ERR(CAM_SMMU,
-			"Error: handle or index invalid. idx = %d hdl = %x",
-			idx, handle);
-		return -EINVAL;
-	}
-
-	if (!iommu_cb_set.cb_info[idx].is_secure) {
-		CAM_ERR(CAM_SMMU,
-			"Error: can't get secure mem from non secure cb");
-		return -EINVAL;
-	}
-
-	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
-	if (iommu_cb_set.cb_info[idx].handle != handle) {
-		CAM_ERR(CAM_SMMU,
-			"Error: hdl is not valid, table_hdl = %x, hdl = %x",
-			iommu_cb_set.cb_info[idx].handle, handle);
-		rc = -EINVAL;
-		goto get_addr_end;
-	}
-
-	buf_state = cam_smmu_validate_secure_fd_in_list(idx,
-		dma_fd,
-		paddr_ptr,
-		len_ptr);
-
-	if (buf_state == CAM_SMMU_BUFF_NOT_EXIST) {
-		CAM_ERR(CAM_SMMU, "dma_fd:%d not in the mapped list", dma_fd);
-		rc = -EINVAL;
-		goto get_addr_end;
-	}
-
-get_addr_end:
-	mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
-	return rc;
-}
-EXPORT_SYMBOL(cam_smmu_get_stage2_iova);
 
 static int cam_smmu_unmap_validate_params(int handle)
 {
@@ -2962,13 +1917,6 @@ int cam_smmu_unmap_user_iova(int handle,
 
 	idx = GET_SMMU_TABLE_IDX(handle);
 	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
-	if (iommu_cb_set.cb_info[idx].is_secure) {
-		CAM_ERR(CAM_SMMU,
-			"Error: can't unmap non-secure mem from secure cb");
-		rc = -EINVAL;
-		goto unmap_end;
-	}
-
 	if (iommu_cb_set.cb_info[idx].handle != handle) {
 		CAM_ERR(CAM_SMMU,
 			"Error: hdl is not valid, table_hdl = %x, hdl = %x",
@@ -3014,13 +1962,6 @@ int cam_smmu_unmap_kernel_iova(int handle,
 
 	idx = GET_SMMU_TABLE_IDX(handle);
 	mutex_lock(&iommu_cb_set.cb_info[idx].lock);
-	if (iommu_cb_set.cb_info[idx].is_secure) {
-		CAM_ERR(CAM_SMMU,
-			"Error: can't unmap non-secure mem from secure cb");
-		rc = -EINVAL;
-		goto unmap_end;
-	}
-
 	if (iommu_cb_set.cb_info[idx].handle != handle) {
 		CAM_ERR(CAM_SMMU,
 			"Error: hdl is not valid, table_hdl = %x, hdl = %x",
@@ -3138,22 +2079,6 @@ int cam_smmu_destroy_handle(int handle)
 		cam_smmu_clean_kernel_buffer_list(idx);
 	}
 
-	if (iommu_cb_set.cb_info[idx].is_secure) {
-		if (iommu_cb_set.cb_info[idx].secure_count == 0) {
-			mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
-			return -EPERM;
-		}
-
-		iommu_cb_set.cb_info[idx].secure_count--;
-		if (iommu_cb_set.cb_info[idx].secure_count == 0) {
-			iommu_cb_set.cb_info[idx].cb_count = 0;
-			iommu_cb_set.cb_info[idx].handle = HANDLE_INIT;
-		}
-
-		mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
-		return 0;
-	}
-
 	iommu_cb_set.cb_info[idx].cb_count = 0;
 	iommu_cb_set.cb_info[idx].handle = HANDLE_INIT;
 	mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
@@ -3174,11 +2099,6 @@ static void cam_smmu_deinit_cb(struct cam_context_bank_info *cb)
 	if (cb->shared_support) {
 		gen_pool_destroy(cb->shared_mem_pool);
 		cb->shared_mem_pool = NULL;
-	}
-
-	if (cb->scratch_buf_support) {
-		kfree(cb->scratch_map.bitmap);
-		cb->scratch_map.bitmap = NULL;
 	}
 }
 
@@ -3234,19 +2154,6 @@ static int cam_smmu_setup_cb(struct cam_context_bank_info *cb,
 		}
 	}
 
-	if (cb->scratch_buf_support) {
-		rc = cam_smmu_init_scratch_map(&cb->scratch_map,
-			cb->scratch_info.iova_start,
-			cb->scratch_info.iova_len,
-			0);
-		if (rc < 0) {
-			CAM_ERR(CAM_SMMU,
-				"Error: failed to create scratch map");
-			rc = -ENODEV;
-			goto end;
-		}
-	}
-
 	/* create a virtual mapping */
 	if (cb->io_support) {
 #if defined(CONFIG_ARCH_SM6150)
@@ -3279,11 +2186,6 @@ end:
 	if (cb->shared_support) {
 		gen_pool_destroy(cb->shared_mem_pool);
 		cb->shared_mem_pool = NULL;
-	}
-
-	if (cb->scratch_buf_support) {
-		kfree(cb->scratch_map.bitmap);
-		cb->scratch_map.bitmap = NULL;
 	}
 
 	return rc;
@@ -3348,15 +2250,7 @@ static int cam_smmu_get_memory_regions_info(struct device_node *of_node,
 	}
 
 	mem_map_node = of_get_child_by_name(of_node, "iova-mem-map");
-	cb->is_secure = of_property_read_bool(of_node, "qcom,secure-cb");
-
-	/*
-	 * We always expect a memory map node, except when it is a secure
-	 * context bank.
-	 */
 	if (!mem_map_node) {
-		if (cb->is_secure)
-			return 0;
 		CAM_ERR(CAM_SMMU, "iova-mem-map not present");
 		return -EINVAL;
 	}
@@ -3421,11 +2315,6 @@ static int cam_smmu_get_memory_regions_info(struct device_node *of_node,
 			cb->shared_support = 1;
 			cb->shared_info.iova_start = region_start;
 			cb->shared_info.iova_len = region_len;
-			break;
-		case CAM_SMMU_REGION_SCRATCH:
-			cb->scratch_buf_support = 1;
-			cb->scratch_info.iova_start = region_start;
-			cb->scratch_info.iova_len = region_len;
 			break;
 		case CAM_SMMU_REGION_IO:
 			cb->io_support = 1;
@@ -3502,13 +2391,6 @@ static int cam_populate_smmu_context_banks(struct device *dev,
 	if (rc < 0) {
 		CAM_ERR(CAM_SMMU, "Error: Getting region info");
 		return rc;
-	}
-
-	if (cb->is_secure) {
-		/* increment count to next bank */
-		cb->dev = dev;
-		iommu_cb_set.cb_init_count++;
-		return 0;
 	}
 
 	/* set up the iommu mapping for the  context bank */

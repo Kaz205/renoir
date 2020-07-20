@@ -287,14 +287,6 @@ struct cam_req_mgr_link_control {
 
 #define CAM_MEM_MGR_GET_HDL_IDX(hdl) (hdl & CAM_MEM_MGR_HDL_IDX_MASK)
 
-#define CAM_MEM_MGR_SET_SECURE_HDL(hdl, flag) \
-	((flag) ? (hdl |= (1 << CAM_MEM_MGR_SECURE_BIT_POS)) : \
-	((hdl) &= ~(1 << CAM_MEM_MGR_SECURE_BIT_POS)))
-
-#define CAM_MEM_MGR_IS_SECURE_HDL(hdl) \
-	(((hdl) & \
-	(1<<CAM_MEM_MGR_SECURE_BIT_POS)) >> CAM_MEM_MGR_SECURE_BIT_POS)
-
 /**
  * memory allocation type
  */

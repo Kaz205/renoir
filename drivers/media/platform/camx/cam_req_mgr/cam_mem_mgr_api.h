@@ -109,7 +109,7 @@ int cam_mem_put_cpu_buf(int32_t buf_handle);
 
 static inline bool cam_mem_is_secure_buf(int32_t buf_handle)
 {
-	return CAM_MEM_MGR_IS_SECURE_HDL(buf_handle);
+	return false;
 }
 
 /**

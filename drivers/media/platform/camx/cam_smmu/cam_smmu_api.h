@@ -154,54 +154,6 @@ int cam_smmu_unmap_kernel_iova(int handle,
 	struct dma_buf *buf, enum cam_smmu_region_id region_id);
 
 /**
- * @brief          : Allocates a scratch buffer
- *
- * This function allocates a scratch virtual buffer of length virt_len in the
- * device virtual address space mapped to phys_len physically contiguous bytes
- * in that device's SMMU.
- *
- * virt_len and phys_len are expected to be aligned to PAGE_SIZE and with each
- * other, otherwise -EINVAL is returned.
- *
- * -EINVAL will be returned if virt_len is less than phys_len.
- *
- * Passing a too large phys_len might also cause failure if that much size is
- * not available for allocation in a physically contiguous way.
- *
- * @param handle   : Handle to identify the CAMSMMU client (VFE, CPP, FD etc.)
- * @param dir      : Direction of mapping which will translate to IOMMU_READ
- *                   IOMMU_WRITE or a bit mask of both.
- * @param paddr_ptr: Device virtual address that the client device will be
- *                   able to read from/write to
- * @param virt_len : Virtual length of the scratch buffer
- * @param phys_len : Physical length of the scratch buffer
- *
- * @return Status of operation. Negative in case of error. Zero otherwise.
- */
-
-int cam_smmu_get_scratch_iova(int handle,
-	enum dma_data_direction dir,
-	dma_addr_t *paddr_ptr,
-	size_t virt_len,
-	size_t phys_len);
-
-/**
- * @brief          : Frees a scratch buffer
- *
- * This function frees a scratch buffer and releases the corresponding SMMU
- * mappings.
- *
- * @param handle   : Handle to identify the CAMSMMU client (IFE, ICP, etc.)
- * @param paddr    : Device virtual address of client's scratch buffer that
- *                   will be freed.
- *
- * @return Status of operation. Negative in case of error. Zero otherwise.
- */
-
-int cam_smmu_put_scratch_iova(int handle,
-	dma_addr_t paddr);
-
-/**
  *@brief        : Destroys an smmu handle
  *
  * @param handle: Handle to identify the CAM SMMU client (VFE, CPP, FD etc.)
@@ -250,19 +202,6 @@ int cam_smmu_get_iova(int handle, int buf_fd, dma_addr_t *paddr_ptr,
 		      size_t *len_ptr);
 
 /**
- * @brief Maps memory from an buffer fd into IOVA space
- *
- * @param handle: SMMU handle identifying the secure context bank to map to
- * @param buf_fd: buffer fd of memory to map to
- * @param paddr_ptr: Pointer IOVA address that will be returned
- * @param len_ptr: Length of memory mapped
- *
- * @return Status of operation. Negative in case of error. Zero otherwise.
- */
-int cam_smmu_get_stage2_iova(int handle, int buf_fd, dma_addr_t *paddr_ptr,
-			     size_t *len_ptr);
-
-/**
  * @brief Unmaps memory from context bank
  *
  * @param handle: SMMU handle identifying the context bank
@@ -270,32 +209,7 @@ int cam_smmu_get_stage2_iova(int handle, int buf_fd, dma_addr_t *paddr_ptr,
  *
  * @return Status of operation. Negative in case of error. Zero otherwise.
  */
-int cam_smmu_put_iova(int handle, int buf_fd);
-
-/**
- * @brief Maps secure memory for SMMU handle
- *
- * @param handle: SMMU handle identifying secure context bank
- * @param buf_fd: buffer fd to map securely
- * @param dir: DMA Direction for the mapping
- * @param dma_addr: Returned IOVA address after mapping
- * @param len_ptr: Length of memory mapped
- *
- * @return Status of operation. Negative in case of error. Zero otherwise.
- */
-int cam_smmu_map_stage2_iova(int handle,
-	int buf_fd, enum dma_data_direction dir, dma_addr_t *dma_addr,
-	size_t *len_ptr);
-
-/**
- * @brief Unmaps secure memopry for SMMU handle
- *
- * @param handle: SMMU handle identifying secure context bank
- * @param buf_fd: buffer fd to unmap
- *
- * @return Status of operation. Negative in case of error. Zero otherwise.
- */
-int cam_smmu_unmap_stage2_iova(int handle, int buf_fd);
+int cam_smmu_put_iova(int handle, int ion_fd);
 
 /**
  * @brief Allocates firmware for context bank
@@ -333,21 +247,6 @@ int cam_smmu_dealloc_firmware(int32_t smmu_hdl);
 int cam_smmu_get_region_info(int32_t smmu_hdl,
 	enum cam_smmu_region_id region_id,
 	struct cam_smmu_region_info *region_info);
-
-/**
- * @brief Reserves secondary heap
- *
- * @param smmu_hdl: SMMU handle identifying the context bank
- * @param iova: IOVA of secondary heap after reservation has completed
- * @param buf: Allocated dma_buf for secondary heap
- * @param request_len: Length of secondary heap after reservation has completed
- *
- * @return Status of operation. Negative in case of error. Zero otherwise.
- */
-int cam_smmu_reserve_sec_heap(int32_t smmu_hdl,
-	struct dma_buf *buf,
-	dma_addr_t *iova,
-	size_t *request_len);
 
 /**
  * @brief Releases secondary heap

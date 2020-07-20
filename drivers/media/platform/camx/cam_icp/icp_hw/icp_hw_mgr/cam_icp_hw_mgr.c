@@ -2212,56 +2212,14 @@ int32_t cam_icp_hw_mgr_cb(uint32_t irq_status, void *data)
 
 static void cam_icp_free_hfi_mem(void)
 {
-	int rc;
-
 	cam_smmu_dealloc_firmware(icp_hw_mgr.iommu_hdl);
-	rc = cam_mem_mgr_free_memory_region(&icp_hw_mgr.hfi_mem.sec_heap);
-	if (rc)
-		CAM_ERR(CAM_ICP, "failed to unreserve sec heap");
-
+	cam_mem_mgr_release_mem(&icp_hw_mgr.hfi_mem.sec_heap);
 	cam_smmu_dealloc_qdss(icp_hw_mgr.iommu_hdl);
 	cam_mem_mgr_release_mem(&icp_hw_mgr.hfi_mem.qtbl);
 	cam_mem_mgr_release_mem(&icp_hw_mgr.hfi_mem.cmd_q);
 	cam_mem_mgr_release_mem(&icp_hw_mgr.hfi_mem.msg_q);
 	cam_mem_mgr_release_mem(&icp_hw_mgr.hfi_mem.dbg_q);
 	cam_mem_mgr_release_mem(&icp_hw_mgr.hfi_mem.sfr_buf);
-}
-
-static int cam_icp_alloc_secheap_mem(struct cam_mem_mgr_memory_desc *secheap)
-{
-	int rc;
-	struct cam_mem_mgr_request_desc alloc;
-	struct cam_mem_mgr_memory_desc out;
-	struct cam_smmu_region_info secheap_info;
-
-	memset(&alloc, 0, sizeof(alloc));
-	memset(&out, 0, sizeof(out));
-
-	rc = cam_smmu_get_region_info(icp_hw_mgr.iommu_hdl,
-		CAM_SMMU_REGION_SECHEAP,
-		&secheap_info);
-	if (rc) {
-		CAM_ERR(CAM_ICP, "Unable to get secheap memory info");
-		return rc;
-	}
-
-	alloc.size = secheap_info.iova_len;
-	alloc.align = 0;
-	alloc.flags = 0;
-	alloc.smmu_hdl = icp_hw_mgr.iommu_hdl;
-	rc = cam_mem_mgr_reserve_memory_region(&alloc,
-		CAM_SMMU_REGION_SECHEAP,
-		&out);
-	if (rc) {
-		CAM_ERR(CAM_ICP, "Unable to reserve secheap memory");
-		return rc;
-	}
-
-	*secheap = out;
-	CAM_DBG(CAM_ICP, "kva: %llX, iova: %x, hdl: %x, len: %lld",
-		out.kva, out.iova, out.mem_handle, out.len);
-
-	return rc;
 }
 
 static int cam_icp_alloc_sfr_mem(struct cam_mem_mgr_memory_desc *sfr)
@@ -2429,7 +2387,7 @@ static int cam_icp_allocate_hfi_mem(void)
 		goto sfr_buf_alloc_failed;
 	}
 
-	rc = cam_icp_alloc_secheap_mem(&icp_hw_mgr.hfi_mem.sec_heap);
+	rc = cam_icp_alloc_shared_mem(&icp_hw_mgr.hfi_mem.sec_heap);
 	if (rc) {
 		CAM_ERR(CAM_ICP, "Unable to allocate sec heap memory");
 		goto sec_heap_alloc_failed;
@@ -2443,7 +2401,7 @@ static int cam_icp_allocate_hfi_mem(void)
 
 	return rc;
 get_io_mem_failed:
-	cam_mem_mgr_free_memory_region(&icp_hw_mgr.hfi_mem.sec_heap);
+	cam_mem_mgr_release_mem(&icp_hw_mgr.hfi_mem.sec_heap);
 sec_heap_alloc_failed:
 	cam_mem_mgr_release_mem(&icp_hw_mgr.hfi_mem.sfr_buf);
 sfr_buf_alloc_failed:
@@ -5632,12 +5590,6 @@ int cam_icp_hw_mgr_init(struct device_node *of_node, uint64_t *hw_mgr_hdl,
 		goto icp_attach_failed;
 	}
 
-	rc = cam_smmu_get_handle("cam-secure", &icp_hw_mgr.iommu_sec_hdl);
-	if (rc) {
-		CAM_ERR(CAM_ICP, "get secure mmu handle failed: %d", rc);
-		goto secure_hdl_failed;
-	}
-
 	rc = cam_icp_mgr_create_wq();
 	if (rc)
 		goto icp_wq_create_failed;
@@ -5649,9 +5601,6 @@ int cam_icp_hw_mgr_init(struct device_node *of_node, uint64_t *hw_mgr_hdl,
 	return rc;
 
 icp_wq_create_failed:
-	cam_smmu_destroy_handle(icp_hw_mgr.iommu_sec_hdl);
-	icp_hw_mgr.iommu_sec_hdl = -1;
-secure_hdl_failed:
 	cam_smmu_ops(icp_hw_mgr.iommu_hdl, CAM_SMMU_DETACH);
 icp_attach_failed:
 	cam_smmu_destroy_handle(icp_hw_mgr.iommu_hdl);
