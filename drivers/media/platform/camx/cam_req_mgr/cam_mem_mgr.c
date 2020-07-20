@@ -63,11 +63,9 @@ static int cam_mem_util_map_cpu_va(struct dma_buf *dmabuf,
 	}
 
 	/*
-	 * Code could be simplified if ION support of dma_buf_vmap is
-	 * available. This workaround takes the avandaage that ion_alloc
-	 * returns a virtually contiguous memory region, so we just need
-	 * to _kmap each individual page and then only use the virtual
-	 * address returned from the first call to _kmap.
+	 * The alloc returns a virtually contiguous memory region, so
+	 * we just map each individual page and then only use the
+	 * virtual address of the first page.
 	 */
 	for (i = 0; i < PAGE_ALIGN(dmabuf->size) / PAGE_SIZE; i++) {
 		addr = dma_buf_kmap(dmabuf, i);
@@ -660,7 +658,7 @@ int cam_mem_mgr_alloc_and_map(struct cam_mem_mgr_alloc_cmd *cmd)
 		&fd);
 	if (rc) {
 		CAM_ERR(CAM_MEM,
-			"Ion Alloc failed, len=%llu, align=%llu, flags=0x%x, num_hdl=%d",
+			"Alloc failed, len=%llu, align=%llu, flags=0x%x, num_hdl=%d",
 			cmd->len, cmd->align, cmd->flags, cmd->num_hdl);
 		return rc;
 	}
@@ -1037,7 +1035,7 @@ static int cam_mem_util_unmap(int32_t idx,
 		sizeof(int32_t) * CAM_MEM_MMU_MAX_HANDLE);
 
 	CAM_DBG(CAM_MEM,
-		"Ion buf at idx = %d freeing fd = %d, imported %d, dma_buf %pK",
+		"buf at idx = %d freeing fd = %d, imported %d, dma_buf %pK",
 		idx, tbl.bufq[idx].fd,
 		tbl.bufq[idx].is_imported,
 		tbl.bufq[idx].dma_buf);

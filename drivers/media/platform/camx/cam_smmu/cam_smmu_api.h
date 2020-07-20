@@ -24,7 +24,7 @@
 #include <linux/spinlock_types.h>
 #include <linux/mutex.h>
 
-/*Enum for possible CAM SMMU operations */
+/* Enum for possible CAM SMMU operations */
 enum cam_smmu_ops_param {
 	CAM_SMMU_ATTACH,
 	CAM_SMMU_DETACH,
@@ -97,18 +97,18 @@ int cam_smmu_ops(int handle, enum cam_smmu_ops_param op);
  * @brief       : Maps user space IOVA for calling driver
  *
  * @param handle: Handle to identify the CAM SMMU client (VFE, CPP, FD etc.)
- * @param ion_fd: ION handle identifying the memory buffer.
- * @dir         : Mapping direction: which will traslate toDMA_BIDIRECTIONAL,
- *                DMA_TO_DEVICE or DMA_FROM_DEVICE
- * @dma_addr    : Pointer to physical address where mapped address will be
- *                returned if region_id is CAM_SMMU_REGION_IO. If region_id is
- *                CAM_SMMU_REGION_SHARED, dma_addr is used as an input parameter
- *                which specifies the cpu virtual address to map.
- * @len_ptr     : Length of buffer mapped returned by CAM SMMU driver.
+ * @param buf_fd: buffer handle identifying the memory buffer.
+ * @dir		: Mapping direction: which will traslate toDMA_BIDIRECTIONAL,
+ *		  DMA_TO_DEVICE or DMA_FROM_DEVICE
+ * @dma_addr	: Pointer to physical address where mapped address will be
+ *		  returned if region_id is CAM_SMMU_REGION_IO. If region_id is
+ *		  CAM_SMMU_REGION_SHARED, dma_addr is used as an input parameter
+ *		  which specifies the cpu virtual address to map.
+ * @len_ptr	: Length of buffer mapped returned by CAM SMMU driver.
  * @return Status of operation. Negative in case of error. Zero otherwise.
  */
 int cam_smmu_map_user_iova(int handle,
-	int ion_fd, enum dma_data_direction dir,
+	int buf_fd, enum dma_data_direction dir,
 	dma_addr_t *dma_addr, size_t *len_ptr,
 	enum cam_smmu_region_id region_id);
 
@@ -135,12 +135,12 @@ int cam_smmu_map_kernel_iova(int handle,
  * @brief       : Unmaps user space IOVA for calling driver
  *
  * @param handle: Handle to identify the CAMSMMU client (VFE, CPP, FD etc.)
- * @param ion_fd: ION handle identifying the memory buffer.
+ * @param buf_fd: buffer handle identifying the memory buffer.
  *
  * @return Status of operation. Negative in case of error. Zero otherwise.
  */
 int cam_smmu_unmap_user_iova(int handle,
-	int ion_fd, enum cam_smmu_region_id region_id);
+	int buf_fd, enum cam_smmu_region_id region_id);
 
 /**
  * @brief       : Unmaps kernel IOVA for calling driver
@@ -237,46 +237,46 @@ void cam_smmu_set_client_page_fault_handler(int handle,
 void cam_smmu_unset_client_page_fault_handler(int handle, void *token);
 
 /**
- * @brief Maps memory from an ION fd into IOVA space
+ * @brief Maps memory from an buffer fd into IOVA space
  *
  * @param handle: SMMU handle identifying the context bank to map to
- * @param ion_fd: ION fd of memory to map to
+ * @param buf_fd: buffer fd of memory to map to
  * @param paddr_ptr: Pointer IOVA address that will be returned
  * @param len_ptr: Length of memory mapped
  *
  * @return Status of operation. Negative in case of error. Zero otherwise.
  */
-int cam_smmu_get_iova(int handle, int ion_fd,
-	dma_addr_t *paddr_ptr, size_t *len_ptr);
+int cam_smmu_get_iova(int handle, int buf_fd, dma_addr_t *paddr_ptr,
+		      size_t *len_ptr);
 
 /**
- * @brief Maps memory from an ION fd into IOVA space
+ * @brief Maps memory from an buffer fd into IOVA space
  *
  * @param handle: SMMU handle identifying the secure context bank to map to
- * @param ion_fd: ION fd of memory to map to
+ * @param buf_fd: buffer fd of memory to map to
  * @param paddr_ptr: Pointer IOVA address that will be returned
  * @param len_ptr: Length of memory mapped
  *
  * @return Status of operation. Negative in case of error. Zero otherwise.
  */
-int cam_smmu_get_stage2_iova(int handle, int ion_fd,
-	dma_addr_t *paddr_ptr, size_t *len_ptr);
+int cam_smmu_get_stage2_iova(int handle, int buf_fd, dma_addr_t *paddr_ptr,
+			     size_t *len_ptr);
 
 /**
  * @brief Unmaps memory from context bank
  *
  * @param handle: SMMU handle identifying the context bank
- * @param ion_fd: ION fd of memory to unmap
+ * @param buf_fd: buffer fd of memory to unmap
  *
  * @return Status of operation. Negative in case of error. Zero otherwise.
  */
-int cam_smmu_put_iova(int handle, int ion_fd);
+int cam_smmu_put_iova(int handle, int buf_fd);
 
 /**
  * @brief Maps secure memory for SMMU handle
  *
  * @param handle: SMMU handle identifying secure context bank
- * @param ion_fd: ION fd to map securely
+ * @param buf_fd: buffer fd to map securely
  * @param dir: DMA Direction for the mapping
  * @param dma_addr: Returned IOVA address after mapping
  * @param len_ptr: Length of memory mapped
@@ -284,18 +284,18 @@ int cam_smmu_put_iova(int handle, int ion_fd);
  * @return Status of operation. Negative in case of error. Zero otherwise.
  */
 int cam_smmu_map_stage2_iova(int handle,
-	int ion_fd, enum dma_data_direction dir, dma_addr_t *dma_addr,
+	int buf_fd, enum dma_data_direction dir, dma_addr_t *dma_addr,
 	size_t *len_ptr);
 
 /**
  * @brief Unmaps secure memopry for SMMU handle
  *
  * @param handle: SMMU handle identifying secure context bank
- * @param ion_fd: ION fd to unmap
+ * @param buf_fd: buffer fd to unmap
  *
  * @return Status of operation. Negative in case of error. Zero otherwise.
  */
-int cam_smmu_unmap_stage2_iova(int handle, int ion_fd);
+int cam_smmu_unmap_stage2_iova(int handle, int buf_fd);
 
 /**
  * @brief Allocates firmware for context bank

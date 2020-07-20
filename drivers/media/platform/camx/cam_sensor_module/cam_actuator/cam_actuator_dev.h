@@ -21,9 +21,6 @@
 #include <linux/of.h>
 #include <linux/module.h>
 #include <linux/irqreturn.h>
-#if defined(CONFIG_ARCH_SM6150)
-#include <linux/ion.h>
-#endif
 #include <linux/iommu.h>
 #include <linux/timer.h>
 #include <linux/kernel.h>
