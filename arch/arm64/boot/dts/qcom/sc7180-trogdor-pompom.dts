@@ -30,6 +30,10 @@
 	};
 };
 
+&gpio_keys {
+	status = "okay";
+};
+
 &panel {
 	/*
 	 * Actual panel is KD116N21-30NV but the timings for auo,b116xa01

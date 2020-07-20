@@ -164,6 +164,23 @@
 		pinctrl-0 = <&ap_edp_bklten>;
 	};
 
+	gpio_keys: gpio-keys {
+		compatible = "gpio-keys";
+		status = "disabled";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pen_pdct_l>;
+
+		pen-insert {
+			label = "Pen Insert";
+
+			/* Insert = low, eject = high */
+			gpios = <&tlmm 52 GPIO_ACTIVE_LOW>;
+			linux,code = <SW_PEN_INSERTED>;
+			linux,input-type = <EV_SW>;
+			wakeup-source;
+		};
+	};
+
 	max98357a: max98357a {
 		compatible = "maxim,max98357a";
 		pinctrl-names = "default";
