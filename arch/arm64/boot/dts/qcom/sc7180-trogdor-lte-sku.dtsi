@@ -5,6 +5,10 @@
  * Copyright 2020 Google LLC.
  */
 
+&ap_sar_sensor {
+	label = "proximity-wifi-lte";
+};
+
 &remoteproc_mpss {
 	firmware-name = "sc7180-mss/google-trogdor/mba.mbn",
 			"sc7180-mss/google-trogdor/modem.mdt";

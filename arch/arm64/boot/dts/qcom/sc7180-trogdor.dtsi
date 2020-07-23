@@ -113,6 +113,24 @@
 		vin-supply = <&ppvar_sys>;
 	};
 
+	pp3300_a: pp3300-a-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "pp3300_a";
+
+		/* EC turns on with en_pp3300_a; always on for AP */
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+
+		/*
+		 * Actually should be pp3300 but that's practically an alias for
+		 * pp3300_a so we use pp3300's vin-supply here to avoid one more
+		 * node.
+		 */
+		vin-supply = <&ppvar_sys>;
+	};
+
 	pp3300_audio:
 	pp3300_codec: pp3300-codec-regulator {
 		compatible = "regulator-fixed";
@@ -125,6 +143,8 @@
 		enable-active-high;
 		pinctrl-names = "default";
 		pinctrl-0 = <&en_pp3300_codec>;
+
+		vin-supply = <&pp3300_a>;
 	};
 
 	pp3300_dx_edp:
@@ -139,6 +159,8 @@
 		enable-active-high;
 		pinctrl-names = "default";
 		pinctrl-0 = <&en_pp3300_dx_edp>;
+
+		vin-supply = <&pp3300_a>;
 	};
 
 	pp3300_fp_tp: pp3300-fp-tp-regulator {
@@ -151,6 +173,8 @@
 		/* AP turns on with PP1800_VIO_OUT; always on for AP */
 		regulator-always-on;
 		regulator-boot-on;
+
+		vin-supply = <&pp3300_a>;
 	};
 
 	/* BOARD-SPECIFIC TOP LEVEL NODES */
@@ -684,6 +708,23 @@ edp_brij_i2c: &i2c2 {
 ap_sar_sensor_i2c: &i2c5 {
 	status = "okay";
 	clock-frequency = <400000>;
+
+	ap_sar_sensor: proximity@28 {
+		compatible = "semtech,sx9310";
+		reg = <0x28>;
+		#io-channel-cells = <1>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&p_sensor_int_l>;
+
+		interrupt-parent = <&tlmm>;
+		interrupts = <24 IRQ_TYPE_LEVEL_LOW>;
+
+		vdd-supply = <&pp3300_a>;
+		svdd-supply = <&pp1800_prox>;
+
+		status = "disabled";
+		label = "proximity-wifi";
+	};
 };
 
 ap_tp_i2c: &i2c7 {
@@ -1342,6 +1383,19 @@ ap_spi_fp: &spi10 {
 			 * remove "output-high" here.
 			 */
 			output-high; /* TODO: Remove this? */
+		};
+	};
+
+	p_sensor_int_l: p-sensor-int-l {
+		pinmux {
+			pins = "gpio24";
+			function = "gpio";
+			input-enable;
+		};
+
+		pinconf {
+			pins = "gpio24";
+			bias-pull-up;
 		};
 	};
 
