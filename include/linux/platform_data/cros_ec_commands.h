@@ -5516,7 +5516,7 @@ struct ec_response_locate_chip {
  *
  * Returns the regulator name and supported voltage list in mV.
  */
-#define EC_CMD_REGULATOR_GET_INFO 0x012B
+#define EC_CMD_REGULATOR_GET_INFO 0x012C
 
 /* Maximum length of regulator name */
 #define EC_REGULATOR_NAME_MAX_LEN 16
@@ -5532,12 +5532,12 @@ struct ec_response_regulator_get_info {
 	char name[EC_REGULATOR_NAME_MAX_LEN];
 	uint16_t num_voltages;
 	uint16_t voltages_mv[EC_REGULATOR_VOLTAGE_MAX_COUNT];
-} __ec_align1;
+} __ec_align2;
 
 /*
  * Configure the regulator as enabled / disabled.
  */
-#define EC_CMD_REGULATOR_ENABLE 0x012C
+#define EC_CMD_REGULATOR_ENABLE 0x012D
 
 struct ec_params_regulator_enable {
 	uint32_t index;
@@ -5549,7 +5549,7 @@ struct ec_params_regulator_enable {
  *
  * Returns 1 if the regulator is enabled, 0 if not.
  */
-#define EC_CMD_REGULATOR_IS_ENABLED 0x012D
+#define EC_CMD_REGULATOR_IS_ENABLED 0x012E
 
 struct ec_params_regulator_is_enabled {
 	uint32_t index;
@@ -5567,7 +5567,7 @@ struct ec_response_regulator_is_enabled {
  * Also note that this might be called before the regulator is enabled, and the
  * setting should be in effect after the regulator is enabled.
  */
-#define EC_CMD_REGULATOR_SET_VOLTAGE 0x012E
+#define EC_CMD_REGULATOR_SET_VOLTAGE 0x012F
 
 struct ec_params_regulator_set_voltage {
 	uint32_t index;
@@ -5578,9 +5578,10 @@ struct ec_params_regulator_set_voltage {
 /*
  * Get the currently configured voltage for the voltage regulator.
  *
- * Note that this might be called before the regulator is enabled.
+ * Note that this might be called before the regulator is enabled, and this
+ * should return the configured output voltage if the regulator is enabled.
  */
-#define EC_CMD_REGULATOR_GET_VOLTAGE 0x012F
+#define EC_CMD_REGULATOR_GET_VOLTAGE 0x0130
 
 struct ec_params_regulator_get_voltage {
 	uint32_t index;
