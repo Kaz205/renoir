@@ -826,17 +826,16 @@ static int hpd_event_thread(void *data)
 	unsigned long flag;
 	struct dp_event *todo;
 	int timeout_mode = 0;
-	int ret;
 
 	dp_priv = (struct dp_display_private *)data;
 
 	while (1) {
 		if (timeout_mode) {
-			ret = wait_event_timeout(dp_priv->event_q,
+			wait_event_timeout(dp_priv->event_q,
 				(dp_priv->event_pndx == dp_priv->event_gndx),
 						EVENT_TIMEOUT);
 		} else {
-			ret = wait_event_timeout(dp_priv->event_q,
+			wait_event_timeout(dp_priv->event_q,
 				(dp_priv->event_pndx != dp_priv->event_gndx),
 						EVENT_TIMEOUT);
 		}

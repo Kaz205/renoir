@@ -52,35 +52,6 @@
 #define DP_INTERRUPT_STATUS2_MASK \
 	(DP_INTERRUPT_STATUS2 << DP_INTERRUPT_STATUS_MASK_SHIFT)
 
-static u8 const vm_pre_emphasis[4][4] = {
-	{0x00, 0x0B, 0x12, 0xFF},       /* pe0, 0 db */
-	{0x00, 0x0A, 0x12, 0xFF},       /* pe1, 3.5 db */
-	{0x00, 0x0C, 0xFF, 0xFF},       /* pe2, 6.0 db */
-	{0xFF, 0xFF, 0xFF, 0xFF}        /* pe3, 9.5 db */
-};
-
-/* voltage swing, 0.2v and 1.0v are not support */
-static u8 const vm_voltage_swing[4][4] = {
-	{0x07, 0x0F, 0x14, 0xFF}, /* sw0, 0.4v  */
-	{0x11, 0x1D, 0x1F, 0xFF}, /* sw1, 0.6 v */
-	{0x18, 0x1F, 0xFF, 0xFF}, /* sw1, 0.8 v */
-	{0xFF, 0xFF, 0xFF, 0xFF}  /* sw1, 1.2 v, optional */
-};
-
-static u8 const vm_pre_emphasis_hbr3_hbr2[4][4] = {
-	{0x00, 0x0C, 0x15, 0x1A},
-	{0x02, 0x0E, 0x16, 0xFF},
-	{0x02, 0x11, 0xFF, 0xFF},
-	{0x04, 0xFF, 0xFF, 0xFF}
-};
-
-static u8 const vm_voltage_swing_hbr3_hbr2[4][4] = {
-	{0x02, 0x12, 0x16, 0x1A},
-	{0x09, 0x19, 0x1F, 0xFF},
-	{0x10, 0x1F, 0xFF, 0xFF},
-	{0x1F, 0xFF, 0xFF, 0xFF}
-};
-
 static u8 const vm_pre_emphasis_hbr_rbr[4][4] = {
 	{0x00, 0x0C, 0x14, 0x19},
 	{0x00, 0x0B, 0x12, 0xFF},
@@ -374,7 +345,7 @@ void dp_catalog_aux_update_cfg(struct dp_catalog *dp_catalog,
 	catalog->aux_lut_cfg_index[type] = new_index;
 }
 
-void dump_regs(void * __iomem *base, int len)
+static void dump_regs(void * __iomem *base, int len)
 {
 	int i;
 	u32 x0, x4, x8, xc;
@@ -386,7 +357,7 @@ void dump_regs(void * __iomem *base, int len)
 		x8 = readl_relaxed(base + 0x08);
 		xc = readl_relaxed(base + 0x0c);
 
-		pr_info("%08p: %08x %08x %08x %08x", base, x0, x4, x8, xc);
+		pr_info("%p: %08x %08x %08x %08x", base, x0, x4, x8, xc);
 		base += 16;
 	}
 }

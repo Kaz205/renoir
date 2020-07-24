@@ -31,7 +31,7 @@ struct dp_aux_private {
 	struct drm_dp_aux dp_aux;
 };
 
-static const char * const dp_aux_get_error(u32 aux_error)
+static const char * dp_aux_get_error(u32 aux_error)
 {
 	switch (aux_error) {
 	case DP_AUX_ERR_NONE:

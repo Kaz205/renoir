@@ -259,8 +259,8 @@ struct tu_algo_data {
 
 static int _tu_param_compare(s64 a, s64 b)
 {
-	u32 a_int, a_frac, a_sign;
-	u32 b_int, b_frac, b_sign;
+	u32 a_sign;
+	u32 b_sign;
 	s64 a_temp, b_temp, minus_1;
 
 	if (a == b)
@@ -268,12 +268,8 @@ static int _tu_param_compare(s64 a, s64 b)
 
 	minus_1 = drm_fixp_from_fraction(-1, 1);
 
-	a_int = (a >> 32) & 0x7FFFFFFF;
-	a_frac = a & 0xFFFFFFFF;
 	a_sign = (a >> 32) & 0x80000000 ? 1 : 0;
 
-	b_int = (b >> 32) & 0x7FFFFFFF;
-	b_frac = b & 0xFFFFFFFF;
 	b_sign = (b >> 32) & 0x80000000 ? 1 : 0;
 
 	if (a_sign > b_sign)
@@ -307,7 +303,6 @@ static void dp_panel_update_tu_timings(struct dp_tu_calc_input *in,
 	s64 pclk_dsc_fp;
 	s64 dwidth_dsc_fp;
 	s64 hbp_dsc_fp;
-	s64 overhead_dsc;
 
 	int tot_num_eoc_symbols = 0;
 	int tot_num_hor_bytes   = 0;
@@ -381,7 +376,6 @@ static void dp_panel_update_tu_timings(struct dp_tu_calc_input *in,
 	dwidth_dsc_bytes = (tot_num_hor_bytes +
 				tot_num_eoc_symbols +
 				(eoc_bytes == 0 ? 0 : tot_num_dummy_bytes));
-	overhead_dsc     = dwidth_dsc_bytes / tot_num_hor_bytes;
 
 	dwidth_dsc_fp = drm_fixp_from_fraction(dwidth_dsc_bytes, 3);
 
@@ -1386,7 +1380,7 @@ int dp_ctrl_host_init(struct dp_ctrl *dp_ctrl, bool flip)
 
 /**
  * dp_ctrl_host_deinit() - Uninitialize DP controller
- * @ctrl: Display Port Driver data
+ * @dp_ctrl: Display Port Driver data
  *
  * Perform required steps to uninitialize DP controller
  * and its resources.
@@ -1846,11 +1840,4 @@ struct dp_ctrl *dp_ctrl_get(struct device *dev, struct dp_link *link,
 
 void dp_ctrl_put(struct dp_ctrl *dp_ctrl)
 {
-	struct dp_ctrl_private *ctrl;
-
-	if (!dp_ctrl)
-		return;
-
-	ctrl = container_of(dp_ctrl, struct dp_ctrl_private, dp_ctrl);
-
 }

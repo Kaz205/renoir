@@ -184,11 +184,9 @@ int dp_power_clk_enable(struct dp_power *dp_power,
 		enum dp_pm_type pm_type, bool enable)
 {
 	int rc = 0;
-	struct dss_module_power *mp;
 	struct dp_power_private *power;
 
 	power = container_of(dp_power, struct dp_power_private, dp_power);
-	mp = &power->parser->mp[pm_type];
 
 	if (pm_type != DP_CORE_PM && pm_type != DP_CTRL_PM &&
 			pm_type != DP_STREAM_PM) {

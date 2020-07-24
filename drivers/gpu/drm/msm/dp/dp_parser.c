@@ -102,7 +102,7 @@ static inline bool dp_parser_check_prefix(const char *clk_prefix,
 
 static int dp_parser_init_clk_data(struct dp_parser *parser)
 {
-	int num_clk = 0, i = 0, rc = 0;
+	int num_clk, i, rc;
 	int core_clk_count = 0, ctrl_clk_count = 0, stream_clk_count = 0;
 	const char *clk_name;
 	struct device *dev = &parser->pdev->dev;
@@ -119,6 +119,8 @@ static int dp_parser_init_clk_data(struct dp_parser *parser)
 	for (i = 0; i < num_clk; i++) {
 		rc = of_property_read_string_index(dev->of_node,
 				"clock-names", i, &clk_name);
+		if (rc < 0)
+			return rc;
 
 		if (dp_parser_check_prefix("core", clk_name))
 			core_clk_count++;

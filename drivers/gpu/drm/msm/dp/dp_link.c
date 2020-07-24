@@ -283,7 +283,7 @@ static bool dp_link_is_video_pattern_valid(u32 pattern)
 
 /**
  * dp_link_is_bit_depth_valid() - validates the bit depth requested
- * @bit_depth: bit depth requested by the sink
+ * @tbd: bit depth requested by the sink
  *
  * Returns true if the requested bit depth is supported.
  */
@@ -704,6 +704,7 @@ end:
 
 /**
  * dp_link_parse_sink_count() - parses the sink count
+ * @dp_link: pointer to link module data
  *
  * Parses the DPCD to check if there is an update to the sink count
  * (Byte 0x200), and whether all the sink devices connected have Content
@@ -1006,7 +1007,7 @@ static void dp_link_reset_data(struct dp_link_private *link)
 
 /**
  * dp_link_process_request() - handle HPD IRQ transition to HIGH
- * @link: pointer to link module data
+ * @dp_link: pointer to link module data
  *
  * This function will handle the HPD IRQ state transitions from LOW to HIGH
  * (including cases when there are back to back HPD IRQ HIGH) indicating
@@ -1098,14 +1099,11 @@ int dp_link_adjust_levels(struct dp_link *dp_link, u8 *link_status)
 {
 	int i;
 	int v_max = 0, p_max = 0;
-	struct dp_link_private *link;
 
 	if (!dp_link) {
 		DRM_ERROR("invalid input\n");
 		return -EINVAL;
 	}
-
-	link = container_of(dp_link, struct dp_link_private, dp_link);
 
 	/* use the max level across lanes */
 	for (i = 0; i < dp_link->link_params.num_lanes; i++) {

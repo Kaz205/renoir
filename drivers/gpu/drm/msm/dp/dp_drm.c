@@ -19,7 +19,7 @@ struct dp_connector {
 
 /**
  * dp_connector_detect - callback to determine if connector is connected
- * @connector: Pointer to drm connector structure
+ * @conn: Pointer to drm connector structure
  * @force: Force detect setting from drm framework
  * Returns: Connector 'is connected' status
  */
