@@ -1086,7 +1086,7 @@ static struct opp_table *_allocate_opp_table(struct device *dev, int index)
 	 */
 	opp_table = kzalloc(sizeof(*opp_table), GFP_KERNEL);
 	if (!opp_table)
-		return NULL;
+		return ERR_PTR(-ENOMEM);
 
 	mutex_init(&opp_table->lock);
 	mutex_init(&opp_table->genpd_virt_dev_lock);
@@ -1097,8 +1097,8 @@ static struct opp_table *_allocate_opp_table(struct device *dev, int index)
 
 	opp_dev = _add_opp_dev(dev, opp_table);
 	if (!opp_dev) {
-		kfree(opp_table);
-		return NULL;
+		ret = -ENOMEM;
+		goto err;
 	}
 
 	_of_init_opp_table(opp_table, dev, index);
@@ -1107,22 +1107,31 @@ static struct opp_table *_allocate_opp_table(struct device *dev, int index)
 	opp_table->clk = clk_get(dev, NULL);
 	if (IS_ERR(opp_table->clk)) {
 		ret = PTR_ERR(opp_table->clk);
-		if (ret != -EPROBE_DEFER)
-			dev_dbg(dev, "%s: Couldn't find clock: %d\n", __func__,
-				ret);
+		if (ret == -EPROBE_DEFER)
+			goto err;
+
+		dev_dbg(dev, "%s: Couldn't find clock: %d\n", __func__, ret);
 	}
 
 	/* Find interconnect path(s) for the device */
 	ret = dev_pm_opp_of_find_icc_paths(dev, opp_table);
-	if (ret)
+	if (ret) {
+		if (ret == -EPROBE_DEFER)
+			goto err;
+
 		dev_warn(dev, "%s: Error finding interconnect paths: %d\n",
 			 __func__, ret);
+	}
 
 	BLOCKING_INIT_NOTIFIER_HEAD(&opp_table->head);
 	INIT_LIST_HEAD(&opp_table->opp_list);
 	kref_init(&opp_table->kref);
 
 	return opp_table;
+
+err:
+	kfree(opp_table);
+	return ERR_PTR(ret);
 }
 
 void _get_opp_table_kref(struct opp_table *opp_table)
@@ -1175,7 +1184,7 @@ again:
 	if (opp_table) {
 		if (!_add_opp_dev(dev, opp_table)) {
 			dev_pm_opp_put_opp_table(opp_table);
-			opp_table = NULL;
+			opp_table = ERR_PTR(-ENOMEM);
 		}
 
 		mutex_lock(&opp_table_lock);
@@ -1637,8 +1646,8 @@ struct opp_table *dev_pm_opp_set_supported_hw(struct device *dev,
 	struct opp_table *opp_table;
 
 	opp_table = dev_pm_opp_get_opp_table(dev);
-	if (!opp_table)
-		return ERR_PTR(-ENOMEM);
+	if (IS_ERR(opp_table))
+		return opp_table;
 
 	/* Make sure there are no concurrent readers while updating opp_table */
 	WARN_ON(!list_empty(&opp_table->opp_list));
@@ -1696,8 +1705,8 @@ struct opp_table *dev_pm_opp_set_prop_name(struct device *dev, const char *name)
 	struct opp_table *opp_table;
 
 	opp_table = dev_pm_opp_get_opp_table(dev);
-	if (!opp_table)
-		return ERR_PTR(-ENOMEM);
+	if (IS_ERR(opp_table))
+		return opp_table;
 
 	/* Make sure there are no concurrent readers while updating opp_table */
 	WARN_ON(!list_empty(&opp_table->opp_list));
@@ -1789,8 +1798,8 @@ struct opp_table *dev_pm_opp_set_regulators(struct device *dev,
 	int ret, i;
 
 	opp_table = dev_pm_opp_get_opp_table(dev);
-	if (!opp_table)
-		return ERR_PTR(-ENOMEM);
+	if (IS_ERR(opp_table))
+		return opp_table;
 
 	/* This should be called before OPPs are initialized */
 	if (WARN_ON(!list_empty(&opp_table->opp_list))) {
@@ -1897,8 +1906,8 @@ struct opp_table *dev_pm_opp_set_clkname(struct device *dev, const char *name)
 	int ret;
 
 	opp_table = dev_pm_opp_get_opp_table(dev);
-	if (!opp_table)
-		return ERR_PTR(-ENOMEM);
+	if (IS_ERR(opp_table))
+		return opp_table;
 
 	/* This should be called before OPPs are initialized */
 	if (WARN_ON(!list_empty(&opp_table->opp_list))) {
@@ -1965,8 +1974,8 @@ struct opp_table *dev_pm_opp_register_set_opp_helper(struct device *dev,
 		return ERR_PTR(-EINVAL);
 
 	opp_table = dev_pm_opp_get_opp_table(dev);
-	if (!opp_table)
-		return ERR_PTR(-ENOMEM);
+	if (!IS_ERR(opp_table))
+		return opp_table;
 
 	/* This should be called before OPPs are initialized */
 	if (WARN_ON(!list_empty(&opp_table->opp_list))) {
@@ -2049,8 +2058,8 @@ struct opp_table *dev_pm_opp_attach_genpd(struct device *dev,
 	const char **name = names;
 
 	opp_table = dev_pm_opp_get_opp_table(dev);
-	if (!opp_table)
-		return ERR_PTR(-ENOMEM);
+	if (IS_ERR(opp_table))
+		return opp_table;
 
 	if (opp_table->genpd_virt_devs)
 		return opp_table;
@@ -2223,8 +2232,8 @@ int dev_pm_opp_add(struct device *dev, unsigned long freq, unsigned long u_volt)
 	int ret;
 
 	opp_table = dev_pm_opp_get_opp_table(dev);
-	if (!opp_table)
-		return -ENOMEM;
+	if (IS_ERR(opp_table))
+		return PTR_ERR(opp_table);
 
 	/* Fix regulator count for dynamic OPPs */
 	opp_table->regulator_count = 1;
