@@ -71,6 +71,7 @@ static void mock_device_release(struct drm_device *dev)
 
 	drm_mode_config_cleanup(&i915->drm);
 
+	i915_params_free(&i915->params);
 	drm_dev_fini(&i915->drm);
 	put_device(&i915->drm.pdev->dev);
 }
@@ -144,6 +145,8 @@ struct drm_i915_private *mock_gem_device(void)
 		goto put_device;
 	}
 	i915->drm.pdev = pdev;
+
+	i915_params_copy(&i915->params, &i915_modparams);
 
 	intel_runtime_pm_init_early(&i915->runtime_pm);
 
