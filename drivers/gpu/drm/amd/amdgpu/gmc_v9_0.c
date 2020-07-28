@@ -723,12 +723,49 @@ static void gmc_v9_0_get_vm_pde(struct amdgpu_device *adev, int level,
 	}
 }
 
+static unsigned gmc_v9_0_get_vbios_fb_size(struct amdgpu_device *adev)
+{
+	u32 d1vga_control = RREG32_SOC15(DCE, 0, mmD1VGA_CONTROL);
+	unsigned size;
+
+	if (REG_GET_FIELD(d1vga_control, D1VGA_CONTROL, D1VGA_MODE_ENABLE)) {
+		size = AMDGPU_VBIOS_VGA_ALLOCATION;
+	} else {
+		u32 viewport;
+
+		switch (adev->asic_type) {
+		case CHIP_RAVEN:
+		case CHIP_RENOIR:
+			viewport = RREG32_SOC15(DCE, 0, mmHUBP0_DCSURF_PRI_VIEWPORT_DIMENSION);
+			size = (REG_GET_FIELD(viewport,
+					      HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION, PRI_VIEWPORT_HEIGHT) *
+				REG_GET_FIELD(viewport,
+					      HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION, PRI_VIEWPORT_WIDTH) *
+				4);
+			break;
+		case CHIP_VEGA10:
+		case CHIP_VEGA12:
+		case CHIP_VEGA20:
+		default:
+			viewport = RREG32_SOC15(DCE, 0, mmSCL0_VIEWPORT_SIZE);
+			size = (REG_GET_FIELD(viewport, SCL0_VIEWPORT_SIZE, VIEWPORT_HEIGHT) *
+				REG_GET_FIELD(viewport, SCL0_VIEWPORT_SIZE, VIEWPORT_WIDTH) *
+				4);
+			break;
+		}
+	}
+
+	return size;
+}
+
+
 static const struct amdgpu_gmc_funcs gmc_v9_0_gmc_funcs = {
 	.flush_gpu_tlb = gmc_v9_0_flush_gpu_tlb,
 	.emit_flush_gpu_tlb = gmc_v9_0_emit_flush_gpu_tlb,
 	.emit_pasid_mapping = gmc_v9_0_emit_pasid_mapping,
 	.get_vm_pte_flags = gmc_v9_0_get_vm_pte_flags,
-	.get_vm_pde = gmc_v9_0_get_vm_pde
+	.get_vm_pde = gmc_v9_0_get_vm_pde,
+	.get_vbios_fb_size = gmc_v9_0_get_vbios_fb_size,
 };
 
 static void gmc_v9_0_set_gmc_funcs(struct amdgpu_device *adev)
@@ -780,31 +817,6 @@ static int gmc_v9_0_early_init(void *handle)
 		adev->gmc.private_aperture_start + (4ULL << 30) - 1;
 
 	return 0;
-}
-
-static bool gmc_v9_0_keep_stolen_memory(struct amdgpu_device *adev)
-{
-
-	/*
-	 * TODO:
-	 * Currently there is a bug where some memory client outside
-	 * of the driver writes to first 8M of VRAM on S3 resume,
-	 * this overrides GART which by default gets placed in first 8M and
-	 * causes VM_FAULTS once GTT is accessed.
-	 * Keep the stolen memory reservation until the while this is not solved.
-	 * Also check code in gmc_v9_0_get_vbios_fb_size and gmc_v9_0_late_init
-	 */
-	switch (adev->asic_type) {
-	case CHIP_VEGA10:
-	case CHIP_RAVEN:
-	case CHIP_ARCTURUS:
-	case CHIP_RENOIR:
-		return true;
-	case CHIP_VEGA12:
-	case CHIP_VEGA20:
-	default:
-		return false;
-	}
 }
 
 static int gmc_v9_0_allocate_vm_inv_eng(struct amdgpu_device *adev)
@@ -1134,52 +1146,6 @@ static int gmc_v9_0_gart_init(struct amdgpu_device *adev)
 	return amdgpu_gart_table_vram_alloc(adev);
 }
 
-static unsigned gmc_v9_0_get_vbios_fb_size(struct amdgpu_device *adev)
-{
-	u32 d1vga_control;
-	unsigned size;
-
-	/*
-	 * TODO Remove once GART corruption is resolved
-	 * Check related code in gmc_v9_0_sw_fini
-	 * */
-	if (adev->gmc.keep_stolen_vga_memory)
-		return AMDGPU_VBIOS_VGA_ALLOCATION;
-
-	d1vga_control = RREG32_SOC15(DCE, 0, mmD1VGA_CONTROL);
-	if (REG_GET_FIELD(d1vga_control, D1VGA_CONTROL, D1VGA_MODE_ENABLE)) {
-		size = AMDGPU_VBIOS_VGA_ALLOCATION;
-	} else {
-		u32 viewport;
-
-		switch (adev->asic_type) {
-		case CHIP_RAVEN:
-		case CHIP_RENOIR:
-			viewport = RREG32_SOC15(DCE, 0, mmHUBP0_DCSURF_PRI_VIEWPORT_DIMENSION);
-			size = (REG_GET_FIELD(viewport,
-					      HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION, PRI_VIEWPORT_HEIGHT) *
-				REG_GET_FIELD(viewport,
-					      HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION, PRI_VIEWPORT_WIDTH) *
-				4);
-			break;
-		case CHIP_VEGA10:
-		case CHIP_VEGA12:
-		case CHIP_VEGA20:
-		default:
-			viewport = RREG32_SOC15(DCE, 0, mmSCL0_VIEWPORT_SIZE);
-			size = (REG_GET_FIELD(viewport, SCL0_VIEWPORT_SIZE, VIEWPORT_HEIGHT) *
-				REG_GET_FIELD(viewport, SCL0_VIEWPORT_SIZE, VIEWPORT_WIDTH) *
-				4);
-			break;
-		}
-	}
-	/* return 0 if the pre-OS buffer uses up most of vram */
-	if ((adev->gmc.real_vram_size - size) < (8 * 1024 * 1024))
-		return 0;
-
-	return size;
-}
-
 /**
  * gmc_v9_0_save_registers - saves regs
  *
@@ -1297,8 +1263,7 @@ static int gmc_v9_0_sw_init(void *handle)
 	if (r)
 		return r;
 
-	adev->gmc.keep_stolen_vga_memory = gmc_v9_0_keep_stolen_memory(adev);
-	adev->gmc.stolen_vga_size = gmc_v9_0_get_vbios_fb_size(adev);
+	amdgpu_gmc_get_vbios_allocations(adev);
 
 	/* Memory manager */
 	r = amdgpu_bo_init(adev);
