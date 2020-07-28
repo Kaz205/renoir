@@ -972,8 +972,7 @@ static int gmc_v9_0_late_init(void *handle)
 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
 	bool r;
 
-	if (!gmc_v9_0_keep_stolen_memory(adev))
-		amdgpu_bo_late_init(adev);
+	amdgpu_bo_late_init(adev);
 
 	r = gmc_v9_0_allocate_vm_inv_eng(adev);
 	if (r)
@@ -1144,7 +1143,7 @@ static unsigned gmc_v9_0_get_vbios_fb_size(struct amdgpu_device *adev)
 	 * TODO Remove once GART corruption is resolved
 	 * Check related code in gmc_v9_0_sw_fini
 	 * */
-	if (gmc_v9_0_keep_stolen_memory(adev))
+	if (adev->gmc.keep_stolen_vga_memory)
 		return AMDGPU_VBIOS_VGA_ALLOCATION;
 
 	d1vga_control = RREG32_SOC15(DCE, 0, mmD1VGA_CONTROL);
@@ -1298,6 +1297,7 @@ static int gmc_v9_0_sw_init(void *handle)
 	if (r)
 		return r;
 
+	adev->gmc.keep_stolen_vga_memory = gmc_v9_0_keep_stolen_memory(adev);
 	adev->gmc.stolen_vga_size = gmc_v9_0_get_vbios_fb_size(adev);
 
 	/* Memory manager */
@@ -1329,7 +1329,6 @@ static int gmc_v9_0_sw_init(void *handle)
 static int gmc_v9_0_sw_fini(void *handle)
 {
 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
-	void *stolen_vga_buf;
 
 	if (amdgpu_ras_is_supported(adev, AMDGPU_RAS_BLOCK__UMC) &&
 			adev->gmc.umc_ras_if) {
@@ -1360,10 +1359,6 @@ static int gmc_v9_0_sw_fini(void *handle)
 
 	amdgpu_gem_force_release(adev);
 	amdgpu_vm_manager_fini(adev);
-
-	if (gmc_v9_0_keep_stolen_memory(adev))
-		amdgpu_bo_free_kernel(&adev->gmc.stolen_vga_memory, NULL, &stolen_vga_buf);
-
 	amdgpu_gart_table_vram_free(adev);
 	amdgpu_bo_fini(adev);
 	amdgpu_gart_fini(adev);
