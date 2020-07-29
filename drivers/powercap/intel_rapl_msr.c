@@ -31,7 +31,9 @@
 #define MSR_VR_CURRENT_CONFIG		0x00000601
 
 /* private data for RAPL MSR Interface */
-static struct rapl_if_priv rapl_msr_priv = {
+static struct rapl_if_priv *rapl_msr_priv;
+
+static struct rapl_if_priv rapl_msr_priv_intel = {
 	.reg_unit = MSR_RAPL_POWER_UNIT,
 	.regs[RAPL_DOMAIN_PACKAGE] = {
 		MSR_PKG_POWER_LIMIT, MSR_PKG_ENERGY_STATUS, MSR_PKG_PERF_STATUS, 0, MSR_PKG_POWER_INFO },
@@ -57,9 +59,9 @@ static int rapl_cpu_online(unsigned int cpu)
 {
 	struct rapl_package *rp;
 
-	rp = rapl_find_package_domain(cpu, &rapl_msr_priv);
+	rp = rapl_find_package_domain(cpu, rapl_msr_priv);
 	if (!rp) {
-		rp = rapl_add_package(cpu, &rapl_msr_priv);
+		rp = rapl_add_package(cpu, rapl_msr_priv);
 		if (IS_ERR(rp))
 			return PTR_ERR(rp);
 	}
@@ -72,7 +74,7 @@ static int rapl_cpu_down_prep(unsigned int cpu)
 	struct rapl_package *rp;
 	int lead_cpu;
 
-	rp = rapl_find_package_domain(cpu, &rapl_msr_priv);
+	rp = rapl_find_package_domain(cpu, rapl_msr_priv);
 	if (!rp)
 		return 0;
 
@@ -135,44 +137,45 @@ static int rapl_msr_probe(struct platform_device *pdev)
 	const struct x86_cpu_id *id = x86_match_cpu(pl4_support_ids);
 	int ret;
 
-	rapl_msr_priv.read_raw = rapl_msr_read_raw;
-	rapl_msr_priv.write_raw = rapl_msr_write_raw;
+	rapl_msr_priv = &rapl_msr_priv_intel;
+	rapl_msr_priv->read_raw = rapl_msr_read_raw;
+	rapl_msr_priv->write_raw = rapl_msr_write_raw;
 
 	if (id) {
-		rapl_msr_priv.limits[RAPL_DOMAIN_PACKAGE] = 3;
-		rapl_msr_priv.regs[RAPL_DOMAIN_PACKAGE][RAPL_DOMAIN_REG_PL4] =
+		rapl_msr_priv->limits[RAPL_DOMAIN_PACKAGE] = 3;
+		rapl_msr_priv->regs[RAPL_DOMAIN_PACKAGE][RAPL_DOMAIN_REG_PL4] =
 			MSR_VR_CURRENT_CONFIG;
 		pr_info("PL4 support detected.\n");
 	}
 
-	rapl_msr_priv.control_type = powercap_register_control_type(NULL, "intel-rapl", NULL);
-	if (IS_ERR(rapl_msr_priv.control_type)) {
+	rapl_msr_priv->control_type = powercap_register_control_type(NULL, "intel-rapl", NULL);
+	if (IS_ERR(rapl_msr_priv->control_type)) {
 		pr_debug("failed to register powercap control_type.\n");
-		return PTR_ERR(rapl_msr_priv.control_type);
+		return PTR_ERR(rapl_msr_priv->control_type);
 	}
 
 	ret = cpuhp_setup_state(CPUHP_AP_ONLINE_DYN, "powercap/rapl:online",
 				rapl_cpu_online, rapl_cpu_down_prep);
 	if (ret < 0)
 		goto out;
-	rapl_msr_priv.pcap_rapl_online = ret;
+	rapl_msr_priv->pcap_rapl_online = ret;
 
 	/* Don't bail out if PSys is not supported */
-	rapl_add_platform_domain(&rapl_msr_priv);
+	rapl_add_platform_domain(rapl_msr_priv);
 
 	return 0;
 
 out:
 	if (ret)
-		powercap_unregister_control_type(rapl_msr_priv.control_type);
+		powercap_unregister_control_type(rapl_msr_priv->control_type);
 	return ret;
 }
 
 static int rapl_msr_remove(struct platform_device *pdev)
 {
-	cpuhp_remove_state(rapl_msr_priv.pcap_rapl_online);
-	rapl_remove_platform_domain(&rapl_msr_priv);
-	powercap_unregister_control_type(rapl_msr_priv.control_type);
+	cpuhp_remove_state(rapl_msr_priv->pcap_rapl_online);
+	rapl_remove_platform_domain(rapl_msr_priv);
+	powercap_unregister_control_type(rapl_msr_priv->control_type);
 	return 0;
 }
 
