@@ -38,6 +38,9 @@
 /* maximum number of device regulator */
 #define CAM_SOC_MAX_REGULATOR       5
 
+/* maximum number of device power domains */
+#define CAM_SOC_MAX_POWER_DOMAINS   5
+
 /* maximum number of device clock */
 #define CAM_SOC_MAX_CLK             32
 
@@ -144,6 +147,9 @@ struct cam_soc_gpio_data {
  * @rgltr_type:             Array of regulator names
  * @rgltr:                  Array of associated regulator resources
  * @rgltr_delay:            Array of regulator delay values
+ * @num_pds:                Number of power domains
+ * @pds_name:               Array of power domain names
+ * @pds:                    Array of associated power domain resources
  * @num_clk:                Number of clocks
  * @clk_name:               Array of clock names
  * @clk:                    Array of associated clock resources
@@ -188,6 +194,10 @@ struct cam_hw_soc_info {
 	uint32_t                        rgltr_type[CAM_SOC_MAX_REGULATOR];
 	struct regulator               *rgltr[CAM_SOC_MAX_REGULATOR];
 	uint32_t                        rgltr_delay[CAM_SOC_MAX_REGULATOR];
+
+	uint32_t                        num_pds;
+	const char                     *pds_name[CAM_SOC_MAX_POWER_DOMAINS];
+	struct device                  *pds[CAM_SOC_MAX_POWER_DOMAINS];
 
 	uint32_t                        use_shared_clk;
 	uint32_t                        num_clk;

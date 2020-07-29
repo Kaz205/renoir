@@ -16,6 +16,10 @@
 #include <linux/slab.h>
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
+
+#include <linux/pm_domain.h>
+#include <linux/pm_runtime.h>
+
 #include "cam_debug_util.h"
 #include "cam_cx_ipeak.h"
 
@@ -527,7 +531,7 @@ int cam_soc_util_get_option_clk_by_name(struct cam_hw_soc_info *soc_info,
 
 	*clk = cam_soc_util_option_clk_get(of_node, index);
 	if (IS_ERR(*clk)) {
-		CAM_ERR(CAM_UTIL, "No clk named %s found. Dev %s", clk_name,
+		CAM_ERR(CAM_UTIL, "No clk %s found for device: %s", clk_name,
 			soc_info->dev_name);
 		*clk_index = -1;
 		return -EFAULT;
@@ -1156,6 +1160,64 @@ static int cam_soc_util_get_dt_regulator_info
 	return rc;
 }
 
+static int cam_soc_util_get_dt_power_domain_info
+	(struct cam_hw_soc_info *soc_info)
+{
+	int rc = 0, count = 0, i = 0;
+	struct device_node *of_node = NULL;
+
+	if (!soc_info || !soc_info->dev) {
+		CAM_ERR(CAM_UTIL, "Invalid parameters");
+		return -EINVAL;
+	}
+
+	of_node = soc_info->dev->of_node;
+
+	soc_info->num_pds = 0;
+	count = of_property_count_strings(of_node, "power-domain-names");
+	if (count != -EINVAL) {
+		if (count <= 0) {
+			CAM_ERR(CAM_UTIL, "no power domains found");
+			count = 0;
+			return -EINVAL;
+		}
+
+		soc_info->num_pds = count;
+
+	} else {
+		CAM_DBG(CAM_UTIL, "No power-domain node found");
+		return 0;
+	}
+
+	for (i = 0; i < soc_info->num_pds; i++) {
+		rc = of_property_read_string_index(of_node,
+			"power-domain-names", i, &soc_info->pds_name[i]);
+		CAM_DBG(CAM_UTIL, "pds_name[%d] = %s",
+			i, soc_info->pds_name[i]);
+		if (rc) {
+			CAM_ERR(CAM_UTIL, "no power domain resource at cnt=%d",
+				i);
+			return -ENODEV;
+		}
+
+		soc_info->pds[i] = genpd_dev_pm_attach_by_id(soc_info->dev, i);
+		if (!soc_info->pds[i])
+			rc = -ENODEV;
+		else
+			rc = IS_ERR(soc_info->pds[i]) ?
+				    PTR_ERR(soc_info->pds[i]) : 0;
+		if (rc == -EPROBE_DEFER) {
+			return rc;
+		} else if (rc < 0) {
+			CAM_ERR(CAM_ISP, "Failed to attach power domain %s: %d",
+				soc_info->pds_name[i], rc);
+			return rc;
+		}
+	}
+
+	return rc;
+}
+
 int cam_soc_util_get_dt_properties(struct cam_hw_soc_info *soc_info)
 {
 	struct device_node *of_node = NULL;
@@ -1227,6 +1289,10 @@ int cam_soc_util_get_dt_properties(struct cam_hw_soc_info *soc_info)
 	}
 
 	rc = cam_soc_util_get_dt_regulator_info(soc_info);
+	if (rc)
+		return rc;
+
+	rc = cam_soc_util_get_dt_power_domain_info(soc_info);
 	if (rc)
 		return rc;
 
@@ -1403,6 +1469,20 @@ static void cam_soc_util_regulator_disable_default(
 	}
 }
 
+static void cam_soc_util_power_domain_disable_default(
+	struct cam_hw_soc_info *soc_info)
+{
+	int j = 0;
+	uint32_t num_pds = soc_info->num_pds;
+
+	for (j = num_pds-1; j >= 0; j--) {
+		if (soc_info->pds[j]) {
+			dev_pm_genpd_set_performance_state(soc_info->pds[j], 0);
+			pm_runtime_put(soc_info->pds[j]);
+		}
+	}
+}
+
 static int cam_soc_util_regulator_enable_default(
 	struct cam_hw_soc_info *soc_info)
 {
@@ -1446,6 +1526,37 @@ disable_rgltr:
 		}
 	}
 
+	return rc;
+}
+
+static int cam_soc_util_power_domain_enable_default(
+	struct cam_hw_soc_info *soc_info)
+{
+	int j = 0, rc = 0;
+	uint32_t num_pds = soc_info->num_pds;
+
+	for (j = 0; j < num_pds; j++) {
+		if (soc_info->pds[j]) {
+			dev_pm_genpd_set_performance_state(soc_info->pds[j],
+				INT_MAX);
+			rc = pm_runtime_get_sync(soc_info->pds[j]);
+			if (rc) {
+				CAM_ERR(CAM_UTIL, "%s enable failed",
+					soc_info->pds_name[j]);
+				goto disable_pds;
+			}
+		}
+	}
+
+	return rc;
+
+disable_pds:
+	for (j--; j >= 0; j--) {
+		if (soc_info->pds[j]) {
+			dev_pm_genpd_set_performance_state(soc_info->pds[j], 0);
+			pm_runtime_put(soc_info->pds[j]);
+		}
+	}
 	return rc;
 }
 
@@ -1642,10 +1753,16 @@ int cam_soc_util_enable_platform_resource(struct cam_hw_soc_info *soc_info,
 		return rc;
 	}
 
+	rc = cam_soc_util_power_domain_enable_default(soc_info);
+	if (rc) {
+		CAM_ERR(CAM_UTIL, "Power domains enable failed");
+		goto disable_regulator;
+	}
+
 	if (enable_clocks) {
 		rc = cam_soc_util_clk_enable_default(soc_info, clk_level);
 		if (rc)
-			goto disable_regulator;
+			goto disable_power_domain;
 	}
 
 	if (enable_irq) {
@@ -1673,6 +1790,9 @@ disable_clk:
 	if (enable_clocks)
 		cam_soc_util_clk_disable_default(soc_info);
 
+disable_power_domain:
+	cam_soc_util_power_domain_disable_default(soc_info);
+
 disable_regulator:
 	cam_soc_util_regulator_disable_default(soc_info);
 
@@ -1693,6 +1813,8 @@ int cam_soc_util_disable_platform_resource(struct cam_hw_soc_info *soc_info,
 
 	if (disable_clocks)
 		cam_soc_util_clk_disable_default(soc_info);
+
+	cam_soc_util_power_domain_disable_default(soc_info);
 
 	cam_soc_util_regulator_disable_default(soc_info);
 
