@@ -112,33 +112,38 @@ struct cam_cpas_client {
 };
 
 /**
+ * struct cam_cpas_bus_bw_map : Bus bandwidth mapping information
+ *
+ * @rpmh_level:	Enumerated RPMH regulator vote level
+ * @level_name: Vote level symbolic name "suspend", "nominal" etc
+ * @index:	Offset into bandwidth table
+ */
+struct cam_cpas_bus_bw_map {
+	enum cam_vote_level rpmh_level;
+	char *level_name;
+	unsigned short int index;
+};
+
+/**
  * struct cam_cpas_bus_client : Bus client information
  *
- * @src: Bus master/src id
- * @dst: Bus slave/dst id
- * @pdata: Bus pdata information
- * @client_id: Bus client id
- * @num_usecases: Number of use cases for this client
- * @num_paths: Number of paths for this client
- * @curr_vote_level: current voted index
  * @dyn_vote: Whether dynamic voting enabled
  * @lock: Mutex lock used while voting on this client
  * @valid: Whether bus client is valid
  * @name: Name of the bus client
+ * @bw_tbl: Bandwidth table
+ * @bw_tbl_size: Bandwidth table size
+ * @path: The interconnect path handle
  *
  */
 struct cam_cpas_bus_client {
-	int src;
-	int dst;
-	struct msm_bus_scale_pdata *pdata;
-	uint32_t client_id;
-	int num_usecases;
-	int num_paths;
-	unsigned int curr_vote_level;
 	bool dyn_vote;
 	struct mutex lock;
 	bool valid;
-	const char *name;
+	char name[32];
+	const struct cam_cpas_bus_bw_map *bw_tbl;
+	size_t bw_tbl_size;
+	struct icc_path *path;
 };
 
 /**
