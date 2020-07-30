@@ -2901,6 +2901,9 @@ bool dcn20_validate_bandwidth(struct dc *dc, struct dc_state *context,
 	bool dummy_pstate_supported = false;
 	double p_state_latency_us = context->bw_ctx.dml.soc.dram_clock_change_latency_us;
 
+	/*Unsafe due to current pipe merge and split logic*/
+	ASSERT(context != dc->current_state);
+
 	if (fast_validate)
 		return dcn20_validate_bandwidth_internal(dc, context, true);
 
