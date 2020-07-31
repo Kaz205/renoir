@@ -395,9 +395,6 @@
 			regulator-min-microvolt = <1800000>;
 			regulator-max-microvolt = <1800000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
-			/* TODO: figre out when to turn this off */
-			regulator-always-on;
-			regulator-boot-on;
 		};
 
 		pp2700_l16a: ldo16 {
