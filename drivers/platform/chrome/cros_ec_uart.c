@@ -21,14 +21,19 @@
 /*
  * EC sends contiguous bytes of response packet on UART AP RX.
  * TTY driver in AP accumulates incoming bytes and calls the registered callback
- * function. Byte count can range from 1 to Max count supported by TTY driver.
+ * function. Byte count can range from 1 to MAX bytes supported by EC.
  * This driver should wait for long time for all callbacks to be processed.
- * Considering the worst case scenario, wait for ~3 secs. This timeout should
+ * Considering the worst case scenario, wait for ~1 sec. This timeout should
  * account for max latency and some additional guard time.
- * In case the packet is received in ms, wait queue will be released and packet
- * will be processed.
+ * Best case: Entire packet is received in ~1 ms, wait queue will be released
+ * and packet will be processed.
+ * Worst case: TTY driver sends bytes in multiple callbacks. In this case this
+ * driver will wait for ~1 sec beyond which it will timeout.
+ * This timeout value should not exceed ~1.2 secs because in case if
+ * EC_CMD_REBOOT_EC sent, high level driver should be able to intercept EC
+ * in RO.
  */
-#define EC_MSG_DEADLINE_MS		(300 * 10)
+#define EC_MSG_DEADLINE_MS		1000
 
 /**
  * struct response_info - Encapsulate EC response related
