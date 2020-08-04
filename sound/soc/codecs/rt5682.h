@@ -1404,8 +1404,6 @@ struct rt5682_priv {
 
 #ifdef CONFIG_COMMON_CLK
 	struct clk_hw dai_clks_hw[RT5682_DAI_NUM_CLKS];
-	struct clk_lookup *dai_clks_lookup[RT5682_DAI_NUM_CLKS];
-	struct clk *dai_clks[RT5682_DAI_NUM_CLKS];
 	struct clk *mclk;
 #endif
 
