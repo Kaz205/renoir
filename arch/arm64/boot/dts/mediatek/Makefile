@@ -11,5 +11,6 @@ dtb-$(CONFIG_ARCH_MEDIATEK) += mt8173-elm-hana.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8173-elm-hana-rev7.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8173-evb.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8183-evb.dtb
-dtb-$(CONFIG_ARCH_MEDIATEK) += mt8192-asurada.dtb
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt8192-asurada-rev0.dtb
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt8192-asurada-rev1.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8192-evb.dtb

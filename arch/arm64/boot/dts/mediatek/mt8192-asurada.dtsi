@@ -390,7 +390,7 @@
 
 	bt_pins: bt-pins {
 		bt_kill: bt_kill {
-			pinmux = <PINMUX_GPIO131__FUNC_GPIO131>; /* BT_KILL_L */
+			pinmux = <PINMUX_GPIO144__FUNC_GPIO144>; /* BT_KILL_L */
 			output-low;
 		};
 		bt_wake: bt_wake {
@@ -667,14 +667,14 @@
 			pinmux = <PINMUX_GPIO65__FUNC_PCIE_CLKREQ_N>;
 			bias-pull-up;
 		};
-		pcie_en_pp3300_wlan {
+		pcie_en_pp3300_wlan: pcie_en_pp3300_wlan {
 			/* TODO: Model as a regulator */
-			pinmux = <PINMUX_GPIO130__FUNC_GPIO130>;
+			pinmux = <PINMUX_GPIO143__FUNC_GPIO143>;
 			output-high;
 		};
 		/* TODO: Split and implement. */
-		wifi_kill {
-			pinmux = <PINMUX_GPIO132__FUNC_GPIO132>; /* WIFI_KILL_L */
+		wifi_kill: wifi_kill {
+			pinmux = <PINMUX_GPIO145__FUNC_GPIO145>; /* WIFI_KILL_L */
 			output-high;
 		};
 	};
@@ -976,12 +976,12 @@
 	interrupts-extended = <&gic GIC_SPI 110 IRQ_TYPE_LEVEL_HIGH 0>,
 			      <&pio 94 IRQ_TYPE_EDGE_FALLING>;
 
-	bluetooth {
+	bluetooth: bluetooth {
 		compatible = "realtek,rtl8822cs-bt";
 		pinctrl-names = "default";
 		pinctrl-0 = <&bt_pins>;
 
-		enable-gpios = <&pio 131 GPIO_ACTIVE_HIGH>;
+		enable-gpios = <&pio 144 GPIO_ACTIVE_HIGH>;
 	};
 };
 
