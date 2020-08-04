@@ -98,12 +98,12 @@ int msm_dp_pll_10nm_init(struct msm_dp_pll *dp_pll, int id);
 void msm_dp_pll_10nm_deinit(struct msm_dp_pll *dp_pll);
 
 #else
-int msm_dp_pll_10nm_init(struct msm_dp_pll *dp_pll, int id)
+static inline int msm_dp_pll_10nm_init(struct msm_dp_pll *dp_pll, int id)
 {
 	return -ENODEV;
 }
 
-void msm_dp_pll_10nm_deinit(struct msm_dp_pll *dp_pll)
+static inline void msm_dp_pll_10nm_deinit(struct msm_dp_pll *dp_pll)
 {
 }
 #endif
