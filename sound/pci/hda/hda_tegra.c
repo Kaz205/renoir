@@ -310,7 +310,7 @@ static int hda_tegra_first_init(struct azx *chip, struct platform_device *pdev)
 		return err;
 	}
 	bus->irq = irq_id;
-
+	bus->dma_stop_delay = 100;
 	synchronize_irq(bus->irq);
 
 	/*
