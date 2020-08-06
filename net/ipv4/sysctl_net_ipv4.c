@@ -225,7 +225,7 @@ static int proc_tcp_default_init_rwnd(struct ctl_table *ctl, int write,
 				      void __user *buffer,
 				      size_t *lenp, loff_t *ppos)
 {
-	return 0;
+	return proc_dointvec(ctl, write, buffer, lenp, ppos);
 }
 
 static int proc_tcp_congestion_control(struct ctl_table *ctl, int write,
