@@ -816,16 +816,17 @@ static int hpd_event_thread(void *data)
 	unsigned long flag;
 	struct dp_event *todo;
 	int timeout_mode = 0;
+	int ret;
 
 	dp_priv = (struct dp_display_private *)data;
 
 	while (1) {
 		if (timeout_mode) {
-			wait_event_timeout(dp_priv->event_q,
+			ret = wait_event_timeout(dp_priv->event_q,
 				(dp_priv->event_pndx == dp_priv->event_gndx),
 						EVENT_TIMEOUT);
 		} else {
-			wait_event_timeout(dp_priv->event_q,
+			ret = wait_event_timeout(dp_priv->event_q,
 				(dp_priv->event_pndx != dp_priv->event_gndx),
 						EVENT_TIMEOUT);
 		}
@@ -1023,12 +1024,41 @@ static int dp_display_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static int dp_pm_resume(struct device *dev)
+{
+	return 0;
+}
+
+static int dp_pm_suspend(struct device *dev)
+{
+	return 0;
+}
+
+static int dp_pm_prepare(struct device *dev)
+{
+	return 0;
+}
+
+static void dp_pm_complete(struct device *dev)
+{
+
+}
+
+static const struct dev_pm_ops dp_pm_ops = {
+	.suspend = dp_pm_suspend,
+	.resume =  dp_pm_resume,
+	.prepare = dp_pm_prepare,
+	.complete = dp_pm_complete,
+};
+
 static struct platform_driver dp_display_driver = {
 	.probe  = dp_display_probe,
 	.remove = dp_display_remove,
 	.driver = {
 		.name = "msm-dp-display",
 		.of_match_table = dp_dt_match,
+		.suppress_bind_attrs = true,
+		.pm = &dp_pm_ops,
 	},
 };
 

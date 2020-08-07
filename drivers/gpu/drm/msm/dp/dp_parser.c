@@ -230,8 +230,8 @@ static int dp_parser_clock(struct dp_parser *parser)
 			strlcpy(clk->clk_name, clk_name, sizeof(clk->clk_name));
 			ctrl_clk_index++;
 
-			if (!strncmp(clk_name, "ctrl_link",
-					strlen("ctrl_link")))
+			if (dp_parser_check_prefix("ctrl_link", clk_name) ||
+			    dp_parser_check_prefix("stream_pixel", clk_name))
 				clk->type = DSS_CLK_PCLK;
 			else
 				clk->type = DSS_CLK_AHB;

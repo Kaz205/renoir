@@ -70,6 +70,19 @@
 #define DP_LINK_CLK_SRC			0
 #define DP_PIXEL_CLK_SRC		1
 
+
+static int dp_vco_set_rate_10nm(struct clk_hw *hw, unsigned long rate,
+				unsigned long parent_rate);
+
+static unsigned long dp_vco_recalc_rate_10nm(struct clk_hw *hw,
+				unsigned long parent_rate);
+
+static long dp_vco_round_rate_10nm(struct clk_hw *hw,
+				unsigned long rate, unsigned long *parent_rate);
+
+static int dp_vco_prepare_10nm(struct clk_hw *hw);
+static void dp_vco_unprepare_10nm(struct clk_hw *hw);
+
 static struct dp_pll_db *dp_pdb;
 
 static const struct clk_ops dp_10nm_vco_clk_ops = {
@@ -767,7 +780,7 @@ static int dp_pll_disable_10nm(struct clk_hw *hw)
 }
 
 
-int dp_vco_prepare_10nm(struct clk_hw *hw)
+static int dp_vco_prepare_10nm(struct clk_hw *hw)
 {
 	int rc = 0;
 	struct dp_pll_vco_clk *vco = to_dp_vco_hw(hw);
@@ -798,7 +811,7 @@ error:
 	return rc;
 }
 
-void dp_vco_unprepare_10nm(struct clk_hw *hw)
+static void dp_vco_unprepare_10nm(struct clk_hw *hw)
 {
 	struct dp_pll_vco_clk *vco = to_dp_vco_hw(hw);
 	struct msm_dp_pll *pll = to_msm_dp_pll(vco);
@@ -819,7 +832,7 @@ void dp_vco_unprepare_10nm(struct clk_hw *hw)
 	pll->pll_on = false;
 }
 
-int dp_vco_set_rate_10nm(struct clk_hw *hw, unsigned long rate,
+static int dp_vco_set_rate_10nm(struct clk_hw *hw, unsigned long rate,
 					unsigned long parent_rate)
 {
 	struct dp_pll_vco_clk *vco = to_dp_vco_hw(hw);
@@ -836,7 +849,7 @@ int dp_vco_set_rate_10nm(struct clk_hw *hw, unsigned long rate,
 	return 0;
 }
 
-unsigned long dp_vco_recalc_rate_10nm(struct clk_hw *hw,
+static unsigned long dp_vco_recalc_rate_10nm(struct clk_hw *hw,
 					unsigned long parent_rate)
 {
 	u32 div, hsclk_div, link_clk_div = 0;

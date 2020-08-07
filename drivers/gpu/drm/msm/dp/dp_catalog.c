@@ -287,6 +287,18 @@ int dp_catalog_aux_clear_trans(struct dp_catalog *dp_catalog, bool read)
 	return 0;
 }
 
+int dp_catalog_aux_clear_hw_interrupts(struct dp_catalog *dp_catalog)
+{
+	struct dp_catalog_private *catalog = container_of(dp_catalog,
+				struct dp_catalog_private, dp_catalog);
+
+	dp_read_aux(catalog, REG_DP_PHY_AUX_INTERRUPT_STATUS);
+	dp_write_aux(catalog, REG_DP_PHY_AUX_INTERRUPT_CLEAR, 0x1f);
+	dp_write_aux(catalog, REG_DP_PHY_AUX_INTERRUPT_CLEAR, 0x9f);
+	dp_write_aux(catalog, REG_DP_PHY_AUX_INTERRUPT_CLEAR, 0);
+	return 0;
+}
+
 void dp_catalog_aux_reset(struct dp_catalog *dp_catalog)
 {
 	u32 aux_ctrl;
@@ -555,6 +567,9 @@ void dp_catalog_ctrl_config_misc(struct dp_catalog *dp_catalog,
 				struct dp_catalog_private, dp_catalog);
 
 	misc_val = dp_read_link(catalog, REG_DP_MISC1_MISC0);
+
+	/* clear bpp bits */
+	misc_val &= ~(0x07 << DP_MISC0_TEST_BITS_DEPTH_SHIFT);
 	misc_val |= colorimetry_cfg << DP_MISC0_COLORIMETRY_CFG_SHIFT;
 	misc_val |= test_bits_depth << DP_MISC0_TEST_BITS_DEPTH_SHIFT;
 	/* Configure clock to synchronous mode */

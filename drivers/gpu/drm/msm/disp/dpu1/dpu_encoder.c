@@ -1280,6 +1280,11 @@ static void dpu_encoder_virt_disable(struct drm_encoder *drm_enc)
 			DPU_ERROR_ENC(dpu_enc, "dp display disable failed\n");
 	}
 
+	if (drm_enc->encoder_type == DRM_MODE_ENCODER_TMDS && priv->dp) {
+		if (msm_dp_display_disable(priv->dp, drm_enc))
+			DPU_ERROR_ENC(dpu_enc, "dp display disable failed\n");
+	}
+
 	mutex_unlock(&dpu_enc->enc_lock);
 }
 
