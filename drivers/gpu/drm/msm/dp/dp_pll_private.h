@@ -92,20 +92,7 @@ long dp_vco_round_rate_10nm(struct clk_hw *hw, unsigned long rate,
 int dp_vco_prepare_10nm(struct clk_hw *hw);
 void dp_vco_unprepare_10nm(struct clk_hw *hw);
 
-#ifdef CONFIG_DRM_MSM_DP_10NM_PLL
-
 int msm_dp_pll_10nm_init(struct msm_dp_pll *dp_pll, int id);
 void msm_dp_pll_10nm_deinit(struct msm_dp_pll *dp_pll);
-
-#else
-static inline int msm_dp_pll_10nm_init(struct msm_dp_pll *dp_pll, int id)
-{
-	return -ENODEV;
-}
-
-static inline void msm_dp_pll_10nm_deinit(struct msm_dp_pll *dp_pll)
-{
-}
-#endif
 
 #endif /* __DP_PLL_10NM_H */

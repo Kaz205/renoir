@@ -16,23 +16,23 @@ static const struct dp_regulator_cfg sdm845_dp_reg_cfg = {
 	},
 };
 
-static int msm_dss_ioremap_byname(struct platform_device *pdev,
-			   struct dss_io_data *io_data, const char *name)
+static int msm_dss_ioremap(struct platform_device *pdev,
+				struct dss_io_data *io_data)
 {
 	struct resource *res = NULL;
 
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, name);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
-		DRM_ERROR("%pS->%s: '%s' msm_dss_get_res_byname failed\n",
-			__builtin_return_address(0), __func__, name);
+		DRM_ERROR("%pS->%s: msm_dss_get_res failed\n",
+			__builtin_return_address(0), __func__);
 		return -ENODEV;
 	}
 
 	io_data->len = (u32)resource_size(res);
 	io_data->base = ioremap(res->start, io_data->len);
 	if (!io_data->base) {
-		DRM_ERROR("%pS->%s: '%s' ioremap failed\n",
-			__builtin_return_address(0), __func__, name);
+		DRM_ERROR("%pS->%s: ioremap failed\n",
+			__builtin_return_address(0), __func__);
 		return -EIO;
 	}
 
@@ -63,7 +63,7 @@ static int dp_parser_ctrl_res(struct dp_parser *parser)
 	struct platform_device *pdev = parser->pdev;
 	struct dp_io *io = &parser->io;
 
-	rc = msm_dss_ioremap_byname(pdev, &io->dp_controller, "dp_controller");
+	rc = msm_dss_ioremap(pdev, &io->dp_controller);
 	if (rc) {
 		DRM_ERROR("unable to remap dp io resources, rc=%d\n", rc);
 		goto err;

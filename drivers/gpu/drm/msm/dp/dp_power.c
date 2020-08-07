@@ -322,23 +322,6 @@ int dp_power_set_link_clk_parent(struct dp_power *dp_power)
 		cfg++;
 	}
 
-	if (num && power->link_provider) {
-		power->link_clk_src = clk_get_parent(cfg->clk);
-			if (power->link_clk_src) {
-				clk_set_parent(power->link_clk_src,
-						power->link_provider);
-				DRM_DEBUG_DP("%s: is the parent of clk=%s\n",
-					__clk_get_name(power->link_provider),
-					__clk_get_name(power->link_clk_src));
-			} else {
-				DRM_ERROR("couldn't get parent for clk=%s\n",
-					name);
-				rc = -EINVAL;
-			}
-	} else {
-		DRM_ERROR("%s clock could not be set parent\n", name);
-		rc = -EINVAL;
-	}
 exit:
 	return rc;
 }
