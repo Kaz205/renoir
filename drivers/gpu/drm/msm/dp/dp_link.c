@@ -584,8 +584,8 @@ static int dp_link_parse_phy_test_params(struct dp_link_private *link)
 	DRM_DEBUG_DP("phy_test_pattern_sel = 0x%x\n", data);
 
 	switch (data) {
-	case DP_PHY_TEST_PATTERN_NONE:
 	case DP_PHY_TEST_PATTERN_SEL_MASK:
+	case DP_PHY_TEST_PATTERN_NONE:
 	case DP_PHY_TEST_PATTERN_D10_2:
 	case DP_PHY_TEST_PATTERN_ERROR_COUNT:
 	case DP_PHY_TEST_PATTERN_PRBS7:

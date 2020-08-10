@@ -1154,11 +1154,12 @@ static int dp_ctrl_link_rate_down_shift(struct dp_ctrl_private *ctrl)
 		break;
 	case 162000:
 	default:
-		ret = -1;
+		ret = -EINVAL;
 		break;
 	};
 
-	DRM_DEBUG_DP("new rate=0x%x\n", ctrl->link->link_params.rate);
+	if (!ret)
+		DRM_DEBUG_DP("new rate=0x%x\n", ctrl->link->link_params.rate);
 
 	return ret;
 }
@@ -1257,7 +1258,6 @@ static int dp_ctrl_link_train(struct dp_ctrl_private *ctrl,
 	ret = dp_ctrl_link_train_1(ctrl, cr, training_step);
 	if (ret) {
 		DRM_ERROR("link training #1 failed. ret=%d\n", ret);
-		ret = -EAGAIN;
 		goto end;
 	}
 
@@ -1267,7 +1267,6 @@ static int dp_ctrl_link_train(struct dp_ctrl_private *ctrl,
 	ret = dp_ctrl_link_train_2(ctrl, cr, training_step);
 	if (ret) {
 		DRM_ERROR("link training #2 failed. ret=%d\n", ret);
-		ret = -EAGAIN;
 		goto end;
 	}
 
@@ -1527,7 +1526,7 @@ static bool dp_ctrl_send_phy_test_pattern(struct dp_ctrl_private *ctrl)
 		break;
 	case MR_LINK_SYMBOL_ERM:
 		success = ((pattern_requested ==
-				DP_PHY_TEST_PATTERN_ERROR_COUNT) ||
+			DP_PHY_TEST_PATTERN_ERROR_COUNT) ||
 				(pattern_requested ==
 				DP_PHY_TEST_PATTERN_CP2520));
 		break;
@@ -1594,10 +1593,10 @@ int dp_ctrl_on_link(struct dp_ctrl *dp_ctrl)
 	int rc = 0;
 	struct dp_ctrl_private *ctrl;
 	u32 rate = 0;
-	u32 link_train_max_retries = 5;
+	int link_train_max_retries = 5;
 	u32 const phy_cts_pixel_clk_khz = 148500;
 	struct dp_cr_status cr;
-	int training_step;
+	unsigned int training_step;
 
 	if (!dp_ctrl)
 		return -EINVAL;
@@ -1651,7 +1650,7 @@ int dp_ctrl_on_link(struct dp_ctrl *dp_ctrl)
 		} else if (training_step == DP_TRAINING_1) {
 			/* link train_1 failed */
 			rc = dp_ctrl_link_rate_down_shift(ctrl);
-			if (rc < 0) { /* alread in RBR = 1.6G */
+			if (rc < 0) { /* already in RBR = 1.6G */
 				if (cr.lane_0_1 & DP_LANE0_1_CR_DONE) {
 					/*
 					 * some lanes are ready,
@@ -1695,7 +1694,6 @@ int dp_ctrl_on_link(struct dp_ctrl *dp_ctrl)
 
 int dp_ctrl_on_stream(struct dp_ctrl *dp_ctrl)
 {
-	int rc = 0;
 	u32 rate = 0;
 	int ret = 0;
 	bool mainlink_ready = false;
@@ -1715,6 +1713,14 @@ int dp_ctrl_on_stream(struct dp_ctrl *dp_ctrl)
 	DRM_DEBUG_DP("rate=%d, num_lanes=%d, pixel_rate=%d\n",
 		ctrl->link->link_params.rate,
 		ctrl->link->link_params.num_lanes, ctrl->dp_ctrl.pixel_rate);
+
+	if (!dp_power_clk_status(ctrl->power, DP_CTRL_PM)) { /* link clk is off */
+		ret = dp_ctrl_enable_mainlink_clocks(ctrl);
+		if (ret) {
+			DRM_ERROR("Failed to start link clocks. ret=%d\n", ret);
+			goto end;
+		}
+	}
 
 	ret = dp_ctrl_enable_stream_clocks(ctrl);
 	if (ret) {
@@ -1751,7 +1757,7 @@ int dp_ctrl_on_stream(struct dp_ctrl *dp_ctrl)
 	DRM_DEBUG_DP("mainlink %s\n", mainlink_ready ? "READY" : "NOT READY");
 
 end:
-	return rc;
+	return ret;
 }
 
 int dp_ctrl_off(struct dp_ctrl *dp_ctrl)

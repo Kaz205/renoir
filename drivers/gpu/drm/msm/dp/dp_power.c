@@ -180,6 +180,20 @@ static int dp_power_clk_set_rate(struct dp_power_private *power,
 	return 0;
 }
 
+int dp_power_clk_status(struct dp_power *dp_power, enum dp_pm_type pm_type)
+{
+	if (pm_type == DP_CORE_PM)
+		return dp_power->core_clks_on;
+
+	if (pm_type == DP_CTRL_PM)
+		return dp_power->link_clks_on;
+
+	if (pm_type == DP_STREAM_PM)
+		return dp_power->stream_clks_on;
+
+	return 0;
+}
+
 int dp_power_clk_enable(struct dp_power *dp_power,
 		enum dp_pm_type pm_type, bool enable)
 {

@@ -259,11 +259,9 @@ static int dp_display_send_hpd_notification(struct dp_display_private *dp,
 	struct msm_drm_private *priv = dp->dp_display.drm_dev->dev_private;
 	struct msm_kms *kms = priv->kms;
 
-	mutex_lock(&dp->dp_display.connect_mutex);
 	if ((hpd && dp->dp_display.is_connected) ||
 			(!hpd && !dp->dp_display.is_connected)) {
 		DRM_DEBUG_DP("HPD already %s\n", (hpd ? "on" : "off"));
-		mutex_unlock(&dp->dp_display.connect_mutex);
 		return 0;
 	}
 
@@ -284,8 +282,6 @@ static int dp_display_send_hpd_notification(struct dp_display_private *dp,
 
 	dp_display_send_hpd_event(&dp->dp_display);
 
-	/* release lock so that drm can issue complete */
-	mutex_unlock(&dp->dp_display.connect_mutex);
 	return 0;
 }
 
@@ -293,9 +289,6 @@ static int dp_display_process_hpd_high(struct dp_display_private *dp)
 {
 	int rc = 0;
 	struct edid *edid;
-
-	if (dp->link->psm_enabled)
-		goto notify;
 
 	dp->panel->max_dp_lanes = dp->parser->max_dp_lanes;
 
@@ -318,7 +311,7 @@ static int dp_display_process_hpd_high(struct dp_display_private *dp)
 		DRM_ERROR("failed to complete DP link training\n");
 		goto end;
 	}
-notify:
+
 	dp_add_event(dp, EV_USER_NOTIFICATION, true, 0);
 
 
@@ -364,8 +357,12 @@ static int dp_display_usbpd_configure_cb(struct device *dev)
 
 	dp_display_host_init(dp);
 
-	if (dp->usbpd->hpd_high)
-		rc = dp_display_process_hpd_high(dp);
+	/*
+	 * set sink to normal operation mode -- D0
+	 * before dpcd read
+	 */
+	dp_link_psm_config(dp->link, &dp->panel->link_info, false);
+	rc = dp_display_process_hpd_high(dp);
 end:
 	return rc;
 }
@@ -378,10 +375,6 @@ static int dp_display_usbpd_disconnect_cb(struct device *dev)
 	dp = dev_get_drvdata(dev);
 
 	dp_add_event(dp, EV_USER_NOTIFICATION, false, 0);
-
-	/* if cable is disconnected, reset psm_enabled flag */
-	if (!dp->usbpd->alt_mode_cfg_done)
-		dp->link->psm_enabled = false;
 
 	return rc;
 }
@@ -707,9 +700,6 @@ static int dp_display_pre_disable(struct msm_dp *dp_display)
 
 	dp = container_of(dp_display, struct dp_display_private, dp_display);
 
-	if (dp->usbpd->alt_mode_cfg_done)
-		dp_link_psm_config(dp->link, &dp->panel->link_info, true);
-
 	return 0;
 }
 
@@ -908,7 +898,7 @@ static void dp_hpd_event_setup(struct dp_display_private *dp_priv)
 	init_waitqueue_head(&dp_priv->event_q);
 	spin_lock_init(&dp_priv->event_lock);
 
-	kthread_run(hpd_event_thread, (void *)dp_priv, "dp_hpd_handler");
+	kthread_run(hpd_event_thread, dp_priv, "dp_hpd_handler");
 }
 
 static irqreturn_t dp_display_irq_handler(int irq, void *dev_id)
@@ -1008,7 +998,6 @@ static int dp_display_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, dp);
 
 	mutex_init(&dp->event_mutex);
-	mutex_init(&dp->dp_display.connect_mutex);
 	g_dp_display = &dp->dp_display;
 
 	rc = component_add(&pdev->dev, &dp_display_comp_ops);
@@ -1070,10 +1059,6 @@ void msm_dp_irq_postinstall(struct msm_dp *dp_display)
 
 	dp_hpd_event_setup(dp);
 
-	/* This hack Delays HPD configuration by 10 sec
-	 * ToDo(User): Implement correct boot sequence of
-	 * HPD configuration and remove this hack
-	 */
 	dp_add_event(dp, EV_HPD_INIT_SETUP, 0, 100);
 }
 
@@ -1166,6 +1151,8 @@ int msm_dp_display_disable(struct msm_dp *dp, struct drm_encoder *encoder)
 	rc = dp_display_pre_disable(dp);
 	if (rc) {
 		DRM_ERROR("DP display pre disable failed, rc=%d\n", rc);
+		atomic_set(&dp_display->hpd_state, ST_DISCONNECTED);
+		mutex_unlock(&dp_display->event_mutex);
 		return rc;
 	}
 

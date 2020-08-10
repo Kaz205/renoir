@@ -33,14 +33,19 @@ static int dp_panel_read_dpcd(struct dp_panel *dp_panel)
 	panel = container_of(dp_panel, struct dp_panel_private, dp_panel);
 	link_info = &dp_panel->link_info;
 
-	rlen = drm_dp_dpcd_read(panel->aux,
-				DP_TRAINING_AUX_RD_INTERVAL, &temp, 1);
-	if (rlen < 0) {
-		DRM_ERROR("err reading DP_TRAINING_AUX_RD_INTERVAL,rlen=%zd\n",
-				rlen);
-		rc = -EINVAL;
+	rlen = drm_dp_dpcd_read(panel->aux, offset,
+			dpcd, (DP_RECEIVER_CAP_SIZE + 1));
+	if (rlen < (DP_RECEIVER_CAP_SIZE + 1)) {
+		DRM_ERROR("dpcd read failed, rlen=%zd\n", rlen);
+		if (rlen == -ETIMEDOUT)
+			rc = rlen;
+		else
+			rc = -EINVAL;
+
 		goto end;
 	}
+
+	temp = dpcd[DP_TRAINING_AUX_RD_INTERVAL];
 
 	/* check for EXTENDED_RECEIVER_CAPABILITY_FIELD_PRESENT */
 	if (temp & BIT(7)) {
@@ -59,9 +64,6 @@ static int dp_panel_read_dpcd(struct dp_panel *dp_panel)
 
 		goto end;
 	}
-
-	print_hex_dump(KERN_DEBUG, "[drm-dp] SINK DPCD: ",
-		DUMP_PREFIX_NONE, 8, 1, dp_panel->dpcd, rlen, false);
 
 	link_info->revision = dpcd[DP_DPCD_REV];
 	major = (link_info->revision >> 4) & 0x0f;
@@ -84,15 +86,13 @@ static int dp_panel_read_dpcd(struct dp_panel *dp_panel)
 	if (drm_dp_enhanced_frame_cap(dpcd))
 		link_info->capabilities |= DP_LINK_CAP_ENHANCED_FRAMING;
 
-
-	len = DP_MAX_DOWNSTREAM_PORTS;
-
 	dp_panel->dfp_present = dpcd[DP_DOWNSTREAMPORT_PRESENT];
 	dp_panel->dfp_present &= DP_DWN_STRM_PORT_PRESENT;
 
 	if (dp_panel->dfp_present && (dpcd[DP_DPCD_REV] > 0x10)) {
 		dp_panel->ds_port_cnt = dpcd[DP_DOWN_STREAM_PORT_COUNT];
 		dp_panel->ds_port_cnt &= DP_PORT_COUNT_MASK;
+		len = DP_DOWNSTREAM_PORTS * DP_DOWNSTREAM_CAP_SIZE;
 
 		rlen = drm_dp_dpcd_read(panel->aux,
 			DP_DOWNSTREAM_PORT_0, dp_panel->ds_cap_info, len);
@@ -102,6 +102,7 @@ static int dp_panel_read_dpcd(struct dp_panel *dp_panel)
 			goto end;
 		}
 	}
+
 end:
 	return rc;
 }
@@ -236,8 +237,10 @@ int dp_panel_read_sink_caps(struct dp_panel *dp_panel,
 		DRM_ERROR("panel edid read failed\n");
 
 		/* fail safe edid */
+		mutex_lock(&connector->dev->mode_config.mutex);
 		if (drm_add_modes_noedid(connector, 640, 480))
 			drm_set_preferred_mode(connector, 640, 480);
+		mutex_unlock(&connector->dev->mode_config.mutex);
 	}
 
 	if (panel->aux_cfg_update_done) {

@@ -361,8 +361,7 @@ static ssize_t dp_aux_transfer(struct drm_dp_aux *dp_aux,
 					PHY_AUX_CFG1);
 			dp_catalog_aux_reset(aux->catalog);
 		}
-		if (aux->aux_error_num == DP_AUX_ERR_DPPHY_AUX)
-			usleep_range(400, 400); /* need 400us before next try */
+		usleep_range(400, 500); /* at least 400us to next try */
 		goto unlock_exit;
 	}
 

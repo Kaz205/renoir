@@ -16,7 +16,8 @@ struct edid;
 
 #define DPRX_EXTENDED_DPCD_FIELD	0x2200
 
-#define DP_RECEIVER_EXT_CAP_SIZE 4
+#define DP_DOWNSTREAM_PORTS		4
+#define DP_DOWNSTREAM_CAP_SIZE		4
 
 struct dp_display_mode {
 	struct drm_display_mode drm_mode;
@@ -35,8 +36,8 @@ struct dp_panel_in {
 
 struct dp_panel {
 	/* dpcd raw data */
-	u8 dpcd[DP_RECEIVER_CAP_SIZE + DP_RECEIVER_EXT_CAP_SIZE + 1];
-	u8 ds_cap_info[DP_MAX_DOWNSTREAM_PORTS];
+	u8 dpcd[DP_RECEIVER_CAP_SIZE + 1];
+	u8 ds_cap_info[DP_DOWNSTREAM_PORTS * DP_DOWNSTREAM_CAP_SIZE];
 	u32 ds_port_cnt;
 	u32 dfp_present;
 
