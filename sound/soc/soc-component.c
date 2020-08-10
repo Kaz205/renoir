@@ -428,7 +428,7 @@ unsigned int snd_soc_component_read(struct snd_soc_component *component,
 		ret = -EIO;
 
 	if (ret < 0)
-		soc_component_ret(component, ret);
+		return soc_component_ret(component, ret);
 
 	return val;
 }
