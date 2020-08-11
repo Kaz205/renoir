@@ -138,7 +138,7 @@
 		enable-active-high;
 		regulator-always-on;
 
-		gpio = <&pio 30 GPIO_ACTIVE_HIGH>;
+		gpio = <&pio 19 GPIO_ACTIVE_HIGH>;
 	};
 
 	pp1000_mipibrdg: pp1000-mipibrdg {
@@ -242,7 +242,14 @@
 	pinctrl-names = "sleep", "default";
 	pinctrl-0 = <&dpi_pin_default>;
 	pinctrl-1 = <&dpi_pin_func>;
-	status = "disabled";
+	status = "okay";
+	ports {
+		port {
+			dpi_out: endpoint {
+				remote-endpoint = <&anx7625_dp_in>;
+			};
+		};
+	};
 };
 
 &dsi0 {
@@ -397,7 +404,32 @@
 	status = "okay";
 	clock-frequency = <400000>;
 
-	/* TODO: Add ANX7625 external DP bridge. */
+	anx_bridge_dp: anx7625@58 {
+		compatible = "analogix,anx7625";
+		reg = <0x58>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&anx7625_dp_pins>;
+		enable-gpios = <&pio 8 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&pio 9 GPIO_ACTIVE_HIGH>;
+		anx,mipi-dpi-in = <1>;
+		interrupt-parent = <&pio>;
+		interrupts = <7 IRQ_TYPE_LEVEL_LOW>;
+		vdd10-supply = <&pp1000_dpbrdg>;
+		vdd18-supply = <&pp1800_dpbrdg>;
+		vdd33-supply = <&pp3300_dpbrdg>;
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				anx7625_dp_in: endpoint {
+					remote-endpoint = <&dpi_out>;
+				};
+			};
+		};
+	};
 };
 
 &mipi_tx0 {
@@ -477,7 +509,7 @@
 			output-low;
 		};
 		pins2 {
-			pinmux = <PINMUX_GPIO0__FUNC_GPIO0>;
+			pinmux = <PINMUX_GPIO7__FUNC_GPIO7>;
 			input-enable;
 			bias-pull-up;
 		};
@@ -981,7 +1013,7 @@
 
 	pp1000_dpbrdg_en: pp1000-dpbrdg-en {
 		pins1 {
-			pinmux = <PINMUX_GPIO30__FUNC_GPIO30>;
+			pinmux = <PINMUX_GPIO19__FUNC_GPIO19>;
 			output-low;
 		};
 	};
