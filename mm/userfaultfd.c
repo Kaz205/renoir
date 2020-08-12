@@ -74,7 +74,7 @@ int mfill_atomic_install_pte(struct mm_struct *dst_mm, pmd_t *dst_pmd,
 	inc_mm_counter(dst_mm, mm_counter(page));
 
 	if (newly_allocated)
-		lru_cache_add_active_or_unevictable(page, dst_vma);
+		lru_cache_add_inactive_or_unevictable(page, dst_vma);
 
 	set_pte_at(dst_mm, dst_addr, dst_pte, _dst_pte);
 
@@ -93,12 +93,7 @@ static int mcopy_atomic_pte(struct mm_struct *dst_mm,
 			    unsigned long src_addr,
 			    struct page **pagep)
 {
-<<<<<<< HEAD
 	struct mem_cgroup *memcg;
-=======
-	pte_t _dst_pte, *dst_pte;
-	spinlock_t *ptl;
->>>>>>> 1935b3979bc5 (mm: memcontrol: convert anon and file-thp to new mem_cgroup_charge() API)
 	void *page_kaddr;
 	int ret;
 	struct page *page;
