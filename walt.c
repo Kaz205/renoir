@@ -1840,7 +1840,7 @@ account_busy_for_task_demand(struct rq *rq, struct task_struct *p, int event)
 	return 1;
 }
 
-unsigned int sysctl_sched_task_unfilter_period = 200000000;
+unsigned int sysctl_sched_task_unfilter_period = 100000000;
 
 /*
  * Called when new window is starting for a task, to record cpu usage over
