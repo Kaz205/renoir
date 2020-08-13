@@ -439,32 +439,6 @@ static int sbs_status_correct(struct i2c_client *client, int *intval)
 	return 0;
 }
 
-static int sbs_get_battery_presence_and_health(
-	struct i2c_client *client, enum power_supply_property psp,
-	union power_supply_propval *val)
-{
-	int ret;
-
-	/* Dummy command; if it succeeds, battery is present. */
-	ret = sbs_read_word_data(client, sbs_data[REG_STATUS].addr);
-
-	if (ret < 0) { /* battery not present*/
-		if (psp == POWER_SUPPLY_PROP_PRESENT) {
-			val->intval = 0;
-			return 0;
-		}
-		return ret;
-	}
-
-	if (psp == POWER_SUPPLY_PROP_PRESENT)
-		val->intval = 1; /* battery present */
-	else /* POWER_SUPPLY_PROP_HEALTH */
-		/* SBS spec doesn't have a general health command. */
-		val->intval = POWER_SUPPLY_HEALTH_UNKNOWN;
-
-	return 0;
-}
-
 static int sbs_get_ti_battery_presence_and_health(
 	struct i2c_client *client, enum power_supply_property psp,
 	union power_supply_propval *val)
@@ -517,6 +491,36 @@ static int sbs_get_ti_battery_presence_and_health(
 		else
 			val->intval = POWER_SUPPLY_HEALTH_GOOD;
 	}
+
+	return 0;
+}
+
+static int sbs_get_battery_presence_and_health(
+	struct i2c_client *client, enum power_supply_property psp,
+	union power_supply_propval *val)
+{
+	struct sbs_info *chip = i2c_get_clientdata(client);
+	int ret;
+
+	if (chip->flags & SBS_FLAGS_TI_BQ20ZX5)
+		return sbs_get_ti_battery_presence_and_health(client, psp, val);
+
+	/* Dummy command; if it succeeds, battery is present. */
+	ret = sbs_read_word_data(client, sbs_data[REG_STATUS].addr);
+
+	if (ret < 0) { /* battery not present*/
+		if (psp == POWER_SUPPLY_PROP_PRESENT) {
+			val->intval = 0;
+			return 0;
+		}
+		return ret;
+	}
+
+	if (psp == POWER_SUPPLY_PROP_PRESENT)
+		val->intval = 1; /* battery present */
+	else /* POWER_SUPPLY_PROP_HEALTH */
+		/* SBS spec doesn't have a general health command. */
+		val->intval = POWER_SUPPLY_HEALTH_UNKNOWN;
 
 	return 0;
 }
@@ -788,12 +792,7 @@ static int sbs_get_property(struct power_supply *psy,
 	switch (psp) {
 	case POWER_SUPPLY_PROP_PRESENT:
 	case POWER_SUPPLY_PROP_HEALTH:
-		if (chip->flags & SBS_FLAGS_TI_BQ20ZX5)
-			ret = sbs_get_ti_battery_presence_and_health(client,
-								     psp, val);
-		else
-			ret = sbs_get_battery_presence_and_health(client, psp,
-								  val);
+		ret = sbs_get_battery_presence_and_health(client, psp, val);
 
 		/* this can only be true if no gpio is used */
 		if (psp == POWER_SUPPLY_PROP_PRESENT)
