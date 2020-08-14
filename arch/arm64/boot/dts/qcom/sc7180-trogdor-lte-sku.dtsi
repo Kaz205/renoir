@@ -10,6 +10,6 @@
 };
 
 &remoteproc_mpss {
-	firmware-name = "sc7180-mss/google-trogdor/mba.mbn",
-			"sc7180-mss/google-trogdor/modem.mdt";
+	firmware-name = "qcom/sc7180-trogdor/modem/mba.mbn",
+			"qcom/sc7180-trogdor/modem/qdsp6sw.mbn";
 };
