@@ -26,7 +26,7 @@ static inline dma_addr_t phys_to_dma_direct(struct device *dev,
 		phys_addr_t phys)
 {
 	if (force_dma_unencrypted(dev))
-		return __phys_to_dma(dev, phys);
+		return phys_to_dma_unencrypted(dev, phys);
 	return phys_to_dma(dev, phys);
 }
 
@@ -495,11 +495,11 @@ int dma_direct_supported(struct device *dev, u64 mask)
 	min_mask = min_t(u64, min_mask, (max_pfn - 1) << PAGE_SHIFT);
 
 	/*
-	 * This check needs to be against the actual bit mask value, so
-	 * use __phys_to_dma() here so that the SME encryption mask isn't
+	 * This check needs to be against the actual bit mask value, so use
+	 * phys_to_dma_unencrypted() here so that the SME encryption mask isn't
 	 * part of the check.
 	 */
-	return mask >= __phys_to_dma(dev, min_mask);
+	return mask >= phys_to_dma_unencrypted(dev, min_mask);
 }
 
 size_t dma_direct_max_mapping_size(struct device *dev)
