@@ -27,6 +27,7 @@
 #include <linux/io-64-nonatomic-lo-hi.h>
 
 #include "amdgpu.h"
+#include "amdgpu_gmc.h"
 
 /**
  * amdgpu_gmc_get_pde_for_bo - get the PDE for a BO
@@ -304,4 +305,46 @@ bool amdgpu_gmc_filter_faults(struct amdgpu_device *adev, uint64_t addr,
 	fault->next = gmc->fault_hash[hash].idx;
 	gmc->fault_hash[hash].idx = gmc->last_fault++;
 	return false;
+}
+
+void amdgpu_gmc_get_vbios_allocations(struct amdgpu_device *adev)
+{
+	unsigned size;
+
+	/*
+	 * TODO:
+	 * Currently there is a bug where some memory client outside
+	 * of the driver writes to first 8M of VRAM on S3 resume,
+	 * this overrides GART which by default gets placed in first 8M and
+	 * causes VM_FAULTS once GTT is accessed.
+	 * Keep the stolen memory reservation until the while this is not solved.
+	 */
+	switch (adev->asic_type) {
+	case CHIP_VEGA10:
+	case CHIP_RAVEN:
+	case CHIP_ARCTURUS:
+	case CHIP_RENOIR:
+		adev->gmc.keep_stolen_vga_memory = true;
+		break;
+	default:
+		adev->gmc.keep_stolen_vga_memory = false;
+		break;
+	}
+
+	if (!amdgpu_device_ip_get_ip_block(adev, AMD_IP_BLOCK_TYPE_DCE))
+		size = 0;
+	else
+		size = amdgpu_gmc_get_vbios_fb_size(adev);
+
+	/* set to 0 if the pre-OS buffer uses up most of vram */
+	if ((adev->gmc.real_vram_size - size) < (8 * 1024 * 1024))
+		size = 0;
+
+	if (size > AMDGPU_VBIOS_VGA_ALLOCATION) {
+		adev->gmc.stolen_vga_size = AMDGPU_VBIOS_VGA_ALLOCATION;
+		adev->gmc.stolen_extended_size = size - adev->gmc.stolen_vga_size;
+	} else {
+		adev->gmc.stolen_vga_size = size;
+		adev->gmc.stolen_extended_size = 0;
+	}
 }
