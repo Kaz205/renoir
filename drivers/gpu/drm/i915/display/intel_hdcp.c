@@ -2056,7 +2056,7 @@ int intel_hdcp_init(struct intel_connector *connector,
 	if (!shim)
 		return -EINVAL;
 
-	if (is_hdcp2_supported(dev_priv))
+	if (is_hdcp2_supported(dev_priv) && !connector->mst_port)
 		intel_hdcp2_init(connector, port, shim);
 
 	ret =
