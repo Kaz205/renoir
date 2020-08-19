@@ -2,6 +2,7 @@
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
  */
+
 #include "walt.h"
 
 #ifdef CONFIG_SCHED_WALT
