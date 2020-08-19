@@ -1134,6 +1134,8 @@ static int nhi_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 			return res;
 	}
 
+	tb_acpi_add_links(nhi);
+
 	tb = icm_probe(nhi);
 	if (!tb)
 		tb = tb_probe(nhi);
