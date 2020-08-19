@@ -43,7 +43,7 @@ MODULE_PARM_DESC(input_boost_ms, "Duration of input boost (msec)");
 static unsigned int cpuboost_input_boost_interval_ms = 150;
 module_param_named(input_boost_interval_ms,
 		   cpuboost_input_boost_interval_ms, uint, 0644);
-MODULE_PARM_DESC(input_boost_ms,
+MODULE_PARM_DESC(input_boost_interval_ms,
 		 "Interval between input events to reactivate input boost (msec)");
 
 DEFINE_MUTEX(cpuboost_mutex);
