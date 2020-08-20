@@ -9,7 +9,9 @@
 #include <linux/acpi.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
+#include <linux/platform_data/x86/intel_iom.h>
 #include <linux/property.h>
+#include <linux/usb/pd.h>
 #include <linux/usb/role.h>
 #include <linux/usb/typec_mux.h>
 #include <linux/usb/typec_dp.h>
@@ -18,6 +20,10 @@
 #include <asm/intel_scu_ipc.h>
 
 #define PMC_USBC_CMD		0xa7
+
+/* Response status bits */
+#define PMC_USB_RESP_STATUS_FAILURE	BIT(0)
+#define PMC_USB_RESP_STATUS_FATAL	BIT(1)
 
 /* "Usage" OOB Message field values */
 enum {
@@ -63,6 +69,7 @@ enum {
 #define PMC_USB_ALTMODE_DP_MODE_SHIFT	8
 
 /* TBT specific Mode Data bits */
+#define PMC_USB_ALTMODE_HPD_HIGH	BIT(14)
 #define PMC_USB_ALTMODE_TBT_TYPE	BIT(17)
 #define PMC_USB_ALTMODE_CABLE_TYPE	BIT(18)
 #define PMC_USB_ALTMODE_ACTIVE_LINK	BIT(20)
@@ -74,13 +81,20 @@ enum {
 #define PMC_USB_ALTMODE_TBT_GEN(_g_)	(((_g_) & GENMASK(1, 0)) << 28)
 
 /* Display HPD Request bits */
+#define PMC_USB_DP_HPD_LVL		BIT(4)
 #define PMC_USB_DP_HPD_IRQ		BIT(5)
-#define PMC_USB_DP_HPD_LVL		BIT(6)
+
+/* IOM Port Status */
+#define IOM_PORT_ACTIVITY_IS(_status_, _type_)				\
+	((((_status_) & IOM_PORT_STATUS_ACTIVITY_TYPE_MASK) >>		\
+	  IOM_PORT_STATUS_ACTIVITY_TYPE_SHIFT) ==			\
+	 (IOM_PORT_STATUS_ACTIVITY_TYPE_##_type_))
 
 struct pmc_usb;
 
 struct pmc_usb_port {
 	int num;
+	u32 iom_status;
 	struct pmc_usb *pmc;
 	struct typec_mux *typec_mux;
 	struct typec_switch *typec_sw;
@@ -91,6 +105,11 @@ struct pmc_usb_port {
 
 	u8 usb2_port;
 	u8 usb3_port;
+
+	enum typec_orientation sbu_orientation;
+	enum typec_orientation hsl_orientation;
+
+	u8 hpd_lvl;
 };
 
 struct pmc_usb {
@@ -99,6 +118,22 @@ struct pmc_usb {
 	struct intel_scu_ipc_dev *ipc;
 	struct pmc_usb_port *port;
 };
+
+static int sbu_orientation(struct pmc_usb_port *port)
+{
+	if (port->sbu_orientation)
+		return port->sbu_orientation - 1;
+
+	return port->orientation - 1;
+}
+
+static int hsl_orientation(struct pmc_usb_port *port)
+{
+	if (port->hsl_orientation)
+		return port->hsl_orientation - 1;
+
+	return port->orientation - 1;
+}
 
 static int pmc_usb_command(struct pmc_usb_port *port, u8 *msg, u32 len)
 {
@@ -110,8 +145,8 @@ static int pmc_usb_command(struct pmc_usb_port *port, u8 *msg, u32 len)
 	 */
 	intel_scu_ipc_dev_command(port->pmc->ipc, PMC_USBC_CMD, 0, msg, len,
 				  response, sizeof(response));
-	if (response[2]) {
-		if (response[2] & BIT(1))
+	if (response[2] & PMC_USB_RESP_STATUS_FAILURE) {
+		if (response[2] & PMC_USB_RESP_STATUS_FATAL)
 			return -EIO;
 		return -EBUSY;
 	}
@@ -120,17 +155,17 @@ static int pmc_usb_command(struct pmc_usb_port *port, u8 *msg, u32 len)
 }
 
 static int
-pmc_usb_mux_dp_hpd(struct pmc_usb_port *port, struct typec_mux_state *state)
+pmc_usb_mux_dp_hpd(struct pmc_usb_port *port, struct typec_displayport_data *dp)
 {
-	struct typec_displayport_data *data = state->data;
 	u8 msg[2] = { };
 
 	msg[0] = PMC_USB_DP_HPD;
 	msg[0] |= port->usb3_port << PMC_USB_MSG_USB3_PORT_SHIFT;
 
-	msg[1] = PMC_USB_DP_HPD_IRQ;
+	if (dp->status & DP_STATUS_IRQ_HPD)
+		msg[1] = PMC_USB_DP_HPD_IRQ;
 
-	if (data->status & DP_STATUS_HPD_STATE)
+	if (dp->status & DP_STATUS_HPD_STATE)
 		msg[1] |= PMC_USB_DP_HPD_LVL;
 
 	return pmc_usb_command(port, msg, sizeof(msg));
@@ -141,9 +176,17 @@ pmc_usb_mux_dp(struct pmc_usb_port *port, struct typec_mux_state *state)
 {
 	struct typec_displayport_data *data = state->data;
 	struct altmode_req req = { };
+	int ret;
 
-	if (data->status & DP_STATUS_IRQ_HPD)
-		return pmc_usb_mux_dp_hpd(port, state);
+	if (IOM_PORT_ACTIVITY_IS(port->iom_status, DP) ||
+	    IOM_PORT_ACTIVITY_IS(port->iom_status, DP_MFD)) {
+		if (!(data->status & DP_STATUS_IRQ_HPD) &&
+		    port->hpd_lvl == (data->status & DP_STATUS_HPD_STATE))
+			return 0;
+
+		port->hpd_lvl = data->status & DP_STATUS_HPD_STATE;
+		return pmc_usb_mux_dp_hpd(port, state->data);
+	}
 
 	req.usage = PMC_USB_ALT_MODE;
 	req.usage |= port->usb3_port << PMC_USB_MSG_USB3_PORT_SHIFT;
@@ -151,17 +194,26 @@ pmc_usb_mux_dp(struct pmc_usb_port *port, struct typec_mux_state *state)
 
 	req.mode_data = (port->orientation - 1) << PMC_USB_ALTMODE_ORI_SHIFT;
 	req.mode_data |= (port->role - 1) << PMC_USB_ALTMODE_UFP_SHIFT;
-	req.mode_data |= (port->orientation - 1) << PMC_USB_ALTMODE_ORI_AUX_SHIFT;
-	req.mode_data |= (port->orientation - 1) << PMC_USB_ALTMODE_ORI_HSL_SHIFT;
+
+	req.mode_data |= sbu_orientation(port) << PMC_USB_ALTMODE_ORI_AUX_SHIFT;
+	req.mode_data |= hsl_orientation(port) << PMC_USB_ALTMODE_ORI_HSL_SHIFT;
 
 	req.mode_data |= (state->mode - TYPEC_STATE_MODAL) <<
 			 PMC_USB_ALTMODE_DP_MODE_SHIFT;
 
-	if (data->status & DP_STATUS_HPD_STATE)
-		req.mode_data |= PMC_USB_DP_HPD_LVL <<
-				 PMC_USB_ALTMODE_DP_MODE_SHIFT;
+	port->hpd_lvl = data->status & DP_STATUS_HPD_STATE;
 
-	return pmc_usb_command(port, (void *)&req, sizeof(req));
+	if (data->status & DP_STATUS_HPD_STATE)
+		req.mode_data |= PMC_USB_ALTMODE_HPD_HIGH;
+
+	ret = pmc_usb_command(port, (void *)&req, sizeof(req));
+	if (ret)
+		return ret;
+
+	if (data->status & (DP_STATUS_IRQ_HPD | DP_STATUS_HPD_STATE))
+		return pmc_usb_mux_dp_hpd(port, state->data);
+
+	return 0;
 }
 
 static int
@@ -171,14 +223,19 @@ pmc_usb_mux_tbt(struct pmc_usb_port *port, struct typec_mux_state *state)
 	u8 cable_speed = TBT_CABLE_SPEED(data->cable_mode);
 	struct altmode_req req = { };
 
+	if (IOM_PORT_ACTIVITY_IS(port->iom_status, TBT) ||
+	    IOM_PORT_ACTIVITY_IS(port->iom_status, ALT_MODE_TBT_USB))
+		return 0;
+
 	req.usage = PMC_USB_ALT_MODE;
 	req.usage |= port->usb3_port << PMC_USB_MSG_USB3_PORT_SHIFT;
 	req.mode_type = PMC_USB_MODE_TYPE_TBT << PMC_USB_MODE_TYPE_SHIFT;
 
 	req.mode_data = (port->orientation - 1) << PMC_USB_ALTMODE_ORI_SHIFT;
 	req.mode_data |= (port->role - 1) << PMC_USB_ALTMODE_UFP_SHIFT;
-	req.mode_data |= (port->orientation - 1) << PMC_USB_ALTMODE_ORI_AUX_SHIFT;
-	req.mode_data |= (port->orientation - 1) << PMC_USB_ALTMODE_ORI_HSL_SHIFT;
+
+	req.mode_data |= sbu_orientation(port) << PMC_USB_ALTMODE_ORI_AUX_SHIFT;
+	req.mode_data |= hsl_orientation(port) << PMC_USB_ALTMODE_ORI_HSL_SHIFT;
 
 	if (TBT_ADAPTER(data->device_mode) == TBT_ADAPTER_TBT3)
 		req.mode_data |= PMC_USB_ALTMODE_TBT_TYPE;
@@ -197,9 +254,53 @@ pmc_usb_mux_tbt(struct pmc_usb_port *port, struct typec_mux_state *state)
 	return pmc_usb_command(port, (void *)&req, sizeof(req));
 }
 
+static int
+pmc_usb_mux_usb4(struct pmc_usb_port *port, struct typec_mux_state *state)
+{
+	struct enter_usb_data *data = state->data;
+	struct altmode_req req = { };
+	u8 cable_speed;
+
+	if (IOM_PORT_ACTIVITY_IS(port->iom_status, TBT) ||
+	    IOM_PORT_ACTIVITY_IS(port->iom_status, ALT_MODE_TBT_USB))
+		return 0;
+
+	req.usage = PMC_USB_ALT_MODE;
+	req.usage |= port->usb3_port << PMC_USB_MSG_USB3_PORT_SHIFT;
+	req.mode_type = PMC_USB_MODE_TYPE_TBT << PMC_USB_MODE_TYPE_SHIFT;
+
+	/* USB4 Mode */
+	req.mode_data = PMC_USB_ALTMODE_FORCE_LSR;
+
+	if (data->active_link_training)
+		req.mode_data |= PMC_USB_ALTMODE_ACTIVE_LINK;
+
+	req.mode_data |= (port->orientation - 1) << PMC_USB_ALTMODE_ORI_SHIFT;
+	req.mode_data |= (port->role - 1) << PMC_USB_ALTMODE_UFP_SHIFT;
+
+	switch ((data->eudo & EUDO_CABLE_TYPE_MASK) >> EUDO_CABLE_TYPE_SHIFT) {
+	case EUDO_CABLE_TYPE_PASSIVE:
+		break;
+	case EUDO_CABLE_TYPE_OPTICAL:
+		req.mode_data |= PMC_USB_ALTMODE_CABLE_TYPE;
+		fallthrough;
+	default:
+		req.mode_data |= PMC_USB_ALTMODE_ACTIVE_CABLE;
+		break;
+	}
+
+	cable_speed = (data->eudo & EUDO_CABLE_SPEED_MASK) >> EUDO_CABLE_SPEED_SHIFT;
+	req.mode_data |= PMC_USB_ALTMODE_CABLE_SPD(cable_speed);
+
+	return pmc_usb_command(port, (void *)&req, sizeof(req));
+}
+
 static int pmc_usb_mux_safe_state(struct pmc_usb_port *port)
 {
 	u8 msg;
+
+	if (IOM_PORT_ACTIVITY_IS(port->iom_status, SAFE_MODE))
+		return 0;
 
 	msg = PMC_USB_SAFE_MODE;
 	msg |= port->usb3_port << PMC_USB_MSG_USB3_PORT_SHIFT;
@@ -207,23 +308,19 @@ static int pmc_usb_mux_safe_state(struct pmc_usb_port *port)
 	return pmc_usb_command(port, &msg, sizeof(msg));
 }
 
-static int pmc_usb_connect(struct pmc_usb_port *port)
-{
-	u8 msg[2];
-
-	msg[0] = PMC_USB_CONNECT;
-	msg[0] |= port->usb3_port << PMC_USB_MSG_USB3_PORT_SHIFT;
-
-	msg[1] = port->usb2_port << PMC_USB_MSG_USB2_PORT_SHIFT;
-	msg[1] |= (port->orientation - 1) << PMC_USB_MSG_ORI_HSL_SHIFT;
-	msg[1] |= (port->orientation - 1) << PMC_USB_MSG_ORI_AUX_SHIFT;
-
-	return pmc_usb_command(port, msg, sizeof(msg));
-}
-
 static int pmc_usb_disconnect(struct pmc_usb_port *port)
 {
+	struct typec_displayport_data data = { };
 	u8 msg[2];
+
+	if (!(port->iom_status & IOM_PORT_STATUS_CONNECTED))
+		return 0;
+
+	/* Clear DisplayPort HPD if it's still asserted. */
+	if (((port->iom_status & IOM_PORT_STATUS_DHPD_HPD_STATUS_MASK) >>
+	     IOM_PORT_STATUS_DHPD_HPD_STATUS_SHIFT) &
+	    IOM_PORT_STATUS_DHPD_HPD_STATUS_ASSERT)
+		pmc_usb_mux_dp_hpd(port, &data);
 
 	msg[0] = PMC_USB_DISCONNECT;
 	msg[0] |= port->usb3_port << PMC_USB_MSG_USB3_PORT_SHIFT;
@@ -233,22 +330,71 @@ static int pmc_usb_disconnect(struct pmc_usb_port *port)
 	return pmc_usb_command(port, msg, sizeof(msg));
 }
 
+static int pmc_usb_connect(struct pmc_usb_port *port, enum usb_role role)
+{
+	u8 ufp = role == USB_ROLE_DEVICE ? 1 : 0;
+	u8 msg[2];
+	int ret;
+
+	if (port->orientation == TYPEC_ORIENTATION_NONE)
+		return -EINVAL;
+
+	if (port->iom_status & IOM_PORT_STATUS_CONNECTED) {
+		if (port->role == role || port->role == USB_ROLE_NONE)
+			return 0;
+
+		/* Role swap */
+		ret = pmc_usb_disconnect(port);
+		if (ret)
+			return ret;
+	}
+
+	msg[0] = PMC_USB_CONNECT;
+	msg[0] |= port->usb3_port << PMC_USB_MSG_USB3_PORT_SHIFT;
+
+	msg[1] = port->usb2_port << PMC_USB_MSG_USB2_PORT_SHIFT;
+	msg[1] |= ufp << PMC_USB_MSG_UFP_SHIFT;
+	msg[1] |= hsl_orientation(port) << PMC_USB_MSG_ORI_HSL_SHIFT;
+	msg[1] |= sbu_orientation(port) << PMC_USB_MSG_ORI_AUX_SHIFT;
+
+	return pmc_usb_command(port, msg, sizeof(msg));
+}
+
 static int
 pmc_usb_mux_set(struct typec_mux *mux, struct typec_mux_state *state)
 {
 	struct pmc_usb_port *port = typec_mux_get_drvdata(mux);
+	int ret;
 
-	if (!state->alt)
+	ret = intel_iom_port_status(port->num, &port->iom_status);
+	if (ret)
+		return ret;
+
+	if (port->orientation == TYPEC_ORIENTATION_NONE || port->role == USB_ROLE_NONE)
 		return 0;
 
 	if (state->mode == TYPEC_STATE_SAFE)
 		return pmc_usb_mux_safe_state(port);
+	if (state->mode == TYPEC_STATE_USB)
+		return pmc_usb_connect(port, port->role);
 
-	switch (state->alt->svid) {
-	case USB_TYPEC_TBT_SID:
-		return pmc_usb_mux_tbt(port, state);
-	case USB_TYPEC_DP_SID:
-		return pmc_usb_mux_dp(port, state);
+	if (state->alt) {
+		switch (state->alt->svid) {
+		case USB_TYPEC_TBT_SID:
+			return pmc_usb_mux_tbt(port, state);
+		case USB_TYPEC_DP_SID:
+			return pmc_usb_mux_dp(port, state);
+		}
+	} else {
+		switch (state->mode) {
+		case TYPEC_MODE_USB2:
+			/* REVISIT: Try with usb3_port set to 0? */
+			break;
+		case TYPEC_MODE_USB3:
+			return pmc_usb_connect(port, port->role);
+		case TYPEC_MODE_USB4:
+			return pmc_usb_mux_usb4(port, state);
+		}
 	}
 
 	return -EOPNOTSUPP;
@@ -258,18 +404,13 @@ static int pmc_usb_set_orientation(struct typec_switch *sw,
 				   enum typec_orientation orientation)
 {
 	struct pmc_usb_port *port = typec_switch_get_drvdata(sw);
+	int ret;
 
-	if (port->orientation == orientation)
-		return 0;
+	ret = intel_iom_port_status(port->num, &port->iom_status);
+	if (ret)
+		return ret;
 
 	port->orientation = orientation;
-
-	if (port->role) {
-		if (orientation == TYPEC_ORIENTATION_NONE)
-			return pmc_usb_disconnect(port);
-		else
-			return pmc_usb_connect(port);
-	}
 
 	return 0;
 }
@@ -277,20 +418,20 @@ static int pmc_usb_set_orientation(struct typec_switch *sw,
 static int pmc_usb_set_role(struct usb_role_switch *sw, enum usb_role role)
 {
 	struct pmc_usb_port *port = usb_role_switch_get_drvdata(sw);
+	int ret;
 
-	if (port->role == role)
-		return 0;
+	ret = intel_iom_port_status(port->num, &port->iom_status);
+	if (ret)
+		return ret;
+
+	if (role == USB_ROLE_NONE)
+		ret = pmc_usb_disconnect(port);
+	else
+		ret = pmc_usb_connect(port, role);
 
 	port->role = role;
 
-	if (port->orientation) {
-		if (role == USB_ROLE_NONE)
-			return pmc_usb_disconnect(port);
-		else
-			return pmc_usb_connect(port);
-	}
-
-	return 0;
+	return ret;
 }
 
 static int pmc_usb_register_port(struct pmc_usb *pmc, int index,
@@ -300,6 +441,7 @@ static int pmc_usb_register_port(struct pmc_usb *pmc, int index,
 	struct usb_role_switch_desc desc = { };
 	struct typec_switch_desc sw_desc = { };
 	struct typec_mux_desc mux_desc = { };
+	const char *str;
 	int ret;
 
 	ret = fwnode_property_read_u8(fwnode, "usb2-port-number", &port->usb2_port);
@@ -309,6 +451,14 @@ static int pmc_usb_register_port(struct pmc_usb *pmc, int index,
 	ret = fwnode_property_read_u8(fwnode, "usb3-port-number", &port->usb3_port);
 	if (ret)
 		return ret;
+
+	ret = fwnode_property_read_string(fwnode, "sbu-orientation", &str);
+	if (!ret)
+		port->sbu_orientation = typec_find_orientation(str);
+
+	ret = fwnode_property_read_string(fwnode, "hsl-orientation", &str);
+	if (!ret)
+		port->hsl_orientation = typec_find_orientation(str);
 
 	port->num = index;
 	port->pmc = pmc;

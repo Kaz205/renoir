@@ -27,6 +27,7 @@
 #include <linux/kernel.h>
 #include <linux/sched.h>
 #include <linux/seq_file.h>
+#include <linux/iopoll.h>
 
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
@@ -37,6 +38,7 @@
 #include <drm/drm_probe_helper.h>
 
 #include "drm_crtc_helper_internal.h"
+#include "drm_dp_mst_topology_internal.h"
 
 /**
  * DOC: dp mst helper
@@ -47,7 +49,6 @@
  */
 static bool dump_dp_payload_table(struct drm_dp_mst_topology_mgr *mgr,
 				  char *buf);
-static int test_calc_pbn_mode(void);
 
 static void drm_dp_mst_topology_put_port(struct drm_dp_mst_port *port);
 
@@ -73,6 +74,8 @@ static bool drm_dp_validate_guid(struct drm_dp_mst_topology_mgr *mgr,
 static int drm_dp_mst_register_i2c_bus(struct drm_dp_aux *aux);
 static void drm_dp_mst_unregister_i2c_bus(struct drm_dp_aux *aux);
 static void drm_dp_mst_kick_tx(struct drm_dp_mst_topology_mgr *mgr);
+
+#define DBG_PREFIX "[dp_mst]"
 
 #define DP_STR(x) [DP_ ## x] = #x
 
@@ -130,6 +133,43 @@ static const char *drm_dp_mst_nak_reason_str(u8 nak_reason)
 }
 
 #undef DP_STR
+#define DP_STR(x) [DRM_DP_SIDEBAND_TX_ ## x] = #x
+
+static const char *drm_dp_mst_sideband_tx_state_str(int state)
+{
+	static const char * const sideband_reason_str[] = {
+		DP_STR(QUEUED),
+		DP_STR(START_SEND),
+		DP_STR(SENT),
+		DP_STR(RX),
+		DP_STR(TIMEOUT),
+	};
+
+	if (state >= ARRAY_SIZE(sideband_reason_str) ||
+	    !sideband_reason_str[state])
+		return "unknown";
+
+	return sideband_reason_str[state];
+}
+
+static int
+drm_dp_mst_rad_to_str(const u8 rad[8], u8 lct, char *out, size_t len)
+{
+	int i;
+	u8 unpacked_rad[16];
+
+	for (i = 0; i < lct; i++) {
+		if (i % 2)
+			unpacked_rad[i] = rad[i / 2] >> 4;
+		else
+			unpacked_rad[i] = rad[i / 2] & BIT_MASK(4);
+	}
+
+	/* TODO: Eventually add something to printk so we can format the rad
+	 * like this: 1.2.3
+	 */
+	return snprintf(out, len, "%*phC", lct, unpacked_rad);
+}
 
 /* sideband msg handling */
 static u8 drm_dp_msg_header_crc4(const uint8_t *data, size_t num_nibbles)
@@ -262,8 +302,9 @@ static bool drm_dp_decode_sideband_msg_hdr(struct drm_dp_sideband_msg_hdr *hdr,
 	return true;
 }
 
-static void drm_dp_encode_sideband_req(struct drm_dp_sideband_msg_req_body *req,
-				       struct drm_dp_sideband_msg_tx *raw)
+void
+drm_dp_encode_sideband_req(const struct drm_dp_sideband_msg_req_body *req,
+			   struct drm_dp_sideband_msg_tx *raw)
 {
 	int idx = 0;
 	int i;
@@ -367,6 +408,253 @@ static void drm_dp_encode_sideband_req(struct drm_dp_sideband_msg_req_body *req,
 		break;
 	}
 	raw->cur_len = idx;
+}
+EXPORT_SYMBOL_FOR_TESTS_ONLY(drm_dp_encode_sideband_req);
+
+/* Decode a sideband request we've encoded, mainly used for debugging */
+int
+drm_dp_decode_sideband_req(const struct drm_dp_sideband_msg_tx *raw,
+			   struct drm_dp_sideband_msg_req_body *req)
+{
+	const u8 *buf = raw->msg;
+	int i, idx = 0;
+
+	req->req_type = buf[idx++] & 0x7f;
+	switch (req->req_type) {
+	case DP_ENUM_PATH_RESOURCES:
+	case DP_POWER_DOWN_PHY:
+	case DP_POWER_UP_PHY:
+		req->u.port_num.port_number = (buf[idx] >> 4) & 0xf;
+		break;
+	case DP_ALLOCATE_PAYLOAD:
+		{
+			struct drm_dp_allocate_payload *a =
+				&req->u.allocate_payload;
+
+			a->number_sdp_streams = buf[idx] & 0xf;
+			a->port_number = (buf[idx] >> 4) & 0xf;
+
+			WARN_ON(buf[++idx] & 0x80);
+			a->vcpi = buf[idx] & 0x7f;
+
+			a->pbn = buf[++idx] << 8;
+			a->pbn |= buf[++idx];
+
+			idx++;
+			for (i = 0; i < a->number_sdp_streams; i++) {
+				a->sdp_stream_sink[i] =
+					(buf[idx + (i / 2)] >> ((i % 2) ? 0 : 4)) & 0xf;
+			}
+		}
+		break;
+	case DP_QUERY_PAYLOAD:
+		req->u.query_payload.port_number = (buf[idx] >> 4) & 0xf;
+		WARN_ON(buf[++idx] & 0x80);
+		req->u.query_payload.vcpi = buf[idx] & 0x7f;
+		break;
+	case DP_REMOTE_DPCD_READ:
+		{
+			struct drm_dp_remote_dpcd_read *r = &req->u.dpcd_read;
+
+			r->port_number = (buf[idx] >> 4) & 0xf;
+
+			r->dpcd_address = (buf[idx] << 16) & 0xf0000;
+			r->dpcd_address |= (buf[++idx] << 8) & 0xff00;
+			r->dpcd_address |= buf[++idx] & 0xff;
+
+			r->num_bytes = buf[++idx];
+		}
+		break;
+	case DP_REMOTE_DPCD_WRITE:
+		{
+			struct drm_dp_remote_dpcd_write *w =
+				&req->u.dpcd_write;
+
+			w->port_number = (buf[idx] >> 4) & 0xf;
+
+			w->dpcd_address = (buf[idx] << 16) & 0xf0000;
+			w->dpcd_address |= (buf[++idx] << 8) & 0xff00;
+			w->dpcd_address |= buf[++idx] & 0xff;
+
+			w->num_bytes = buf[++idx];
+
+			w->bytes = kmemdup(&buf[++idx], w->num_bytes,
+					   GFP_KERNEL);
+			if (!w->bytes)
+				return -ENOMEM;
+		}
+		break;
+	case DP_REMOTE_I2C_READ:
+		{
+			struct drm_dp_remote_i2c_read *r = &req->u.i2c_read;
+			struct drm_dp_remote_i2c_read_tx *tx;
+			bool failed = false;
+
+			r->num_transactions = buf[idx] & 0x3;
+			r->port_number = (buf[idx] >> 4) & 0xf;
+			for (i = 0; i < r->num_transactions; i++) {
+				tx = &r->transactions[i];
+
+				tx->i2c_dev_id = buf[++idx] & 0x7f;
+				tx->num_bytes = buf[++idx];
+				tx->bytes = kmemdup(&buf[++idx],
+						    tx->num_bytes,
+						    GFP_KERNEL);
+				if (!tx->bytes) {
+					failed = true;
+					break;
+				}
+				idx += tx->num_bytes;
+				tx->no_stop_bit = (buf[idx] >> 5) & 0x1;
+				tx->i2c_transaction_delay = buf[idx] & 0xf;
+			}
+
+			if (failed) {
+				for (i = 0; i < r->num_transactions; i++) {
+					tx = &r->transactions[i];
+					kfree(tx->bytes);
+				}
+				return -ENOMEM;
+			}
+
+			r->read_i2c_device_id = buf[++idx] & 0x7f;
+			r->num_bytes_read = buf[++idx];
+		}
+		break;
+	case DP_REMOTE_I2C_WRITE:
+		{
+			struct drm_dp_remote_i2c_write *w = &req->u.i2c_write;
+
+			w->port_number = (buf[idx] >> 4) & 0xf;
+			w->write_i2c_device_id = buf[++idx] & 0x7f;
+			w->num_bytes = buf[++idx];
+			w->bytes = kmemdup(&buf[++idx], w->num_bytes,
+					   GFP_KERNEL);
+			if (!w->bytes)
+				return -ENOMEM;
+		}
+		break;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL_FOR_TESTS_ONLY(drm_dp_decode_sideband_req);
+
+void
+drm_dp_dump_sideband_msg_req_body(const struct drm_dp_sideband_msg_req_body *req,
+				  int indent, struct drm_printer *printer)
+{
+	int i;
+
+#define P(f, ...) drm_printf_indent(printer, indent, f, ##__VA_ARGS__)
+	if (req->req_type == DP_LINK_ADDRESS) {
+		/* No contents to print */
+		P("type=%s\n", drm_dp_mst_req_type_str(req->req_type));
+		return;
+	}
+
+	P("type=%s contents:\n", drm_dp_mst_req_type_str(req->req_type));
+	indent++;
+
+	switch (req->req_type) {
+	case DP_ENUM_PATH_RESOURCES:
+	case DP_POWER_DOWN_PHY:
+	case DP_POWER_UP_PHY:
+		P("port=%d\n", req->u.port_num.port_number);
+		break;
+	case DP_ALLOCATE_PAYLOAD:
+		P("port=%d vcpi=%d pbn=%d sdp_streams=%d %*ph\n",
+		  req->u.allocate_payload.port_number,
+		  req->u.allocate_payload.vcpi, req->u.allocate_payload.pbn,
+		  req->u.allocate_payload.number_sdp_streams,
+		  req->u.allocate_payload.number_sdp_streams,
+		  req->u.allocate_payload.sdp_stream_sink);
+		break;
+	case DP_QUERY_PAYLOAD:
+		P("port=%d vcpi=%d\n",
+		  req->u.query_payload.port_number,
+		  req->u.query_payload.vcpi);
+		break;
+	case DP_REMOTE_DPCD_READ:
+		P("port=%d dpcd_addr=%05x len=%d\n",
+		  req->u.dpcd_read.port_number, req->u.dpcd_read.dpcd_address,
+		  req->u.dpcd_read.num_bytes);
+		break;
+	case DP_REMOTE_DPCD_WRITE:
+		P("port=%d addr=%05x len=%d: %*ph\n",
+		  req->u.dpcd_write.port_number,
+		  req->u.dpcd_write.dpcd_address,
+		  req->u.dpcd_write.num_bytes, req->u.dpcd_write.num_bytes,
+		  req->u.dpcd_write.bytes);
+		break;
+	case DP_REMOTE_I2C_READ:
+		P("port=%d num_tx=%d id=%d size=%d:\n",
+		  req->u.i2c_read.port_number,
+		  req->u.i2c_read.num_transactions,
+		  req->u.i2c_read.read_i2c_device_id,
+		  req->u.i2c_read.num_bytes_read);
+
+		indent++;
+		for (i = 0; i < req->u.i2c_read.num_transactions; i++) {
+			const struct drm_dp_remote_i2c_read_tx *rtx =
+				&req->u.i2c_read.transactions[i];
+
+			P("%d: id=%03d size=%03d no_stop_bit=%d tx_delay=%03d: %*ph\n",
+			  i, rtx->i2c_dev_id, rtx->num_bytes,
+			  rtx->no_stop_bit, rtx->i2c_transaction_delay,
+			  rtx->num_bytes, rtx->bytes);
+		}
+		break;
+	case DP_REMOTE_I2C_WRITE:
+		P("port=%d id=%d size=%d: %*ph\n",
+		  req->u.i2c_write.port_number,
+		  req->u.i2c_write.write_i2c_device_id,
+		  req->u.i2c_write.num_bytes, req->u.i2c_write.num_bytes,
+		  req->u.i2c_write.bytes);
+		break;
+	default:
+		P("???\n");
+		break;
+	}
+#undef P
+}
+EXPORT_SYMBOL_FOR_TESTS_ONLY(drm_dp_dump_sideband_msg_req_body);
+
+static inline void
+drm_dp_mst_dump_sideband_msg_tx(struct drm_printer *p,
+				const struct drm_dp_sideband_msg_tx *txmsg)
+{
+	struct drm_dp_sideband_msg_req_body req;
+	char buf[64];
+	int ret;
+	int i;
+
+	drm_dp_mst_rad_to_str(txmsg->dst->rad, txmsg->dst->lct, buf,
+			      sizeof(buf));
+	drm_printf(p, "txmsg cur_offset=%x cur_len=%x seqno=%x state=%s path_msg=%d dst=%s\n",
+		   txmsg->cur_offset, txmsg->cur_len, txmsg->seqno,
+		   drm_dp_mst_sideband_tx_state_str(txmsg->state),
+		   txmsg->path_msg, buf);
+
+	ret = drm_dp_decode_sideband_req(txmsg, &req);
+	if (ret) {
+		drm_printf(p, "<failed to decode sideband req: %d>\n", ret);
+		return;
+	}
+	drm_dp_dump_sideband_msg_req_body(&req, 1, p);
+
+	switch (req.req_type) {
+	case DP_REMOTE_DPCD_WRITE:
+		kfree(req.u.dpcd_write.bytes);
+		break;
+	case DP_REMOTE_I2C_READ:
+		for (i = 0; i < req.u.i2c_read.num_transactions; i++)
+			kfree(req.u.i2c_read.transactions[i].bytes);
+		break;
+	case DP_REMOTE_I2C_WRITE:
+		kfree(req.u.i2c_write.bytes);
+		break;
+	}
 }
 
 static void drm_dp_crc_sideband_chunk_req(u8 *msg, u8 len)
@@ -899,6 +1187,11 @@ static int drm_dp_mst_wait_tx_reply(struct drm_dp_mst_branch *mstb,
 		}
 	}
 out:
+	if (unlikely(ret == -EIO) && drm_debug_enabled(DRM_UT_DP)) {
+		struct drm_printer p = drm_debug_printer(DBG_PREFIX);
+
+		drm_dp_mst_dump_sideband_msg_tx(&p, txmsg);
+	}
 	mutex_unlock(&mgr->qlock);
 
 	return ret;
@@ -2035,8 +2328,11 @@ static int process_single_tx_qlock(struct drm_dp_mst_topology_mgr *mgr,
 	idx += tosend + 1;
 
 	ret = drm_dp_send_sideband_msg(mgr, up, chunk, idx);
-	if (ret) {
-		DRM_DEBUG_KMS("sideband msg failed to send\n");
+	if (unlikely(ret) && drm_debug_enabled(DRM_UT_DP)) {
+		struct drm_printer p = drm_debug_printer(DBG_PREFIX);
+
+		drm_printf(&p, "sideband msg failed to send\n");
+		drm_dp_mst_dump_sideband_msg_tx(&p, txmsg);
 		return ret;
 	}
 
@@ -2098,6 +2394,13 @@ static void drm_dp_queue_down_tx(struct drm_dp_mst_topology_mgr *mgr,
 {
 	mutex_lock(&mgr->qlock);
 	list_add_tail(&txmsg->next, &mgr->tx_msg_downq);
+
+	if (drm_debug_enabled(DRM_UT_DP)) {
+		struct drm_printer p = drm_debug_printer(DBG_PREFIX);
+
+		drm_dp_mst_dump_sideband_msg_tx(&p, txmsg);
+	}
+
 	if (list_is_singular(&mgr->tx_msg_downq))
 		process_single_down_tx_qlock(mgr);
 	mutex_unlock(&mgr->qlock);
@@ -3498,6 +3801,17 @@ fail:
 	return ret;
 }
 
+static int do_get_act_status(struct drm_dp_aux *aux)
+{
+	int ret;
+	u8 status;
+
+	ret = drm_dp_dpcd_readb(aux, DP_PAYLOAD_TABLE_UPDATE_STATUS, &status);
+	if (ret < 0)
+		return ret;
+
+	return status;
+}
 
 /**
  * drm_dp_check_act_status() - Check ACT handled status.
@@ -3507,33 +3821,29 @@ fail:
  */
 int drm_dp_check_act_status(struct drm_dp_mst_topology_mgr *mgr)
 {
-	u8 status;
-	int ret;
-	int count = 0;
+	/*
+	 * There doesn't seem to be any recommended retry count or timeout in
+	 * the MST specification. Since some hubs have been observed to take
+	 * over 1 second to update their payload allocations under certain
+	 * conditions, we use a rather large timeout value.
+	 */
+	const int timeout_ms = 3000;
+	int ret, status;
 
-	do {
-		ret = drm_dp_dpcd_readb(mgr->aux, DP_PAYLOAD_TABLE_UPDATE_STATUS, &status);
-
-		if (ret < 0) {
-			DRM_DEBUG_KMS("failed to read payload table status %d\n", ret);
-			goto fail;
-		}
-
-		if (status & DP_PAYLOAD_ACT_HANDLED)
-			break;
-		count++;
-		udelay(100);
-
-	} while (count < 30);
-
-	if (!(status & DP_PAYLOAD_ACT_HANDLED)) {
-		DRM_DEBUG_KMS("failed to get ACT bit %d after %d retries\n", status, count);
-		ret = -EINVAL;
-		goto fail;
+	ret = readx_poll_timeout(do_get_act_status, mgr->aux, status,
+				 status & DP_PAYLOAD_ACT_HANDLED || status < 0,
+				 200, timeout_ms * USEC_PER_MSEC);
+	if (ret < 0 && status >= 0) {
+		DRM_DEBUG_KMS("Failed to get ACT after %dms, last status: %02x\n",
+			      timeout_ms, status);
+		return -EINVAL;
+	} else if (status < 0) {
+		DRM_DEBUG_KMS("Failed to read payload table status: %d\n",
+			      status);
+		return status;
 	}
+
 	return 0;
-fail:
-	return ret;
 }
 EXPORT_SYMBOL(drm_dp_check_act_status);
 
@@ -3573,30 +3883,6 @@ int drm_dp_calc_pbn_mode(int clock, int bpp)
 	return drm_fixp2int_ceil(peak_kbps);
 }
 EXPORT_SYMBOL(drm_dp_calc_pbn_mode);
-
-static int test_calc_pbn_mode(void)
-{
-	int ret;
-	ret = drm_dp_calc_pbn_mode(154000, 30);
-	if (ret != 689) {
-		DRM_ERROR("PBN calculation test failed - clock %d, bpp %d, expected PBN %d, actual PBN %d.\n",
-				154000, 30, 689, ret);
-		return -EINVAL;
-	}
-	ret = drm_dp_calc_pbn_mode(234000, 30);
-	if (ret != 1047) {
-		DRM_ERROR("PBN calculation test failed - clock %d, bpp %d, expected PBN %d, actual PBN %d.\n",
-				234000, 30, 1047, ret);
-		return -EINVAL;
-	}
-	ret = drm_dp_calc_pbn_mode(297000, 24);
-	if (ret != 1063) {
-		DRM_ERROR("PBN calculation test failed - clock %d, bpp %d, expected PBN %d, actual PBN %d.\n",
-				297000, 24, 1063, ret);
-		return -EINVAL;
-	}
-	return 0;
-}
 
 /* we want to kick the TX after we've ack the up/down IRQs. */
 static void drm_dp_mst_kick_tx(struct drm_dp_mst_topology_mgr *mgr)
@@ -3977,8 +4263,6 @@ int drm_dp_mst_topology_mgr_init(struct drm_dp_mst_topology_mgr *mgr,
 	if (!mgr->proposed_vcpis)
 		return -ENOMEM;
 	set_bit(0, &mgr->payload_mask);
-	if (test_calc_pbn_mode() < 0)
-		DRM_ERROR("MST PBN self-test failed\n");
 
 	mst_state = kzalloc(sizeof(*mst_state), GFP_KERNEL);
 	if (mst_state == NULL)

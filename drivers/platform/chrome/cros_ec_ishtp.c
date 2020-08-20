@@ -46,7 +46,7 @@ static const guid_t cros_ish_guid =
 struct header {
 	u8 channel;
 	u8 status;
-	u8 id;
+	u8 token;
 	u8 reserved;
 } __packed;
 
@@ -81,28 +81,24 @@ DECLARE_RWSEM(init_lock);
 
 /**
  * struct response_info - Encapsulate firmware response related
- *			information for passing between function
- *			ish_send() and process_recv() callback.
- * @data:		Copy the data received from firmware here.
- * @max_size:		Max size allocated for the @data buffer. If the
- *			received data exceeds this value, we log an
- *			error.
- * @size:		Actual size of data received from firmware.
- * @error:		0 for success, negative error code for a
- *			failure in function process_recv().
- * @expected_id:	Expected id for response that we are waiting on.
- * @received:		Set to true on receiving a valid firmware
- *			response to host command
- * @wait_queue:		Wait queue for Host firmware loading where the
- *			client sends message to ISH firmware and waits
- *			for response
+ * information for passing between function ish_send() and
+ * process_recv() callback.
+ *
+ * @data: Copy the data received from firmware here.
+ * @max_size: Max size allocated for the @data buffer. If the received
+ * data exceeds this value, we log an error.
+ * @size: Actual size of data received from firmware.
+ * @error: 0 for success, negative error code for a failure in process_recv().
+ * @token: Expected token for response that we are waiting on.
+ * @received: Set to true on receiving a valid firmware	response to host command
+ * @wait_queue: Wait queue for host to wait for firmware response.
  */
 struct response_info {
 	void *data;
 	size_t max_size;
 	size_t size;
 	int error;
-	u8 expected_id;
+	u8 token;
 	bool received;
 	wait_queue_head_t wait_queue;
 };
@@ -167,7 +163,7 @@ static int ish_send(struct ishtp_cl_data *client_data,
 		    u8 *out_msg, size_t out_size,
 		    u8 *in_msg, size_t in_size)
 {
-	static u8 current_id;
+	static u8 next_token;
 	int rv;
 	struct header *out_hdr = (struct header *)out_msg;
 	struct ishtp_cl *cros_ish_cl = client_data->cros_ish_cl;
@@ -180,10 +176,10 @@ static int ish_send(struct ishtp_cl_data *client_data,
 	client_data->response.data = in_msg;
 	client_data->response.max_size = in_size;
 	client_data->response.error = 0;
-	client_data->response.expected_id = ++current_id;
+	client_data->response.token = next_token++;
 	client_data->response.received = false;
 
-	out_hdr->id = client_data->response.expected_id;
+	out_hdr->token = client_data->response.token;
 
 	rv = ishtp_cl_send(cros_ish_cl, out_msg, out_size);
 	if (rv) {
@@ -264,10 +260,10 @@ static void process_recv(struct ishtp_cl *cros_ish_cl,
 			goto end_error;
 		}
 
-		if (client_data->response.expected_id != in_msg->hdr.id) {
-			dev_err(dev,
-				"Dropping old response id %d\n",
-				in_msg->hdr.id);
+		if (client_data->response.token != in_msg->hdr.token) {
+			dev_err_ratelimited(dev,
+					    "Dropping old response token %d\n",
+					    in_msg->hdr.token);
 			goto end_error;
 		}
 

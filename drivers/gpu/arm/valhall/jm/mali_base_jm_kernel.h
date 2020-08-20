@@ -264,7 +264,6 @@ typedef u32 base_context_create_flags;
 
 #define BASE_TLSTREAM_FLAGS_MASK (BASE_TLSTREAM_ENABLE_LATENCY_TRACEPOINTS | \
 		BASE_TLSTREAM_JOB_DUMPING_ENABLED)
-
 /*
  * Dependency stuff, keep it private for now. May want to expose it if
  * we decide to make the number of semaphores a configurable

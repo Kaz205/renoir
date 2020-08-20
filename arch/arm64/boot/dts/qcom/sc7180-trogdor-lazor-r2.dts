@@ -1,0 +1,28 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Google Lazor board device tree source
+ *
+ * Copyright 2020 Google LLC.
+ */
+
+#include "sc7180-trogdor-lazor-r1-lte.dts"
+
+/ {
+	model = "Google Lazor (rev2)";
+	compatible = "google,lazor-rev2", "qcom,sc7180";
+};
+
+&sdhc_1 {
+	/*
+	 * HACK: due to b/155826689 we are temporarily overriding the
+	 * compatible string which will cause us to restore the DLL config
+	 * at runtime resume.
+	 */
+	compatible = "qcom,sdm845-sdhci", "qcom,sdhci-msm-v5";
+
+	/* HACK: this emmc is also causing us s2r problems, so further hack. */
+	max-frequency = <100000000>;
+	/delete-property/mmc-ddr-1_8v;
+	/delete-property/mmc-hs400-1_8v;
+	/delete-property/mmc-hs400-enhanced-strobe;
+};

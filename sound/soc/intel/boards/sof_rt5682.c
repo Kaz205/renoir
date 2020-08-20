@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0-only
 // Copyright(c) 2019-2020 Intel Corporation.
 
 /*
@@ -43,6 +43,7 @@
 	((quirk << SOF_RT5682_NUM_HDMIDEV_SHIFT) & SOF_RT5682_NUM_HDMIDEV_MASK)
 #define SOF_RT1015_SPEAKER_AMP_PRESENT		BIT(13)
 #define SOF_MAX98373_SPEAKER_AMP_PRESENT	BIT(14)
+#define SOF_MAX98360A_SPEAKER_AMP_PRESENT	BIT(15)
 
 /* Default: MCLK on, MCLK 19.2M, SSP0  */
 static unsigned long sof_rt5682_quirk = SOF_RT5682_MCLK_EN |
@@ -117,6 +118,19 @@ static const struct dmi_system_id sof_rt5682_quirk_table[] = {
 		},
 		.driver_data = (void *)(SOF_RT5682_MCLK_EN |
 					SOF_RT5682_SSP_CODEC(0)),
+	},
+	{
+		.callback = sof_rt5682_quirk_cb,
+		.matches = {
+			DMI_MATCH(DMI_PRODUCT_FAMILY, "Google_Volteer"),
+			DMI_MATCH(DMI_PRODUCT_NAME, "Terrador"),
+		},
+		.driver_data = (void *)(SOF_RT5682_MCLK_EN |
+					SOF_RT5682_SSP_CODEC(0) |
+					SOF_SPEAKER_AMP_PRESENT |
+					SOF_MAX98373_SPEAKER_AMP_PRESENT |
+					SOF_RT5682_SSP_AMP(2) |
+					SOF_RT5682_NUM_HDMIDEV(4)),
 	},
 	{}
 };
@@ -276,8 +290,15 @@ static int sof_rt1015_hw_params(struct snd_pcm_substream *substream,
 		return 0;
 
 	for_each_rtd_codec_dais(rtd, i, codec_dai) {
+		/* Set tdm/i2s1 master bclk ratio */
+		ret = snd_soc_dai_set_bclk_ratio(codec_dai, 64);
+		if (ret < 0) {
+			dev_err(card->dev, "failed to set bclk ratio\n");
+			return ret;
+		}
+
 		ret = snd_soc_dai_set_pll(codec_dai, 0, RT1015_PLL_S_BCLK,
-					  params_rate(params) * 50,
+					  params_rate(params) * 64,
 					  params_rate(params) * 256);
 		if (ret < 0) {
 			dev_err(card->dev, "failed to set pll\n");
@@ -484,6 +505,13 @@ static struct snd_soc_dai_link_component max98357a_component[] = {
 	}
 };
 
+static struct snd_soc_dai_link_component max98360a_component[] = {
+	{
+		.name = "MX98360A:00",
+		.dai_name = "HiFi",
+	}
+};
+
 static struct snd_soc_dai_link_component rt1015_components[] = {
 	{
 		.name = "i2c-10EC1015:00",
@@ -645,6 +673,11 @@ static struct snd_soc_dai_link *sof_card_dai_links_create(struct device *dev,
 			links[id].num_codecs = ARRAY_SIZE(max_98373_components);
 			links[id].init = max98373_spk_codec_init;
 			links[id].ops = &max_98373_ops;
+		} else if (sof_rt5682_quirk &
+				SOF_MAX98360A_SPEAKER_AMP_PRESENT) {
+			links[id].codecs = max98360a_component;
+			links[id].num_codecs = ARRAY_SIZE(max98360a_component);
+			links[id].init = speaker_codec_init;
 		} else {
 			links[id].codecs = max98357a_component;
 			links[id].num_codecs = ARRAY_SIZE(max98357a_component);
@@ -831,6 +864,15 @@ static const struct platform_device_id board_ids[] = {
 					SOF_RT5682_SSP_AMP(1) |
 					SOF_RT5682_NUM_HDMIDEV(4)),
 	},
+	{
+		.name = "jsl_rt5682_max98360a",
+		.driver_data = (kernel_ulong_t)(SOF_RT5682_MCLK_EN |
+					SOF_RT5682_MCLK_24MHZ |
+					SOF_RT5682_SSP_CODEC(0) |
+					SOF_SPEAKER_AMP_PRESENT |
+					SOF_MAX98360A_SPEAKER_AMP_PRESENT |
+					SOF_RT5682_SSP_AMP(1)),
+	},
 	{ }
 };
 
@@ -854,3 +896,4 @@ MODULE_ALIAS("platform:sof_rt5682");
 MODULE_ALIAS("platform:tgl_max98357a_rt5682");
 MODULE_ALIAS("platform:jsl_rt5682_rt1015");
 MODULE_ALIAS("platform:tgl_max98373_rt5682");
+MODULE_ALIAS("platform:jsl_rt5682_max98360a");

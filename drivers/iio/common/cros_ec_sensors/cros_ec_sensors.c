@@ -16,7 +16,6 @@
 #include <linux/iio/trigger_consumer.h>
 #include <linux/iio/triggered_buffer.h>
 #include <linux/kernel.h>
-#include <linux/mfd/cros_ec.h>
 #include <linux/module.h>
 #include <linux/platform_data/cros_ec_commands.h>
 #include <linux/platform_data/cros_ec_proto.h>
@@ -237,6 +236,8 @@ static int cros_ec_sensors_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
+	iio_buffer_set_attrs(indio_dev->buffer, cros_ec_sensor_fifo_attributes);
+
 	indio_dev->info = &ec_sensors_info;
 	state = iio_priv(indio_dev);
 	for (channel = state->channels, i = CROS_EC_SENSOR_X;
@@ -293,8 +294,6 @@ static int cros_ec_sensors_probe(struct platform_device *pdev)
 		state->core.read_ec_sensors_data = cros_ec_sensors_read_lpc;
 	else
 		state->core.read_ec_sensors_data = cros_ec_sensors_read_cmd;
-
-	iio_buffer_set_attrs(indio_dev->buffer, cros_ec_sensor_fifo_attributes);
 
 	return devm_iio_device_register(dev, indio_dev);
 }

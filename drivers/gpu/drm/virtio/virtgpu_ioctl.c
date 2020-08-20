@@ -230,6 +230,7 @@ static int virtio_gpu_execbuffer_ioctl(struct drm_device *dev, void *data,
 	/* fence the command bo */
 	virtio_gpu_unref_list(&validate_list);
 	kvfree(buflist);
+	dma_fence_put(&out_fence->f);
 	return 0;
 
 out_memdup:

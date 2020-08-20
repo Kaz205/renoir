@@ -165,7 +165,6 @@
 /delete-node/ &venus_mem;
 /delete-node/ &cdsp_mem;
 /delete-node/ &cdsp_pas;
-/delete-node/ &zap_shader;
 /delete-node/ &gpu_mem;
 
 /* Increase the size from 120 MB to 128 MB */
@@ -635,7 +634,7 @@ ap_ts_i2c: &i2c14 {
 };
 
 &mss_pil {
-	iommus = <&apps_smmu 0x780 0x1>,
+	iommus = <&apps_smmu 0x781 0x0>,
 		 <&apps_smmu 0x724 0x3>;
 };
 

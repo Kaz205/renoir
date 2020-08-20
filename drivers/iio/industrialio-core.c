@@ -130,6 +130,8 @@ static const char * const iio_modifier_names[] = {
 	[IIO_MOD_PM2P5] = "pm2p5",
 	[IIO_MOD_PM4] = "pm4",
 	[IIO_MOD_PM10] = "pm10",
+	[IIO_MOD_ETHANOL] = "ethanol",
+	[IIO_MOD_H2] = "h2",
 	[IIO_MOD_DOUBLE_TAP] = "double_tap",
 };
 
@@ -1245,6 +1247,16 @@ static ssize_t iio_show_dev_name(struct device *dev,
 
 static DEVICE_ATTR(name, S_IRUGO, iio_show_dev_name, NULL);
 
+static ssize_t iio_show_dev_label(struct device *dev,
+				 struct device_attribute *attr,
+				 char *buf)
+{
+	struct iio_dev *indio_dev = dev_to_iio_dev(dev);
+	return snprintf(buf, PAGE_SIZE, "%s\n", indio_dev->label);
+}
+
+static DEVICE_ATTR(label, S_IRUGO, iio_show_dev_label, NULL);
+
 static ssize_t iio_show_timestamp_clock(struct device *dev,
 					struct device_attribute *attr,
 					char *buf)
@@ -1361,6 +1373,8 @@ static int iio_device_register_sysfs(struct iio_dev *indio_dev)
 
 	if (indio_dev->name)
 		attrcount++;
+	if (indio_dev->label)
+		attrcount++;
 	if (clk)
 		attrcount++;
 
@@ -1383,6 +1397,8 @@ static int iio_device_register_sysfs(struct iio_dev *indio_dev)
 		indio_dev->chan_attr_group.attrs[attrn++] = &p->dev_attr.attr;
 	if (indio_dev->name)
 		indio_dev->chan_attr_group.attrs[attrn++] = &dev_attr_name.attr;
+	if (indio_dev->label)
+		indio_dev->chan_attr_group.attrs[attrn++] = &dev_attr_label.attr;
 	if (clk)
 		indio_dev->chan_attr_group.attrs[attrn++] = clk;
 
@@ -1428,7 +1444,7 @@ struct device_type iio_device_type = {
  * iio_device_alloc() - allocate an iio_dev from a driver
  * @sizeof_priv:	Space to allocate for private structure.
  **/
-struct iio_dev *iio_device_alloc(int sizeof_priv)
+struct iio_dev *iio_device_alloc(struct device *parent, int sizeof_priv)
 {
 	struct iio_dev *dev;
 	size_t alloc_size;
@@ -1442,27 +1458,28 @@ struct iio_dev *iio_device_alloc(int sizeof_priv)
 	alloc_size += IIO_ALIGN - 1;
 
 	dev = kzalloc(alloc_size, GFP_KERNEL);
+	if (!dev)
+		return NULL;
 
-	if (dev) {
-		dev->dev.groups = dev->groups;
-		dev->dev.type = &iio_device_type;
-		dev->dev.bus = &iio_bus_type;
-		device_initialize(&dev->dev);
-		dev_set_drvdata(&dev->dev, (void *)dev);
-		mutex_init(&dev->mlock);
-		mutex_init(&dev->info_exist_lock);
-		INIT_LIST_HEAD(&dev->channel_attr_list);
+	dev->dev.parent = parent;
+	dev->dev.groups = dev->groups;
+	dev->dev.type = &iio_device_type;
+	dev->dev.bus = &iio_bus_type;
+	device_initialize(&dev->dev);
+	dev_set_drvdata(&dev->dev, (void *)dev);
+	mutex_init(&dev->mlock);
+	mutex_init(&dev->info_exist_lock);
+	INIT_LIST_HEAD(&dev->channel_attr_list);
 
-		dev->id = ida_simple_get(&iio_ida, 0, 0, GFP_KERNEL);
-		if (dev->id < 0) {
-			/* cannot use a dev_err as the name isn't available */
-			pr_err("failed to get device id\n");
-			kfree(dev);
-			return NULL;
-		}
-		dev_set_name(&dev->dev, "iio:device%d", dev->id);
-		INIT_LIST_HEAD(&dev->buffer_list);
+	dev->id = ida_simple_get(&iio_ida, 0, 0, GFP_KERNEL);
+	if (dev->id < 0) {
+		/* cannot use a dev_err as the name isn't available */
+		pr_err("failed to get device id\n");
+		kfree(dev);
+		return NULL;
 	}
+	dev_set_name(&dev->dev, "iio:device%d", dev->id);
+	INIT_LIST_HEAD(&dev->buffer_list);
 
 	return dev;
 }
@@ -1484,32 +1501,18 @@ static void devm_iio_device_release(struct device *dev, void *res)
 	iio_device_free(*(struct iio_dev **)res);
 }
 
-int devm_iio_device_match(struct device *dev, void *res, void *data)
-{
-	struct iio_dev **r = res;
-	if (!r || !*r) {
-		WARN_ON(!r || !*r);
-		return 0;
-	}
-	return *r == data;
-}
-EXPORT_SYMBOL_GPL(devm_iio_device_match);
-
 /**
  * devm_iio_device_alloc - Resource-managed iio_device_alloc()
- * @dev:		Device to allocate iio_dev for
+ * @parent:		Device to allocate iio_dev for, and parent for this IIO device
  * @sizeof_priv:	Space to allocate for private structure.
  *
  * Managed iio_device_alloc. iio_dev allocated with this function is
  * automatically freed on driver detach.
  *
- * If an iio_dev allocated with this function needs to be freed separately,
- * devm_iio_device_free() must be used.
- *
  * RETURNS:
  * Pointer to allocated iio_dev on success, NULL on failure.
  */
-struct iio_dev *devm_iio_device_alloc(struct device *dev, int sizeof_priv)
+struct iio_dev *devm_iio_device_alloc(struct device *parent, int sizeof_priv)
 {
 	struct iio_dev **ptr, *iio_dev;
 
@@ -1518,10 +1521,10 @@ struct iio_dev *devm_iio_device_alloc(struct device *dev, int sizeof_priv)
 	if (!ptr)
 		return NULL;
 
-	iio_dev = iio_device_alloc(sizeof_priv);
+	iio_dev = iio_device_alloc(parent, sizeof_priv);
 	if (iio_dev) {
 		*ptr = iio_dev;
-		devres_add(dev, ptr);
+		devres_add(parent, ptr);
 	} else {
 		devres_free(ptr);
 	}
@@ -1529,23 +1532,6 @@ struct iio_dev *devm_iio_device_alloc(struct device *dev, int sizeof_priv)
 	return iio_dev;
 }
 EXPORT_SYMBOL_GPL(devm_iio_device_alloc);
-
-/**
- * devm_iio_device_free - Resource-managed iio_device_free()
- * @dev:		Device this iio_dev belongs to
- * @iio_dev:		the iio_dev associated with the device
- *
- * Free iio_dev allocated with devm_iio_device_alloc().
- */
-void devm_iio_device_free(struct device *dev, struct iio_dev *iio_dev)
-{
-	int rc;
-
-	rc = devres_release(dev, devm_iio_device_release,
-			    devm_iio_device_match, iio_dev);
-	WARN_ON(rc);
-}
-EXPORT_SYMBOL_GPL(devm_iio_device_free);
 
 /**
  * iio_chrdev_open() - chrdev file open for buffer access and ioctls
@@ -1653,6 +1639,9 @@ int __iio_device_register(struct iio_dev *indio_dev, struct module *this_mod)
 	/* If the calling driver did not initialize of_node, do it here */
 	if (!indio_dev->dev.of_node && indio_dev->dev.parent)
 		indio_dev->dev.of_node = indio_dev->dev.parent->of_node;
+
+	indio_dev->label = of_get_property(indio_dev->dev.of_node, "label",
+					   NULL);
 
 	ret = iio_check_unique_scan_index(indio_dev);
 	if (ret < 0)
@@ -1764,23 +1753,6 @@ int __devm_iio_device_register(struct device *dev, struct iio_dev *indio_dev,
 	return ret;
 }
 EXPORT_SYMBOL_GPL(__devm_iio_device_register);
-
-/**
- * devm_iio_device_unregister - Resource-managed iio_device_unregister()
- * @dev:	Device this iio_dev belongs to
- * @indio_dev:	the iio_dev associated with the device
- *
- * Unregister iio_dev registered with devm_iio_device_register().
- */
-void devm_iio_device_unregister(struct device *dev, struct iio_dev *indio_dev)
-{
-	int rc;
-
-	rc = devres_release(dev, devm_iio_device_unreg,
-			    devm_iio_device_match, indio_dev);
-	WARN_ON(rc);
-}
-EXPORT_SYMBOL_GPL(devm_iio_device_unregister);
 
 /**
  * iio_device_claim_direct_mode - Keep device in direct mode

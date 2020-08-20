@@ -185,24 +185,6 @@ uint32_t virtio_video_v4l2_control_to_virtio(uint32_t v4l2_control)
 	return 0;
 }
 
-uint32_t virtio_video_get_format_from_virtio_profile(uint32_t virtio_profile)
-{
-	if (virtio_profile >= VIRTIO_VIDEO_PROFILE_H264_MIN &&
-	    virtio_profile <= VIRTIO_VIDEO_PROFILE_H264_MAX)
-		return VIRTIO_VIDEO_FORMAT_H264;
-	else if (virtio_profile >= VIRTIO_VIDEO_PROFILE_HEVC_MIN &&
-		 virtio_profile <= VIRTIO_VIDEO_PROFILE_HEVC_MAX)
-		return VIRTIO_VIDEO_FORMAT_HEVC;
-	else if (virtio_profile >= VIRTIO_VIDEO_PROFILE_VP8_MIN &&
-		 virtio_profile <= VIRTIO_VIDEO_PROFILE_VP8_MAX)
-		return VIRTIO_VIDEO_FORMAT_VP8;
-	else if (virtio_profile >= VIRTIO_VIDEO_PROFILE_VP9_MIN &&
-		 virtio_profile <= VIRTIO_VIDEO_PROFILE_VP9_MAX)
-		return VIRTIO_VIDEO_FORMAT_VP9;
-
-	return 0;
-}
-
 struct video_format *find_video_format(struct list_head *fmts_list,
 				       uint32_t format)
 {
