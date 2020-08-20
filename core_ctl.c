@@ -2,9 +2,8 @@
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
  */
+#define pr_fmt(fmt)	"core_ctl: " fmt
 
-#define pr_fmt(WALTc4af4bede1)	"\x63\x6f\x72\x65\x5f\x63\x74\x6c\x3a\x20" \
-WALTc4af4bede1
 #include <linux/init.h>
 #include <linux/cpu.h>
 #include <linux/cpumask.h>
@@ -15,526 +14,1341 @@ WALTc4af4bede1
 #include <linux/syscore_ops.h>
 #include <uapi/linux/sched/types.h>
 #include <linux/sched/core_ctl.h>
+
 #include <trace/events/sched.h>
 #include "walt.h"
-struct WALTd84195416f{bool WALTb6181247c7;unsigned int min_cpus;unsigned int 
-max_cpus;unsigned int offline_delay_ms;unsigned int busy_up_thres[
-MAX_CPUS_PER_CLUSTER];unsigned int busy_down_thres[MAX_CPUS_PER_CLUSTER];
-unsigned int active_cpus;unsigned int WALT3fc386a32e;unsigned int WALTd76a53732a
-;unsigned int WALT9656065c1c;cpumask_t WALT39abd1de52;unsigned int need_cpus;
-unsigned int task_thres;unsigned int WALTf368d5dcae;unsigned int WALT263a14abab;
-unsigned int nr_prev_assist_thresh;s64 WALT474287bcf5;struct list_head 
-WALT895ecc2391;bool WALTa280f52f04;spinlock_t WALTffb20e4808;bool enable;int 
-WALT78602fc8a3;struct task_struct*WALT2e935f34a1;unsigned int WALT76f375774d;
-unsigned int boost;struct kobject kobj;unsigned int WALTcc9821f091;};struct 
-WALT722543f60e{bool WALT087db4d18a;unsigned int WALT517f9bdd84;unsigned int 
-WALT8f9ab72eb9;bool not_preferred;struct WALTd84195416f*WALT1b752e214a;struct 
-list_head WALTa7f3b2896c;bool WALT7f508cb38b;};static DEFINE_PER_CPU(struct 
-WALT722543f60e,WALT22ef1845d7);static struct WALTd84195416f WALT9a7bdf60eb[
-MAX_CLUSTERS];static unsigned int WALT3480a8e71f;
-#define WALT213747575e(WALT1b752e214a, WALT8aa1674e1f) \
-	for (; (WALT8aa1674e1f) < WALT3480a8e71f && ((WALT1b752e214a) = &WALT9a7bdf60eb\
-[WALT8aa1674e1f]);\
-		WALT8aa1674e1f++)
-static DEFINE_SPINLOCK(WALT78e2cdac9a);static void WALT041d9949cf(struct 
-WALTd84195416f*WALT048da5e00c);static void WALTe68f5dd857(struct WALTd84195416f*
-WALT048da5e00c);static bool WALT69be84bb38;ATOMIC_NOTIFIER_HEAD(WALTe24f5fc06e);
-static unsigned int WALT86ffcc7dfd;static unsigned int WALTbc04b417fa(const 
-struct WALTd84195416f*WALT1b752e214a);static ssize_t store_min_cpus(struct 
-WALTd84195416f*WALT048da5e00c,const char*WALT33c5f8b4bc,size_t WALT33ea1b60d7){
-unsigned int WALTc94d3d8015;if(sscanf(WALT33c5f8b4bc,"\x25\x75" "\n",&
-WALTc94d3d8015)!=(0x1f6d+370-0x20de))return-EINVAL;WALT048da5e00c->min_cpus=min(
-WALTc94d3d8015,WALT048da5e00c->WALT3fc386a32e);WALTe68f5dd857(WALT048da5e00c);
-return WALT33ea1b60d7;}static ssize_t show_min_cpus(const struct WALTd84195416f*
-WALT048da5e00c,char*WALT33c5f8b4bc){return snprintf(WALT33c5f8b4bc,PAGE_SIZE,
-"\x25\x75" "\n",WALT048da5e00c->min_cpus);}static ssize_t store_max_cpus(struct 
-WALTd84195416f*WALT048da5e00c,const char*WALT33c5f8b4bc,size_t WALT33ea1b60d7){
-unsigned int WALTc94d3d8015;if(sscanf(WALT33c5f8b4bc,"\x25\x75" "\n",&
-WALTc94d3d8015)!=(0x1918+3363-0x263a))return-EINVAL;WALT048da5e00c->max_cpus=min
-(WALTc94d3d8015,WALT048da5e00c->WALT3fc386a32e);WALTe68f5dd857(WALT048da5e00c);
-return WALT33ea1b60d7;}static ssize_t show_max_cpus(const struct WALTd84195416f*
-WALT048da5e00c,char*WALT33c5f8b4bc){return snprintf(WALT33c5f8b4bc,PAGE_SIZE,
-"\x25\x75" "\n",WALT048da5e00c->max_cpus);}static ssize_t store_offline_delay_ms
-(struct WALTd84195416f*WALT048da5e00c,const char*WALT33c5f8b4bc,size_t 
-WALT33ea1b60d7){unsigned int WALTc94d3d8015;if(sscanf(WALT33c5f8b4bc,
-"\x25\x75" "\n",&WALTc94d3d8015)!=(0x695+4921-0x19cd))return-EINVAL;
-WALT048da5e00c->offline_delay_ms=WALTc94d3d8015;WALT041d9949cf(WALT048da5e00c);
-return WALT33ea1b60d7;}static ssize_t show_task_thres(const struct 
-WALTd84195416f*WALT048da5e00c,char*WALT33c5f8b4bc){return snprintf(
-WALT33c5f8b4bc,PAGE_SIZE,"\x25\x75" "\n",WALT048da5e00c->task_thres);}static 
-ssize_t store_task_thres(struct WALTd84195416f*WALT048da5e00c,const char*
-WALT33c5f8b4bc,size_t WALT33ea1b60d7){unsigned int WALTc94d3d8015;if(sscanf(
-WALT33c5f8b4bc,"\x25\x75" "\n",&WALTc94d3d8015)!=(0x914+3170-0x1575))return-
-EINVAL;if(WALTc94d3d8015<WALT048da5e00c->WALT3fc386a32e)return-EINVAL;
-WALT048da5e00c->task_thres=WALTc94d3d8015;WALT041d9949cf(WALT048da5e00c);return 
-WALT33ea1b60d7;}static ssize_t show_nr_prev_assist_thresh(const struct 
-WALTd84195416f*WALT048da5e00c,char*WALT33c5f8b4bc){return snprintf(
-WALT33c5f8b4bc,PAGE_SIZE,"\x25\x75" "\n",WALT048da5e00c->nr_prev_assist_thresh);
-}static ssize_t store_nr_prev_assist_thresh(struct WALTd84195416f*WALT048da5e00c
-,const char*WALT33c5f8b4bc,size_t WALT33ea1b60d7){unsigned int WALTc94d3d8015;if
-(sscanf(WALT33c5f8b4bc,"\x25\x75" "\n",&WALTc94d3d8015)!=(0x513+2869-0x1047))
-return-EINVAL;WALT048da5e00c->nr_prev_assist_thresh=WALTc94d3d8015;
-WALT041d9949cf(WALT048da5e00c);return WALT33ea1b60d7;}static ssize_t 
-show_offline_delay_ms(const struct WALTd84195416f*WALT048da5e00c,char*
-WALT33c5f8b4bc){return snprintf(WALT33c5f8b4bc,PAGE_SIZE,"\x25\x75" "\n",
-WALT048da5e00c->offline_delay_ms);}static ssize_t store_busy_up_thres(struct 
-WALTd84195416f*WALT048da5e00c,const char*WALT33c5f8b4bc,size_t WALT33ea1b60d7){
-unsigned int WALTc94d3d8015[MAX_CPUS_PER_CLUSTER];int WALT083920bcc8,
-WALT5d971be8b8;WALT083920bcc8=sscanf(WALT33c5f8b4bc,
-"\x25\x75\x20\x25\x75\x20\x25\x75\x20\x25\x75\x20\x25\x75\x20\x25\x75" "\n",&
-WALTc94d3d8015[(0x8c2+5377-0x1dc3)],&WALTc94d3d8015[(0x570+6071-0x1d26)],&
-WALTc94d3d8015[(0x104b+2464-0x19e9)],&WALTc94d3d8015[(0xf48+900-0x12c9)],&
-WALTc94d3d8015[(0x1701+1434-0x1c97)],&WALTc94d3d8015[(0x723+7609-0x24d7)]);if(
-WALT083920bcc8!=(0x612+536-0x829)&&WALT083920bcc8!=WALT048da5e00c->
-WALT3fc386a32e)return-EINVAL;if(WALT083920bcc8==(0x508+6593-0x1ec8)){for(
-WALT5d971be8b8=(0x573+5919-0x1c92);WALT5d971be8b8<WALT048da5e00c->WALT3fc386a32e
-;WALT5d971be8b8++)WALT048da5e00c->busy_up_thres[WALT5d971be8b8]=WALTc94d3d8015[
-(0x735+826-0xa6f)];}else{for(WALT5d971be8b8=(0x9ca+6641-0x23bb);WALT5d971be8b8<
-WALT048da5e00c->WALT3fc386a32e;WALT5d971be8b8++)WALT048da5e00c->busy_up_thres[
-WALT5d971be8b8]=WALTc94d3d8015[WALT5d971be8b8];}WALT041d9949cf(WALT048da5e00c);
-return WALT33ea1b60d7;}static ssize_t show_busy_up_thres(const struct 
-WALTd84195416f*WALT048da5e00c,char*WALT33c5f8b4bc){int WALT5d971be8b8,
-WALT33ea1b60d7=(0x1948+2090-0x2172);for(WALT5d971be8b8=(0xe6c+1889-0x15cd);
-WALT5d971be8b8<WALT048da5e00c->WALT3fc386a32e;WALT5d971be8b8++)WALT33ea1b60d7+=
-snprintf(WALT33c5f8b4bc+WALT33ea1b60d7,PAGE_SIZE-WALT33ea1b60d7,"\x25\x75\x20",
-WALT048da5e00c->busy_up_thres[WALT5d971be8b8]);WALT33ea1b60d7+=snprintf(
-WALT33c5f8b4bc+WALT33ea1b60d7,PAGE_SIZE-WALT33ea1b60d7,"\n");return 
-WALT33ea1b60d7;}static ssize_t store_busy_down_thres(struct WALTd84195416f*
-WALT048da5e00c,const char*WALT33c5f8b4bc,size_t WALT33ea1b60d7){unsigned int 
-WALTc94d3d8015[MAX_CPUS_PER_CLUSTER];int WALT083920bcc8,WALT5d971be8b8;
-WALT083920bcc8=sscanf(WALT33c5f8b4bc,
-"\x25\x75\x20\x25\x75\x20\x25\x75\x20\x25\x75\x20\x25\x75\x20\x25\x75" "\n",&
-WALTc94d3d8015[(0x463+6630-0x1e49)],&WALTc94d3d8015[(0x88b+2664-0x12f2)],&
-WALTc94d3d8015[(0x123a+65-0x1279)],&WALTc94d3d8015[(0xeda+3447-0x1c4e)],&
-WALTc94d3d8015[(0x215a+1157-0x25db)],&WALTc94d3d8015[(0x1219+4646-0x243a)]);if(
-WALT083920bcc8!=(0x6f6+7249-0x2346)&&WALT083920bcc8!=WALT048da5e00c->
-WALT3fc386a32e)return-EINVAL;if(WALT083920bcc8==(0xbb6+2626-0x15f7)){for(
-WALT5d971be8b8=(0x2050+642-0x22d2);WALT5d971be8b8<WALT048da5e00c->WALT3fc386a32e
-;WALT5d971be8b8++)WALT048da5e00c->busy_down_thres[WALT5d971be8b8]=WALTc94d3d8015
-[(0x2aa+345-0x403)];}else{for(WALT5d971be8b8=(0x1b7+5686-0x17ed);WALT5d971be8b8<
-WALT048da5e00c->WALT3fc386a32e;WALT5d971be8b8++)WALT048da5e00c->busy_down_thres[
-WALT5d971be8b8]=WALTc94d3d8015[WALT5d971be8b8];}WALT041d9949cf(WALT048da5e00c);
-return WALT33ea1b60d7;}static ssize_t show_busy_down_thres(const struct 
-WALTd84195416f*WALT048da5e00c,char*WALT33c5f8b4bc){int WALT5d971be8b8,
-WALT33ea1b60d7=(0x1cb6+173-0x1d63);for(WALT5d971be8b8=(0x824+4852-0x1b18);
-WALT5d971be8b8<WALT048da5e00c->WALT3fc386a32e;WALT5d971be8b8++)WALT33ea1b60d7+=
-snprintf(WALT33c5f8b4bc+WALT33ea1b60d7,PAGE_SIZE-WALT33ea1b60d7,"\x25\x75\x20",
-WALT048da5e00c->busy_down_thres[WALT5d971be8b8]);WALT33ea1b60d7+=snprintf(
-WALT33c5f8b4bc+WALT33ea1b60d7,PAGE_SIZE-WALT33ea1b60d7,"\n");return 
-WALT33ea1b60d7;}static ssize_t store_enable(struct WALTd84195416f*WALT048da5e00c
-,const char*WALT33c5f8b4bc,size_t WALT33ea1b60d7){unsigned int WALTc94d3d8015;
-bool WALTd09cc5ef75;if(sscanf(WALT33c5f8b4bc,"\x25\x75" "\n",&WALTc94d3d8015)!=
-(0x381+1371-0x8db))return-EINVAL;WALTd09cc5ef75=!!WALTc94d3d8015;if(
-WALTd09cc5ef75!=WALT048da5e00c->enable){WALT048da5e00c->enable=WALTd09cc5ef75;
-WALT041d9949cf(WALT048da5e00c);}return WALT33ea1b60d7;}static ssize_t 
-show_enable(const struct WALTd84195416f*WALT048da5e00c,char*WALT33c5f8b4bc){
-return scnprintf(WALT33c5f8b4bc,PAGE_SIZE,"\x25\x75" "\n",WALT048da5e00c->enable
-);}static ssize_t show_need_cpus(const struct WALTd84195416f*WALT048da5e00c,char
-*WALT33c5f8b4bc){return snprintf(WALT33c5f8b4bc,PAGE_SIZE,"\x25\x75" "\n",
-WALT048da5e00c->need_cpus);}static ssize_t show_active_cpus(const struct 
-WALTd84195416f*WALT048da5e00c,char*WALT33c5f8b4bc){return snprintf(
-WALT33c5f8b4bc,PAGE_SIZE,"\x25\x75" "\n",WALT048da5e00c->active_cpus);}static 
-ssize_t show_global_state(const struct WALTd84195416f*WALT048da5e00c,char*
-WALT33c5f8b4bc){struct WALT722543f60e*WALTe2cca49edf;struct WALTd84195416f*
-WALT1b752e214a;ssize_t WALT33ea1b60d7=(0xf58+2576-0x1968);unsigned int 
-WALT8f9ab72eb9;spin_lock_irq(&WALT78e2cdac9a);for_each_possible_cpu(
-WALT8f9ab72eb9){WALTe2cca49edf=&per_cpu(WALT22ef1845d7,WALT8f9ab72eb9);
-WALT1b752e214a=WALTe2cca49edf->WALT1b752e214a;if(!WALT1b752e214a||!
-WALT1b752e214a->WALTb6181247c7)continue;WALT33ea1b60d7+=snprintf(WALT33c5f8b4bc+
-WALT33ea1b60d7,PAGE_SIZE-WALT33ea1b60d7,"\x43\x50\x55\x25\x75" "\n",
-WALT8f9ab72eb9);WALT33ea1b60d7+=snprintf(WALT33c5f8b4bc+WALT33ea1b60d7,PAGE_SIZE
--WALT33ea1b60d7,"\t" "\x43\x50\x55\x3a\x20\x25\x75" "\n",WALTe2cca49edf->
-WALT8f9ab72eb9);WALT33ea1b60d7+=snprintf(WALT33c5f8b4bc+WALT33ea1b60d7,PAGE_SIZE
--WALT33ea1b60d7,"\t" "\x4f\x6e\x6c\x69\x6e\x65\x3a\x20\x25\x75" "\n",cpu_online(
-WALTe2cca49edf->WALT8f9ab72eb9));WALT33ea1b60d7+=snprintf(WALT33c5f8b4bc+
-WALT33ea1b60d7,PAGE_SIZE-WALT33ea1b60d7,
-"\t" "\x49\x73\x6f\x6c\x61\x74\x65\x64\x3a\x20\x25\x75" "\n",cpu_isolated(
-WALTe2cca49edf->WALT8f9ab72eb9));WALT33ea1b60d7+=snprintf(WALT33c5f8b4bc+
-WALT33ea1b60d7,PAGE_SIZE-WALT33ea1b60d7,
-"\t" "\x46\x69\x72\x73\x74\x20\x43\x50\x55\x3a\x20\x25\x75" "\n",WALT1b752e214a
-->WALT76f375774d);WALT33ea1b60d7+=snprintf(WALT33c5f8b4bc+WALT33ea1b60d7,
-PAGE_SIZE-WALT33ea1b60d7,"\t" "\x42\x75\x73\x79\x25\x25\x3a\x20\x25\x75" "\n",
-WALTe2cca49edf->WALT517f9bdd84);WALT33ea1b60d7+=snprintf(WALT33c5f8b4bc+
-WALT33ea1b60d7,PAGE_SIZE-WALT33ea1b60d7,
-"\t" "\x49\x73\x20\x62\x75\x73\x79\x3a\x20\x25\x75" "\n",WALTe2cca49edf->
-WALT087db4d18a);WALT33ea1b60d7+=snprintf(WALT33c5f8b4bc+WALT33ea1b60d7,PAGE_SIZE
--WALT33ea1b60d7,
-"\t" "\x4e\x6f\x74\x20\x70\x72\x65\x66\x65\x72\x72\x65\x64\x3a\x20\x25\x75" "\n"
-,WALTe2cca49edf->not_preferred);WALT33ea1b60d7+=snprintf(WALT33c5f8b4bc+
-WALT33ea1b60d7,PAGE_SIZE-WALT33ea1b60d7,
-"\t" "\x4e\x72\x20\x72\x75\x6e\x6e\x69\x6e\x67\x3a\x20\x25\x75" "\n",
-WALT1b752e214a->WALT78602fc8a3);WALT33ea1b60d7+=snprintf(WALT33c5f8b4bc+
-WALT33ea1b60d7,PAGE_SIZE-WALT33ea1b60d7,
-"\t" "\x41\x63\x74\x69\x76\x65\x20\x43\x50\x55\x73\x3a\x20\x25\x75" "\n",
-WALTbc04b417fa(WALT1b752e214a));WALT33ea1b60d7+=snprintf(WALT33c5f8b4bc+
-WALT33ea1b60d7,PAGE_SIZE-WALT33ea1b60d7,
-"\t" "\x4e\x65\x65\x64\x20\x43\x50\x55\x73\x3a\x20\x25\x75" "\n",WALT1b752e214a
-->need_cpus);WALT33ea1b60d7+=snprintf(WALT33c5f8b4bc+WALT33ea1b60d7,PAGE_SIZE-
-WALT33ea1b60d7,
-"\t" "\x4e\x72\x20\x69\x73\x6f\x6c\x61\x74\x65\x64\x20\x43\x50\x55\x73\x3a\x20\x25\x75" "\n"
-,WALT1b752e214a->WALTd76a53732a);WALT33ea1b60d7+=snprintf(WALT33c5f8b4bc+
-WALT33ea1b60d7,PAGE_SIZE-WALT33ea1b60d7,
-"\t" "\x42\x6f\x6f\x73\x74\x3a\x20\x25\x75" "\n",(unsigned int)WALT1b752e214a->
-boost);}spin_unlock_irq(&WALT78e2cdac9a);return WALT33ea1b60d7;}static ssize_t 
-store_not_preferred(struct WALTd84195416f*WALT048da5e00c,const char*
-WALT33c5f8b4bc,size_t WALT33ea1b60d7){struct WALT722543f60e*WALTe2cca49edf;
-unsigned int WALT5d971be8b8;unsigned int WALTc94d3d8015[MAX_CPUS_PER_CLUSTER];
-unsigned long WALT05b7c9a580;int WALT083920bcc8;int WALT30bdc18e2b=
-(0x797+2869-0x12cc);WALT083920bcc8=sscanf(WALT33c5f8b4bc,
-"\x25\x75\x20\x25\x75\x20\x25\x75\x20\x25\x75\x20\x25\x75\x20\x25\x75" "\n",&
-WALTc94d3d8015[(0x908+854-0xc5e)],&WALTc94d3d8015[(0x827+2266-0x1100)],&
-WALTc94d3d8015[(0x11f6+5242-0x266e)],&WALTc94d3d8015[(0x1217+2082-0x1a36)],&
-WALTc94d3d8015[(0x45b+6519-0x1dce)],&WALTc94d3d8015[(0x1020+1071-0x144a)]);if(
-WALT083920bcc8!=WALT048da5e00c->WALT3fc386a32e)return-EINVAL;spin_lock_irqsave(&
-WALT78e2cdac9a,WALT05b7c9a580);for(WALT5d971be8b8=(0x1398+2944-0x1f18);
-WALT5d971be8b8<WALT048da5e00c->WALT3fc386a32e;WALT5d971be8b8++){WALTe2cca49edf=&
-per_cpu(WALT22ef1845d7,WALT5d971be8b8+WALT048da5e00c->WALT76f375774d);
-WALTe2cca49edf->not_preferred=WALTc94d3d8015[WALT5d971be8b8];WALT30bdc18e2b+=!!
-WALTc94d3d8015[WALT5d971be8b8];}WALT048da5e00c->WALT9656065c1c=WALT30bdc18e2b;
-spin_unlock_irqrestore(&WALT78e2cdac9a,WALT05b7c9a580);return WALT33ea1b60d7;}
-static ssize_t show_not_preferred(const struct WALTd84195416f*WALT048da5e00c,
-char*WALT33c5f8b4bc){struct WALT722543f60e*WALTe2cca49edf;ssize_t WALT33ea1b60d7
-=(0x2462+221-0x253f);unsigned long WALT05b7c9a580;int WALT5d971be8b8;
-spin_lock_irqsave(&WALT78e2cdac9a,WALT05b7c9a580);for(WALT5d971be8b8=
-(0x928+1999-0x10f7);WALT5d971be8b8<WALT048da5e00c->WALT3fc386a32e;WALT5d971be8b8
-++){WALTe2cca49edf=&per_cpu(WALT22ef1845d7,WALT5d971be8b8+WALT048da5e00c->
-WALT76f375774d);WALT33ea1b60d7+=scnprintf(WALT33c5f8b4bc+WALT33ea1b60d7,
-PAGE_SIZE-WALT33ea1b60d7,"\x43\x50\x55\x23\x25\x64\x3a\x20\x25\x75" "\n",
-WALTe2cca49edf->WALT8f9ab72eb9,WALTe2cca49edf->not_preferred);}
-spin_unlock_irqrestore(&WALT78e2cdac9a,WALT05b7c9a580);return WALT33ea1b60d7;}
-struct core_ctl_attr{struct attribute attr;ssize_t(*show)(const struct 
-WALTd84195416f*,char*);ssize_t(*store)(struct WALTd84195416f*,const char*,size_t
- WALT33ea1b60d7);};
-#define core_ctl_attr_ro(WALTb25dfb9431)		\
-static struct core_ctl_attr WALTb25dfb9431 =	\
-__ATTR(WALTb25dfb9431, (0x144+9178-0x23fa), show_##WALTb25dfb9431, NULL)
-#define core_ctl_attr_rw(WALTb25dfb9431)			\
-static struct core_ctl_attr WALTb25dfb9431 =		\
-__ATTR(WALTb25dfb9431, (0x13a5+4603-0x23fc), show_##WALTb25dfb9431, store_##\
-WALTb25dfb9431)
-core_ctl_attr_rw(min_cpus);core_ctl_attr_rw(max_cpus);core_ctl_attr_rw(
-offline_delay_ms);core_ctl_attr_rw(busy_up_thres);core_ctl_attr_rw(
-busy_down_thres);core_ctl_attr_rw(task_thres);core_ctl_attr_rw(
-nr_prev_assist_thresh);core_ctl_attr_ro(need_cpus);core_ctl_attr_ro(active_cpus)
-;core_ctl_attr_ro(global_state);core_ctl_attr_rw(not_preferred);core_ctl_attr_rw
-(enable);static struct attribute*default_attrs[]={&min_cpus.attr,&max_cpus.attr,
-&offline_delay_ms.attr,&busy_up_thres.attr,&busy_down_thres.attr,&task_thres.
-attr,&nr_prev_assist_thresh.attr,&enable.attr,&need_cpus.attr,&active_cpus.attr,
-&global_state.attr,&not_preferred.attr,NULL};
-#define WALTe67e7bc098(WALT041cb91678) container_of(WALT041cb91678, struct \
-WALTd84195416f, kobj)
-#define WALTc8af498370(WALT6268ff8549) container_of(WALT6268ff8549, struct \
-core_ctl_attr, attr)
-static ssize_t show(struct kobject*kobj,struct attribute*attr,char*
-WALT33c5f8b4bc){struct WALTd84195416f*WALTf8791a57cc=WALTe67e7bc098(kobj);struct
- core_ctl_attr*WALT9514acbabb=WALTc8af498370(attr);ssize_t WALT083920bcc8=-EIO;
-if(WALT9514acbabb->show)WALT083920bcc8=WALT9514acbabb->show(WALTf8791a57cc,
-WALT33c5f8b4bc);return WALT083920bcc8;}static ssize_t store(struct kobject*kobj,
-struct attribute*attr,const char*WALT33c5f8b4bc,size_t WALT33ea1b60d7){struct 
-WALTd84195416f*WALTf8791a57cc=WALTe67e7bc098(kobj);struct core_ctl_attr*
-WALT9514acbabb=WALTc8af498370(attr);ssize_t WALT083920bcc8=-EIO;if(
-WALT9514acbabb->store)WALT083920bcc8=WALT9514acbabb->store(WALTf8791a57cc,
-WALT33c5f8b4bc,WALT33ea1b60d7);return WALT083920bcc8;}static const struct 
-sysfs_ops sysfs_ops={.show=show,.store=store,};static struct kobj_type 
-WALTe314eed4f2={.sysfs_ops=&sysfs_ops,.default_attrs=default_attrs,};static 
-struct sched_avg_stats WALT3d55024438[NR_CPUS];static int WALT586cb87856(int 
-WALT6b2e94bfe7){int WALT8f9ab72eb9;struct WALTd84195416f*WALT1b752e214a;int 
-WALT7cdf3ec737=(0x7c5+5043-0x1b78);WALT213747575e(WALT1b752e214a,WALT6b2e94bfe7)
-{for_each_cpu(WALT8f9ab72eb9,&WALT1b752e214a->WALT39abd1de52)WALT7cdf3ec737+=
-WALT3d55024438[WALT8f9ab72eb9].nr;}return WALT7cdf3ec737;}static int 
-WALT91003ac218(int WALT6b2e94bfe7){int WALT8f9ab72eb9;struct WALTd84195416f*
-WALT79d47a94b2;int WALT33128046d7=(0x2282+1125-0x26e7);if(WALT6b2e94bfe7==
-(0x28c+3983-0x121b))return(0x887+3307-0x1572);WALT79d47a94b2=&WALT9a7bdf60eb[
-WALT6b2e94bfe7-(0xf2c+82-0xf7d)];for_each_cpu(WALT8f9ab72eb9,&WALT79d47a94b2->
-WALT39abd1de52)WALT33128046d7+=WALT3d55024438[WALT8f9ab72eb9].nr_misfit;return 
-WALT33128046d7;}static int WALT4e9e6ae627(int WALT6b2e94bfe7){int WALT8f9ab72eb9
-;struct WALTd84195416f*WALT1b752e214a=&WALT9a7bdf60eb[WALT6b2e94bfe7];int 
-WALTf368d5dcae=(0xac4+4149-0x1af9);for_each_cpu(WALT8f9ab72eb9,&WALT1b752e214a->
-WALT39abd1de52)WALTf368d5dcae=max(WALTf368d5dcae,WALT3d55024438[WALT8f9ab72eb9].
-nr_max);return WALTf368d5dcae;}static int WALT9385e48bfe(int WALT6b2e94bfe7){int
- nr_big=(0x1ecc+1038-0x22da);int WALT8f9ab72eb9;struct WALTd84195416f*
-WALT1b752e214a=&WALT9a7bdf60eb[WALT6b2e94bfe7];if(WALT6b2e94bfe7==
-(0xb46+4301-0x1c13)){for_each_cpu(WALT8f9ab72eb9,&WALT1b752e214a->WALT39abd1de52
-)nr_big+=WALT3d55024438[WALT8f9ab72eb9].nr_misfit;}else{for_each_cpu(
-WALT8f9ab72eb9,&WALT1b752e214a->WALT39abd1de52)nr_big+=WALT3d55024438[
-WALT8f9ab72eb9].nr;}return nr_big;}static int WALT4d8e98122d(int WALT6b2e94bfe7)
-{int WALTf32c877095=(0x1cad+237-0x1d9a);int WALT8f9ab72eb9;struct WALTd84195416f
-*WALT79d47a94b2;if(WALT6b2e94bfe7==(0x3c0+6265-0x1c39))return
-(0x14a9+2532-0x1e8d);WALT6b2e94bfe7--;WALT79d47a94b2=&WALT9a7bdf60eb[
-WALT6b2e94bfe7];if(WALT79d47a94b2->WALTd76a53732a)return(0xa9f+1283-0xfa2);
-for_each_cpu(WALT8f9ab72eb9,&WALT79d47a94b2->WALT39abd1de52)WALTf32c877095+=
-WALT3d55024438[WALT8f9ab72eb9].nr;WALTf32c877095+=WALT91003ac218(WALT6b2e94bfe7)
-;if(WALTf32c877095>WALT79d47a94b2->active_cpus)WALTf32c877095=WALTf32c877095-
-WALT79d47a94b2->active_cpus;else WALTf32c877095=(0x1131+5326-0x25ff);return 
-WALTf32c877095;}static int WALTf3336414f3(int WALT6b2e94bfe7){int WALT8f9ab72eb9
-;struct WALTd84195416f*WALT1b752e214a;int WALT49c28541b7=(0x7bc+5358-0x1caa);if(
-WALT6b2e94bfe7!=(0x17bb+1855-0x1efa))return(0x1061+1203-0x1514);WALT213747575e(
-WALT1b752e214a,WALT6b2e94bfe7){int nr_scaled=(0x14e3+877-0x1850);int active_cpus
-=WALT1b752e214a->active_cpus;for_each_cpu(WALT8f9ab72eb9,&WALT1b752e214a->
-WALT39abd1de52)nr_scaled+=WALT3d55024438[WALT8f9ab72eb9].nr_scaled;nr_scaled/=
-(0x1412+3937-0x230f);if(WALT6b2e94bfe7==(0x740+1422-0xcce))WALT49c28541b7+=
-nr_scaled;else WALT49c28541b7+=max((0x50a+3832-0x1402),nr_scaled-active_cpus);}
-return WALT49c28541b7;}static void WALT595408d471(void){struct WALTd84195416f*
-WALT1b752e214a;unsigned int WALT6b2e94bfe7=(0xd2c+5225-0x2195);unsigned long 
-WALT05b7c9a580;int WALTd8515de889=(0x1c38+1590-0x226e);sched_get_nr_running_avg(
-WALT3d55024438);spin_lock_irqsave(&WALT78e2cdac9a,WALT05b7c9a580);WALT213747575e
-(WALT1b752e214a,WALT6b2e94bfe7){int WALT7cdf3ec737,WALT33128046d7;if(!
-WALT1b752e214a->WALTb6181247c7)continue;WALT7cdf3ec737=WALT586cb87856(
-WALT6b2e94bfe7);WALT33128046d7=WALT91003ac218(WALT6b2e94bfe7);WALT1b752e214a->
-WALT78602fc8a3=WALT7cdf3ec737+WALT33128046d7;WALT1b752e214a->WALTf368d5dcae=
-WALT4e9e6ae627(WALT6b2e94bfe7);WALT1b752e214a->WALT263a14abab=WALT4d8e98122d(
-WALT6b2e94bfe7);WALT1b752e214a->WALTcc9821f091=WALTf3336414f3(WALT6b2e94bfe7);
-trace_core_ctl_update_nr_need(WALT1b752e214a->WALT76f375774d,WALT7cdf3ec737,
-WALT33128046d7,WALT1b752e214a->WALT78602fc8a3,WALT1b752e214a->WALTf368d5dcae,
-WALT1b752e214a->WALT263a14abab);WALTd8515de889+=WALT9385e48bfe(WALT6b2e94bfe7);}
-spin_unlock_irqrestore(&WALT78e2cdac9a,WALT05b7c9a580);WALT86ffcc7dfd=
-WALTd8515de889;walt_rotation_checkpoint(WALTd8515de889);}
-#define WALTc2db0febb0	(0x368+502-0x55a)
-static unsigned int WALT50b207ad6d(const struct WALTd84195416f*WALT1b752e214a,
-unsigned int WALTeadf56a7a3){if(WALT1b752e214a->WALT78602fc8a3>=WALT1b752e214a->
-task_thres)return WALT1b752e214a->WALT3fc386a32e;if(WALT1b752e214a->
-WALT263a14abab>=WALT1b752e214a->nr_prev_assist_thresh)WALTeadf56a7a3=
-WALTeadf56a7a3+WALT1b752e214a->WALT263a14abab;if(WALT1b752e214a->WALT78602fc8a3>
-WALTeadf56a7a3)WALTeadf56a7a3=WALTeadf56a7a3+(0x130c+1192-0x17b3);if(
-WALT1b752e214a->WALTf368d5dcae>WALTc2db0febb0)WALTeadf56a7a3=WALTeadf56a7a3+
-(0x1048+5086-0x2425);if(WALTeadf56a7a3<WALT1b752e214a->WALTcc9821f091)
-WALTeadf56a7a3=WALT1b752e214a->WALTcc9821f091;return WALTeadf56a7a3;}static 
-unsigned int WALTa16d868f28(const struct WALTd84195416f*WALT1b752e214a,unsigned 
-int need_cpus){return min(max(WALT1b752e214a->min_cpus,need_cpus),WALT1b752e214a
-->max_cpus);}static unsigned int WALTbc04b417fa(const struct WALTd84195416f*
-WALT1b752e214a){return WALT1b752e214a->WALT3fc386a32e-sched_isolate_count(&
-WALT1b752e214a->WALT39abd1de52,true);}static bool WALT375fa7adc6(const struct 
-WALT722543f60e*WALT048da5e00c){return cpu_online(WALT048da5e00c->WALT8f9ab72eb9)
-&&!cpu_isolated(WALT048da5e00c->WALT8f9ab72eb9);}static bool WALT05c5275688(
-const struct WALTd84195416f*WALT1b752e214a,unsigned int WALTf32c877095){return(
-WALTf32c877095<WALT1b752e214a->active_cpus||(WALTf32c877095>WALT1b752e214a->
-active_cpus&&WALT1b752e214a->WALTd76a53732a));}static bool WALTf6692437dc(const 
-struct WALTd84195416f*WALT1b752e214a){return(is_min_capacity_cpu(WALT1b752e214a
-->WALT76f375774d)&&sched_ravg_window<DEFAULT_SCHED_RAVG_WINDOW);}static bool 
-eval_need(struct WALTd84195416f*WALT1b752e214a){unsigned long WALT05b7c9a580;
-struct WALT722543f60e*WALTe2cca49edf;unsigned int need_cpus=(0x1645+4019-0x25f8)
-,WALTefe45c244d,WALT8255d868d2;int WALT083920bcc8=(0x1a5c+1391-0x1fcb);bool 
-WALT11e2990555=false;unsigned int WALTeadf56a7a3;s64 WALT2c53bb3f34,
-WALTcc63e644e4;if(unlikely(!WALT1b752e214a->WALTb6181247c7))return
-(0x1b00+811-0x1e2b);spin_lock_irqsave(&WALT78e2cdac9a,WALT05b7c9a580);if(
-WALT1b752e214a->boost||!WALT1b752e214a->enable||WALTf6692437dc(WALT1b752e214a)){
-need_cpus=WALT1b752e214a->max_cpus;}else{WALT1b752e214a->active_cpus=
-WALTbc04b417fa(WALT1b752e214a);WALT8255d868d2=WALT1b752e214a->active_cpus?
-WALT1b752e214a->active_cpus-(0x10+5383-0x1516):(0x1ed1+1231-0x23a0);
-list_for_each_entry(WALTe2cca49edf,&WALT1b752e214a->WALT895ecc2391,
-WALTa7f3b2896c){bool WALT28dac86562=WALTe2cca49edf->WALT087db4d18a;if(
-WALTe2cca49edf->WALT517f9bdd84>=WALT1b752e214a->busy_up_thres[WALT8255d868d2]||
-sched_cpu_high_irqload(WALTe2cca49edf->WALT8f9ab72eb9))WALTe2cca49edf->
-WALT087db4d18a=true;else if(WALTe2cca49edf->WALT517f9bdd84<WALT1b752e214a->
-busy_down_thres[WALT8255d868d2])WALTe2cca49edf->WALT087db4d18a=false;
-trace_core_ctl_set_busy(WALTe2cca49edf->WALT8f9ab72eb9,WALTe2cca49edf->
-WALT517f9bdd84,WALT28dac86562,WALTe2cca49edf->WALT087db4d18a);need_cpus+=
-WALTe2cca49edf->WALT087db4d18a;}need_cpus=WALT50b207ad6d(WALT1b752e214a,
-need_cpus);}WALTeadf56a7a3=WALTa16d868f28(WALT1b752e214a,need_cpus);
-WALT11e2990555=WALT05c5275688(WALT1b752e214a,WALTeadf56a7a3);WALTefe45c244d=
-WALT1b752e214a->need_cpus;WALT2c53bb3f34=ktime_to_ms(ktime_get());if(
-WALTeadf56a7a3>WALT1b752e214a->active_cpus){WALT083920bcc8=(0x1a3d+1186-0x1ede);
-}else{if(WALTeadf56a7a3==WALTefe45c244d&&WALTeadf56a7a3==WALT1b752e214a->
-active_cpus){WALT1b752e214a->WALT474287bcf5=WALT2c53bb3f34;
-spin_unlock_irqrestore(&WALT78e2cdac9a,WALT05b7c9a580);return(0x1851+712-0x1b19)
-;}WALTcc63e644e4=WALT2c53bb3f34-WALT1b752e214a->WALT474287bcf5;WALT083920bcc8=
-WALTcc63e644e4>=WALT1b752e214a->offline_delay_ms;}if(WALT083920bcc8){
-WALT1b752e214a->WALT474287bcf5=WALT2c53bb3f34;WALT1b752e214a->need_cpus=
-WALTeadf56a7a3;}trace_core_ctl_eval_need(WALT1b752e214a->WALT76f375774d,
-WALTefe45c244d,WALTeadf56a7a3,WALT083920bcc8&&WALT11e2990555);
-spin_unlock_irqrestore(&WALT78e2cdac9a,WALT05b7c9a580);return WALT083920bcc8&&
-WALT11e2990555;}static void WALT041d9949cf(struct WALTd84195416f*WALT1b752e214a)
-{if(eval_need(WALT1b752e214a))WALTe68f5dd857(WALT1b752e214a);}static void 
-WALTe68f5dd857(struct WALTd84195416f*WALT1b752e214a){unsigned long 
-WALT05b7c9a580;spin_lock_irqsave(&WALT1b752e214a->WALTffb20e4808,WALT05b7c9a580)
-;WALT1b752e214a->WALTa280f52f04=true;spin_unlock_irqrestore(&WALT1b752e214a->
-WALTffb20e4808,WALT05b7c9a580);wake_up_process(WALT1b752e214a->WALT2e935f34a1);}
-static u64 WALTdfa13d72c3;int core_ctl_set_boost(bool boost){unsigned int 
-WALT6b2e94bfe7=(0x1629+2573-0x2036);struct WALTd84195416f*WALT1b752e214a=NULL;
-unsigned long WALT05b7c9a580;int WALT083920bcc8=(0x881+5694-0x1ebf);bool 
-WALT37066d5eec=false;if(unlikely(!WALT69be84bb38))return(0x1c74+110-0x1ce2);
-spin_lock_irqsave(&WALT78e2cdac9a,WALT05b7c9a580);WALT213747575e(WALT1b752e214a,
-WALT6b2e94bfe7){if(boost){WALT37066d5eec=!WALT1b752e214a->boost;++WALT1b752e214a
-->boost;}else{if(!WALT1b752e214a->boost){WALT083920bcc8=-EINVAL;break;}else{--
-WALT1b752e214a->boost;WALT37066d5eec=!WALT1b752e214a->boost;}}}
-spin_unlock_irqrestore(&WALT78e2cdac9a,WALT05b7c9a580);if(WALT37066d5eec){
-WALT6b2e94bfe7=(0x734+7704-0x254c);WALT213747575e(WALT1b752e214a,WALT6b2e94bfe7)
-WALT041d9949cf(WALT1b752e214a);}if(WALT1b752e214a)trace_core_ctl_set_boost(
-WALT1b752e214a->boost,WALT083920bcc8);return WALT083920bcc8;}EXPORT_SYMBOL(
-core_ctl_set_boost);void core_ctl_notifier_register(struct notifier_block*
-WALTfe5c53f6bd){atomic_notifier_chain_register(&WALTe24f5fc06e,WALTfe5c53f6bd);}
-void core_ctl_notifier_unregister(struct notifier_block*WALTfe5c53f6bd){
-atomic_notifier_chain_unregister(&WALTe24f5fc06e,WALTfe5c53f6bd);}static void 
-WALT521764ce34(void){struct core_ctl_notif_data WALT89bf9aac81={
-(0xb20+387-0xca3)};struct notifier_block*WALT9e976b309a;rcu_read_lock();
-WALT9e976b309a=rcu_dereference_raw(WALTe24f5fc06e.head);rcu_read_unlock();if(!
-WALT9e976b309a)return;WALT89bf9aac81.nr_big=WALT86ffcc7dfd;walt_fill_ta_data(&
-WALT89bf9aac81);trace_core_ctl_notif_data(WALT89bf9aac81.nr_big,WALT89bf9aac81.
-coloc_load_pct,WALT89bf9aac81.ta_util_pct,WALT89bf9aac81.cur_cap_pct);
-atomic_notifier_call_chain(&WALTe24f5fc06e,(0x1321+1261-0x180e),&WALT89bf9aac81)
-;}void core_ctl_check(u64 WALTd872303760){int WALT8f9ab72eb9;struct 
-WALT722543f60e*WALTe2cca49edf;struct WALTd84195416f*WALT1b752e214a;unsigned int 
-WALT6b2e94bfe7=(0x7a0+7806-0x261e);unsigned long WALT05b7c9a580;if(unlikely(!
-WALT69be84bb38))return;if(WALTd872303760==WALTdfa13d72c3)return;WALTdfa13d72c3=
-WALTd872303760;spin_lock_irqsave(&WALT78e2cdac9a,WALT05b7c9a580);
-for_each_possible_cpu(WALT8f9ab72eb9){WALTe2cca49edf=&per_cpu(WALT22ef1845d7,
-WALT8f9ab72eb9);WALT1b752e214a=WALTe2cca49edf->WALT1b752e214a;if(!WALT1b752e214a
-||!WALT1b752e214a->WALTb6181247c7)continue;WALTe2cca49edf->WALT517f9bdd84=
-sched_get_cpu_util(WALT8f9ab72eb9);}spin_unlock_irqrestore(&WALT78e2cdac9a,
-WALT05b7c9a580);WALT595408d471();WALT213747575e(WALT1b752e214a,WALT6b2e94bfe7){
-if(eval_need(WALT1b752e214a))WALTe68f5dd857(WALT1b752e214a);}WALT521764ce34();}
-static void WALT7e643441e5(struct WALT722543f60e*WALT722543f60e){unsigned long 
-WALT05b7c9a580;spin_lock_irqsave(&WALT78e2cdac9a,WALT05b7c9a580);list_del(&
-WALT722543f60e->WALTa7f3b2896c);list_add_tail(&WALT722543f60e->WALTa7f3b2896c,&
-WALT722543f60e->WALT1b752e214a->WALT895ecc2391);spin_unlock_irqrestore(&
-WALT78e2cdac9a,WALT05b7c9a580);}static bool WALT25bcd77821(int WALT8f9ab72eb9,
-struct WALTd84195416f*WALT1b752e214a){return true;}static void WALTb426628abe(
-struct WALTd84195416f*WALT1b752e214a,unsigned int WALTf32c877095){struct 
-WALT722543f60e*WALTe2cca49edf,*WALTb9b0dca770;unsigned long WALT05b7c9a580;
-unsigned int WALT3fc386a32e=WALT1b752e214a->WALT3fc386a32e;unsigned int 
-WALT3407f2d0ae=(0x30c+7683-0x210f);bool WALT23fe99670b=WALT1b752e214a->
-WALT9656065c1c;spin_lock_irqsave(&WALT78e2cdac9a,WALT05b7c9a580);
-list_for_each_entry_safe(WALTe2cca49edf,WALTb9b0dca770,&WALT1b752e214a->
-WALT895ecc2391,WALTa7f3b2896c){if(!WALT3fc386a32e--)break;if(!WALT375fa7adc6(
-WALTe2cca49edf))continue;if(WALT1b752e214a->active_cpus==WALTf32c877095)break;if
-(WALTe2cca49edf->WALT087db4d18a)continue;if(WALT1b752e214a->WALT9656065c1c&&!
-WALTe2cca49edf->not_preferred)continue;if(!WALT25bcd77821(WALTe2cca49edf->
-WALT8f9ab72eb9,WALT1b752e214a))continue;spin_unlock_irqrestore(&WALT78e2cdac9a,
-WALT05b7c9a580);pr_debug(
-"\x54\x72\x79\x69\x6e\x67\x20\x74\x6f\x20\x69\x73\x6f\x6c\x61\x74\x65\x20\x43\x50\x55\x25\x75" "\n"
-,WALTe2cca49edf->WALT8f9ab72eb9);if(!sched_isolate_cpu(WALTe2cca49edf->
-WALT8f9ab72eb9)){WALTe2cca49edf->WALT7f508cb38b=true;WALT7e643441e5(
-WALTe2cca49edf);WALT3407f2d0ae++;}else{pr_debug(
-"\x55\x6e\x61\x62\x6c\x65\x20\x74\x6f\x20\x69\x73\x6f\x6c\x61\x74\x65\x20\x43\x50\x55\x25\x75" "\n"
-,WALTe2cca49edf->WALT8f9ab72eb9);}WALT1b752e214a->active_cpus=WALTbc04b417fa(
-WALT1b752e214a);spin_lock_irqsave(&WALT78e2cdac9a,WALT05b7c9a580);}
-WALT1b752e214a->WALTd76a53732a+=WALT3407f2d0ae;spin_unlock_irqrestore(&
-WALT78e2cdac9a,WALT05b7c9a580);WALTcd588e3717:if(WALT1b752e214a->active_cpus<=
-WALT1b752e214a->max_cpus)return;WALT3407f2d0ae=(0x788+2738-0x123a);
-WALT3fc386a32e=WALT1b752e214a->WALT3fc386a32e;spin_lock_irqsave(&WALT78e2cdac9a,
-WALT05b7c9a580);list_for_each_entry_safe(WALTe2cca49edf,WALTb9b0dca770,&
-WALT1b752e214a->WALT895ecc2391,WALTa7f3b2896c){if(!WALT3fc386a32e--)break;if(!
-WALT375fa7adc6(WALTe2cca49edf))continue;if(WALT1b752e214a->active_cpus<=
-WALT1b752e214a->max_cpus)break;if(WALT23fe99670b&&!WALTe2cca49edf->not_preferred
-)continue;spin_unlock_irqrestore(&WALT78e2cdac9a,WALT05b7c9a580);pr_debug(
-"\x54\x72\x79\x69\x6e\x67\x20\x74\x6f\x20\x69\x73\x6f\x6c\x61\x74\x65\x20\x43\x50\x55\x25\x75" "\n"
-,WALTe2cca49edf->WALT8f9ab72eb9);if(!sched_isolate_cpu(WALTe2cca49edf->
-WALT8f9ab72eb9)){WALTe2cca49edf->WALT7f508cb38b=true;WALT7e643441e5(
-WALTe2cca49edf);WALT3407f2d0ae++;}else{pr_debug(
-"\x55\x6e\x61\x62\x6c\x65\x20\x74\x6f\x20\x69\x73\x6f\x6c\x61\x74\x65\x20\x43\x50\x55\x25\x75" "\n"
-,WALTe2cca49edf->WALT8f9ab72eb9);}WALT1b752e214a->active_cpus=WALTbc04b417fa(
-WALT1b752e214a);spin_lock_irqsave(&WALT78e2cdac9a,WALT05b7c9a580);}
-WALT1b752e214a->WALTd76a53732a+=WALT3407f2d0ae;spin_unlock_irqrestore(&
-WALT78e2cdac9a,WALT05b7c9a580);if(WALT23fe99670b&&WALT1b752e214a->active_cpus>
-WALT1b752e214a->max_cpus){WALT23fe99670b=false;goto WALTcd588e3717;}}static void
- WALT8d759fe75f(struct WALTd84195416f*WALT1b752e214a,unsigned int WALTf32c877095
-,bool WALT16510eae6d){struct WALT722543f60e*WALTe2cca49edf,*WALTb9b0dca770;
-unsigned long WALT05b7c9a580;unsigned int WALT3fc386a32e=WALT1b752e214a->
-WALT3fc386a32e;unsigned int WALTa857c3409b=(0x716+7629-0x24e3);spin_lock_irqsave
-(&WALT78e2cdac9a,WALT05b7c9a580);list_for_each_entry_safe(WALTe2cca49edf,
-WALTb9b0dca770,&WALT1b752e214a->WALT895ecc2391,WALTa7f3b2896c){if(!
-WALT3fc386a32e--)break;if(!WALTe2cca49edf->WALT7f508cb38b)continue;if((
-cpu_online(WALTe2cca49edf->WALT8f9ab72eb9)&&!cpu_isolated(WALTe2cca49edf->
-WALT8f9ab72eb9))||(!WALT16510eae6d&&WALTe2cca49edf->not_preferred))continue;if(
-WALT1b752e214a->active_cpus==WALTf32c877095)break;spin_unlock_irqrestore(&
-WALT78e2cdac9a,WALT05b7c9a580);pr_debug(
-"\x54\x72\x79\x69\x6e\x67\x20\x74\x6f\x20\x75\x6e\x69\x73\x6f\x6c\x61\x74\x65\x20\x43\x50\x55\x25\x75" "\n"
-,WALTe2cca49edf->WALT8f9ab72eb9);if(!sched_unisolate_cpu(WALTe2cca49edf->
-WALT8f9ab72eb9)){WALTe2cca49edf->WALT7f508cb38b=false;WALT7e643441e5(
-WALTe2cca49edf);WALTa857c3409b++;}else{pr_debug(
-"\x55\x6e\x61\x62\x6c\x65\x20\x74\x6f\x20\x75\x6e\x69\x73\x6f\x6c\x61\x74\x65\x20\x43\x50\x55\x25\x75" "\n"
-,WALTe2cca49edf->WALT8f9ab72eb9);}WALT1b752e214a->active_cpus=WALTbc04b417fa(
-WALT1b752e214a);spin_lock_irqsave(&WALT78e2cdac9a,WALT05b7c9a580);}
-WALT1b752e214a->WALTd76a53732a-=WALTa857c3409b;spin_unlock_irqrestore(&
-WALT78e2cdac9a,WALT05b7c9a580);}static void WALT06ff7ad6cf(struct WALTd84195416f
-*WALT1b752e214a,unsigned int WALTf32c877095){bool WALT02ab9de09c=false;
-WALT8d759fe75f(WALT1b752e214a,WALTf32c877095,WALT02ab9de09c);if(WALT1b752e214a->
-active_cpus==WALTf32c877095)return;WALT02ab9de09c=true;WALT8d759fe75f(
-WALT1b752e214a,WALTf32c877095,WALT02ab9de09c);}static void __ref WALT5b4f389aad(
-struct WALTd84195416f*WALT1b752e214a){unsigned int WALTf32c877095;WALTf32c877095
-=WALTa16d868f28(WALT1b752e214a,WALT1b752e214a->need_cpus);if(WALT05c5275688(
-WALT1b752e214a,WALTf32c877095)){pr_debug(
-"\x54\x72\x79\x69\x6e\x67\x20\x74\x6f\x20\x61\x64\x6a\x75\x73\x74\x20\x67\x72\x6f\x75\x70\x20\x25\x75\x20\x66\x72\x6f\x6d\x20\x25\x75\x20\x74\x6f\x20\x25\x75" "\n"
-,WALT1b752e214a->WALT76f375774d,WALT1b752e214a->active_cpus,WALTf32c877095);if(
-WALT1b752e214a->active_cpus>WALTf32c877095)WALTb426628abe(WALT1b752e214a,
-WALTf32c877095);else if(WALT1b752e214a->active_cpus<WALTf32c877095)
-WALT06ff7ad6cf(WALT1b752e214a,WALTf32c877095);}}static int __ref WALTcc8e90311b(
-void*WALTf8791a57cc){struct WALTd84195416f*WALT1b752e214a=WALTf8791a57cc;
-unsigned long WALT05b7c9a580;while((0x14c5+763-0x17bf)){set_current_state(
-TASK_INTERRUPTIBLE);spin_lock_irqsave(&WALT1b752e214a->WALTffb20e4808,
-WALT05b7c9a580);if(!WALT1b752e214a->WALTa280f52f04){spin_unlock_irqrestore(&
-WALT1b752e214a->WALTffb20e4808,WALT05b7c9a580);schedule();if(kthread_should_stop
-())break;spin_lock_irqsave(&WALT1b752e214a->WALTffb20e4808,WALT05b7c9a580);}
-set_current_state(TASK_RUNNING);WALT1b752e214a->WALTa280f52f04=false;
-spin_unlock_irqrestore(&WALT1b752e214a->WALTffb20e4808,WALT05b7c9a580);
-WALT5b4f389aad(WALT1b752e214a);}return(0x7b2+7136-0x2392);}static int 
-WALT7641504060(unsigned int WALT8f9ab72eb9,bool WALTf62b956761){struct 
-WALT722543f60e*WALT048da5e00c=&per_cpu(WALT22ef1845d7,WALT8f9ab72eb9);struct 
-WALTd84195416f*WALT1b752e214a=WALT048da5e00c->WALT1b752e214a;unsigned int 
-WALTf32c877095;bool WALTc7196d407f=false,WALTfbe01eaa1f=false;unsigned long 
-WALT05b7c9a580;if(unlikely(!WALT1b752e214a||!WALT1b752e214a->WALTb6181247c7))
-return(0xcf1+2193-0x1582);if(WALTf62b956761){WALT1b752e214a->active_cpus=
-WALTbc04b417fa(WALT1b752e214a);WALT7e643441e5(WALT048da5e00c);}else{if(
-WALT048da5e00c->WALT7f508cb38b){sched_unisolate_cpu_unlocked(WALT8f9ab72eb9);
-WALT048da5e00c->WALT7f508cb38b=false;WALTfbe01eaa1f=true;}WALT7e643441e5(
-WALT048da5e00c);WALT048da5e00c->WALT517f9bdd84=(0x5aa+5165-0x19d7);
-WALT1b752e214a->active_cpus=WALTbc04b417fa(WALT1b752e214a);}WALTf32c877095=
-WALTa16d868f28(WALT1b752e214a,WALT1b752e214a->need_cpus);spin_lock_irqsave(&
-WALT78e2cdac9a,WALT05b7c9a580);if(WALTfbe01eaa1f)WALT1b752e214a->WALTd76a53732a
---;WALTc7196d407f=WALT05c5275688(WALT1b752e214a,WALTf32c877095);
-spin_unlock_irqrestore(&WALT78e2cdac9a,WALT05b7c9a580);if(WALTc7196d407f)
-WALTe68f5dd857(WALT1b752e214a);return(0x1041+3780-0x1f05);}static int 
-WALT32859df63c(unsigned int WALT8f9ab72eb9){return WALT7641504060(WALT8f9ab72eb9
-,true);}static int WALT182ef3e766(unsigned int WALT8f9ab72eb9){return 
-WALT7641504060(WALT8f9ab72eb9,false);}static struct WALTd84195416f*
-WALTd5d0009aa2(unsigned int WALT76f375774d){unsigned int WALT5d971be8b8;for(
-WALT5d971be8b8=(0x14b4+2368-0x1df4);WALT5d971be8b8<WALT3480a8e71f;++
-WALT5d971be8b8){if(WALT9a7bdf60eb[WALT5d971be8b8].WALT76f375774d==WALT76f375774d
-)return&WALT9a7bdf60eb[WALT5d971be8b8];}return NULL;}static int WALTfec3515cc6(
-const struct cpumask*WALTdf9caaa1ec){struct device*WALTf018520c69;unsigned int 
-WALT76f375774d=cpumask_first(WALTdf9caaa1ec);struct WALTd84195416f*
-WALT1b752e214a;struct WALT722543f60e*WALT048da5e00c;unsigned int WALT8f9ab72eb9;
-struct sched_param WALT88d2ec5be5={.sched_priority=MAX_RT_PRIO-
-(0x305+3297-0xfe5)};if(WALTd5d0009aa2(WALT76f375774d))return(0xa15+6018-0x2197);
-WALTf018520c69=get_cpu_device(WALT76f375774d);if(!WALTf018520c69)return-ENODEV;
-pr_info(
-"\x43\x72\x65\x61\x74\x69\x6e\x67\x20\x43\x50\x55\x20\x67\x72\x6f\x75\x70\x20\x25\x64" "\n"
-,WALT76f375774d);if(WALT3480a8e71f==MAX_CLUSTERS){pr_err(
-"\x55\x6e\x73\x75\x70\x70\x6f\x72\x74\x65\x64\x20\x6e\x75\x6d\x62\x65\x72\x20\x6f\x66\x20\x63\x6c\x75\x73\x74\x65\x72\x73\x2e\x20\x4f\x6e\x6c\x79\x20\x25\x75\x20\x73\x75\x70\x70\x6f\x72\x74\x65\x64" "\n"
-,MAX_CLUSTERS);return-EINVAL;}WALT1b752e214a=&WALT9a7bdf60eb[WALT3480a8e71f];++
-WALT3480a8e71f;cpumask_copy(&WALT1b752e214a->WALT39abd1de52,WALTdf9caaa1ec);
-WALT1b752e214a->WALT3fc386a32e=cpumask_weight(WALTdf9caaa1ec);if(WALT1b752e214a
-->WALT3fc386a32e>MAX_CPUS_PER_CLUSTER){pr_err(
-"\x48\x57\x20\x63\x6f\x6e\x66\x69\x67\x75\x72\x61\x74\x69\x6f\x6e\x20\x6e\x6f\x74\x20\x73\x75\x70\x70\x6f\x72\x74\x65\x64" "\n"
-);return-EINVAL;}WALT1b752e214a->WALT76f375774d=WALT76f375774d;WALT1b752e214a->
-min_cpus=(0x534+2314-0xe3d);WALT1b752e214a->max_cpus=WALT1b752e214a->
-WALT3fc386a32e;WALT1b752e214a->need_cpus=WALT1b752e214a->WALT3fc386a32e;
-WALT1b752e214a->offline_delay_ms=(0x978+3039-0x14f3);WALT1b752e214a->task_thres=
-UINT_MAX;WALT1b752e214a->nr_prev_assist_thresh=UINT_MAX;WALT1b752e214a->
-WALT78602fc8a3=WALT1b752e214a->WALT3fc386a32e;WALT1b752e214a->enable=true;
-WALT1b752e214a->WALT9656065c1c=(0x78b+5003-0x1b16);WALT1b752e214a->
-WALTcc9821f091=(0x1907+123-0x1982);INIT_LIST_HEAD(&WALT1b752e214a->
-WALT895ecc2391);spin_lock_init(&WALT1b752e214a->WALTffb20e4808);for_each_cpu(
-WALT8f9ab72eb9,WALTdf9caaa1ec){pr_info(
-"\x49\x6e\x69\x74\x20\x43\x50\x55\x25\x75\x20\x73\x74\x61\x74\x65" "\n",
-WALT8f9ab72eb9);WALT048da5e00c=&per_cpu(WALT22ef1845d7,WALT8f9ab72eb9);
-WALT048da5e00c->WALT1b752e214a=WALT1b752e214a;WALT048da5e00c->WALT8f9ab72eb9=
-WALT8f9ab72eb9;list_add_tail(&WALT048da5e00c->WALTa7f3b2896c,&WALT1b752e214a->
-WALT895ecc2391);}WALT1b752e214a->active_cpus=WALTbc04b417fa(WALT1b752e214a);
-WALT1b752e214a->WALT2e935f34a1=kthread_run(WALTcc8e90311b,(void*)WALT1b752e214a,
-"\x63\x6f\x72\x65\x5f\x63\x74\x6c\x2f\x25\x64",WALT76f375774d);if(IS_ERR(
-WALT1b752e214a->WALT2e935f34a1))return PTR_ERR(WALT1b752e214a->WALT2e935f34a1);
-sched_setscheduler_nocheck(WALT1b752e214a->WALT2e935f34a1,SCHED_FIFO,&
-WALT88d2ec5be5);WALT1b752e214a->WALTb6181247c7=true;kobject_init(&WALT1b752e214a
-->kobj,&WALTe314eed4f2);return kobject_add(&WALT1b752e214a->kobj,&WALTf018520c69
-->kobj,"\x63\x6f\x72\x65\x5f\x63\x74\x6c");}static int __init core_ctl_init(void
-){struct walt_sched_cluster*WALT1b752e214a;int WALT083920bcc8;
-cpuhp_setup_state_nocalls(CPUHP_AP_ONLINE_DYN,
-"\x63\x6f\x72\x65\x5f\x63\x74\x6c\x2f\x69\x73\x6f\x6c\x61\x74\x69\x6f\x6e\x3a\x6f\x6e\x6c\x69\x6e\x65"
-,WALT32859df63c,NULL);cpuhp_setup_state_nocalls(CPUHP_CORE_CTL_ISOLATION_DEAD,
-"\x63\x6f\x72\x65\x5f\x63\x74\x6c\x2f\x69\x73\x6f\x6c\x61\x74\x69\x6f\x6e\x3a\x64\x65\x61\x64"
-,NULL,WALT182ef3e766);for_each_sched_cluster(WALT1b752e214a){WALT083920bcc8=
-WALTfec3515cc6(&WALT1b752e214a->cpus);if(WALT083920bcc8)pr_warn(
-"\x75\x6e\x61\x62\x6c\x65\x20\x74\x6f\x20\x63\x72\x65\x61\x74\x65\x20\x63\x6f\x72\x65\x20\x63\x74\x6c\x20\x67\x72\x6f\x75\x70\x3a\x20\x25\x64" "\n"
-,WALT083920bcc8);}WALT69be84bb38=true;return(0x40b+8156-0x23e7);}late_initcall(
-core_ctl_init);
+
+struct cluster_data {
+	bool inited;
+	unsigned int min_cpus;
+	unsigned int max_cpus;
+	unsigned int offline_delay_ms;
+	unsigned int busy_up_thres[MAX_CPUS_PER_CLUSTER];
+	unsigned int busy_down_thres[MAX_CPUS_PER_CLUSTER];
+	unsigned int active_cpus;
+	unsigned int num_cpus;
+	unsigned int nr_isolated_cpus;
+	unsigned int nr_not_preferred_cpus;
+	cpumask_t cpu_mask;
+	unsigned int need_cpus;
+	unsigned int task_thres;
+	unsigned int max_nr;
+	unsigned int nr_prev_assist;
+	unsigned int nr_prev_assist_thresh;
+	s64 need_ts;
+	struct list_head lru;
+	bool pending;
+	spinlock_t pending_lock;
+	bool enable;
+	int nrrun;
+	struct task_struct *core_ctl_thread;
+	unsigned int first_cpu;
+	unsigned int boost;
+	struct kobject kobj;
+	unsigned int strict_nrrun;
+};
+
+struct cpu_data {
+	bool is_busy;
+	unsigned int busy;
+	unsigned int cpu;
+	bool not_preferred;
+	struct cluster_data *cluster;
+	struct list_head sib;
+	bool isolated_by_us;
+};
+
+static DEFINE_PER_CPU(struct cpu_data, cpu_state);
+static struct cluster_data cluster_state[MAX_CLUSTERS];
+static unsigned int num_clusters;
+
+#define for_each_cluster(cluster, idx) \
+	for (; (idx) < num_clusters && ((cluster) = &cluster_state[idx]);\
+		idx++)
+
+
+static DEFINE_SPINLOCK(state_lock);
+static void apply_need(struct cluster_data *state);
+static void wake_up_core_ctl_thread(struct cluster_data *state);
+static bool initialized;
+
+ATOMIC_NOTIFIER_HEAD(core_ctl_notifier);
+static unsigned int last_nr_big;
+
+static unsigned int get_active_cpu_count(const struct cluster_data *cluster);
+
+/* ========================= sysfs interface =========================== */
+
+static ssize_t store_min_cpus(struct cluster_data *state,
+				const char *buf, size_t count)
+{
+	unsigned int val;
+
+	if (sscanf(buf, "%u\n", &val) != 1)
+		return -EINVAL;
+
+	state->min_cpus = min(val, state->num_cpus);
+	wake_up_core_ctl_thread(state);
+
+	return count;
+}
+
+static ssize_t show_min_cpus(const struct cluster_data *state, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%u\n", state->min_cpus);
+}
+
+static ssize_t store_max_cpus(struct cluster_data *state,
+				const char *buf, size_t count)
+{
+	unsigned int val;
+
+	if (sscanf(buf, "%u\n", &val) != 1)
+		return -EINVAL;
+
+	state->max_cpus = min(val, state->num_cpus);
+	wake_up_core_ctl_thread(state);
+
+	return count;
+}
+
+static ssize_t show_max_cpus(const struct cluster_data *state, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%u\n", state->max_cpus);
+}
+
+static ssize_t store_offline_delay_ms(struct cluster_data *state,
+					const char *buf, size_t count)
+{
+	unsigned int val;
+
+	if (sscanf(buf, "%u\n", &val) != 1)
+		return -EINVAL;
+
+	state->offline_delay_ms = val;
+	apply_need(state);
+
+	return count;
+}
+
+static ssize_t show_task_thres(const struct cluster_data *state, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%u\n", state->task_thres);
+}
+
+static ssize_t store_task_thres(struct cluster_data *state,
+				const char *buf, size_t count)
+{
+	unsigned int val;
+
+	if (sscanf(buf, "%u\n", &val) != 1)
+		return -EINVAL;
+
+	if (val < state->num_cpus)
+		return -EINVAL;
+
+	state->task_thres = val;
+	apply_need(state);
+
+	return count;
+}
+
+static ssize_t show_nr_prev_assist_thresh(const struct cluster_data *state,
+								char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%u\n", state->nr_prev_assist_thresh);
+}
+
+static ssize_t store_nr_prev_assist_thresh(struct cluster_data *state,
+				const char *buf, size_t count)
+{
+	unsigned int val;
+
+	if (sscanf(buf, "%u\n", &val) != 1)
+		return -EINVAL;
+
+	state->nr_prev_assist_thresh = val;
+	apply_need(state);
+
+	return count;
+}
+
+static ssize_t show_offline_delay_ms(const struct cluster_data *state,
+				     char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%u\n", state->offline_delay_ms);
+}
+
+static ssize_t store_busy_up_thres(struct cluster_data *state,
+					const char *buf, size_t count)
+{
+	unsigned int val[MAX_CPUS_PER_CLUSTER];
+	int ret, i;
+
+	ret = sscanf(buf, "%u %u %u %u %u %u\n",
+			&val[0], &val[1], &val[2], &val[3],
+			&val[4], &val[5]);
+	if (ret != 1 && ret != state->num_cpus)
+		return -EINVAL;
+
+	if (ret == 1) {
+		for (i = 0; i < state->num_cpus; i++)
+			state->busy_up_thres[i] = val[0];
+	} else {
+		for (i = 0; i < state->num_cpus; i++)
+			state->busy_up_thres[i] = val[i];
+	}
+	apply_need(state);
+	return count;
+}
+
+static ssize_t show_busy_up_thres(const struct cluster_data *state, char *buf)
+{
+	int i, count = 0;
+
+	for (i = 0; i < state->num_cpus; i++)
+		count += snprintf(buf + count, PAGE_SIZE - count, "%u ",
+				  state->busy_up_thres[i]);
+
+	count += snprintf(buf + count, PAGE_SIZE - count, "\n");
+	return count;
+}
+
+static ssize_t store_busy_down_thres(struct cluster_data *state,
+					const char *buf, size_t count)
+{
+	unsigned int val[MAX_CPUS_PER_CLUSTER];
+	int ret, i;
+
+	ret = sscanf(buf, "%u %u %u %u %u %u\n",
+			&val[0], &val[1], &val[2], &val[3],
+			&val[4], &val[5]);
+	if (ret != 1 && ret != state->num_cpus)
+		return -EINVAL;
+
+	if (ret == 1) {
+		for (i = 0; i < state->num_cpus; i++)
+			state->busy_down_thres[i] = val[0];
+	} else {
+		for (i = 0; i < state->num_cpus; i++)
+			state->busy_down_thres[i] = val[i];
+	}
+	apply_need(state);
+	return count;
+}
+
+static ssize_t show_busy_down_thres(const struct cluster_data *state, char *buf)
+{
+	int i, count = 0;
+
+	for (i = 0; i < state->num_cpus; i++)
+		count += snprintf(buf + count, PAGE_SIZE - count, "%u ",
+				  state->busy_down_thres[i]);
+
+	count += snprintf(buf + count, PAGE_SIZE - count, "\n");
+	return count;
+}
+
+static ssize_t store_enable(struct cluster_data *state,
+				const char *buf, size_t count)
+{
+	unsigned int val;
+	bool bval;
+
+	if (sscanf(buf, "%u\n", &val) != 1)
+		return -EINVAL;
+
+	bval = !!val;
+	if (bval != state->enable) {
+		state->enable = bval;
+		apply_need(state);
+	}
+
+	return count;
+}
+
+static ssize_t show_enable(const struct cluster_data *state, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%u\n", state->enable);
+}
+
+static ssize_t show_need_cpus(const struct cluster_data *state, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%u\n", state->need_cpus);
+}
+
+static ssize_t show_active_cpus(const struct cluster_data *state, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%u\n", state->active_cpus);
+}
+
+static ssize_t show_global_state(const struct cluster_data *state, char *buf)
+{
+	struct cpu_data *c;
+	struct cluster_data *cluster;
+	ssize_t count = 0;
+	unsigned int cpu;
+
+	spin_lock_irq(&state_lock);
+	for_each_possible_cpu(cpu) {
+		c = &per_cpu(cpu_state, cpu);
+		cluster = c->cluster;
+		if (!cluster || !cluster->inited)
+			continue;
+
+		count += snprintf(buf + count, PAGE_SIZE - count,
+					"CPU%u\n", cpu);
+		count += snprintf(buf + count, PAGE_SIZE - count,
+					"\tCPU: %u\n", c->cpu);
+		count += snprintf(buf + count, PAGE_SIZE - count,
+					"\tOnline: %u\n",
+					cpu_online(c->cpu));
+		count += snprintf(buf + count, PAGE_SIZE - count,
+					"\tIsolated: %u\n",
+					cpu_isolated(c->cpu));
+		count += snprintf(buf + count, PAGE_SIZE - count,
+					"\tFirst CPU: %u\n",
+						cluster->first_cpu);
+		count += snprintf(buf + count, PAGE_SIZE - count,
+					"\tBusy%%: %u\n", c->busy);
+		count += snprintf(buf + count, PAGE_SIZE - count,
+					"\tIs busy: %u\n", c->is_busy);
+		count += snprintf(buf + count, PAGE_SIZE - count,
+					"\tNot preferred: %u\n",
+						c->not_preferred);
+		count += snprintf(buf + count, PAGE_SIZE - count,
+					"\tNr running: %u\n", cluster->nrrun);
+		count += snprintf(buf + count, PAGE_SIZE - count,
+			"\tActive CPUs: %u\n", get_active_cpu_count(cluster));
+		count += snprintf(buf + count, PAGE_SIZE - count,
+				"\tNeed CPUs: %u\n", cluster->need_cpus);
+		count += snprintf(buf + count, PAGE_SIZE - count,
+				"\tNr isolated CPUs: %u\n",
+						cluster->nr_isolated_cpus);
+		count += snprintf(buf + count, PAGE_SIZE - count,
+				"\tBoost: %u\n", (unsigned int) cluster->boost);
+	}
+	spin_unlock_irq(&state_lock);
+
+	return count;
+}
+
+static ssize_t store_not_preferred(struct cluster_data *state,
+				   const char *buf, size_t count)
+{
+	struct cpu_data *c;
+	unsigned int i;
+	unsigned int val[MAX_CPUS_PER_CLUSTER];
+	unsigned long flags;
+	int ret;
+	int not_preferred_count = 0;
+
+	ret = sscanf(buf, "%u %u %u %u %u %u\n",
+			&val[0], &val[1], &val[2], &val[3],
+			&val[4], &val[5]);
+	if (ret != state->num_cpus)
+		return -EINVAL;
+
+	spin_lock_irqsave(&state_lock, flags);
+	for (i = 0; i < state->num_cpus; i++) {
+		c = &per_cpu(cpu_state, i + state->first_cpu);
+		c->not_preferred = val[i];
+		not_preferred_count += !!val[i];
+	}
+	state->nr_not_preferred_cpus = not_preferred_count;
+	spin_unlock_irqrestore(&state_lock, flags);
+
+	return count;
+}
+
+static ssize_t show_not_preferred(const struct cluster_data *state, char *buf)
+{
+	struct cpu_data *c;
+	ssize_t count = 0;
+	unsigned long flags;
+	int i;
+
+	spin_lock_irqsave(&state_lock, flags);
+	for (i = 0; i < state->num_cpus; i++) {
+		c = &per_cpu(cpu_state, i + state->first_cpu);
+		count += scnprintf(buf + count, PAGE_SIZE - count,
+				"CPU#%d: %u\n", c->cpu, c->not_preferred);
+	}
+	spin_unlock_irqrestore(&state_lock, flags);
+
+	return count;
+}
+
+
+struct core_ctl_attr {
+	struct attribute attr;
+	ssize_t (*show)(const struct cluster_data *, char *);
+	ssize_t (*store)(struct cluster_data *, const char *, size_t count);
+};
+
+#define core_ctl_attr_ro(_name)		\
+static struct core_ctl_attr _name =	\
+__ATTR(_name, 0444, show_##_name, NULL)
+
+#define core_ctl_attr_rw(_name)			\
+static struct core_ctl_attr _name =		\
+__ATTR(_name, 0644, show_##_name, store_##_name)
+
+core_ctl_attr_rw(min_cpus);
+core_ctl_attr_rw(max_cpus);
+core_ctl_attr_rw(offline_delay_ms);
+core_ctl_attr_rw(busy_up_thres);
+core_ctl_attr_rw(busy_down_thres);
+core_ctl_attr_rw(task_thres);
+core_ctl_attr_rw(nr_prev_assist_thresh);
+core_ctl_attr_ro(need_cpus);
+core_ctl_attr_ro(active_cpus);
+core_ctl_attr_ro(global_state);
+core_ctl_attr_rw(not_preferred);
+core_ctl_attr_rw(enable);
+
+static struct attribute *default_attrs[] = {
+	&min_cpus.attr,
+	&max_cpus.attr,
+	&offline_delay_ms.attr,
+	&busy_up_thres.attr,
+	&busy_down_thres.attr,
+	&task_thres.attr,
+	&nr_prev_assist_thresh.attr,
+	&enable.attr,
+	&need_cpus.attr,
+	&active_cpus.attr,
+	&global_state.attr,
+	&not_preferred.attr,
+	NULL
+};
+
+#define to_cluster_data(k) container_of(k, struct cluster_data, kobj)
+#define to_attr(a) container_of(a, struct core_ctl_attr, attr)
+static ssize_t show(struct kobject *kobj, struct attribute *attr, char *buf)
+{
+	struct cluster_data *data = to_cluster_data(kobj);
+	struct core_ctl_attr *cattr = to_attr(attr);
+	ssize_t ret = -EIO;
+
+	if (cattr->show)
+		ret = cattr->show(data, buf);
+
+	return ret;
+}
+
+static ssize_t store(struct kobject *kobj, struct attribute *attr,
+		     const char *buf, size_t count)
+{
+	struct cluster_data *data = to_cluster_data(kobj);
+	struct core_ctl_attr *cattr = to_attr(attr);
+	ssize_t ret = -EIO;
+
+	if (cattr->store)
+		ret = cattr->store(data, buf, count);
+
+	return ret;
+}
+
+static const struct sysfs_ops sysfs_ops = {
+	.show	= show,
+	.store	= store,
+};
+
+static struct kobj_type ktype_core_ctl = {
+	.sysfs_ops	= &sysfs_ops,
+	.default_attrs	= default_attrs,
+};
+
+/* ==================== runqueue based core count =================== */
+
+static struct sched_avg_stats nr_stats[NR_CPUS];
+
+/*
+ * nr_need:
+ *   Number of tasks running on this cluster plus
+ *   tasks running on higher capacity clusters.
+ *   To find out CPUs needed from this cluster.
+ *
+ * For example:
+ *   On dual cluster system with 4 min capacity
+ *   CPUs and 4 max capacity CPUs, if there are
+ *   4 small tasks running on min capacity CPUs
+ *   and 2 big tasks running on 2 max capacity
+ *   CPUs, nr_need has to be 6 for min capacity
+ *   cluster and 2 for max capacity cluster.
+ *   This is because, min capacity cluster has to
+ *   account for tasks running on max capacity
+ *   cluster, so that, the min capacity cluster
+ *   can be ready to accommodate tasks running on max
+ *   capacity CPUs if the demand of tasks goes down.
+ */
+static int compute_cluster_nr_need(int index)
+{
+	int cpu;
+	struct cluster_data *cluster;
+	int nr_need = 0;
+
+	for_each_cluster(cluster, index) {
+		for_each_cpu(cpu, &cluster->cpu_mask)
+			nr_need += nr_stats[cpu].nr;
+	}
+
+	return nr_need;
+}
+
+/*
+ * prev_misfit_need:
+ *   Tasks running on smaller capacity cluster which
+ *   needs to be migrated to higher capacity cluster.
+ *   To find out how many tasks need higher capacity CPUs.
+ *
+ * For example:
+ *   On dual cluster system with 4 min capacity
+ *   CPUs and 4 max capacity CPUs, if there are
+ *   2 small tasks and 2 big tasks running on
+ *   min capacity CPUs and no tasks running on
+ *   max cpacity, prev_misfit_need of min capacity
+ *   cluster will be 0 and prev_misfit_need of
+ *   max capacity cluster will be 2.
+ */
+static int compute_prev_cluster_misfit_need(int index)
+{
+	int cpu;
+	struct cluster_data *prev_cluster;
+	int prev_misfit_need = 0;
+
+	/*
+	 * Lowest capacity cluster does not have to
+	 * accommodate any misfit tasks.
+	 */
+	if (index == 0)
+		return 0;
+
+	prev_cluster = &cluster_state[index - 1];
+
+	for_each_cpu(cpu, &prev_cluster->cpu_mask)
+		prev_misfit_need += nr_stats[cpu].nr_misfit;
+
+	return prev_misfit_need;
+}
+
+static int compute_cluster_max_nr(int index)
+{
+	int cpu;
+	struct cluster_data *cluster = &cluster_state[index];
+	int max_nr = 0;
+
+	for_each_cpu(cpu, &cluster->cpu_mask)
+		max_nr = max(max_nr, nr_stats[cpu].nr_max);
+
+	return max_nr;
+}
+
+static int cluster_real_big_tasks(int index)
+{
+	int nr_big = 0;
+	int cpu;
+	struct cluster_data *cluster = &cluster_state[index];
+
+	if (index == 0) {
+		for_each_cpu(cpu, &cluster->cpu_mask)
+			nr_big += nr_stats[cpu].nr_misfit;
+	} else {
+		for_each_cpu(cpu, &cluster->cpu_mask)
+			nr_big += nr_stats[cpu].nr;
+	}
+
+	return nr_big;
+}
+
+/*
+ * prev_nr_need_assist:
+ *   Tasks that are eligible to run on the previous
+ *   cluster but cannot run because of insufficient
+ *   CPUs there. prev_nr_need_assist is indicative
+ *   of number of CPUs in this cluster that should
+ *   assist its previous cluster to makeup for
+ *   insufficient CPUs there.
+ *
+ * For example:
+ *   On tri-cluster system with 4 min capacity
+ *   CPUs, 3 intermediate capacity CPUs and 1
+ *   max capacity CPU, if there are 4 small
+ *   tasks running on min capacity CPUs, 4 big
+ *   tasks running on intermediate capacity CPUs
+ *   and no tasks running on max capacity CPU,
+ *   prev_nr_need_assist for min & max capacity
+ *   clusters will be 0, but, for intermediate
+ *   capacity cluster prev_nr_need_assist will
+ *   be 1 as it has 3 CPUs, but, there are 4 big
+ *   tasks to be served.
+ */
+static int prev_cluster_nr_need_assist(int index)
+{
+	int need = 0;
+	int cpu;
+	struct cluster_data *prev_cluster;
+
+	if (index == 0)
+		return 0;
+
+	index--;
+	prev_cluster = &cluster_state[index];
+
+	/*
+	 * Next cluster should not assist, while there are isolated cpus
+	 * in this cluster.
+	 */
+	if (prev_cluster->nr_isolated_cpus)
+		return 0;
+
+	for_each_cpu(cpu, &prev_cluster->cpu_mask)
+		need += nr_stats[cpu].nr;
+
+	need += compute_prev_cluster_misfit_need(index);
+
+	if (need > prev_cluster->active_cpus)
+		need = need - prev_cluster->active_cpus;
+	else
+		need = 0;
+
+	return need;
+}
+
+/*
+ * This is only implemented for min capacity cluster.
+ *
+ * Bringing a little CPU out of isolation and using it
+ * more does not hurt power as much as bringing big CPUs.
+ *
+ * little cluster provides help needed for the other clusters.
+ * we take nr_scaled (which gives better resolution) and find
+ * the total nr in the system. Then take out the active higher
+ * capacity CPUs from the nr and consider the remaining nr as
+ * strict and consider that many little CPUs are needed.
+ */
+static int compute_cluster_nr_strict_need(int index)
+{
+	int cpu;
+	struct cluster_data *cluster;
+	int nr_strict_need = 0;
+
+	if (index != 0)
+		return 0;
+
+	for_each_cluster(cluster, index) {
+		int nr_scaled = 0;
+		int active_cpus = cluster->active_cpus;
+
+		for_each_cpu(cpu, &cluster->cpu_mask)
+			nr_scaled += nr_stats[cpu].nr_scaled;
+
+		nr_scaled /= 100;
+
+		/*
+		 * For little cluster, nr_scaled becomes the nr_strict,
+		 * for other cluster, overflow is counted towards
+		 * the little cluster need.
+		 */
+		if (index == 0)
+			nr_strict_need += nr_scaled;
+		else
+			nr_strict_need += max(0, nr_scaled - active_cpus);
+	}
+
+	return nr_strict_need;
+}
+static void update_running_avg(void)
+{
+	struct cluster_data *cluster;
+	unsigned int index = 0;
+	unsigned long flags;
+	int big_avg = 0;
+
+	sched_get_nr_running_avg(nr_stats);
+
+	spin_lock_irqsave(&state_lock, flags);
+	for_each_cluster(cluster, index) {
+		int nr_need, prev_misfit_need;
+
+		if (!cluster->inited)
+			continue;
+
+		nr_need = compute_cluster_nr_need(index);
+		prev_misfit_need = compute_prev_cluster_misfit_need(index);
+
+
+		cluster->nrrun = nr_need + prev_misfit_need;
+		cluster->max_nr = compute_cluster_max_nr(index);
+		cluster->nr_prev_assist = prev_cluster_nr_need_assist(index);
+
+		cluster->strict_nrrun = compute_cluster_nr_strict_need(index);
+
+		trace_core_ctl_update_nr_need(cluster->first_cpu, nr_need,
+					prev_misfit_need,
+					cluster->nrrun, cluster->max_nr,
+					cluster->nr_prev_assist);
+
+		big_avg += cluster_real_big_tasks(index);
+	}
+	spin_unlock_irqrestore(&state_lock, flags);
+
+	last_nr_big = big_avg;
+	walt_rotation_checkpoint(big_avg);
+}
+
+#define MAX_NR_THRESHOLD	4
+/* adjust needed CPUs based on current runqueue information */
+static unsigned int apply_task_need(const struct cluster_data *cluster,
+				    unsigned int new_need)
+{
+	/* unisolate all cores if there are enough tasks */
+	if (cluster->nrrun >= cluster->task_thres)
+		return cluster->num_cpus;
+
+	/*
+	 * unisolate as many cores as the previous cluster
+	 * needs assistance with.
+	 */
+	if (cluster->nr_prev_assist >= cluster->nr_prev_assist_thresh)
+		new_need = new_need + cluster->nr_prev_assist;
+
+	/* only unisolate more cores if there are tasks to run */
+	if (cluster->nrrun > new_need)
+		new_need = new_need + 1;
+
+	/*
+	 * We don't want tasks to be overcrowded in a cluster.
+	 * If any CPU has more than MAX_NR_THRESHOLD in the last
+	 * window, bring another CPU to help out.
+	 */
+	if (cluster->max_nr > MAX_NR_THRESHOLD)
+		new_need = new_need + 1;
+
+	/*
+	 * For little cluster, we use a bit more relaxed approach
+	 * and impose the strict nr condition. Because all tasks can
+	 * spill onto little if big cluster is crowded.
+	 */
+	if (new_need < cluster->strict_nrrun)
+		new_need = cluster->strict_nrrun;
+
+	return new_need;
+}
+
+/* ======================= load based core count  ====================== */
+
+static unsigned int apply_limits(const struct cluster_data *cluster,
+				 unsigned int need_cpus)
+{
+	return min(max(cluster->min_cpus, need_cpus), cluster->max_cpus);
+}
+
+static unsigned int get_active_cpu_count(const struct cluster_data *cluster)
+{
+	return cluster->num_cpus -
+				sched_isolate_count(&cluster->cpu_mask, true);
+}
+
+static bool is_active(const struct cpu_data *state)
+{
+	return cpu_online(state->cpu) && !cpu_isolated(state->cpu);
+}
+
+static bool adjustment_possible(const struct cluster_data *cluster,
+							unsigned int need)
+{
+	return (need < cluster->active_cpus || (need > cluster->active_cpus &&
+						cluster->nr_isolated_cpus));
+}
+
+static bool need_all_cpus(const struct cluster_data *cluster)
+{
+	return (is_min_capacity_cpu(cluster->first_cpu) &&
+		sched_ravg_window < DEFAULT_SCHED_RAVG_WINDOW);
+}
+
+static bool eval_need(struct cluster_data *cluster)
+{
+	unsigned long flags;
+	struct cpu_data *c;
+	unsigned int need_cpus = 0, last_need, thres_idx;
+	int ret = 0;
+	bool need_flag = false;
+	unsigned int new_need;
+	s64 now, elapsed;
+
+	if (unlikely(!cluster->inited))
+		return 0;
+
+	spin_lock_irqsave(&state_lock, flags);
+
+	if (cluster->boost || !cluster->enable || need_all_cpus(cluster)) {
+		need_cpus = cluster->max_cpus;
+	} else {
+		cluster->active_cpus = get_active_cpu_count(cluster);
+		thres_idx = cluster->active_cpus ? cluster->active_cpus - 1 : 0;
+		list_for_each_entry(c, &cluster->lru, sib) {
+			bool old_is_busy = c->is_busy;
+
+			if (c->busy >= cluster->busy_up_thres[thres_idx] ||
+			    sched_cpu_high_irqload(c->cpu))
+				c->is_busy = true;
+			else if (c->busy < cluster->busy_down_thres[thres_idx])
+				c->is_busy = false;
+
+			trace_core_ctl_set_busy(c->cpu, c->busy, old_is_busy,
+						c->is_busy);
+			need_cpus += c->is_busy;
+		}
+		need_cpus = apply_task_need(cluster, need_cpus);
+	}
+	new_need = apply_limits(cluster, need_cpus);
+	need_flag = adjustment_possible(cluster, new_need);
+
+	last_need = cluster->need_cpus;
+	now = ktime_to_ms(ktime_get());
+
+	if (new_need > cluster->active_cpus) {
+		ret = 1;
+	} else {
+		/*
+		 * When there is no change in need and there are no more
+		 * active CPUs than currently needed, just update the
+		 * need time stamp and return.
+		 */
+		if (new_need == last_need && new_need == cluster->active_cpus) {
+			cluster->need_ts = now;
+			spin_unlock_irqrestore(&state_lock, flags);
+			return 0;
+		}
+
+		elapsed =  now - cluster->need_ts;
+		ret = elapsed >= cluster->offline_delay_ms;
+	}
+
+	if (ret) {
+		cluster->need_ts = now;
+		cluster->need_cpus = new_need;
+	}
+	trace_core_ctl_eval_need(cluster->first_cpu, last_need, new_need,
+				 ret && need_flag);
+	spin_unlock_irqrestore(&state_lock, flags);
+
+	return ret && need_flag;
+}
+
+static void apply_need(struct cluster_data *cluster)
+{
+	if (eval_need(cluster))
+		wake_up_core_ctl_thread(cluster);
+}
+
+/* ========================= core count enforcement ==================== */
+
+static void wake_up_core_ctl_thread(struct cluster_data *cluster)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&cluster->pending_lock, flags);
+	cluster->pending = true;
+	spin_unlock_irqrestore(&cluster->pending_lock, flags);
+
+	wake_up_process(cluster->core_ctl_thread);
+}
+
+static u64 core_ctl_check_timestamp;
+
+int core_ctl_set_boost(bool boost)
+{
+	unsigned int index = 0;
+	struct cluster_data *cluster = NULL;
+	unsigned long flags;
+	int ret = 0;
+	bool boost_state_changed = false;
+
+	if (unlikely(!initialized))
+		return 0;
+
+	spin_lock_irqsave(&state_lock, flags);
+	for_each_cluster(cluster, index) {
+		if (boost) {
+			boost_state_changed = !cluster->boost;
+			++cluster->boost;
+		} else {
+			if (!cluster->boost) {
+				ret = -EINVAL;
+				break;
+			} else {
+				--cluster->boost;
+				boost_state_changed = !cluster->boost;
+			}
+		}
+	}
+	spin_unlock_irqrestore(&state_lock, flags);
+
+	if (boost_state_changed) {
+		index = 0;
+		for_each_cluster(cluster, index)
+			apply_need(cluster);
+	}
+
+	if (cluster)
+		trace_core_ctl_set_boost(cluster->boost, ret);
+
+	return ret;
+}
+EXPORT_SYMBOL(core_ctl_set_boost);
+
+void core_ctl_notifier_register(struct notifier_block *n)
+{
+	atomic_notifier_chain_register(&core_ctl_notifier, n);
+}
+
+void core_ctl_notifier_unregister(struct notifier_block *n)
+{
+	atomic_notifier_chain_unregister(&core_ctl_notifier, n);
+}
+
+static void core_ctl_call_notifier(void)
+{
+	struct core_ctl_notif_data ndata = {0};
+	struct notifier_block *nb;
+
+	/*
+	 * Don't bother querying the stats when the notifier
+	 * chain is empty.
+	 */
+	rcu_read_lock();
+	nb = rcu_dereference_raw(core_ctl_notifier.head);
+	rcu_read_unlock();
+
+	if (!nb)
+		return;
+
+	ndata.nr_big = last_nr_big;
+	walt_fill_ta_data(&ndata);
+	trace_core_ctl_notif_data(ndata.nr_big, ndata.coloc_load_pct,
+			ndata.ta_util_pct, ndata.cur_cap_pct);
+
+	atomic_notifier_call_chain(&core_ctl_notifier, 0, &ndata);
+}
+
+void core_ctl_check(u64 window_start)
+{
+	int cpu;
+	struct cpu_data *c;
+	struct cluster_data *cluster;
+	unsigned int index = 0;
+	unsigned long flags;
+
+	if (unlikely(!initialized))
+		return;
+
+	if (window_start == core_ctl_check_timestamp)
+		return;
+
+	core_ctl_check_timestamp = window_start;
+
+	spin_lock_irqsave(&state_lock, flags);
+	for_each_possible_cpu(cpu) {
+
+		c = &per_cpu(cpu_state, cpu);
+		cluster = c->cluster;
+
+		if (!cluster || !cluster->inited)
+			continue;
+
+		c->busy = sched_get_cpu_util(cpu);
+	}
+	spin_unlock_irqrestore(&state_lock, flags);
+
+	update_running_avg();
+
+	for_each_cluster(cluster, index) {
+		if (eval_need(cluster))
+			wake_up_core_ctl_thread(cluster);
+	}
+
+	core_ctl_call_notifier();
+}
+
+static void move_cpu_lru(struct cpu_data *cpu_data)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&state_lock, flags);
+	list_del(&cpu_data->sib);
+	list_add_tail(&cpu_data->sib, &cpu_data->cluster->lru);
+	spin_unlock_irqrestore(&state_lock, flags);
+}
+
+static bool should_we_isolate(int cpu, struct cluster_data *cluster)
+{
+	return true;
+}
+
+static void try_to_isolate(struct cluster_data *cluster, unsigned int need)
+{
+	struct cpu_data *c, *tmp;
+	unsigned long flags;
+	unsigned int num_cpus = cluster->num_cpus;
+	unsigned int nr_isolated = 0;
+	bool first_pass = cluster->nr_not_preferred_cpus;
+
+	/*
+	 * Protect against entry being removed (and added at tail) by other
+	 * thread (hotplug).
+	 */
+	spin_lock_irqsave(&state_lock, flags);
+	list_for_each_entry_safe(c, tmp, &cluster->lru, sib) {
+		if (!num_cpus--)
+			break;
+
+		if (!is_active(c))
+			continue;
+		if (cluster->active_cpus == need)
+			break;
+		/* Don't isolate busy CPUs. */
+		if (c->is_busy)
+			continue;
+
+		/*
+		 * We isolate only the not_preferred CPUs. If none
+		 * of the CPUs are selected as not_preferred, then
+		 * all CPUs are eligible for isolation.
+		 */
+		if (cluster->nr_not_preferred_cpus && !c->not_preferred)
+			continue;
+
+		if (!should_we_isolate(c->cpu, cluster))
+			continue;
+
+		spin_unlock_irqrestore(&state_lock, flags);
+
+		pr_debug("Trying to isolate CPU%u\n", c->cpu);
+		if (!sched_isolate_cpu(c->cpu)) {
+			c->isolated_by_us = true;
+			move_cpu_lru(c);
+			nr_isolated++;
+		} else {
+			pr_debug("Unable to isolate CPU%u\n", c->cpu);
+		}
+		cluster->active_cpus = get_active_cpu_count(cluster);
+		spin_lock_irqsave(&state_lock, flags);
+	}
+	cluster->nr_isolated_cpus += nr_isolated;
+	spin_unlock_irqrestore(&state_lock, flags);
+
+again:
+	/*
+	 * If the number of active CPUs is within the limits, then
+	 * don't force isolation of any busy CPUs.
+	 */
+	if (cluster->active_cpus <= cluster->max_cpus)
+		return;
+
+	nr_isolated = 0;
+	num_cpus = cluster->num_cpus;
+	spin_lock_irqsave(&state_lock, flags);
+	list_for_each_entry_safe(c, tmp, &cluster->lru, sib) {
+		if (!num_cpus--)
+			break;
+
+		if (!is_active(c))
+			continue;
+		if (cluster->active_cpus <= cluster->max_cpus)
+			break;
+
+		if (first_pass && !c->not_preferred)
+			continue;
+
+		spin_unlock_irqrestore(&state_lock, flags);
+
+		pr_debug("Trying to isolate CPU%u\n", c->cpu);
+		if (!sched_isolate_cpu(c->cpu)) {
+			c->isolated_by_us = true;
+			move_cpu_lru(c);
+			nr_isolated++;
+		} else {
+			pr_debug("Unable to isolate CPU%u\n", c->cpu);
+		}
+		cluster->active_cpus = get_active_cpu_count(cluster);
+		spin_lock_irqsave(&state_lock, flags);
+	}
+	cluster->nr_isolated_cpus += nr_isolated;
+	spin_unlock_irqrestore(&state_lock, flags);
+
+	if (first_pass && cluster->active_cpus > cluster->max_cpus) {
+		first_pass = false;
+		goto again;
+	}
+}
+
+static void __try_to_unisolate(struct cluster_data *cluster,
+			       unsigned int need, bool force)
+{
+	struct cpu_data *c, *tmp;
+	unsigned long flags;
+	unsigned int num_cpus = cluster->num_cpus;
+	unsigned int nr_unisolated = 0;
+
+	/*
+	 * Protect against entry being removed (and added at tail) by other
+	 * thread (hotplug).
+	 */
+	spin_lock_irqsave(&state_lock, flags);
+	list_for_each_entry_safe(c, tmp, &cluster->lru, sib) {
+		if (!num_cpus--)
+			break;
+
+		if (!c->isolated_by_us)
+			continue;
+		if ((cpu_online(c->cpu) && !cpu_isolated(c->cpu)) ||
+			(!force && c->not_preferred))
+			continue;
+		if (cluster->active_cpus == need)
+			break;
+
+		spin_unlock_irqrestore(&state_lock, flags);
+
+		pr_debug("Trying to unisolate CPU%u\n", c->cpu);
+		if (!sched_unisolate_cpu(c->cpu)) {
+			c->isolated_by_us = false;
+			move_cpu_lru(c);
+			nr_unisolated++;
+		} else {
+			pr_debug("Unable to unisolate CPU%u\n", c->cpu);
+		}
+		cluster->active_cpus = get_active_cpu_count(cluster);
+		spin_lock_irqsave(&state_lock, flags);
+	}
+	cluster->nr_isolated_cpus -= nr_unisolated;
+	spin_unlock_irqrestore(&state_lock, flags);
+}
+
+static void try_to_unisolate(struct cluster_data *cluster, unsigned int need)
+{
+	bool force_use_non_preferred = false;
+
+	__try_to_unisolate(cluster, need, force_use_non_preferred);
+
+	if (cluster->active_cpus == need)
+		return;
+
+	force_use_non_preferred = true;
+	__try_to_unisolate(cluster, need, force_use_non_preferred);
+}
+
+static void __ref do_core_ctl(struct cluster_data *cluster)
+{
+	unsigned int need;
+
+	need = apply_limits(cluster, cluster->need_cpus);
+
+	if (adjustment_possible(cluster, need)) {
+		pr_debug("Trying to adjust group %u from %u to %u\n",
+				cluster->first_cpu, cluster->active_cpus, need);
+
+		if (cluster->active_cpus > need)
+			try_to_isolate(cluster, need);
+		else if (cluster->active_cpus < need)
+			try_to_unisolate(cluster, need);
+	}
+}
+
+static int __ref try_core_ctl(void *data)
+{
+	struct cluster_data *cluster = data;
+	unsigned long flags;
+
+	while (1) {
+		set_current_state(TASK_INTERRUPTIBLE);
+		spin_lock_irqsave(&cluster->pending_lock, flags);
+		if (!cluster->pending) {
+			spin_unlock_irqrestore(&cluster->pending_lock, flags);
+			schedule();
+			if (kthread_should_stop())
+				break;
+			spin_lock_irqsave(&cluster->pending_lock, flags);
+		}
+		set_current_state(TASK_RUNNING);
+		cluster->pending = false;
+		spin_unlock_irqrestore(&cluster->pending_lock, flags);
+
+		do_core_ctl(cluster);
+	}
+
+	return 0;
+}
+
+static int isolation_cpuhp_state(unsigned int cpu,  bool online)
+{
+	struct cpu_data *state = &per_cpu(cpu_state, cpu);
+	struct cluster_data *cluster = state->cluster;
+	unsigned int need;
+	bool do_wakeup = false, unisolated = false;
+	unsigned long flags;
+
+	if (unlikely(!cluster || !cluster->inited))
+		return 0;
+
+	if (online) {
+		cluster->active_cpus = get_active_cpu_count(cluster);
+
+		/*
+		 * Moving to the end of the list should only happen in
+		 * CPU_ONLINE and not on CPU_UP_PREPARE to prevent an
+		 * infinite list traversal when thermal (or other entities)
+		 * reject trying to online CPUs.
+		 */
+		move_cpu_lru(state);
+	} else {
+		/*
+		 * We don't want to have a CPU both offline and isolated.
+		 * So unisolate a CPU that went down if it was isolated by us.
+		 */
+		if (state->isolated_by_us) {
+			sched_unisolate_cpu_unlocked(cpu);
+			state->isolated_by_us = false;
+			unisolated = true;
+		}
+
+		/* Move a CPU to the end of the LRU when it goes offline. */
+		move_cpu_lru(state);
+
+		state->busy = 0;
+		cluster->active_cpus = get_active_cpu_count(cluster);
+	}
+
+	need = apply_limits(cluster, cluster->need_cpus);
+	spin_lock_irqsave(&state_lock, flags);
+	if (unisolated)
+		cluster->nr_isolated_cpus--;
+	do_wakeup = adjustment_possible(cluster, need);
+	spin_unlock_irqrestore(&state_lock, flags);
+	if (do_wakeup)
+		wake_up_core_ctl_thread(cluster);
+
+	return 0;
+}
+
+static int core_ctl_isolation_online_cpu(unsigned int cpu)
+{
+	return isolation_cpuhp_state(cpu, true);
+}
+
+static int core_ctl_isolation_dead_cpu(unsigned int cpu)
+{
+	return isolation_cpuhp_state(cpu, false);
+}
+
+/* ============================ init code ============================== */
+
+static struct cluster_data *find_cluster_by_first_cpu(unsigned int first_cpu)
+{
+	unsigned int i;
+
+	for (i = 0; i < num_clusters; ++i) {
+		if (cluster_state[i].first_cpu == first_cpu)
+			return &cluster_state[i];
+	}
+
+	return NULL;
+}
+
+static int cluster_init(const struct cpumask *mask)
+{
+	struct device *dev;
+	unsigned int first_cpu = cpumask_first(mask);
+	struct cluster_data *cluster;
+	struct cpu_data *state;
+	unsigned int cpu;
+	struct sched_param param = { .sched_priority = MAX_RT_PRIO-1 };
+
+	if (find_cluster_by_first_cpu(first_cpu))
+		return 0;
+
+	dev = get_cpu_device(first_cpu);
+	if (!dev)
+		return -ENODEV;
+
+	pr_info("Creating CPU group %d\n", first_cpu);
+
+	if (num_clusters == MAX_CLUSTERS) {
+		pr_err("Unsupported number of clusters. Only %u supported\n",
+								MAX_CLUSTERS);
+		return -EINVAL;
+	}
+	cluster = &cluster_state[num_clusters];
+	++num_clusters;
+
+	cpumask_copy(&cluster->cpu_mask, mask);
+	cluster->num_cpus = cpumask_weight(mask);
+	if (cluster->num_cpus > MAX_CPUS_PER_CLUSTER) {
+		pr_err("HW configuration not supported\n");
+		return -EINVAL;
+	}
+	cluster->first_cpu = first_cpu;
+	cluster->min_cpus = 1;
+	cluster->max_cpus = cluster->num_cpus;
+	cluster->need_cpus = cluster->num_cpus;
+	cluster->offline_delay_ms = 100;
+	cluster->task_thres = UINT_MAX;
+	cluster->nr_prev_assist_thresh = UINT_MAX;
+	cluster->nrrun = cluster->num_cpus;
+	cluster->enable = true;
+	cluster->nr_not_preferred_cpus = 0;
+	cluster->strict_nrrun = 0;
+	INIT_LIST_HEAD(&cluster->lru);
+	spin_lock_init(&cluster->pending_lock);
+
+	for_each_cpu(cpu, mask) {
+		pr_info("Init CPU%u state\n", cpu);
+
+		state = &per_cpu(cpu_state, cpu);
+		state->cluster = cluster;
+		state->cpu = cpu;
+		list_add_tail(&state->sib, &cluster->lru);
+	}
+	cluster->active_cpus = get_active_cpu_count(cluster);
+
+	cluster->core_ctl_thread = kthread_run(try_core_ctl, (void *) cluster,
+					"core_ctl/%d", first_cpu);
+	if (IS_ERR(cluster->core_ctl_thread))
+		return PTR_ERR(cluster->core_ctl_thread);
+
+	sched_setscheduler_nocheck(cluster->core_ctl_thread, SCHED_FIFO,
+				   &param);
+
+	cluster->inited = true;
+
+	kobject_init(&cluster->kobj, &ktype_core_ctl);
+	return kobject_add(&cluster->kobj, &dev->kobj, "core_ctl");
+}
+
+static int __init core_ctl_init(void)
+{
+	struct walt_sched_cluster *cluster;
+	int ret;
+
+	cpuhp_setup_state_nocalls(CPUHP_AP_ONLINE_DYN,
+			"core_ctl/isolation:online",
+			core_ctl_isolation_online_cpu, NULL);
+
+	cpuhp_setup_state_nocalls(CPUHP_CORE_CTL_ISOLATION_DEAD,
+			"core_ctl/isolation:dead",
+			NULL, core_ctl_isolation_dead_cpu);
+
+	for_each_sched_cluster(cluster) {
+		ret = cluster_init(&cluster->cpus);
+		if (ret)
+			pr_warn("unable to create core ctl group: %d\n", ret);
+	}
+
+	initialized = true;
+	return 0;
+}
+
+late_initcall(core_ctl_init);
