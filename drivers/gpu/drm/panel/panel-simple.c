@@ -2044,6 +2044,7 @@ static const struct drm_display_mode kingdisplay_kd116n21_30nv_a010_mode = {
 	.vsync_start = 768 + 5,
 	.vsync_end = 768 + 5 + 5,
 	.vtotal = 768 + 5 + 5 + 122,
+	.vrefresh = 60,
 	.flags = DRM_MODE_FLAG_NVSYNC | DRM_MODE_FLAG_NHSYNC,
 };
 
