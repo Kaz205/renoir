@@ -238,8 +238,7 @@ config COMPACTION
 
 config PROCESS_RECLAIM
 	bool "Enable process reclaim"
-	depends on PROC_FS
-	default n
+	depends on PROC_FS && MMU
 	help
 	 It allows to reclaim pages of the process by /proc/pid/reclaim.
 
