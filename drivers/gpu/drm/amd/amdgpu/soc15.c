@@ -960,6 +960,11 @@ static uint64_t soc15_get_pcie_replay_count(struct amdgpu_device *adev)
 	return (nak_r + nak_g);
 }
 
+static void soc15_pre_asic_init(struct amdgpu_device *adev)
+{
+	gmc_v9_0_restore_registers(adev);
+}
+
 static const struct amdgpu_asic_funcs soc15_asic_funcs =
 {
 	.read_disabled_bios = &soc15_read_disabled_bios,
@@ -979,6 +984,7 @@ static const struct amdgpu_asic_funcs soc15_asic_funcs =
 	.get_pcie_usage = &soc15_get_pcie_usage,
 	.need_reset_on_init = &soc15_need_reset_on_init,
 	.get_pcie_replay_count = &soc15_get_pcie_replay_count,
+	.pre_asic_init = &soc15_pre_asic_init,
 };
 
 static const struct amdgpu_asic_funcs vega20_asic_funcs =
@@ -999,7 +1005,8 @@ static const struct amdgpu_asic_funcs vega20_asic_funcs =
 	.get_pcie_usage = &vega20_get_pcie_usage,
 	.need_reset_on_init = &soc15_need_reset_on_init,
 	.get_pcie_replay_count = &soc15_get_pcie_replay_count,
-	.reset_method = &soc15_asic_reset_method
+	.reset_method = &soc15_asic_reset_method,
+	.pre_asic_init = &soc15_pre_asic_init,
 };
 
 static int soc15_common_early_init(void *handle)
