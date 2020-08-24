@@ -63,6 +63,8 @@
 #define HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION__PRI_VIEWPORT_HEIGHT__SHIFT                                       0x10
 #define HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION__PRI_VIEWPORT_WIDTH_MASK                                          0x00003FFFL
 #define HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION__PRI_VIEWPORT_HEIGHT_MASK                                         0x3FFF0000L
+#define mmDCHUBBUB_SDPIF_MMIO_CNTRL_0                                                                  0x049d
+#define mmDCHUBBUB_SDPIF_MMIO_CNTRL_0_BASE_IDX                                                         2
 
 /* XXX Move this macro to VEGA10 header file, which is like vid.h for VI.*/
 #define AMDGPU_NUM_OF_VMIDS			8
@@ -1392,7 +1394,7 @@ static void gmc_v9_0_init_golden_registers(struct amdgpu_device *adev)
 static void gmc_v9_0_restore_registers(struct amdgpu_device *adev)
 {
 	if (adev->asic_type == CHIP_RAVEN)
-		WREG32(mmDCHUBBUB_SDPIF_MMIO_CNTRL_0, adev->gmc.sdpif_register);
+		WREG32_SOC15(DCE, 0, mmDCHUBBUB_SDPIF_MMIO_CNTRL_0, adev->gmc.sdpif_register);
 }
 
 /**
@@ -1502,7 +1504,7 @@ static int gmc_v9_0_hw_init(void *handle)
 static void gmc_v9_0_save_registers(struct amdgpu_device *adev)
 {
 	if (adev->asic_type == CHIP_RAVEN)
-		adev->gmc.sdpif_register = RREG32(mmDCHUBBUB_SDPIF_MMIO_CNTRL_0);
+		adev->gmc.sdpif_register = RREG32_SOC15(DCE, 0, mmDCHUBBUB_SDPIF_MMIO_CNTRL_0);
 }
 
 /**
