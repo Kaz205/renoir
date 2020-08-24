@@ -587,6 +587,7 @@ static int virtio_gpu_resource_create_blob_ioctl(struct drm_device *dev,
 {
 	int ret, si, nents;
 	uint32_t handle = 0;
+	uint32_t ctx_id;
 	struct scatterlist *sg;
 	struct virtio_gpu_object *obj;
 	struct virtio_gpu_fence *fence;
@@ -603,8 +604,9 @@ static int virtio_gpu_resource_create_blob_ioctl(struct drm_device *dev,
 	params.size = rc_blob->size;
 	params.blob_mem = rc_blob->blob_mem;
 	params.blob = true;
+	ctx_id = vfpriv ? vfpriv->ctx_id : 0;
 
-	if (rc_blob->cmd_size && vfpriv) {
+	if (rc_blob->cmd_size) {
 		void *buf;
 	        /* gets freed when the ring has consumed it */
 		buf = memdup_user(u64_to_user_ptr(rc_blob->cmd),
@@ -614,7 +616,7 @@ static int virtio_gpu_resource_create_blob_ioctl(struct drm_device *dev,
 			return PTR_ERR(buf);
 
 		virtio_gpu_cmd_submit(vgdev, buf, rc_blob->cmd_size,
-				      vfpriv->ctx_id, NULL);
+				      ctx_id, NULL);
 	}
 
 	obj = virtio_gpu_alloc_object(dev, &params, NULL);
@@ -661,7 +663,7 @@ static int virtio_gpu_resource_create_blob_ioctl(struct drm_device *dev,
 		goto err_free_ents;
 	}
 
-	virtio_gpu_cmd_resource_create_blob(vgdev, obj, vfpriv->ctx_id,
+	virtio_gpu_cmd_resource_create_blob(vgdev, obj, ctx_id,
 					    rc_blob->blob_mem, rc_blob->blob_flags,
 					    rc_blob->blob_id, rc_blob->size, nents,
 					    ents);
