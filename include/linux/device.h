@@ -908,6 +908,8 @@ extern int devres_release_group(struct device *dev, void *id);
 
 /* managed devm_k.alloc/kfree for device drivers */
 extern void *devm_kmalloc(struct device *dev, size_t size, gfp_t gfp) __malloc;
+extern void *devm_krealloc(struct device *dev, void *ptr, size_t size,
+                   gfp_t gfp) __must_check;
 extern __printf(3, 0)
 char *devm_kvasprintf(struct device *dev, gfp_t gfp, const char *fmt,
 		      va_list ap) __malloc;
