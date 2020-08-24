@@ -800,6 +800,8 @@ int tb_domain_init(void)
 {
 	int ret;
 
+	tb_test_init();
+
 	tb_debugfs_init();
 	ret = tb_xdomain_init();
 	if (ret)
@@ -814,6 +816,7 @@ err_xdomain:
 	tb_xdomain_exit();
 err_debugfs:
 	tb_debugfs_exit();
+	tb_test_exit();
 
 	return ret;
 }
@@ -825,4 +828,5 @@ void tb_domain_exit(void)
 	tb_nvm_exit();
 	tb_xdomain_exit();
 	tb_debugfs_exit();
+	tb_test_exit();
 }
