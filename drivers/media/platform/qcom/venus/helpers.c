@@ -396,7 +396,7 @@ put_ts_metadata(struct venus_inst *inst, struct vb2_v4l2_buffer *vbuf)
 	}
 
 	if (slot == -1) {
-		dev_dbg(inst->core->dev, "%s: no free slot\n", __func__);
+		dev_dbg(inst->core->dev, VDBGL "no free slot\n");
 		return;
 	}
 
@@ -544,6 +544,8 @@ static u32 to_hfi_raw_fmt(u32 v4l2_fmt)
 		return HFI_COLOR_FORMAT_NV12;
 	case V4L2_PIX_FMT_NV21:
 		return HFI_COLOR_FORMAT_NV21;
+	case V4L2_PIX_FMT_NV12_UBWC:
+		return HFI_COLOR_FORMAT_NV12_UBWC;
 	default:
 		break;
 	}

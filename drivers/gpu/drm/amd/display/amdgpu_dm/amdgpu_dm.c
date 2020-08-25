@@ -971,8 +971,13 @@ static int dm_late_init(void *handle)
 	struct dmcu_iram_parameters params;
 	unsigned int linear_lut[16];
 	int i;
-	struct dmcu *dmcu = adev->dm.dc->res_pool->dmcu;
-	bool ret = false;
+	struct dmcu *dmcu = NULL;
+	bool ret;
+
+	if (!adev->dm.fw_dmcu)
+		return detect_mst_link_for_all_connectors(adev->ddev);
+
+	dmcu = adev->dm.dc->res_pool->dmcu;
 
 	for (i = 0; i < 16; i++)
 		linear_lut[i] = 0xFFFF * i / 15;
@@ -988,13 +993,10 @@ static int dm_late_init(void *handle)
 	 */
 	params.min_abm_backlight = 0x28F;
 
-	/* todo will enable for navi10 */
-	if (adev->asic_type <= CHIP_RAVEN) {
-		ret = dmcu_load_iram(dmcu, params);
+	ret = dmcu_load_iram(dmcu, params);
 
-		if (!ret)
-			return -EINVAL;
-	}
+	if (!ret)
+		return -EINVAL;
 
 	return detect_mst_link_for_all_connectors(adev->ddev);
 }
@@ -1520,17 +1522,22 @@ amdgpu_dm_update_connector_after_detect(struct amdgpu_dm_connector *aconnector)
 		dc_sink_retain(aconnector->dc_sink);
 		if (sink->dc_edid.length == 0) {
 			aconnector->edid = NULL;
-			drm_dp_cec_unset_edid(&aconnector->dm_dp_aux.aux);
+			if (aconnector->dc_link->aux_mode) {
+				drm_dp_cec_unset_edid(
+					&aconnector->dm_dp_aux.aux);
+			}
 		} else {
 			aconnector->edid =
-				(struct edid *) sink->dc_edid.raw_edid;
-
+				(struct edid *)sink->dc_edid.raw_edid;
 
 			drm_connector_update_edid_property(connector,
-					aconnector->edid);
-			drm_dp_cec_set_edid(&aconnector->dm_dp_aux.aux,
-					    aconnector->edid);
+							   aconnector->edid);
+
+			if (aconnector->dc_link->aux_mode)
+				drm_dp_cec_set_edid(&aconnector->dm_dp_aux.aux,
+						    aconnector->edid);
 		}
+
 		amdgpu_dm_update_freesync_caps(connector, aconnector->edid);
 		update_connector_ext_caps(aconnector);
 	} else {
@@ -2181,6 +2188,8 @@ static void amdgpu_dm_update_backlight_caps(struct amdgpu_display_manager *dm)
 {
 #if defined(CONFIG_ACPI)
 	struct amdgpu_dm_backlight_caps caps;
+
+	memset(&caps, 0, sizeof(caps));
 
 	if (dm->backlight_caps.caps_valid)
 		return;
@@ -4187,7 +4196,8 @@ void amdgpu_dm_connector_funcs_reset(struct drm_connector *connector)
 		state->underscan_hborder = 0;
 		state->underscan_vborder = 0;
 		state->base.max_requested_bpc = 8;
-
+		state->vcpi_slots = 0;
+		state->pbn = 0;
 		if (connector->connector_type == DRM_MODE_CONNECTOR_eDP)
 			state->abm_level = amdgpu_dm_abm_level;
 
@@ -4215,7 +4225,8 @@ amdgpu_dm_connector_atomic_duplicate_state(struct drm_connector *connector)
 	new_state->underscan_enable = state->underscan_enable;
 	new_state->underscan_hborder = state->underscan_hborder;
 	new_state->underscan_vborder = state->underscan_vborder;
-
+	new_state->vcpi_slots = state->vcpi_slots;
+	new_state->pbn = state->pbn;
 	return &new_state->base;
 }
 
@@ -4612,10 +4623,64 @@ static void dm_encoder_helper_disable(struct drm_encoder *encoder)
 
 }
 
+static int convert_dc_color_depth_into_bpc (enum dc_color_depth display_color_depth)
+{
+	switch (display_color_depth) {
+		case COLOR_DEPTH_666:
+			return 6;
+		case COLOR_DEPTH_888:
+			return 8;
+		case COLOR_DEPTH_101010:
+			return 10;
+		case COLOR_DEPTH_121212:
+			return 12;
+		case COLOR_DEPTH_141414:
+			return 14;
+		case COLOR_DEPTH_161616:
+			return 16;
+		default:
+			break;
+		}
+	return 0;
+}
+
 static int dm_encoder_helper_atomic_check(struct drm_encoder *encoder,
 					  struct drm_crtc_state *crtc_state,
 					  struct drm_connector_state *conn_state)
 {
+	struct drm_atomic_state *state = crtc_state->state;
+	struct drm_connector *connector = conn_state->connector;
+	struct amdgpu_dm_connector *aconnector = to_amdgpu_dm_connector(connector);
+	struct dm_connector_state *dm_new_connector_state = to_dm_connector_state(conn_state);
+	const struct drm_display_mode *adjusted_mode = &crtc_state->adjusted_mode;
+	struct drm_dp_mst_topology_mgr *mst_mgr;
+	struct drm_dp_mst_port *mst_port;
+	enum dc_color_depth color_depth;
+	int clock, bpp = 0;
+
+	if (!aconnector->port || !aconnector->dc_sink)
+		return 0;
+
+	mst_port = aconnector->port;
+	mst_mgr = &aconnector->mst_port->mst_mgr;
+
+	if (!crtc_state->connectors_changed && !crtc_state->mode_changed)
+		return 0;
+
+	if (!state->duplicated) {
+		color_depth = convert_color_depth_from_display_info(connector, conn_state);
+		bpp = convert_dc_color_depth_into_bpc(color_depth) * 3;
+		clock = adjusted_mode->clock;
+		dm_new_connector_state->pbn = drm_dp_calc_pbn_mode(clock, bpp);
+	}
+	dm_new_connector_state->vcpi_slots = drm_dp_atomic_find_vcpi_slots(state,
+									   mst_mgr,
+									   mst_port,
+									   dm_new_connector_state->pbn);
+	if (dm_new_connector_state->vcpi_slots < 0) {
+		DRM_DEBUG_ATOMIC("failed finding vcpi slots: %d\n", (int)dm_new_connector_state->vcpi_slots);
+		return dm_new_connector_state->vcpi_slots;
+	}
 	return 0;
 }
 
@@ -7220,6 +7285,7 @@ static int dm_update_plane_state(struct dc *dc,
 	struct drm_crtc_state *old_crtc_state, *new_crtc_state;
 	struct dm_crtc_state *dm_new_crtc_state, *dm_old_crtc_state;
 	struct dm_plane_state *dm_new_plane_state, *dm_old_plane_state;
+	struct amdgpu_crtc *new_acrtc;
 	bool needs_reset;
 	int ret = 0;
 
@@ -7229,9 +7295,23 @@ static int dm_update_plane_state(struct dc *dc,
 	dm_new_plane_state = to_dm_plane_state(new_plane_state);
 	dm_old_plane_state = to_dm_plane_state(old_plane_state);
 
-	/*TODO Implement atomic check for cursor plane */
-	if (plane->type == DRM_PLANE_TYPE_CURSOR)
+	/*TODO Implement better atomic check for cursor plane */
+	if (plane->type == DRM_PLANE_TYPE_CURSOR) {
+		if (!enable || !new_plane_crtc ||
+			drm_atomic_plane_disabling(plane->state, new_plane_state))
+			return 0;
+
+		new_acrtc = to_amdgpu_crtc(new_plane_crtc);
+
+		if ((new_plane_state->crtc_w > new_acrtc->max_cursor_width) ||
+			(new_plane_state->crtc_h > new_acrtc->max_cursor_height)) {
+			DRM_DEBUG_ATOMIC("Bad cursor size %d x %d\n",
+							 new_plane_state->crtc_w, new_plane_state->crtc_h);
+			return -EINVAL;
+		}
+
 		return 0;
+	}
 
 	needs_reset = should_reset_plane(state, plane, old_plane_state,
 					 new_plane_state);
@@ -7665,6 +7745,11 @@ static int amdgpu_dm_atomic_check(struct drm_device *dev,
 	if (ret)
 		goto fail;
 
+	/* Perform validation of MST topology in the state*/
+	ret = drm_dp_mst_atomic_check(state);
+	if (ret)
+		goto fail;
+
 	if (state->legacy_cursor_update) {
 		/*
 		 * This is a fast cursor update coming from the plane update
@@ -7733,6 +7818,16 @@ static int amdgpu_dm_atomic_check(struct drm_device *dev,
 		if (ret)
 			goto fail;
 
+		/*
+		 * Perform validation of MST topology in the state:
+		 * We need to perform MST atomic check before calling
+		 * dc_validate_global_state(), or there is a chance
+		 * to get stuck in an infinite loop and hang eventually.
+		 */
+		ret = drm_dp_mst_atomic_check(state);
+		if (ret)
+			goto fail;
+
 		if (dc_validate_global_state(dc, dm_state->context, false) != DC_OK) {
 			ret = -EINVAL;
 			goto fail;
@@ -7745,20 +7840,38 @@ static int amdgpu_dm_atomic_check(struct drm_device *dev,
 		 * the same resource. If we have a new DC context as part of
 		 * the DM atomic state from validation we need to free it and
 		 * retain the existing one instead.
+		 *
+		 * Furthermore, since the DM atomic state only contains the DC
+		 * context and can safely be annulled, we can free the state
+		 * and clear the associated private object now to free
+		 * some memory and avoid a possible use-after-free later.
 		 */
-		struct dm_atomic_state *new_dm_state, *old_dm_state;
 
-		new_dm_state = dm_atomic_get_new_state(state);
-		old_dm_state = dm_atomic_get_old_state(state);
+		for (i = 0; i < state->num_private_objs; i++) {
+			struct drm_private_obj *obj = state->private_objs[i].ptr;
 
-		if (new_dm_state && old_dm_state) {
-			if (new_dm_state->context)
-				dc_release_state(new_dm_state->context);
+			if (obj->funcs == adev->dm.atomic_obj.funcs) {
+				int j = state->num_private_objs-1;
 
-			new_dm_state->context = old_dm_state->context;
+				dm_atomic_destroy_state(obj,
+						state->private_objs[i].state);
 
-			if (old_dm_state->context)
-				dc_retain_state(old_dm_state->context);
+				/* If i is not at the end of the array then the
+				 * last element needs to be moved to where i was
+				 * before the array can safely be truncated.
+				 */
+				if (i != j)
+					state->private_objs[i] =
+						state->private_objs[j];
+
+				state->private_objs[j].ptr = NULL;
+				state->private_objs[j].state = NULL;
+				state->private_objs[j].old_state = NULL;
+				state->private_objs[j].new_state = NULL;
+
+				state->num_private_objs = j;
+				break;
+			}
 		}
 	}
 

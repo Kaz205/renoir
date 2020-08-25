@@ -49,10 +49,9 @@ typedef irqreturn_t (*cros_ec_sensors_capture_t)(int irq, void *p);
  *				the timestamp. The timestamp is always last and
  *				is always 8-byte aligned.
  * @read_ec_sensors_data:	function used for accessing sensors values
- * @curr_sampl_freq:		current sampling period
  * @fifo_max_event_count:	Size of the EC sensor FIFO
  * @frequencies:		Table of known available frequencies:
- *				0, Min and Max in mHz.
+ *				0, Min and Max in mHz
  */
 struct cros_ec_sensors_core_state {
 	struct cros_ec_device *ec;
@@ -75,7 +74,6 @@ struct cros_ec_sensors_core_state {
 	int (*read_ec_sensors_data)(struct iio_dev *indio_dev,
 				    unsigned long scan_mask, s16 *data);
 
-	int curr_sampl_freq;
 	u32 fifo_max_event_count;
 	int frequencies[6];
 };

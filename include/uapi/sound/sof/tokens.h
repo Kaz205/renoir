@@ -113,8 +113,7 @@
 #define SOF_TKN_EFFECT_TYPE	SOF_TKN_PROCESS_TYPE
 
 /* SAI */
-#define SOF_TKN_IMX_SAI_FIRST_TOKEN		1000
-/* TODO: Add SAI tokens */
+#define SOF_TKN_IMX_SAI_MCLK_ID			1000
 
 /* ESAI */
 #define SOF_TKN_IMX_ESAI_MCLK_ID		1100
@@ -126,5 +125,13 @@
 /* Led control for mute switches */
 #define SOF_TKN_MUTE_LED_USE			1300
 #define SOF_TKN_MUTE_LED_DIRECTION		1301
+
+/* ALH */
+#define SOF_TKN_INTEL_ALH_RATE			1400
+#define SOF_TKN_INTEL_ALH_CH			1401
+
+/* HDA */
+#define SOF_TKN_INTEL_HDA_RATE			1500
+#define SOF_TKN_INTEL_HDA_CH			1501
 
 #endif

@@ -622,6 +622,24 @@ static struct cpufreq_governor *find_governor(const char *str_governor)
 	return NULL;
 }
 
+static struct cpufreq_governor *get_governor(const char *str_governor)
+{
+	struct cpufreq_governor *t;
+
+	mutex_lock(&cpufreq_governor_mutex);
+	t = find_governor(str_governor);
+	if (!t)
+		goto unlock;
+
+	if (!try_module_get(t->owner))
+		t = NULL;
+
+unlock:
+	mutex_unlock(&cpufreq_governor_mutex);
+
+	return t;
+}
+
 static int cpufreq_parse_policy(char *str_governor,
 				struct cpufreq_policy *policy)
 {
@@ -644,33 +662,20 @@ static int cpufreq_parse_governor(char *str_governor,
 {
 	struct cpufreq_governor *t;
 
-	mutex_lock(&cpufreq_governor_mutex);
-
-	t = find_governor(str_governor);
-	if (!t) {
-		int ret;
-
-		mutex_unlock(&cpufreq_governor_mutex);
-
-		ret = request_module("cpufreq_%s", str_governor);
-		if (ret)
-			return -EINVAL;
-
-		mutex_lock(&cpufreq_governor_mutex);
-
-		t = find_governor(str_governor);
-	}
-	if (t && !try_module_get(t->owner))
-		t = NULL;
-
-	mutex_unlock(&cpufreq_governor_mutex);
-
+	t = get_governor(str_governor);
 	if (t) {
 		policy->governor = t;
 		return 0;
 	}
 
-	return -EINVAL;
+	if (request_module("cpufreq_%s", str_governor))
+		return -EINVAL;
+
+	t = get_governor(str_governor);
+	if (!t)
+		return -EINVAL;
+	policy->governor = t;
+	return 0;
 }
 
 /**
@@ -819,12 +824,14 @@ static ssize_t show_scaling_available_governors(struct cpufreq_policy *policy,
 		goto out;
 	}
 
+	mutex_lock(&cpufreq_governor_mutex);
 	for_each_governor(t) {
 		if (i >= (ssize_t) ((PAGE_SIZE / sizeof(char))
 		    - (CPUFREQ_NAME_LEN + 2)))
-			goto out;
+			break;
 		i += scnprintf(&buf[i], CPUFREQ_NAME_PLEN, "%s ", t->name);
 	}
+	mutex_unlock(&cpufreq_governor_mutex);
 out:
 	i += sprintf(&buf[i], "\n");
 	return i;
@@ -1061,6 +1068,7 @@ static int cpufreq_init_policy(struct cpufreq_policy *policy)
 {
 	struct cpufreq_governor *gov = NULL, *def_gov = NULL;
 	struct cpufreq_policy new_policy;
+	int ret;
 
 	memcpy(&new_policy, policy, sizeof(*policy));
 
@@ -1071,7 +1079,7 @@ static int cpufreq_init_policy(struct cpufreq_policy *policy)
 		 * Update governor of new_policy to the governor used before
 		 * hotplug
 		 */
-		gov = find_governor(policy->last_governor);
+		gov = get_governor(policy->last_governor);
 		if (gov) {
 			pr_debug("Restoring governor %s for cpu %d\n",
 				policy->governor->name, policy->cpu);
@@ -1079,6 +1087,7 @@ static int cpufreq_init_policy(struct cpufreq_policy *policy)
 			if (!def_gov)
 				return -ENODATA;
 			gov = def_gov;
+			__module_get(gov->owner);
 		}
 		new_policy.governor = gov;
 	} else {
@@ -1092,7 +1101,11 @@ static int cpufreq_init_policy(struct cpufreq_policy *policy)
 		}
 	}
 
-	return cpufreq_set_policy(policy, &new_policy);
+	ret = cpufreq_set_policy(policy, &new_policy);
+	if (gov)
+		module_put(gov->owner);
+
+	return ret;
 }
 
 static int cpufreq_add_policy_cpu(struct cpufreq_policy *policy, unsigned int cpu)
@@ -2592,26 +2605,27 @@ EXPORT_SYMBOL(cpufreq_end_complex_usb);
 static int cpufreq_boost_set_sw(int state)
 {
 	struct cpufreq_policy *policy;
-	int ret = -EINVAL;
 
 	for_each_active_policy(policy) {
+		int ret;
+
 		if (!policy->freq_table)
-			continue;
+			return -ENXIO;
 
 		ret = cpufreq_frequency_table_cpuinfo(policy,
 						      policy->freq_table);
 		if (ret) {
 			pr_err("%s: Policy frequency update failed\n",
 			       __func__);
-			break;
+			return ret;
 		}
 
 		ret = freq_qos_update_request(policy->max_freq_req, policy->max);
 		if (ret < 0)
-			break;
+			return ret;
 	}
 
-	return ret;
+	return 0;
 }
 
 int cpufreq_boost_trigger_state(int state)

@@ -183,15 +183,19 @@ bool dm_helpers_dp_mst_write_payload_allocation_table(
 		bool enable)
 {
 	struct amdgpu_dm_connector *aconnector;
+	struct dm_connector_state *dm_conn_state;
 	struct drm_dp_mst_topology_mgr *mst_mgr;
 	struct drm_dp_mst_port *mst_port;
-	int slots = 0;
 	bool ret;
-	int clock;
-	int bpp = 0;
-	int pbn = 0;
 
 	aconnector = (struct amdgpu_dm_connector *)stream->dm_stream_context;
+	/* Accessing the connector state is required for vcpi_slots allocation
+	 * and directly relies on behaviour in commit check
+	 * that blocks before commit guaranteeing that the state
+	 * is not gonna be swapped while still in use in commit tail */
+
+	dm_conn_state = to_dm_connector_state(aconnector->base.state);
+
 
 	if (!aconnector || !aconnector->mst_port)
 		return false;
@@ -204,42 +208,10 @@ bool dm_helpers_dp_mst_write_payload_allocation_table(
 	mst_port = aconnector->port;
 
 	if (enable) {
-		clock = stream->timing.pix_clk_100hz / 10;
 
-		switch (stream->timing.display_color_depth) {
-
-		case COLOR_DEPTH_666:
-			bpp = 6;
-			break;
-		case COLOR_DEPTH_888:
-			bpp = 8;
-			break;
-		case COLOR_DEPTH_101010:
-			bpp = 10;
-			break;
-		case COLOR_DEPTH_121212:
-			bpp = 12;
-			break;
-		case COLOR_DEPTH_141414:
-			bpp = 14;
-			break;
-		case COLOR_DEPTH_161616:
-			bpp = 16;
-			break;
-		default:
-			ASSERT(bpp != 0);
-			break;
-		}
-
-		bpp = bpp * 3;
-
-		/* TODO need to know link rate */
-
-		pbn = drm_dp_calc_pbn_mode(clock, bpp);
-
-		slots = drm_dp_find_vcpi_slots(mst_mgr, pbn);
-		ret = drm_dp_mst_allocate_vcpi(mst_mgr, mst_port, pbn, slots);
-
+		ret = drm_dp_mst_allocate_vcpi(mst_mgr, mst_port,
+					       dm_conn_state->pbn,
+					       dm_conn_state->vcpi_slots);
 		if (!ret)
 			return false;
 
@@ -571,6 +543,7 @@ enum dc_edid_status dm_helpers_read_local_edid(
 		struct dc_sink *sink)
 {
 	struct amdgpu_dm_connector *aconnector = link->priv;
+	struct drm_connector *connector = &aconnector->base;
 	struct i2c_adapter *ddc;
 	int retry = 3;
 	enum dc_edid_status edid_status;
@@ -587,6 +560,15 @@ enum dc_edid_status dm_helpers_read_local_edid(
 	do {
 
 		edid = drm_get_edid(&aconnector->base, ddc);
+
+		/* DP Compliance Test 4.2.2.6 */
+		if (link->aux_mode && connector->edid_corrupt)
+			drm_dp_send_real_edid_checksum(&aconnector->dm_dp_aux.aux, connector->real_edid_checksum);
+
+		if (!edid && connector->edid_corrupt) {
+			connector->edid_corrupt = false;
+			return EDID_BAD_CHECKSUM;
+		}
 
 		if (!edid)
 			return EDID_NO_RESPONSE;
@@ -608,34 +590,10 @@ enum dc_edid_status dm_helpers_read_local_edid(
 		DRM_ERROR("EDID err: %d, on connector: %s",
 				edid_status,
 				aconnector->base.name);
-	if (link->aux_mode) {
-		union test_request test_request = { {0} };
-		union test_response test_response = { {0} };
 
-		dm_helpers_dp_read_dpcd(ctx,
-					link,
-					DP_TEST_REQUEST,
-					&test_request.raw,
-					sizeof(union test_request));
-
-		if (!test_request.bits.EDID_READ)
-			return edid_status;
-
-		test_response.bits.EDID_CHECKSUM_WRITE = 1;
-
-		dm_helpers_dp_write_dpcd(ctx,
-					link,
-					DP_TEST_EDID_CHECKSUM,
-					&sink->dc_edid.raw_edid[sink->dc_edid.length-1],
-					1);
-
-		dm_helpers_dp_write_dpcd(ctx,
-					link,
-					DP_TEST_RESPONSE,
-					&test_response.raw,
-					sizeof(test_response));
-
-	}
+	/* DP Compliance Test 4.2.2.3 */
+	if (link->aux_mode)
+		drm_dp_send_real_edid_checksum(&aconnector->dm_dp_aux.aux, sink->dc_edid.raw_edid[sink->dc_edid.length-1]);
 
 	return edid_status;
 }

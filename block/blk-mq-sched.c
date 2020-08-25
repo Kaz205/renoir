@@ -87,27 +87,26 @@ void blk_mq_sched_restart(struct blk_mq_hw_ctx *hctx)
  * its queue by itself in its completion handler, so we don't need to
  * restart queue if .get_budget() returns BLK_STS_NO_RESOURCE.
  *
- * Returns true if hctx->dispatch was found non-empty and
- * run_work has to be run again.  This is necessary to avoid
- * starving flushes.
+ * Returns -EAGAIN if hctx->dispatch was found non-empty and run_work has to
+ * be run again.  This is necessary to avoid starving flushes.
  */
-static bool blk_mq_do_dispatch_sched(struct blk_mq_hw_ctx *hctx)
+static int blk_mq_do_dispatch_sched(struct blk_mq_hw_ctx *hctx)
 {
 	struct request_queue *q = hctx->queue;
 	struct elevator_queue *e = q->elevator;
 	LIST_HEAD(rq_list);
-	bool ret = false;
+	int ret = 0;
 
 	do {
 		struct request *rq;
 
-		if (!list_empty_careful(&hctx->dispatch)) {
-			ret = true;
-			break;
-		}
-
 		if (e->type->ops.has_work && !e->type->ops.has_work(hctx))
 			break;
+
+		if (!list_empty_careful(&hctx->dispatch)) {
+			ret = -EAGAIN;
+			break;
+		}
 
 		if (!blk_mq_get_dispatch_budget(hctx))
 			break;
@@ -153,22 +152,21 @@ static struct blk_mq_ctx *blk_mq_next_ctx(struct blk_mq_hw_ctx *hctx,
  * its queue by itself in its completion handler, so we don't need to
  * restart queue if .get_budget() returns BLK_STS_NO_RESOURCE.
  *
- * Returns true if hctx->dispatch was found non-empty and
- * run_work has to be run again.  This is necessary to avoid
- * starving flushes.
+ * Returns -EAGAIN if hctx->dispatch was found non-empty and run_work has to
+ * to be run again.  This is necessary to avoid starving flushes.
  */
-static bool blk_mq_do_dispatch_ctx(struct blk_mq_hw_ctx *hctx)
+static int blk_mq_do_dispatch_ctx(struct blk_mq_hw_ctx *hctx)
 {
 	struct request_queue *q = hctx->queue;
 	LIST_HEAD(rq_list);
 	struct blk_mq_ctx *ctx = READ_ONCE(hctx->dispatch_from);
-	bool ret = false;
+	int ret = 0;
 
 	do {
 		struct request *rq;
 
 		if (!list_empty_careful(&hctx->dispatch)) {
-			ret = true;
+			ret = -EAGAIN;
 			break;
 		}
 
@@ -208,23 +206,13 @@ static bool blk_mq_do_dispatch_ctx(struct blk_mq_hw_ctx *hctx)
 	return ret;
 }
 
-void blk_mq_sched_dispatch_requests(struct blk_mq_hw_ctx *hctx)
+int __blk_mq_sched_dispatch_requests(struct blk_mq_hw_ctx *hctx)
 {
 	struct request_queue *q = hctx->queue;
 	struct elevator_queue *e = q->elevator;
 	const bool has_sched_dispatch = e && e->type->ops.dispatch_request;
-	bool run_again;
-	bool restarted = false;
+	int ret = 0;
 	LIST_HEAD(rq_list);
-
-	/* RCU or SRCU read lock is needed before checking quiesced flag */
-	if (unlikely(blk_mq_hctx_stopped(hctx) || blk_queue_quiesced(q)))
-		return;
-
-	hctx->run++;
-
-again:
-	run_again = false;
 
 	/*
 	 * If we have previous entries on our dispatch list, grab them first for
@@ -254,27 +242,40 @@ again:
 		blk_mq_sched_mark_restart_hctx(hctx);
 		if (blk_mq_dispatch_rq_list(q, &rq_list, false)) {
 			if (has_sched_dispatch)
-				run_again = blk_mq_do_dispatch_sched(hctx);
+				ret = blk_mq_do_dispatch_sched(hctx);
 			else
-				run_again = blk_mq_do_dispatch_ctx(hctx);
+				ret = blk_mq_do_dispatch_ctx(hctx);
 		}
 	} else if (has_sched_dispatch) {
-		run_again = blk_mq_do_dispatch_sched(hctx);
+		ret = blk_mq_do_dispatch_sched(hctx);
 	} else if (hctx->dispatch_busy) {
 		/* dequeue request one by one from sw queue if queue is busy */
-		run_again = blk_mq_do_dispatch_ctx(hctx);
+		ret = blk_mq_do_dispatch_ctx(hctx);
 	} else {
 		blk_mq_flush_busy_ctxs(hctx, &rq_list);
 		blk_mq_dispatch_rq_list(q, &rq_list, false);
 	}
 
-	if (run_again) {
-		if (!restarted) {
-			restarted = true;
-			goto again;
-		}
+	return ret;
+}
 
-		blk_mq_run_hw_queue(hctx, true);
+void blk_mq_sched_dispatch_requests(struct blk_mq_hw_ctx *hctx)
+{
+	struct request_queue *q = hctx->queue;
+
+	/* RCU or SRCU read lock is needed before checking quiesced flag */
+	if (unlikely(blk_mq_hctx_stopped(hctx) || blk_queue_quiesced(q)))
+		return;
+
+	hctx->run++;
+
+	/*
+	 * A return of -EAGAIN is an indication that hctx->dispatch is not
+	 * empty and we must run again in order to avoid starving flushes.
+	 */
+	if (__blk_mq_sched_dispatch_requests(hctx) == -EAGAIN) {
+		if (__blk_mq_sched_dispatch_requests(hctx) == -EAGAIN)
+			blk_mq_run_hw_queue(hctx, true);
 	}
 }
 

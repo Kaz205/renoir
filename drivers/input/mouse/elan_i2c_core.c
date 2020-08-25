@@ -89,7 +89,8 @@ struct elan_tp_data {
 	u8			mode;
 	u16			ic_type;
 	u16			fw_validpage_count;
-	u16			fw_signature_address;
+	u16			fw_page_size;
+	u32			fw_signature_address;
 
 	bool			irq_wake;
 
@@ -100,8 +101,8 @@ struct elan_tp_data {
 	bool			middle_button;
 };
 
-static int elan_get_fwinfo(u16 ic_type, u16 *validpage_count,
-			   u16 *signature_address)
+static int elan_get_fwinfo(u16 ic_type, u8 iap_version, u16 *validpage_count,
+			   u32 *signature_address, u16 *page_size)
 {
 	switch (ic_type) {
 	case 0x00:
@@ -126,15 +127,36 @@ static int elan_get_fwinfo(u16 ic_type, u16 *validpage_count,
 	case 0x10:
 		*validpage_count = 1024;
 		break;
+	case 0x11:
+		*validpage_count = 1280;
+		break;
+	case 0x13:
+		*validpage_count = 2048;
+		break;
+	case 0x14:
+	case 0x15:
+		*validpage_count = 1024;
+		break;
 	default:
 		/* unknown ic type clear value */
 		*validpage_count = 0;
 		*signature_address = 0;
+		*page_size = 0;
 		return -ENXIO;
 	}
 
 	*signature_address =
 		(*validpage_count * ETP_FW_PAGE_SIZE) - ETP_FW_SIGNATURE_SIZE;
+
+	if ((ic_type == 0x14 || ic_type == 0x15) && iap_version >= 2) {
+		*validpage_count /= 8;
+		*page_size = ETP_FW_PAGE_SIZE_512;
+	} else if (ic_type >= 0x0D && iap_version >= 1) {
+		*validpage_count /= 2;
+		*page_size = ETP_FW_PAGE_SIZE_128;
+	} else {
+		*page_size = ETP_FW_PAGE_SIZE;
+	}
 
 	return 0;
 }
@@ -379,7 +401,6 @@ static int elan_uninhibit(struct input_dev *input_dev)
 static int elan_query_device_info(struct elan_tp_data *data)
 {
 	int error;
-	u16 ic_type;
 
 	error = data->ops->get_version(data->client, false, &data->fw_version);
 	if (error)
@@ -403,13 +424,10 @@ static int elan_query_device_info(struct elan_tp_data *data)
 	if (error)
 		return error;
 
-	if (data->pattern == 0x01)
-		ic_type = data->ic_type;
-	else
-		ic_type = data->iap_version;
-
-	error = elan_get_fwinfo(ic_type, &data->fw_validpage_count,
-				&data->fw_signature_address);
+	error = elan_get_fwinfo(data->ic_type, data->iap_version,
+				&data->fw_validpage_count,
+				&data->fw_signature_address,
+				&data->fw_page_size);
 	if (error)
 		dev_warn(&data->client->dev,
 			 "unexpected iap version %#04x (ic type: %#04x), firmware update will not work\n",
@@ -497,14 +515,14 @@ static int elan_query_device_parameters(struct elan_tp_data *data)
  * IAP firmware updater related routines
  **********************************************************
  */
-static int elan_write_fw_block(struct elan_tp_data *data,
+static int elan_write_fw_block(struct elan_tp_data *data, u16 page_size,
 			       const u8 *page, u16 checksum, int idx)
 {
 	int retry = ETP_RETRY_COUNT;
 	int error;
 
 	do {
-		error = data->ops->write_fw_block(data->client,
+		error = data->ops->write_fw_block(data->client, page_size,
 						  page, checksum, idx);
 		if (!error)
 			return 0;
@@ -527,21 +545,23 @@ static int __elan_update_firmware(struct elan_tp_data *data,
 	u16 boot_page_count;
 	u16 sw_checksum = 0, fw_checksum = 0;
 
-	error = data->ops->prepare_fw_update(client);
+	error = data->ops->prepare_fw_update(client, data->ic_type,
+					     data->iap_version);
 	if (error)
 		return error;
 
 	iap_start_addr = get_unaligned_le16(&fw->data[ETP_IAP_START_ADDR * 2]);
 
-	boot_page_count = (iap_start_addr * 2) / ETP_FW_PAGE_SIZE;
+	boot_page_count = (iap_start_addr * 2) / data->fw_page_size;
 	for (i = boot_page_count; i < data->fw_validpage_count; i++) {
 		u16 checksum = 0;
-		const u8 *page = &fw->data[i * ETP_FW_PAGE_SIZE];
+		const u8 *page = &fw->data[i * data->fw_page_size];
 
-		for (j = 0; j < ETP_FW_PAGE_SIZE; j += 2)
+		for (j = 0; j < data->fw_page_size; j += 2)
 			checksum += ((page[j + 1] << 8) | page[j]);
 
-		error = elan_write_fw_block(data, page, checksum, i);
+		error = elan_write_fw_block(data, data->fw_page_size,
+					    page, checksum, i);
 		if (error) {
 			dev_err(dev, "write page %d fail: %d\n", i, error);
 			return error;
@@ -1018,6 +1038,8 @@ static void elan_report_absolute(struct elan_tp_data *data, u8 *packet)
 	u8 hover_info = packet[ETP_HOVER_INFO_OFFSET];
 	bool contact_valid, hover_event;
 
+	pm_wakeup_event(&data->client->dev, 0);
+
 	hover_event = hover_info & 0x40;
 	for (i = 0; i < ETP_MAX_FINGERS; i++) {
 		contact_valid = tp_info & (1U << (3 + i));
@@ -1040,6 +1062,8 @@ static void elan_report_trackpoint(struct elan_tp_data *data, u8 *report)
 	struct input_dev *input = data->tp_input;
 	u8 *packet = &report[ETP_REPORT_ID_OFFSET + 1];
 	int x, y;
+
+	pm_wakeup_event(&data->client->dev, 0);
 
 	if (!data->tp_input) {
 		dev_warn_once(&data->client->dev,
@@ -1065,7 +1089,6 @@ static void elan_report_trackpoint(struct elan_tp_data *data, u8 *report)
 static irqreturn_t elan_isr(int irq, void *dev_id)
 {
 	struct elan_tp_data *data = dev_id;
-	struct device *dev = &data->client->dev;
 	int error;
 	u8 report[ETP_MAX_REPORT_LEN];
 
@@ -1083,8 +1106,6 @@ static irqreturn_t elan_isr(int irq, void *dev_id)
 	if (error)
 		goto out;
 
-	pm_wakeup_event(dev, 0);
-
 	switch (report[ETP_REPORT_ID_OFFSET]) {
 	case ETP_REPORT_ID:
 		elan_report_absolute(data, report);
@@ -1093,7 +1114,7 @@ static irqreturn_t elan_isr(int irq, void *dev_id)
 		elan_report_trackpoint(data, report);
 		break;
 	default:
-		dev_err(dev, "invalid report id data (%x)\n",
+		dev_err(&data->client->dev, "invalid report id data (%x)\n",
 			report[ETP_REPORT_ID_OFFSET]);
 	}
 

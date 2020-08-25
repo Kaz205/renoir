@@ -2066,6 +2066,9 @@ static void security_load_policycaps(struct selinux_state *state)
 			pr_info("SELinux:  unknown policy capability %u\n",
 				i);
 	}
+
+	state->android_netlink_route = p->android_netlink_route;
+	selinux_nlmsg_init();
 }
 
 static int security_preserve_bools(struct selinux_state *state,
@@ -2844,8 +2847,12 @@ err:
 	if (*names) {
 		for (i = 0; i < *len; i++)
 			kfree((*names)[i]);
+		kfree(*names);
 	}
 	kfree(*values);
+	*len = 0;
+	*names = NULL;
+	*values = NULL;
 	goto out;
 }
 

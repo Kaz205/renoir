@@ -262,6 +262,14 @@ static void notrace start_secondary(void *unused)
 
 	wmb();
 	cpu_startup_entry(CPUHP_AP_ONLINE_IDLE);
+
+	/*
+	 * Prevent tail call to cpu_startup_entry() because the stack protector
+	 * guard has been changed a couple of function calls up, in
+	 * boot_init_stack_canary() and must not be checked before tail calling
+	 * another function.
+	 */
+	prevent_tail_call_optimization();
 }
 
 /**
@@ -466,7 +474,7 @@ static bool match_smt(struct cpuinfo_x86 *c, struct cpuinfo_x86 *o)
  */
 
 static const struct x86_cpu_id snc_cpu[] = {
-	{ X86_VENDOR_INTEL, 6, INTEL_FAM6_SKYLAKE_X },
+	X86_MATCH_INTEL_FAM6_MODEL(SKYLAKE_X, NULL),
 	{}
 };
 
@@ -1591,13 +1599,20 @@ int native_cpu_disable(void)
 	if (ret)
 		return ret;
 
+	cpu_disable_common();
 	/*
 	 * Disable the local APIC. Otherwise IPI broadcasts will reach
 	 * it. It still responds normally to INIT, NMI, SMI, and SIPI
-	 * messages.
+	 * messages. Its important to do apic_soft_disable() after
+	 * fixup_irqs(), because fixup_irqs() called from cpu_disable_common()
+	 * depends on IRR being set. After apic_soft_disable() CPU preserves
+	 * currently set IRR/ISR but new interrupts will not set IRR.
+	 * This causes interrupts sent to outgoing cpu before completion
+	 * of irq migration to be lost. Check SDM Vol 3 "10.4.7.2 Local
+	 * APIC State after It Has been Software Disabled" section for more
+	 * details.
 	 */
 	apic_soft_disable();
-	cpu_disable_common();
 
 	return 0;
 }

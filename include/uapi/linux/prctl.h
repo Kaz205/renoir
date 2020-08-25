@@ -237,6 +237,12 @@ struct prctl_mm_map {
 #define PR_GET_TAGGED_ADDR_CTRL		56
 # define PR_TAGGED_ADDR_ENABLE		(1UL << 0)
 
+/*
+ * Setup core-scheduling for the task. This value is a temporary
+ * place holder till the upstream value is known.
+ */
+#define PR_SET_CORE_SCHED		0x200
+
 #define PR_SET_VMA		0x53564d41
 # define PR_SET_VMA_ANON_NAME		0
 

@@ -675,16 +675,33 @@ struct task_struct {
 	const struct sched_class	*sched_class;
 	struct sched_entity		se;
 	struct sched_rt_entity		rt;
+	struct sched_dl_entity		dl;
+
+#ifdef CONFIG_SCHED_CORE
+	struct rb_node			core_node;
+	unsigned long			core_cookie;
+	unsigned int			core_occupation;
+#endif
+
 #ifdef CONFIG_CGROUP_SCHED
 	struct task_group		*sched_task_group;
 #endif
-	struct sched_dl_entity		dl;
 
 #ifdef CONFIG_UCLAMP_TASK
-	/* Clamp values requested for a scheduling entity */
+	/*
+	 * Clamp values requested for a scheduling entity.
+	 * Must be updated with task_rq_lock() held.
+	 */
 	struct uclamp_se		uclamp_req[UCLAMP_CNT];
-	/* Effective clamp values used for a scheduling entity */
+	/*
+	 * Effective clamp values used for a scheduling entity.
+	 * Must be updated with task_rq_lock() held.
+	 */
 	struct uclamp_se		uclamp[UCLAMP_CNT];
+#endif
+
+#ifdef CONFIG_PROC_LATSENSE
+	int proc_latency_sensitive;
 #endif
 
 #ifdef CONFIG_PREEMPT_NOTIFIERS
@@ -2000,5 +2017,17 @@ const struct sched_avg *sched_trace_rq_avg_irq(struct rq *rq);
 int sched_trace_rq_cpu(struct rq *rq);
 
 const struct cpumask *sched_trace_rd_span(struct root_domain *rd);
+
+#ifdef CONFIG_SCHED_CORE
+int task_set_core_sched(int set, struct task_struct *tsk);
+void sched_core_irq_enter(void);
+void sched_core_irq_exit(void);
+void sched_core_user_enter(void);
+#else
+#define task_set_core_sched(set, tsk) (-EINVAL)
+#define sched_core_irq_enter(void) do { } while (0)
+#define sched_core_irq_exit(void) do { } while (0)
+#define sched_core_user_enter(void) do { } while (0)
+#endif
 
 #endif

@@ -140,6 +140,7 @@ unsigned name_to_int(const struct qstr *qstr);
  * array.c
  */
 extern const struct file_operations proc_tid_children_operations;
+extern const struct file_operations proc_tid_latsense_operations;
 
 extern void proc_task_name(struct seq_file *m, struct task_struct *p,
 			   bool escape);
@@ -208,6 +209,7 @@ struct pde_opener {
 extern const struct inode_operations proc_link_inode_operations;
 extern const struct inode_operations proc_pid_link_inode_operations;
 extern const struct super_operations proc_sops;
+extern const struct file_operations proc_reclaim_operations;
 
 void proc_init_kmemcache(void);
 void set_proc_pid_nlink(void);
