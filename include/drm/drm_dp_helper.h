@@ -1599,6 +1599,7 @@ struct drm_dp_desc;
 bool drm_dp_read_sink_count_cap(struct drm_connector *connector,
 				const u8 dpcd[DP_RECEIVER_CAP_SIZE],
 				const struct drm_dp_desc *desc);
+int drm_dp_read_sink_count(struct drm_dp_aux *aux);
 
 void drm_dp_remote_aux_init(struct drm_dp_aux *aux);
 void drm_dp_aux_init(struct drm_dp_aux *aux);
