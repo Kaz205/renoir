@@ -44,6 +44,7 @@ enum {
 	ST_CONNECT_PENDING,
 	ST_CONNECTED,
 	ST_DISCONNECT_PENDING,
+	ST_SUSPEND_PENDING,
 };
 
 enum {
@@ -55,6 +56,8 @@ enum {
 	EV_HPD_REPLUG_INT,
 	EV_HPD_UNPLUG_INT,
 	EV_USER_NOTIFICATION,
+	EV_CONNECT_PENDING_TIMEOUT,
+	EV_DISCONNECT_PENDING_TIMEOUT,
 };
 
 #define EVENT_TIMEOUT	(HZ/10)	/* 100ms */
@@ -450,6 +453,11 @@ static int dp_hpd_plug_handle(struct dp_display_private *dp, u32 data)
 	mutex_lock(&dp->event_mutex);
 
 	state =  atomic_read(&dp->hpd_state);
+	if (state == ST_SUSPEND_PENDING) {
+		mutex_unlock(&dp->event_mutex);
+		return 0;
+	}
+
 	if (state == ST_CONNECT_PENDING || state == ST_CONNECTED) {
 		mutex_unlock(&dp->event_mutex);
 		return 0;
@@ -462,9 +470,6 @@ static int dp_hpd_plug_handle(struct dp_display_private *dp, u32 data)
 		return 0;
 	}
 
-	/* stop sending uevent if it is still pending at event q */
-	dp_del_event(dp, EV_USER_NOTIFICATION);
-
 	atomic_set(&dp->hpd_state, ST_CONNECT_PENDING);
 
 	hpd->hpd_high = 1;
@@ -474,11 +479,35 @@ static int dp_hpd_plug_handle(struct dp_display_private *dp, u32 data)
 		hpd->hpd_high = 0;
 		atomic_set(&dp->hpd_state, ST_DISCONNECTED);
 	}
+
+	/* start sanity checking */
+	dp_add_event(dp, EV_CONNECT_PENDING_TIMEOUT, 0, 50);
+
 	mutex_unlock(&dp->event_mutex);
 
 	/* uevent will complete connection part */
 	return 0;
 };
+
+static int dp_display_enable(struct dp_display_private *dp, u32 data);
+static int dp_display_disable(struct dp_display_private *dp, u32 data);
+
+static int dp_connect_pending_timeout(struct dp_display_private *dp, u32 data)
+{
+	u32 state;
+
+	mutex_lock(&dp->event_mutex);
+
+	state =  atomic_read(&dp->hpd_state);
+	if (state == ST_CONNECT_PENDING) {
+		dp_display_enable(dp, 0);
+		atomic_set(&dp->hpd_state, ST_CONNECTED);
+	}
+
+	mutex_unlock(&dp->event_mutex);
+
+	return 0;
+}
 
 static int dp_hpd_unplug_handle(struct dp_display_private *dp, u32 data)
 {
@@ -491,6 +520,11 @@ static int dp_hpd_unplug_handle(struct dp_display_private *dp, u32 data)
 	mutex_lock(&dp->event_mutex);
 
 	state = atomic_read(&dp->hpd_state);
+	if (state == ST_SUSPEND_PENDING) {
+		mutex_unlock(&dp->event_mutex);
+		return 0;
+	}
+
 	if (state == ST_DISCONNECT_PENDING || state == ST_DISCONNECTED) {
 		mutex_unlock(&dp->event_mutex);
 		return 0;
@@ -505,9 +539,6 @@ static int dp_hpd_unplug_handle(struct dp_display_private *dp, u32 data)
 
 	atomic_set(&dp->hpd_state, ST_DISCONNECT_PENDING);
 
-	/* stop sending uevent if it is still pending at event q */
-	dp_del_event(dp, EV_USER_NOTIFICATION);
-
 	/* disable HPD plug interrupt until disconnect is done */
 	dp_catalog_hpd_config_intr(dp->catalog, DP_DP_HPD_PLUG_INT_MASK
 				| DP_DP_IRQ_HPD_INT_MASK, false);
@@ -520,6 +551,9 @@ static int dp_hpd_unplug_handle(struct dp_display_private *dp, u32 data)
 	 */
 	dp_display_usbpd_disconnect_cb(&dp->pdev->dev);
 
+	/* start sanity checking */
+	dp_add_event(dp, EV_DISCONNECT_PENDING_TIMEOUT, 0, 50);
+
 	dp_catalog_hpd_config_intr(dp->catalog, DP_DP_HPD_PLUG_INT_MASK |
 					DP_DP_IRQ_HPD_INT_MASK, true);
 
@@ -528,10 +562,35 @@ static int dp_hpd_unplug_handle(struct dp_display_private *dp, u32 data)
 	return 0;
 }
 
+static int dp_disconnect_pending_timeout(struct dp_display_private *dp, u32 data)
+{
+	u32 state;
+
+	mutex_lock(&dp->event_mutex);
+
+	state =  atomic_read(&dp->hpd_state);
+	if (state == ST_DISCONNECT_PENDING) {
+		dp_display_disable(dp, 0);
+		atomic_set(&dp->hpd_state, ST_DISCONNECTED);
+	}
+
+	mutex_unlock(&dp->event_mutex);
+
+	return 0;
+}
+
 static int dp_irq_hpd_handle(struct dp_display_private *dp, u32 data)
 {
-	/* irq_hpd can happen at either connected or disconnected state */
+	u32 state;
+
 	mutex_lock(&dp->event_mutex);
+
+	/* irq_hpd can happen at either connected or disconnected state */
+	state =  atomic_read(&dp->hpd_state);
+	if (state == ST_SUSPEND_PENDING) {
+		mutex_unlock(&dp->event_mutex);
+		return 0;
+	}
 
 	dp_display_usbpd_attention_cb(&dp->pdev->dev);
 
@@ -694,15 +753,6 @@ static int dp_display_post_enable(struct msm_dp *dp_display)
 	return 0;
 }
 
-static int dp_display_pre_disable(struct msm_dp *dp_display)
-{
-	struct dp_display_private *dp;
-
-	dp = container_of(dp_display, struct dp_display_private, dp_display);
-
-	return 0;
-}
-
 static int dp_display_disable(struct dp_display_private *dp, u32 data)
 {
 	if (!dp->power_on)
@@ -816,17 +866,16 @@ static int hpd_event_thread(void *data)
 	unsigned long flag;
 	struct dp_event *todo;
 	int timeout_mode = 0;
-	int ret;
 
 	dp_priv = (struct dp_display_private *)data;
 
 	while (1) {
 		if (timeout_mode) {
-			ret = wait_event_timeout(dp_priv->event_q,
+			wait_event_timeout(dp_priv->event_q,
 				(dp_priv->event_pndx == dp_priv->event_gndx),
 						EVENT_TIMEOUT);
 		} else {
-			ret = wait_event_timeout(dp_priv->event_q,
+			wait_event_timeout(dp_priv->event_q,
 				(dp_priv->event_pndx != dp_priv->event_gndx),
 						EVENT_TIMEOUT);
 		}
@@ -884,6 +933,14 @@ static int hpd_event_thread(void *data)
 			break;
 		case EV_USER_NOTIFICATION:
 			dp_display_send_hpd_notification(dp_priv,
+						todo->data);
+			break;
+		case EV_CONNECT_PENDING_TIMEOUT:
+			dp_connect_pending_timeout(dp_priv,
+						todo->data);
+			break;
+		case EV_DISCONNECT_PENDING_TIMEOUT:
+			dp_disconnect_pending_timeout(dp_priv,
 						todo->data);
 			break;
 		default:
@@ -1031,6 +1088,16 @@ static int dp_pm_resume(struct device *dev)
 
 static int dp_pm_suspend(struct device *dev)
 {
+	struct platform_device *pdev = to_platform_device(dev);
+	struct dp_display_private *dp = platform_get_drvdata(pdev);
+
+	if (!dp) {
+		DRM_ERROR("DP driver bind failed. Invalid driver data\n");
+		return -EINVAL;
+	}
+
+	atomic_set(&dp->hpd_state, ST_DISCONNECTED);
+
 	return 0;
 }
 
@@ -1129,6 +1196,7 @@ int msm_dp_display_enable(struct msm_dp *dp, struct drm_encoder *encoder)
 {
 	int rc = 0;
 	struct dp_display_private *dp_display;
+	u32 state;
 
 	dp_display = container_of(dp, struct dp_display_private, dp_display);
 	if (!dp_display->dp_mode.drm_mode.clock) {
@@ -1138,6 +1206,7 @@ int msm_dp_display_enable(struct msm_dp *dp, struct drm_encoder *encoder)
 
 	mutex_lock(&dp_display->event_mutex);
 
+	state =  atomic_read(&dp_display->hpd_state);
 	rc = dp_display_set_mode(dp, &dp_display->dp_mode);
 	if (rc) {
 		DRM_ERROR("Failed to perform a mode set, rc=%d\n", rc);
@@ -1161,6 +1230,11 @@ int msm_dp_display_enable(struct msm_dp *dp, struct drm_encoder *encoder)
 		dp_display_unprepare(dp);
 	}
 
+	dp_del_event(dp_display, EV_CONNECT_PENDING_TIMEOUT);
+
+	if (state == ST_SUSPEND_PENDING)
+		dp_add_event(dp_display, EV_IRQ_HPD_INT, 0, 0);
+
 	/* completed connection */
 	atomic_set(&dp_display->hpd_state, ST_CONNECTED);
 
@@ -1169,22 +1243,27 @@ int msm_dp_display_enable(struct msm_dp *dp, struct drm_encoder *encoder)
 	return rc;
 }
 
+int msm_dp_display_pre_disable(struct msm_dp *dp, struct drm_encoder *encoder)
+{
+	struct dp_display_private *dp_display;
+
+	dp_display = container_of(dp, struct dp_display_private, dp_display);
+
+	dp_ctrl_push_idle(dp_display->ctrl);
+
+
+	return 0;
+}
+
 int msm_dp_display_disable(struct msm_dp *dp, struct drm_encoder *encoder)
 {
 	int rc = 0;
+	u32 state;
 	struct dp_display_private *dp_display;
 
 	dp_display = container_of(dp, struct dp_display_private, dp_display);
 
 	mutex_lock(&dp_display->event_mutex);
-
-	rc = dp_display_pre_disable(dp);
-	if (rc) {
-		DRM_ERROR("DP display pre disable failed, rc=%d\n", rc);
-		atomic_set(&dp_display->hpd_state, ST_DISCONNECTED);
-		mutex_unlock(&dp_display->event_mutex);
-		return rc;
-	}
 
 	dp_display_disable(dp_display, 0);
 
@@ -1192,8 +1271,17 @@ int msm_dp_display_disable(struct msm_dp *dp, struct drm_encoder *encoder)
 	if (rc)
 		DRM_ERROR("DP display unprepare failed, rc=%d\n", rc);
 
-	/* completed disconnection */
-	atomic_set(&dp_display->hpd_state, ST_DISCONNECTED);
+
+	dp_del_event(dp_display, EV_DISCONNECT_PENDING_TIMEOUT);
+
+	state =  atomic_read(&dp_display->hpd_state);
+	if (state == ST_DISCONNECT_PENDING) {
+		/* completed disconnection */
+		atomic_set(&dp_display->hpd_state, ST_DISCONNECTED);
+
+	} else {
+		atomic_set(&dp_display->hpd_state, ST_SUSPEND_PENDING);
+	}
 
 	mutex_unlock(&dp_display->event_mutex);
 	return rc;

@@ -21,7 +21,8 @@ struct dp_panel_private {
 static int dp_panel_read_dpcd(struct dp_panel *dp_panel)
 {
 	int rc = 0;
-	size_t len, rlen;
+	size_t len;
+	ssize_t rlen;
 	struct dp_panel_private *panel;
 	struct dp_link_info *link_info;
 	u8 *dpcd, major = 0, minor = 0, temp;
@@ -96,7 +97,7 @@ static int dp_panel_read_dpcd(struct dp_panel *dp_panel)
 		rlen = drm_dp_dpcd_read(panel->aux,
 			DP_DOWNSTREAM_PORT_0, dp_panel->ds_cap_info, len);
 		if (rlen < len) {
-			DRM_ERROR("ds port status failed, rlen=%d\n", rlen);
+			DRM_ERROR("ds port status failed, rlen=%zd\n", rlen);
 			rc = -EINVAL;
 			goto end;
 		}
