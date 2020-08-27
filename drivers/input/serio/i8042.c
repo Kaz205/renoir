@@ -254,6 +254,8 @@ static int i8042_flush(void)
 	int count = 0;
 	int retval = 0;
 
+	mutex_lock(&i8042_mutex);
+
 	spin_lock_irqsave(&i8042_lock, flags);
 
 	while ((str = i8042_read_status()) & I8042_STR_OBF) {
@@ -269,6 +271,8 @@ static int i8042_flush(void)
 	}
 
 	spin_unlock_irqrestore(&i8042_lock, flags);
+
+	mutex_unlock(&i8042_mutex);
 
 	return retval;
 }
