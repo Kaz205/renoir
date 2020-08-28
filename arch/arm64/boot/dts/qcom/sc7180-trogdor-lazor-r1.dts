@@ -10,6 +10,6 @@
 #include "sc7180-trogdor-lazor.dtsi"
 
 / {
-	model = "Google Lazor (rev1, rev3+)";
+	model = "Google Lazor (rev1+)";
 	compatible = "google,lazor", "qcom,sc7180";
 };

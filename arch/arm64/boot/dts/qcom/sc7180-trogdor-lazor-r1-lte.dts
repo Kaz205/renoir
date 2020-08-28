@@ -9,7 +9,7 @@
 #include "sc7180-trogdor-lte-sku.dtsi"
 
 / {
-	model = "Google Lazor (rev1, rev3+) with LTE";
+	model = "Google Lazor (rev1+) with LTE";
 	compatible = "google,lazor-sku0", "qcom,sc7180";
 };
 
