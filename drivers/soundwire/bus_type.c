@@ -20,12 +20,14 @@
 static const struct sdw_device_id *
 sdw_get_device_id(struct sdw_slave *slave, struct sdw_driver *drv)
 {
-	const struct sdw_device_id *id;
+	const struct sdw_device_id *id = drv->id_table;
 
-	for (id = drv->id_table; id && id->mfg_id; id++)
+	while (id && id->mfg_id) {
 		if (slave->id.mfg_id == id->mfg_id &&
 		    slave->id.part_id == id->part_id)
 			return id;
+		id++;
+	}
 
 	return NULL;
 }
