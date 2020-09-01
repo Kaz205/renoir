@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Christoph Hellwig.
+ * Copyright (C) 2018-2020 Christoph Hellwig.
  *
  * DMA operations that map physical memory directly without using an IOMMU.
  */
@@ -135,6 +135,20 @@ again:
 	return page;
 }
 
+static inline bool dma_should_alloc_from_pool(struct device *dev, gfp_t gfp,
+					      unsigned long attrs)
+{
+	if (gfpflags_allow_blocking(gfp))
+		return false;
+	if (force_dma_unencrypted(dev))
+		return true;
+	if (!dma_alloc_need_uncached(dev, attrs))
+		return false;
+	if (is_dev_swiotlb_force(dev))
+		return false;
+	return true;
+}
+
 void *dma_direct_alloc(struct device *dev, size_t size,
 		dma_addr_t *dma_handle, gfp_t gfp, unsigned long attrs)
 {
@@ -150,8 +164,7 @@ void *dma_direct_alloc(struct device *dev, size_t size,
 		return arch_dma_alloc(dev, size, dma_handle, gfp, attrs);
 
 	if (IS_ENABLED(CONFIG_DMA_DIRECT_REMAP) &&
-	    dma_alloc_need_uncached(dev, attrs) &&
-	    !gfpflags_allow_blocking(gfp) && !is_dev_swiotlb_force(dev)) {
+	    dma_should_alloc_from_pool(dev, gfp, 0)) {
 		ret = dma_alloc_from_pool(size, &page, gfp);
 		if (!ret)
 			return NULL;
@@ -272,6 +285,56 @@ void dma_direct_free(struct device *dev, size_t size,
 		vunmap(cpu_addr);
 
 	__dma_direct_free_pages(dev, dma_direct_to_page(dev, dma_addr), size);
+}
+
+struct page *dma_direct_alloc_pages(struct device *dev, size_t size,
+		dma_addr_t *dma_handle, enum dma_data_direction dir, gfp_t gfp)
+{
+	struct page *page;
+	void *ret;
+
+	if (IS_ENABLED(CONFIG_DMA_DIRECT_REMAP) &&
+	    dma_should_alloc_from_pool(dev, gfp, 0)) {
+		ret = dma_alloc_from_pool(PAGE_ALIGN(size), &page, gfp);
+		if (!ret)
+			return NULL;
+		goto done;
+	}
+
+	page = __dma_direct_alloc_pages(dev, size, gfp, 0);
+	if (!page)
+		return NULL;
+	ret = page_address(page);
+	if (force_dma_unencrypted(dev)) {
+		if (set_memory_decrypted((unsigned long)ret,
+				1 << get_order(size)))
+			goto out_free_pages;
+	}
+	memset(ret, 0, size);
+done:
+	*dma_handle = phys_to_dma_direct(dev, page_to_phys(page));
+	return page;
+out_free_pages:
+	__dma_direct_free_pages(dev, page, size);
+	return NULL;
+}
+
+void dma_direct_free_pages(struct device *dev, size_t size,
+		struct page *page, dma_addr_t dma_addr,
+		enum dma_data_direction dir)
+{
+	unsigned int page_order = get_order(size);
+	void *vaddr = page_address(page);
+
+	/* If cpu_addr is not from an atomic pool, dma_free_from_pool() fails */
+	if (IS_ENABLED(CONFIG_DMA_DIRECT_REMAP) &&
+	    dma_free_from_pool(vaddr, PAGE_ALIGN(size)))
+		return;
+
+	if (force_dma_unencrypted(dev))
+		set_memory_encrypted((unsigned long)vaddr, 1 << page_order);
+
+	__dma_direct_free_pages(dev, page, size);
 }
 
 #if defined(CONFIG_ARCH_HAS_SYNC_DMA_FOR_DEVICE) || \
