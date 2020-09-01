@@ -68,10 +68,8 @@ static int sdw_intel_cleanup(struct sdw_intel_ctx *ctx)
 		if (!(link_mask & BIT(i)))
 			continue;
 
-		if (link->pdev) {
-			pm_runtime_disable(&link->pdev->dev);
+		if (link->pdev)
 			platform_device_unregister(link->pdev);
-		}
 	}
 
 	return 0;
