@@ -17,7 +17,6 @@
 #include <linux/soundwire/sdw.h>
 #include <sound/pcm_params.h>
 #include <sound/soc.h>
-#include <linux/workqueue.h>
 #include "bus.h"
 #include "cadence_master.h"
 
@@ -791,7 +790,7 @@ irqreturn_t sdw_cdns_irq(int irq, void *dev_id)
 			     CDNS_MCP_INT_SLAVE_MASK, 0);
 
 		int_status &= ~CDNS_MCP_INT_SLAVE_MASK;
-		schedule_work(&cdns->work);
+		ret = IRQ_WAKE_THREAD;
 	}
 
 	cdns_writel(cdns, CDNS_MCP_INTSTAT, int_status);
@@ -800,15 +799,13 @@ irqreturn_t sdw_cdns_irq(int irq, void *dev_id)
 EXPORT_SYMBOL(sdw_cdns_irq);
 
 /**
- * To update slave status in a work since we will need to handle
- * other interrupts eg. CDNS_MCP_INT_RX_WL during the update slave
- * process.
- * @work: cdns worker thread
+ * sdw_cdns_thread() - Cadence irq thread handler
+ * @irq: irq number
+ * @dev_id: irq context
  */
-static void cdns_update_slave_status_work(struct work_struct *work)
+irqreturn_t sdw_cdns_thread(int irq, void *dev_id)
 {
-	struct sdw_cdns *cdns =
-		container_of(work, struct sdw_cdns, work);
+	struct sdw_cdns *cdns = dev_id;
 	u32 slave0, slave1;
 
 	dev_dbg_ratelimited(cdns->dev, "Slave status change\n");
@@ -825,7 +822,9 @@ static void cdns_update_slave_status_work(struct work_struct *work)
 	cdns_updatel(cdns, CDNS_MCP_INTMASK,
 		     CDNS_MCP_INT_SLAVE_MASK, CDNS_MCP_INT_SLAVE_MASK);
 
+	return IRQ_HANDLED;
 }
+EXPORT_SYMBOL(sdw_cdns_thread);
 
 /*
  * init routines
@@ -1428,7 +1427,6 @@ int sdw_cdns_probe(struct sdw_cdns *cdns)
 	init_completion(&cdns->tx_complete);
 	cdns->bus.port_ops = &cdns_port_ops;
 
-	INIT_WORK(&cdns->work, cdns_update_slave_status_work);
 	return 0;
 }
 EXPORT_SYMBOL(sdw_cdns_probe);
