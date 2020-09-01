@@ -42,6 +42,9 @@ static int sdw_intel_cleanup_pdev(struct sdw_intel_ctx *ctx)
 		link++;
 	}
 
+	kfree(ctx->links);
+	ctx->links = NULL;
+
 	return 0;
 }
 
@@ -93,15 +96,14 @@ static struct sdw_intel_ctx
 
 	dev_dbg(&adev->dev, "Creating %d SDW Link devices\n", count);
 
-	ctx = devm_kzalloc(&adev->dev, sizeof(*ctx), GFP_KERNEL);
+	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
 	if (!ctx)
 		return NULL;
 
 	ctx->count = count;
-	ctx->links = devm_kcalloc(&adev->dev, ctx->count,
-				  sizeof(*ctx->links), GFP_KERNEL);
+	ctx->links = kcalloc(ctx->count, sizeof(*ctx->links), GFP_KERNEL);
 	if (!ctx->links)
-		return NULL;
+		goto link_err;
 
 	link = ctx->links;
 
@@ -144,8 +146,9 @@ static struct sdw_intel_ctx
 	return ctx;
 
 pdev_err:
-	ctx->count = i;
 	sdw_intel_cleanup_pdev(ctx);
+link_err:
+	kfree(ctx);
 	return NULL;
 }
 
@@ -213,6 +216,7 @@ void *sdw_intel_init(acpi_handle *parent_handle, struct sdw_intel_res *res)
 void sdw_intel_exit(struct sdw_intel_ctx *ctx)
 {
 	sdw_intel_cleanup_pdev(ctx);
+	kfree(ctx);
 }
 EXPORT_SYMBOL(sdw_intel_exit);
 
