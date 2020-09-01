@@ -161,27 +161,32 @@ static int apq8016_lpass_free_dma_channel(struct lpass_data *drvdata, int chan)
 static int apq8016_lpass_init(struct platform_device *pdev)
 {
 	struct lpass_data *drvdata = platform_get_drvdata(pdev);
-	struct lpass_variant *variant = drvdata->variant;
 	struct device *dev = &pdev->dev;
-	int ret, i;
+	int ret;
 
+	drvdata->pcnoc_mport_clk = devm_clk_get(dev, "pcnoc-mport-clk");
+	if (IS_ERR(drvdata->pcnoc_mport_clk)) {
+		dev_err(dev, "error getting pcnoc-mport-clk: %ld\n",
+			PTR_ERR(drvdata->pcnoc_mport_clk));
+		return PTR_ERR(drvdata->pcnoc_mport_clk);
+	}
 
-	drvdata->clks = devm_kcalloc(dev, variant->num_clks,
-				     sizeof(*drvdata->clks), GFP_KERNEL);
-	drvdata->num_clks = variant->num_clks;
-
-	for (i = 0; i < drvdata->num_clks; i++)
-		drvdata->clks[i].id = variant->clk_name[i];
-
-	ret = devm_clk_bulk_get(dev, drvdata->num_clks, drvdata->clks);
+	ret = clk_prepare_enable(drvdata->pcnoc_mport_clk);
 	if (ret) {
-		dev_err(dev, "Failed to get clocks %d\n", ret);
+		dev_err(dev, "Error enabling pcnoc-mport-clk: %d\n", ret);
 		return ret;
 	}
 
-	ret = clk_bulk_prepare_enable(drvdata->num_clks, drvdata->clks);
+	drvdata->pcnoc_sway_clk = devm_clk_get(dev, "pcnoc-sway-clk");
+	if (IS_ERR(drvdata->pcnoc_sway_clk)) {
+		dev_err(dev, "error getting pcnoc-sway-clk: %ld\n",
+			PTR_ERR(drvdata->pcnoc_sway_clk));
+		return PTR_ERR(drvdata->pcnoc_sway_clk);
+	}
+
+	ret = clk_prepare_enable(drvdata->pcnoc_sway_clk);
 	if (ret) {
-		dev_err(dev, "apq8016 clk_enable failed\n");
+		dev_err(dev, "Error enabling pcnoc_sway_clk: %d\n", ret);
 		return ret;
 	}
 
@@ -192,7 +197,8 @@ static int apq8016_lpass_exit(struct platform_device *pdev)
 {
 	struct lpass_data *drvdata = platform_get_drvdata(pdev);
 
-	clk_bulk_disable_unprepare(drvdata->num_clks, drvdata->clks);
+	clk_disable_unprepare(drvdata->pcnoc_mport_clk);
+	clk_disable_unprepare(drvdata->pcnoc_sway_clk);
 
 	return 0;
 }
@@ -213,11 +219,6 @@ static struct lpass_variant apq8016_data = {
 	.wrdma_reg_stride	= 0x1000,
 	.wrdma_channel_start	= 5,
 	.wrdma_channels		= 2,
-	.clk_name		= (const char*[]) {
-				   "pcnoc-mport-clk",
-				   "pcnoc-sway-clk",
-				  },
-	.num_clks		= 2,
 	.dai_driver		= apq8016_lpass_cpu_dai_driver,
 	.num_dai		= ARRAY_SIZE(apq8016_lpass_cpu_dai_driver),
 	.dai_osr_clk_names	= (const char *[]) {
