@@ -2887,27 +2887,6 @@ static int fill_dc_scaling_info(const struct drm_plane_state *state,
 	return 0;
 }
 
-static int get_fb_info(const struct amdgpu_framebuffer *amdgpu_fb,
-		       uint64_t *tiling_flags)
-{
-	struct amdgpu_bo *rbo = gem_to_amdgpu_bo(amdgpu_fb->base.obj[0]);
-	int r = amdgpu_bo_reserve(rbo, false);
-
-	if (unlikely(r)) {
-		/* Don't show error message when returning -ERESTARTSYS */
-		if (r != -ERESTARTSYS)
-			DRM_ERROR("Unable to reserve buffer: %d\n", r);
-		return r;
-	}
-
-	if (tiling_flags)
-		amdgpu_bo_get_tiling_flags(rbo, tiling_flags);
-
-	amdgpu_bo_unreserve(rbo);
-
-	return r;
-}
-
 static inline uint64_t get_dcc_address(uint64_t address, uint64_t tiling_flags)
 {
 	uint32_t offset = AMDGPU_TILING_GET(tiling_flags, DCC_OFFSET_256B);
@@ -3299,7 +3278,6 @@ static int fill_dc_plane_attributes(struct amdgpu_device *adev,
 		to_amdgpu_framebuffer(plane_state->fb);
 	struct dc_scaling_info scaling_info;
 	struct dc_plane_info plane_info;
-	uint64_t tiling_flags;
 	int ret;
 	bool force_disable_dcc = false;
 
@@ -3312,12 +3290,9 @@ static int fill_dc_plane_attributes(struct amdgpu_device *adev,
 	dc_plane_state->clip_rect = scaling_info.clip_rect;
 	dc_plane_state->scaling_quality = scaling_info.scaling_quality;
 
-	ret = get_fb_info(amdgpu_fb, &tiling_flags);
-	if (ret)
-		return ret;
-
 	force_disable_dcc = adev->asic_type == CHIP_RAVEN && adev->in_suspend;
-	ret = fill_dc_plane_info_and_addr(adev, plane_state, tiling_flags,
+	ret = fill_dc_plane_info_and_addr(adev, plane_state,
+					  amdgpu_fb->tiling_flags,
 					  &plane_info,
 					  &dc_plane_state->address,
 					  force_disable_dcc);
@@ -4797,7 +4772,6 @@ static int dm_plane_helper_prepare_fb(struct drm_plane *plane,
 	struct list_head list;
 	struct ttm_validate_buffer tv;
 	struct ww_acquire_ctx ticket;
-	uint64_t tiling_flags;
 	uint32_t domain;
 	int r;
 	bool force_disable_dcc = false;
@@ -4847,8 +4821,6 @@ static int dm_plane_helper_prepare_fb(struct drm_plane *plane,
 		return r;
 	}
 
-	amdgpu_bo_get_tiling_flags(rbo, &tiling_flags);
-
 	ttm_eu_backoff_reservation(&ticket, &list);
 
 	afb->address = amdgpu_bo_gpu_offset(rbo);
@@ -4862,9 +4834,9 @@ static int dm_plane_helper_prepare_fb(struct drm_plane *plane,
 		force_disable_dcc = adev->asic_type == CHIP_RAVEN && adev->in_suspend;
 		fill_plane_buffer_attributes(
 			adev, afb, plane_state->format, plane_state->rotation,
-			tiling_flags, &plane_state->tiling_info,
-			&plane_state->plane_size, &plane_state->dcc,
-			&plane_state->address,
+			afb->tiling_flags,
+			&plane_state->tiling_info, &plane_state->plane_size,
+			&plane_state->dcc, &plane_state->address,
 			force_disable_dcc);
 	}
 
@@ -6037,7 +6009,6 @@ static void amdgpu_dm_commit_planes(struct drm_atomic_state *state,
 	long r;
 	unsigned long flags;
 	struct amdgpu_bo *abo;
-	uint64_t tiling_flags;
 	uint32_t target_vblank, last_flip_vblank;
 	bool vrr_active = amdgpu_dm_vrr_active(acrtc_state);
 	bool pflip_present = false;
@@ -6069,6 +6040,7 @@ static void amdgpu_dm_commit_planes(struct drm_atomic_state *state,
 		struct drm_crtc *crtc = new_plane_state->crtc;
 		struct drm_crtc_state *new_crtc_state;
 		struct drm_framebuffer *fb = new_plane_state->fb;
+		struct amdgpu_framebuffer *afb = (struct amdgpu_framebuffer *)fb;
 		bool plane_needs_flip;
 		struct dc_plane_state *dc_plane;
 		struct dm_plane_state *dm_new_plane_state = to_dm_plane_state(new_plane_state);
@@ -6120,22 +6092,9 @@ static void amdgpu_dm_commit_planes(struct drm_atomic_state *state,
 		if (unlikely(r <= 0))
 			DRM_ERROR("Waiting for fences timed out!");
 
-		/*
-		 * TODO This might fail and hence better not used, wait
-		 * explicitly on fences instead
-		 * and in general should be called for
-		 * blocking commit to as per framework helpers
-		 */
-		r = amdgpu_bo_reserve(abo, true);
-		if (unlikely(r != 0))
-			DRM_ERROR("failed to reserve buffer before flip\n");
-
-		amdgpu_bo_get_tiling_flags(abo, &tiling_flags);
-
-		amdgpu_bo_unreserve(abo);
-
 		fill_dc_plane_info_and_addr(
-			dm->adev, new_plane_state, tiling_flags,
+			dm->adev, new_plane_state,
+			afb->tiling_flags,
 			&bundle->plane_infos[planes_count],
 			&bundle->flip_addrs[planes_count].address,
 			false);
@@ -7292,6 +7251,7 @@ static bool should_reset_plane(struct drm_atomic_state *state,
 	 * TODO: Come up with a more elegant solution for this.
 	 */
 	for_each_oldnew_plane_in_state(state, other, old_other_state, new_other_state, i) {
+		struct amdgpu_framebuffer *old_afb, *new_afb;
 		if (other->type == DRM_PLANE_TYPE_CURSOR)
 			continue;
 
@@ -7302,9 +7262,19 @@ static bool should_reset_plane(struct drm_atomic_state *state,
 		if (old_other_state->crtc != new_other_state->crtc)
 			return true;
 
-		/* TODO: Remove this once we can handle fast format changes. */
-		if (old_other_state->fb && new_other_state->fb &&
-		    old_other_state->fb->format != new_other_state->fb->format)
+		/* Framebuffer checks fall at the end. */
+		if (!old_other_state->fb || !new_other_state->fb)
+			continue;
+
+		/* Pixel format changes can require bandwidth updates. */
+		if (old_other_state->fb->format != new_other_state->fb->format)
+			return true;
+
+		old_afb = (struct amdgpu_framebuffer *)old_other_state->fb;
+		new_afb = (struct amdgpu_framebuffer *)new_other_state->fb;
+
+		/* Tiling and DCC changes also require bandwidth updates. */
+		if (old_afb->tiling_flags != new_afb->tiling_flags)
 			return true;
 	}
 
@@ -7524,7 +7494,6 @@ dm_determine_update_type_for_commit(struct amdgpu_display_manager *dm,
 			struct dc_plane_info *plane_info = &bundle->plane_infos[num_plane];
 			struct dc_flip_addrs *flip_addr = &bundle->flip_addrs[num_plane];
 			struct dc_scaling_info *scaling_info = &bundle->scaling_infos[num_plane];
-			uint64_t tiling_flags;
 
 			new_plane_crtc = new_plane_state->crtc;
 			old_plane_crtc = old_plane_state->crtc;
@@ -7571,12 +7540,8 @@ dm_determine_update_type_for_commit(struct amdgpu_display_manager *dm,
 			bundle->surface_updates[num_plane].scaling_info = scaling_info;
 
 			if (amdgpu_fb) {
-				ret = get_fb_info(amdgpu_fb, &tiling_flags);
-				if (ret)
-					goto cleanup;
-
 				ret = fill_dc_plane_info_and_addr(
-					dm->adev, new_plane_state, tiling_flags,
+					dm->adev, new_plane_state, amdgpu_fb->tiling_flags,
 					plane_info,
 					&flip_addr->address,
 					false);
