@@ -18,6 +18,7 @@
  */
 
 #include <linux/dma-buf.h>
+#include <linux/virtio_dma_buf.h>
 #include <media/v4l2-event.h>
 #include <media/v4l2-ioctl.h>
 #include <media/videobuf2-dma-sg.h>
@@ -58,7 +59,7 @@ static int virtio_video_get_dma_buf_id(struct virtio_video_device *vvd,
 	 */
 	struct dma_buf *dma_buf = dma_buf_get(vb->planes[0].m.fd);
 
-	return dma_buf_get_uuid(dma_buf, uuid);
+	return virtio_dma_buf_get_uuid(dma_buf, uuid);
 }
 
 static int virtio_video_send_resource_create_object(struct vb2_buffer *vb,
