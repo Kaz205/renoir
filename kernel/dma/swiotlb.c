@@ -120,7 +120,7 @@ static inline struct swiotlb *get_swiotlb(struct device *dev)
  * Max segment that we can provide which (if pages are contingous) will
  * not be bounced (unless SWIOTLB_FORCE is set).
  */
-unsigned int max_segment;
+static unsigned int max_segment;
 
 static int late_alloc;
 
