@@ -232,6 +232,7 @@ static int mtk_vcodec_probe(struct platform_device *pdev)
 		mtk_v4l2_err("Could not get vdec IPI device");
 		return -ENODEV;
 	}
+	dma_set_max_seg_size(&pdev->dev, UINT_MAX);
 
 	dev->fw_handler = mtk_vcodec_fw_select(dev, fw_type, DECODER);
 	if (IS_ERR(dev->fw_handler))
