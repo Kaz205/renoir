@@ -389,6 +389,20 @@ static int trackpoint_reconnect(struct psmouse *psmouse)
 	return 0;
 }
 
+static void trackpoint_cleanup(struct psmouse *psmouse)
+{
+	struct trackpoint_data *tp = psmouse->private;
+	u8 param[3] = { TP_TOGGLE, TP_TOGGLE_BURST, TP_TOGGLE_ELAN_SLEEP };
+
+	if (tp->variant_id == TP_VARIANT_ELAN) {
+		if (ps2_command(&psmouse->ps2dev, param,
+				MAKE_PS2_CMD(3, 0, TP_COMMAND))) {
+			psmouse_err(psmouse,
+				    "failed to suspend trackpont.\n");
+		}
+	}
+}
+
 int trackpoint_detect(struct psmouse *psmouse, bool set_properties)
 {
 	struct ps2dev *ps2dev = &psmouse->ps2dev;
@@ -420,6 +434,8 @@ int trackpoint_detect(struct psmouse *psmouse, bool set_properties)
 
 	psmouse->reconnect = trackpoint_reconnect;
 	psmouse->disconnect = trackpoint_disconnect;
+
+	psmouse->cleanup = trackpoint_cleanup;
 
 	if (variant_id != TP_VARIANT_IBM) {
 		/* Newer variants do not support extended button query. */

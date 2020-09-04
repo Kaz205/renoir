@@ -107,6 +107,7 @@
 #define TP_TOGGLE_EXT_TAG	0x22	/* Bit 3 of the first packet coming from the
 					   external device will be forced to 1 */
 #define TP_MASK_EXT_TAG			0x04
+#define TP_TOGGLE_ELAN_SLEEP	0x8
 
 
 /* Power on Self Test Results */
