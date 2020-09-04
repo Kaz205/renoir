@@ -139,6 +139,9 @@
 #define INFRA_TOPAXI_PROTECTEN_SET		0x0260
 #define INFRA_TOPAXI_PROTECTEN_CLR		0x0264
 
+#define REG_INFRA_MISC				0xf00
+#define F_DDR_4GB_SUPPORT_EN			BIT(13)
+
 int mtk_infracfg_set_bus_protection(struct regmap *infracfg, u32 mask,
 		bool reg_update);
 int mtk_infracfg_clear_bus_protection(struct regmap *infracfg, u32 mask,
