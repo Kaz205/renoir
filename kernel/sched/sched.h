@@ -2478,7 +2478,7 @@ static inline void cpufreq_update_util(struct rq *rq, unsigned int flags) {}
 unsigned long uclamp_eff_value(struct task_struct *p, enum uclamp_id clamp_id);
 
 /**
- * uclamp_rq_util_with - clamp @util with @rq and @p effective uclamp values.
+ * uclamp_util_with - clamp @util with @rq and @p effective uclamp values.
  * @rq:		The rq to clamp against. Must not be NULL.
  * @util:	The util value to clamp.
  * @p:		The task to clamp against. Can be NULL if you want to clamp
