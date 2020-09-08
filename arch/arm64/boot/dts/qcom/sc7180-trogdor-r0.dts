@@ -81,6 +81,10 @@ ap_ts_pen_1v8: &i2c4 {
 	enable-gpios = <&tlmm 14 GPIO_ACTIVE_HIGH>;
 };
 
+&trackpad {
+	interrupts = <58 IRQ_TYPE_EDGE_FALLING>;
+};
+
 /* PINCTRL - modifications to sc7180-trogdor.dtsi */
 
 &ap_suspend_l_neuter {
@@ -140,6 +144,16 @@ ap_ts_pen_1v8: &i2c4 {
 
 	pinconf {
 		pins = "gpio104";
+	};
+};
+
+&trackpad_int_1v8_odl {
+	pinmux {
+		pins = "gpio58";
+	};
+
+	pinconf {
+		pins = "gpio58";
 	};
 };
 
