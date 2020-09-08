@@ -143,10 +143,9 @@ struct cam_irq_bh_api {
  * @return:             0: Success
  *                      Negative: Failure
  */
-int cam_irq_controller_init(const char       *name,
-	void __iomem                         *mem_base,
-	struct cam_irq_controller_reg_info   *register_info,
-	void                                **irq_controller);
+int cam_irq_controller_init(const char *name, void __iomem *mem_base,
+			    struct cam_irq_controller_reg_info *register_info,
+			    void **irq_controller);
 
 /*
  * cam_irq_controller_subscribe_irq()

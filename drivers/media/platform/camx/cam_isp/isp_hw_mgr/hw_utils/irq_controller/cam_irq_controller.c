@@ -130,10 +130,9 @@ int cam_irq_controller_deinit(void **irq_controller)
 	return 0;
 }
 
-int cam_irq_controller_init(const char       *name,
-	void __iomem                         *mem_base,
-	struct cam_irq_controller_reg_info   *register_info,
-	void                                **irq_controller)
+int cam_irq_controller_init(const char *name, void __iomem *mem_base,
+			    struct cam_irq_controller_reg_info *register_info,
+			    void **irq_controller)
 {
 	struct cam_irq_controller *controller = NULL;
 	int i, rc = 0;

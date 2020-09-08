@@ -15,11 +15,9 @@
 #include "cam_vfe_top_ver2.h"
 #include "cam_debug_util.h"
 
-int cam_vfe_top_init(uint32_t          top_version,
-	struct cam_hw_soc_info        *soc_info,
-	struct cam_hw_intf            *hw_intf,
-	void                          *top_hw_info,
-	struct cam_vfe_top            **vfe_top)
+int cam_vfe_top_init(uint32_t top_version, struct cam_hw_soc_info *soc_info,
+		     struct cam_hw_intf *hw_intf, void *top_hw_info,
+		     struct cam_vfe_top **vfe_top)
 {
 	int rc = -EINVAL;
 
@@ -29,15 +27,14 @@ int cam_vfe_top_init(uint32_t          top_version,
 			vfe_top);
 		break;
 	default:
-		CAM_ERR(CAM_ISP, "Error! Unsupported Version %x", top_version);
+		CAM_ERR(CAM_ISP, "Unsupported vfe top version %x", top_version);
 		break;
 	}
 
 	return rc;
 }
 
-int cam_vfe_top_deinit(uint32_t        top_version,
-	struct cam_vfe_top           **vfe_top)
+int cam_vfe_top_deinit(uint32_t top_version, struct cam_vfe_top **vfe_top)
 {
 	int rc = -EINVAL;
 
@@ -46,7 +43,7 @@ int cam_vfe_top_deinit(uint32_t        top_version,
 		rc = cam_vfe_top_ver2_deinit(vfe_top);
 		break;
 	default:
-		CAM_ERR(CAM_ISP, "Error! Unsupported Version %x", top_version);
+		CAM_ERR(CAM_ISP, "Unsupported vfe top version %x", top_version);
 		break;
 	}
 

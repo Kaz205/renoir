@@ -58,7 +58,6 @@ struct cam_vfe_bus {
  * @Brief:                   Initialize Bus layer
  *
  * @bus_version:             Version of BUS to initialize
- * @bus_type:                Bus Type RD/WR
  * @soc_info:                Soc Information for the associated HW
  * @hw_intf:                 HW Interface of HW to which this resource belongs
  * @bus_hw_info:             BUS HW info that contains details of BUS registers
@@ -70,13 +69,9 @@ struct cam_vfe_bus {
  * @Return:                  0: Success
  *                           Non-zero: Failure
  */
-int cam_vfe_bus_init(uint32_t          bus_version,
-	int                            bus_type,
-	struct cam_hw_soc_info        *soc_info,
-	struct cam_hw_intf            *hw_intf,
-	void                          *bus_hw_info,
-	void                          *vfe_irq_controller,
-	struct cam_vfe_bus            **vfe_bus);
+int cam_vfe_bus_init(uint32_t bus_version, struct cam_hw_soc_info *soc_info,
+		     struct cam_hw_intf *hw_intf, void *bus_hw_info,
+		     void *vfe_irq_controller, struct cam_vfe_bus **vfe_bus);
 
 /*
  * cam_vfe_bus_deinit()
@@ -89,7 +84,6 @@ int cam_vfe_bus_init(uint32_t          bus_version,
  * @Return:                  0: Success
  *                           Non-zero: Failure
  */
-int cam_vfe_bus_deinit(uint32_t        bus_version,
-	struct cam_vfe_bus           **vfe_bus);
+int cam_vfe_bus_deinit(uint32_t bus_version, struct cam_vfe_bus **vfe_bus);
 
 #endif /* _CAM_VFE_BUS_ */

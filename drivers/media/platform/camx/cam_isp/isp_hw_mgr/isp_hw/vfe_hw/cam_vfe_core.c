@@ -832,59 +832,45 @@ irqreturn_t cam_vfe_irq(int irq_num, void *data)
 		core_info->vfe_irq_controller);
 }
 
-int cam_vfe_core_init(struct cam_vfe_hw_core_info  *core_info,
-	struct cam_hw_soc_info                     *soc_info,
-	struct cam_hw_intf                         *hw_intf,
-	struct cam_vfe_hw_info                     *vfe_hw_info)
+int cam_vfe_core_init(struct cam_vfe_hw_core_info *core_info,
+		      struct cam_hw_soc_info *soc_info,
+		      struct cam_hw_intf *hw_intf,
+		      struct cam_vfe_hw_info *vfe_hw_info)
 {
 	int rc = -EINVAL;
 	int i;
 
-	CAM_DBG(CAM_ISP, "Enter");
-
 	rc = cam_irq_controller_init(drv_name,
-		CAM_SOC_GET_REG_MAP_START(soc_info, VFE_CORE_BASE_IDX),
-		vfe_hw_info->irq_reg_info, &core_info->vfe_irq_controller);
+				     CAM_SOC_GET_REG_MAP_START(soc_info,
+				     VFE_CORE_BASE_IDX),
+				     vfe_hw_info->irq_reg_info,
+				     &core_info->vfe_irq_controller);
 	if (rc) {
-		CAM_ERR(CAM_ISP, "Error! cam_irq_controller_init failed");
+		CAM_ERR(CAM_ISP, "IRQ controller init failed");
 		return rc;
 	}
 
-	rc = cam_vfe_top_init(vfe_hw_info->top_version,
-		soc_info, hw_intf, vfe_hw_info->top_hw_info,
-		&core_info->vfe_top);
+	rc = cam_vfe_top_init(vfe_hw_info->top_version, soc_info, hw_intf,
+			      vfe_hw_info->top_hw_info, &core_info->vfe_top);
 	if (rc) {
-		CAM_ERR(CAM_ISP, "Error! cam_vfe_top_init failed");
+		CAM_ERR(CAM_ISP, "VFE top init failed");
 		goto deinit_controller;
 	}
 
-	rc = cam_vfe_bus_init(vfe_hw_info->bus_version, BUS_TYPE_WR,
-		soc_info, hw_intf,
-		vfe_hw_info->bus_hw_info, core_info->vfe_irq_controller,
-		&core_info->vfe_bus);
+	rc = cam_vfe_bus_init(vfe_hw_info->bus_version, soc_info, hw_intf,
+			      vfe_hw_info->bus_hw_info,
+			      core_info->vfe_irq_controller,
+			      &core_info->vfe_bus);
 	if (rc) {
-		CAM_ERR(CAM_ISP, "Error! cam_vfe_bus_init failed");
+		CAM_ERR(CAM_ISP, "VFE bus init failed");
 		goto deinit_top;
-	}
-
-	/* Read Bus is not valid for vfe-lite */
-	if ((hw_intf->hw_idx == 0) || (hw_intf->hw_idx == 1)) {
-		rc = cam_vfe_bus_init(vfe_hw_info->bus_rd_version, BUS_TYPE_RD,
-			soc_info, hw_intf, vfe_hw_info->bus_rd_hw_info,
-			core_info->vfe_irq_controller, &core_info->vfe_rd_bus);
-		if (rc) {
-			CAM_ERR(CAM_ISP, "Error! RD cam_vfe_bus_init failed");
-			rc = 0;
-		}
-		CAM_DBG(CAM_ISP, "vfe_bus_rd %pK hw_idx %d",
-			core_info->vfe_rd_bus, hw_intf->hw_idx);
 	}
 
 	INIT_LIST_HEAD(&core_info->free_payload_list);
 	for (i = 0; i < CAM_VFE_EVT_MAX; i++) {
 		INIT_LIST_HEAD(&core_info->evt_payload[i].list);
 		list_add_tail(&core_info->evt_payload[i].list,
-			&core_info->free_payload_list);
+			      &core_info->free_payload_list);
 	}
 
 	spin_lock_init(&core_info->spin_lock);
@@ -892,8 +878,7 @@ int cam_vfe_core_init(struct cam_vfe_hw_core_info  *core_info,
 	return rc;
 
 deinit_top:
-	cam_vfe_top_deinit(vfe_hw_info->top_version,
-		&core_info->vfe_top);
+	cam_vfe_top_deinit(vfe_hw_info->top_version, &core_info->vfe_top);
 
 deinit_controller:
 	cam_irq_controller_deinit(&core_info->vfe_irq_controller);
@@ -901,8 +886,8 @@ deinit_controller:
 	return rc;
 }
 
-int cam_vfe_core_deinit(struct cam_vfe_hw_core_info  *core_info,
-	struct cam_vfe_hw_info                       *vfe_hw_info)
+int cam_vfe_core_deinit(struct cam_vfe_hw_core_info *core_info,
+			struct cam_vfe_hw_info *vfe_hw_info)
 {
 	int                rc = -EINVAL;
 	int                i;
@@ -914,20 +899,17 @@ int cam_vfe_core_deinit(struct cam_vfe_hw_core_info  *core_info,
 	for (i = 0; i < CAM_VFE_EVT_MAX; i++)
 		INIT_LIST_HEAD(&core_info->evt_payload[i].list);
 
-	rc = cam_vfe_bus_deinit(vfe_hw_info->bus_version,
-		&core_info->vfe_bus);
+	rc = cam_vfe_bus_deinit(vfe_hw_info->bus_version, &core_info->vfe_bus);
 	if (rc)
-		CAM_ERR(CAM_ISP, "Error cam_vfe_bus_deinit failed rc=%d", rc);
+		CAM_ERR(CAM_ISP, "VFE bus deinit failed rc=%d", rc);
 
-	rc = cam_vfe_top_deinit(vfe_hw_info->top_version,
-		&core_info->vfe_top);
+	rc = cam_vfe_top_deinit(vfe_hw_info->top_version, &core_info->vfe_top);
 	if (rc)
-		CAM_ERR(CAM_ISP, "Error cam_vfe_top_deinit failed rc=%d", rc);
+		CAM_ERR(CAM_ISP, "VFE top deinit failed rc=%d", rc);
 
 	rc = cam_irq_controller_deinit(&core_info->vfe_irq_controller);
 	if (rc)
-		CAM_ERR(CAM_ISP,
-			"Error cam_irq_controller_deinit failed rc=%d", rc);
+		CAM_ERR(CAM_ISP, "IRQ controller deinit failed rc=%d", rc);
 
 	spin_unlock_irqrestore(&core_info->spin_lock, flags);
 

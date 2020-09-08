@@ -94,11 +94,11 @@ int cam_vfe_process_cmd(void *device_priv, uint32_t cmd_type,
 irqreturn_t cam_vfe_irq(int irq_num, void *data);
 
 int cam_vfe_core_init(struct cam_vfe_hw_core_info *core_info,
-	struct cam_hw_soc_info             *soc_info,
-	struct cam_hw_intf                 *hw_intf,
-	struct cam_vfe_hw_info             *vfe_hw_info);
+		      struct cam_hw_soc_info *soc_info,
+		      struct cam_hw_intf *hw_intf,
+		      struct cam_vfe_hw_info *vfe_hw_info);
 
 int cam_vfe_core_deinit(struct cam_vfe_hw_core_info *core_info,
-	struct cam_vfe_hw_info             *vfe_hw_info);
+			struct cam_vfe_hw_info *vfe_hw_info);
 
 #endif /* _CAM_VFE_CORE_H_ */

@@ -4298,7 +4298,7 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 	bool                                     fill_fence = true;
 	struct cam_isp_prepare_hw_update_data   *prepare_hw_data;
 
-	if (!hw_mgr_priv || !prepare_hw_update_args) {
+	if (!hw_mgr_priv || !prepare || !prepare->packet) {
 		CAM_ERR(CAM_ISP, "Invalid args");
 		return -EINVAL;
 	}
