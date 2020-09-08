@@ -1197,13 +1197,7 @@ void hda_machine_select(struct snd_sof_dev *sdev)
 
 	mach = snd_soc_acpi_find_machine(desc->machines);
 	if (mach) {
-		/*
-		 * If tplg file name is overridden, use it instead of
-		 * the one set in mach table
-		 */
-		if (!sof_pdata->tplg_filename)
-			sof_pdata->tplg_filename = mach->sof_tplg_filename;
-
+		sof_pdata->tplg_filename = mach->sof_tplg_filename;
 		sof_pdata->machine = mach;
 
 		if (mach->link_mask) {
