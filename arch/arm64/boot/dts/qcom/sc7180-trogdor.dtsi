@@ -19,7 +19,6 @@
  *
  * Delete all unused memory nodes and define the peripheral memory regions
  * required by the board dts.
- *
  */
 
 /delete-node/ &hyp_mem;
@@ -34,7 +33,6 @@
 };
 
 / {
-
 	reserved-memory {
 		atf_mem: memory@80b00000 {
 			reg = <0x0 0x80b00000 0x0 0x100000>;
@@ -215,7 +213,7 @@
 		};
 	};
 
-	max98357a: max98357a {
+	max98357a: audio-codec-0 {
 		compatible = "maxim,max98357a";
 		pinctrl-names = "default";
 		pinctrl-0 = <&amp_en>;
@@ -276,7 +274,6 @@
 	vcc-supply = <&pp1800_l11a>;
 };
 
-
 &qspi {
 	status = "okay";
 	pinctrl-names = "default";
@@ -292,7 +289,6 @@
 		spi-rx-bus-width = <2>;
 	};
 };
-
 
 &apps_rsc {
 	pm6150-rpmh-regulators {
@@ -329,14 +325,12 @@
 		};
 
 		pp1000_l2a: ldo2 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <944000>;
 			regulator-max-microvolt = <1056000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
 		};
 
 		pp1000_l3a: ldo3 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <968000>;
 			regulator-max-microvolt = <1064000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -355,7 +349,6 @@
 		vdda_qrefs_0p9:
 		vdda_usb_ss_dp_core:
 		pp900_l4a: ldo4 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <824000>;
 			regulator-max-microvolt = <928000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -374,7 +367,6 @@
 		vddio_ebi0:
 		vddq:
 		pp600_l6a: ldo6 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <568000>;
 			regulator-max-microvolt = <648000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -382,7 +374,6 @@
 
 		vdd_cx_wlan:
 		pp800_l9a: ldo9 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <488000>;
 			regulator-max-microvolt = <800000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -438,7 +429,6 @@
 		};
 
 		pp2700_l16a: ldo16 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <2496000>;
 			regulator-max-microvolt = <3304000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -447,7 +437,6 @@
 		vdda_qusb_hs0_3p1:
 		vdd_pdphy:
 		pp3100_l17a: ldo17 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <2920000>;
 			regulator-max-microvolt = <3232000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -462,7 +451,6 @@
 
 		mcp_vcc:
 		pp2850_l19a: ldo19 {
-			/* TODO: IDP sets this higher so we'll match */
 			regulator-min-microvolt = <2960000>;
 			regulator-max-microvolt = <2960000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -474,7 +462,6 @@
 		qcom,pmic-id = "c";
 
 		pp1300_s8c: smps8 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <1120000>;
 			regulator-max-microvolt = <1408000>;
 		};
@@ -487,7 +474,6 @@
 
 		vdd_wcss_adc_dac:
 		pp1300_l2c: ldo2 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <1168000>;
 			regulator-max-microvolt = <1304000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -512,7 +498,6 @@
 		ld_pp1800_esim_l4c:
 		vddpx_5:
 		pp1800_l4c: ldo4 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <1648000>;
 			regulator-max-microvolt = <3304000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -527,7 +512,6 @@
 
 		vddpx_2:
 		ppvar_l6c: ldo6 {
-			/* TODO: max should probably be 2.95 to match vmmc */
 			regulator-min-microvolt = <1800000>;
 			regulator-max-microvolt = <3304000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -538,7 +522,6 @@
 			regulator-min-microvolt = <3304000>;
 			regulator-max-microvolt = <3304000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
-			/* TODO: Implement hub driver to turn this off */
 			regulator-always-on;
 			regulator-boot-on;
 		};
@@ -558,14 +541,12 @@
 		};
 
 		pp3300_l10c: ldo10 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <3000000>;
 			regulator-max-microvolt = <3400000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
 		};
 
 		pp3300_l11c: ldo11 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <3000000>;
 			regulator-max-microvolt = <3400000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -936,6 +917,12 @@ ap_spi_fp: &spi10 {
 	vdda-pll-supply = <&vdda_usb_ss_dp_core>;
 };
 
+&venus {
+	video-firmware {
+		iommus = <&apps_smmu 0x0c42 0x0>;
+	};
+};
+
 &wifi {
 	status = "okay";
 	vdd-0.8-cx-mx-supply = <&vdd_cx_wlan>;
@@ -952,7 +939,7 @@ ap_spi_fp: &spi10 {
 	};
 };
 
-/* PINCTRL - additions to nodes defined in sdm845.dtsi */
+/* PINCTRL - additions to nodes defined in sc7180.dtsi */
 
 &qspi_cs0 {
 	pinconf {
@@ -1101,7 +1088,7 @@ ap_spi_fp: &spi10 {
 };
 
 &pm6150l_gpio {
-	gpio-line-names = "AP_SUSPEND", /* TODO: Remove if doesn't work */
+	gpio-line-names = "AP_SUSPEND",
 			  "",
 			  "",
 			  "",
@@ -1163,7 +1150,6 @@ ap_spi_fp: &spi10 {
 		};
 	};
 
-	/* We will totally remove this in r2+ */
 	ap_suspend_l_neuter: ap-suspend-l-neuter {
 		pinmux  {
 			pins = "gpio27";
@@ -1442,11 +1428,5 @@ ap_spi_fp: &spi10 {
 			bias-disable;
 			drive-strength = <2>;
 		};
-	};
-};
-
-&venus {
-	video-firmware {
-		iommus = <&apps_smmu 0x0c42 0x0>;
 	};
 };
