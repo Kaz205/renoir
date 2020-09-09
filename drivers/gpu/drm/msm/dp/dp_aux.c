@@ -188,9 +188,9 @@ static void dp_aux_native_handler(struct dp_aux_private *aux)
 		aux->aux_error_num = DP_AUX_ERR_ADDR;
 	else if (isr & DP_INTR_TIMEOUT)
 		aux->aux_error_num = DP_AUX_ERR_TOUT;
-	else if (isr & DP_INTR_NACK_DEFER)
+	if (isr & DP_INTR_NACK_DEFER)
 		aux->aux_error_num = DP_AUX_ERR_NACK;
-	else if (isr & DP_INTR_AUX_ERROR) {
+	if (isr & DP_INTR_AUX_ERROR) {
 		aux->aux_error_num = DP_AUX_ERR_PHY;
 		dp_catalog_aux_clear_hw_interrupts(aux->catalog);
 	}
