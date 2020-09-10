@@ -24,7 +24,6 @@
 #include "dp_ctrl.h"
 #include "dp_display.h"
 #include "dp_drm.h"
-#include "dp_pll.h"
 #include "dp_audio.h"
 
 static struct msm_dp *g_dp_display;
@@ -90,7 +89,6 @@ struct dp_display_private {
 
 	struct dp_usbpd   *usbpd;
 	struct dp_parser  *parser;
-	struct msm_dp_pll *pll;
 	struct dp_power   *power;
 	struct dp_catalog *catalog;
 	struct drm_dp_aux *aux;
@@ -662,7 +660,6 @@ static void dp_display_deinit_sub_modules(struct dp_display_private *dp)
 	dp_ctrl_put(dp->ctrl);
 	dp_panel_put(dp->panel);
 	dp_aux_put(dp->aux);
-	dp_pll_put(dp->pll);
 	dp_audio_put(dp->audio);
 }
 
@@ -673,9 +670,6 @@ static int dp_init_sub_modules(struct dp_display_private *dp)
 	struct dp_usbpd_cb *cb = &dp->usbpd_cb;
 	struct dp_panel_in panel_in = {
 		.dev = dev,
-	};
-	struct dp_pll_in pll_in = {
-		.pdev = dp->pdev,
 	};
 
 	/* Callback APIs used for cable status change event */
@@ -706,17 +700,6 @@ static int dp_init_sub_modules(struct dp_display_private *dp)
 		dp->catalog = NULL;
 		goto error;
 	}
-
-	pll_in.parser = dp->parser;
-	dp->pll = dp_pll_get(&pll_in);
-	if (IS_ERR_OR_NULL(dp->pll)) {
-		rc = -EINVAL;
-		DRM_ERROR("failed to initialize pll, rc = %d\n", rc);
-		dp->pll = NULL;
-		goto error;
-	}
-
-	dp->parser->pll = dp->pll;
 
 	dp->power = dp_power_get(dp->parser);
 	if (IS_ERR(dp->power)) {
