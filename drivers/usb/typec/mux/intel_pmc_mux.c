@@ -108,8 +108,6 @@ struct pmc_usb_port {
 
 	enum typec_orientation sbu_orientation;
 	enum typec_orientation hsl_orientation;
-
-	u8 hpd_lvl;
 };
 
 struct pmc_usb {
@@ -179,14 +177,11 @@ pmc_usb_mux_dp(struct pmc_usb_port *port, struct typec_mux_state *state)
 	int ret;
 
 	if (IOM_PORT_ACTIVITY_IS(port->iom_status, DP) ||
-	    IOM_PORT_ACTIVITY_IS(port->iom_status, DP_MFD)) {
-		if (!(data->status & DP_STATUS_IRQ_HPD) &&
-		    port->hpd_lvl == (data->status & DP_STATUS_HPD_STATE))
-			return 0;
+	    IOM_PORT_ACTIVITY_IS(port->iom_status, DP_MFD))
+		return 0;
 
-		port->hpd_lvl = data->status & DP_STATUS_HPD_STATE;
+	if (data->status & DP_STATUS_IRQ_HPD)
 		return pmc_usb_mux_dp_hpd(port, state->data);
-	}
 
 	req.usage = PMC_USB_ALT_MODE;
 	req.usage |= port->usb3_port << PMC_USB_MSG_USB3_PORT_SHIFT;
@@ -201,8 +196,6 @@ pmc_usb_mux_dp(struct pmc_usb_port *port, struct typec_mux_state *state)
 	req.mode_data |= (state->mode - TYPEC_STATE_MODAL) <<
 			 PMC_USB_ALTMODE_DP_MODE_SHIFT;
 
-	port->hpd_lvl = data->status & DP_STATUS_HPD_STATE;
-
 	if (data->status & DP_STATUS_HPD_STATE)
 		req.mode_data |= PMC_USB_ALTMODE_HPD_HIGH;
 
@@ -210,7 +203,7 @@ pmc_usb_mux_dp(struct pmc_usb_port *port, struct typec_mux_state *state)
 	if (ret)
 		return ret;
 
-	if (data->status & (DP_STATUS_IRQ_HPD | DP_STATUS_HPD_STATE))
+	if (data->status & DP_STATUS_HPD_STATE)
 		return pmc_usb_mux_dp_hpd(port, state->data);
 
 	return 0;
