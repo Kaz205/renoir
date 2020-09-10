@@ -639,22 +639,6 @@ config SENSORS_HDAPS
 	  Say Y here if you have an applicable laptop and want to experience
 	  the awesome power of hdaps.
 
-config INTEL_IOM
-	tristate "Intel Input Output Manager (IOM) driver"
-	depends on ACPI && PCI
-	help
-	  This driver helps read relevant information such as Type-C port
-	  status (whether a device is connected to a Type-C port or not)
-	  and the activity type on the Type-C ports (such as USB, Display
-	  Port, Thunderbolt), for consumption by other drivers.
-
-	  Currently intel_iom_port_status() API is exported by this driver,
-	  that has information about the Type-C port status and port activity
-	  type.
-
-	  To compile this driver as a module, choose M here: the module will
-	  be called intel_iom.
-
 config INTEL_MENLOW
 	tristate "Thermal Management driver for Intel menlow platform"
 	depends on ACPI_THERMAL
