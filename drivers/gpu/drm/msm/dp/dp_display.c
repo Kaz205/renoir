@@ -65,7 +65,9 @@ enum {
 #define DP_EVENT_Q_MAX	8
 
 #define DP_TIMEOUT_5_SECOND	(5000/EVENT_TIMEOUT)
-#define DP_TIMEOUT_1_SECOND	(1000/EVENT_TIMEOUT)
+#define DP_TIMEOUT_NONE		0
+
+#define WAIT_FOR_RESUME_TIMEOUT_JIFFIES (HZ / 2)
 
 struct dp_event {
 	u32 event_id;
@@ -109,6 +111,8 @@ struct dp_display_private {
 	u32 event_gndx;
 	struct dp_event event_list[DP_EVENT_Q_MAX];
 	spinlock_t event_lock;
+
+	struct completion resume_comp;
 };
 
 static const struct of_device_id dp_dt_match[] = {
@@ -476,7 +480,7 @@ static int dp_hpd_plug_handle(struct dp_display_private *dp, u32 data)
 	}
 
 	if (state == ST_SUSPENDED)
-		tout = DP_TIMEOUT_1_SECOND;
+		tout = DP_TIMEOUT_NONE;
 
 	atomic_set(&dp->hpd_state, ST_CONNECT_PENDING);
 
@@ -753,6 +757,8 @@ static int dp_display_enable(struct dp_display_private *dp, u32 data)
 	if (!rc)
 		dp->power_on = true;
 
+	/* complete resume_comp regardless it is armed or not */
+	complete(&dp->resume_comp);
 	return rc;
 }
 
@@ -1067,6 +1073,7 @@ static int dp_display_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, dp);
 
 	mutex_init(&dp->event_mutex);
+	init_completion(&dp->resume_comp);
 	g_dp_display = &dp->dp_display;
 
 	rc = component_add(&pdev->dev, &dp_display_comp_ops);
@@ -1203,6 +1210,19 @@ int msm_dp_modeset_init(struct msm_dp *dp_display, struct drm_device *dev,
 	return 0;
 }
 
+static int dp_display_wait4resume_done(struct dp_display_private *dp)
+{
+	int ret = 0;
+
+	reinit_completion(&dp->resume_comp);
+	if (!wait_for_completion_timeout(&dp->resume_comp,
+				WAIT_FOR_RESUME_TIMEOUT_JIFFIES)) {
+		DRM_ERROR("wait4resume_done timedout\n");
+		ret = -ETIMEDOUT;
+	}
+	return ret;
+}
+
 int msm_dp_display_enable(struct msm_dp *dp, struct drm_encoder *encoder)
 {
 	int rc = 0;
@@ -1217,14 +1237,6 @@ int msm_dp_display_enable(struct msm_dp *dp, struct drm_encoder *encoder)
 
 	mutex_lock(&dp_display->event_mutex);
 
-	state =  atomic_read(&dp_display->hpd_state);
-	if (state == ST_SUSPENDED) {
-		/* start link re training */
-		dp_add_event(dp_display, EV_HPD_PLUG_INT, 0, 0);
-		mutex_unlock(&dp_display->event_mutex);
-		return rc;
-	}
-
 	rc = dp_display_set_mode(dp, &dp_display->dp_mode);
 	if (rc) {
 		DRM_ERROR("Failed to perform a mode set, rc=%d\n", rc);
@@ -1237,6 +1249,16 @@ int msm_dp_display_enable(struct msm_dp *dp, struct drm_encoder *encoder)
 		DRM_ERROR("DP display prepare failed, rc=%d\n", rc);
 		mutex_unlock(&dp_display->event_mutex);
 		return rc;
+	}
+
+	state =  atomic_read(&dp_display->hpd_state);
+	if (state == ST_SUSPENDED) {
+		/* start link training */
+		dp_add_event(dp_display, EV_HPD_PLUG_INT, 0, 0);
+		mutex_unlock(&dp_display->event_mutex);
+
+		/* wait until dp interface is up */
+		goto resume_done;
 	}
 
 	dp_display_enable(dp_display, 0);
@@ -1258,6 +1280,10 @@ int msm_dp_display_enable(struct msm_dp *dp, struct drm_encoder *encoder)
 
 	mutex_unlock(&dp_display->event_mutex);
 
+	return rc;
+
+resume_done:
+	dp_display_wait4resume_done(dp_display);
 	return rc;
 }
 
