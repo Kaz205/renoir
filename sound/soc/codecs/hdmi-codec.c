@@ -554,15 +554,24 @@ static int hdmi_codec_i2s_set_fmt(struct snd_soc_dai *dai,
 	return 0;
 }
 
-static int hdmi_codec_digital_mute(struct snd_soc_dai *dai, int mute)
+static int hdmi_codec_mute(struct snd_soc_dai *dai, int mute, int direction)
 {
 	struct hdmi_codec_priv *hcp = snd_soc_dai_get_drvdata(dai);
 
-	if (hcp->hcd.ops->digital_mute)
-		return hcp->hcd.ops->digital_mute(dai->dev->parent,
-						  hcp->hcd.data, mute);
+	/*
+	 * ignore if direction was CAPTURE
+	 * and it had .no_capture_mute flag
+	 * see
+	 *	snd_soc_dai_digital_mute()
+	 */
+	if (hcp->hcd.ops->mute_stream &&
+	    (direction == SNDRV_PCM_STREAM_PLAYBACK ||
+	     !hcp->hcd.ops->no_capture_mute))
+		return hcp->hcd.ops->mute_stream(dai->dev->parent,
+						 hcp->hcd.data,
+						 mute, direction);
 
-	return 0;
+	return -ENOTSUPP;
 }
 
 static int hdmi_codec_trigger(struct snd_pcm_substream *substream, int cmd,
@@ -599,7 +608,7 @@ static const struct snd_soc_dai_ops hdmi_codec_i2s_dai_ops = {
 	.shutdown	= hdmi_codec_shutdown,
 	.hw_params	= hdmi_codec_hw_params,
 	.set_fmt	= hdmi_codec_i2s_set_fmt,
-	.digital_mute	= hdmi_codec_digital_mute,
+	.mute_stream	= hdmi_codec_mute,
 	.trigger	= hdmi_codec_trigger,
 };
 
@@ -607,7 +616,7 @@ static const struct snd_soc_dai_ops hdmi_codec_spdif_dai_ops = {
 	.startup	= hdmi_codec_startup,
 	.shutdown	= hdmi_codec_shutdown,
 	.hw_params	= hdmi_codec_hw_params,
-	.digital_mute	= hdmi_codec_digital_mute,
+	.mute_stream	= hdmi_codec_mute,
 	.trigger	= hdmi_codec_trigger,
 };
 

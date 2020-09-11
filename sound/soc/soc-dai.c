@@ -14,10 +14,14 @@
 static inline int _soc_dai_ret(struct snd_soc_dai *dai,
 			       const char *func, int ret)
 {
+	/* Positive, Zero values are not errors */
+	if (ret >= 0)
+		return ret;
+
+	/* Negative values might be errors */
 	switch (ret) {
 	case -EPROBE_DEFER:
 	case -ENOTSUPP:
-	case 0:
 		break;
 	default:
 		dev_err(dai->dev,
@@ -294,13 +298,15 @@ int snd_soc_dai_digital_mute(struct snd_soc_dai *dai, int mute,
 {
 	int ret = -ENOTSUPP;
 
+	/*
+	 * ignore if direction was CAPTURE
+	 * and it had .no_capture_mute flag
+	 */
 	if (dai->driver->ops &&
-	    dai->driver->ops->mute_stream)
+	    dai->driver->ops->mute_stream &&
+	    (direction == SNDRV_PCM_STREAM_PLAYBACK ||
+	     !dai->driver->ops->no_capture_mute))
 		ret = dai->driver->ops->mute_stream(dai, mute, direction);
-	else if (direction == SNDRV_PCM_STREAM_PLAYBACK &&
-		 dai->driver->ops &&
-		 dai->driver->ops->digital_mute)
-		ret = dai->driver->ops->digital_mute(dai, mute);
 
 	return soc_dai_ret(dai, ret);
 }
