@@ -291,6 +291,7 @@ static int spi_geni_init(struct spi_geni_master *mas)
 {
 	struct geni_se *se = &mas->se;
 	unsigned int proto, major, minor, ver;
+	u32 spi_tx_cfg;
 
 	pm_runtime_get_sync(mas->dev);
 
@@ -323,6 +324,11 @@ static int spi_geni_init(struct spi_geni_master *mas)
 
 	geni_se_select_mode(se, GENI_SE_FIFO);
 
+	/* We always control CS manually */
+	spi_tx_cfg = readl(se->base + SE_SPI_TRANS_CFG);
+	spi_tx_cfg &= ~CS_TOGGLE;
+	writel(spi_tx_cfg, se->base + SE_SPI_TRANS_CFG);
+
 	pm_runtime_put(mas->dev);
 	return 0;
 }
@@ -332,7 +338,7 @@ static void setup_fifo_xfer(struct spi_transfer *xfer,
 				u16 mode, struct spi_master *spi)
 {
 	u32 m_cmd = 0;
-	u32 spi_tx_cfg, len;
+	u32 len;
 	struct geni_se *se = &mas->se;
 	int ret;
 
@@ -351,7 +357,6 @@ static void setup_fifo_xfer(struct spi_transfer *xfer,
 	spin_lock_irq(&mas->lock);
 	spin_unlock_irq(&mas->lock);
 
-	spi_tx_cfg = readl(se->base + SE_SPI_TRANS_CFG);
 	if (xfer->bits_per_word != mas->cur_bits_per_word) {
 		spi_setup_word_len(mas, mode, xfer->bits_per_word);
 		mas->cur_bits_per_word = xfer->bits_per_word;
@@ -364,8 +369,6 @@ static void setup_fifo_xfer(struct spi_transfer *xfer,
 
 	mas->tx_rem_bytes = 0;
 	mas->rx_rem_bytes = 0;
-
-	spi_tx_cfg &= ~CS_TOGGLE;
 
 	if (!(mas->cur_bits_per_word % MIN_WORD_LEN))
 		len = xfer->len * BITS_PER_BYTE / mas->cur_bits_per_word;
@@ -385,7 +388,6 @@ static void setup_fifo_xfer(struct spi_transfer *xfer,
 		writel(len, se->base + SE_SPI_RX_TRANS_LEN);
 		mas->rx_rem_bytes = xfer->len;
 	}
-	writel(spi_tx_cfg, se->base + SE_SPI_TRANS_CFG);
 
 	/*
 	 * Lock around right before we start the transfer since our
