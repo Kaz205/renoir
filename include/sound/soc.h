@@ -370,24 +370,6 @@
 #define SOC_ENUM_SINGLE_VIRT_DECL(name, xtexts) \
 	const struct soc_enum name = SOC_ENUM_SINGLE_VIRT(ARRAY_SIZE(xtexts), xtexts)
 
-/*
- * Bias levels
- *
- * @ON:      Bias is fully on for audio playback and capture operations.
- * @PREPARE: Prepare for audio operations. Called before DAPM switching for
- *           stream start and stop operations.
- * @STANDBY: Low power standby state when no playback/capture operations are
- *           in progress. NOTE: The transition time between STANDBY and ON
- *           should be as fast as possible and no longer than 10ms.
- * @OFF:     Power Off. No restrictions on transition times.
- */
-enum snd_soc_bias_level {
-	SND_SOC_BIAS_OFF = 0,
-	SND_SOC_BIAS_STANDBY = 1,
-	SND_SOC_BIAS_PREPARE = 2,
-	SND_SOC_BIAS_ON = 3,
-};
-
 struct device_node;
 struct snd_jack;
 struct snd_soc_card;
@@ -446,6 +428,10 @@ int devm_snd_soc_register_component(struct device *dev,
 			 const struct snd_soc_component_driver *component_driver,
 			 struct snd_soc_dai_driver *dai_drv, int num_dai);
 void snd_soc_unregister_component(struct device *dev);
+void snd_soc_unregister_component_by_driver(struct device *dev,
+			 const struct snd_soc_component_driver *component_driver);
+struct snd_soc_component *snd_soc_lookup_component_nolocked(struct device *dev,
+							    const char *driver_name);
 struct snd_soc_component *snd_soc_lookup_component(struct device *dev,
 						   const char *driver_name);
 
@@ -800,6 +786,9 @@ struct snd_soc_dai_link {
 
 	/* codec/machine specific init - e.g. add machine controls */
 	int (*init)(struct snd_soc_pcm_runtime *rtd);
+
+	/* codec/machine specific exit - dual of init() */
+	void (*exit)(struct snd_soc_pcm_runtime *rtd);
 
 	/* optional hw_params re-writing for BE and FE sync */
 	int (*be_hw_params_fixup)(struct snd_soc_pcm_runtime *rtd,
@@ -1370,6 +1359,10 @@ void snd_soc_remove_pcm_runtime(struct snd_soc_card *card,
 struct snd_soc_dai *snd_soc_register_dai(struct snd_soc_component *component,
 					 struct snd_soc_dai_driver *dai_drv,
 					 bool legacy_dai_naming);
+struct snd_soc_dai *devm_snd_soc_register_dai(struct device *dev,
+					      struct snd_soc_component *component,
+					      struct snd_soc_dai_driver *dai_drv,
+					      bool legacy_dai_naming);
 void snd_soc_unregister_dai(struct snd_soc_dai *dai);
 
 struct snd_soc_dai *snd_soc_find_dai(

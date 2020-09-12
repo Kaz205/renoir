@@ -12,10 +12,14 @@
 static inline int _soc_link_ret(struct snd_soc_pcm_runtime *rtd,
 				const char *func, int ret)
 {
+	/* Positive, Zero values are not errors */
+	if (ret >= 0)
+		return ret;
+
+	/* Negative values might be errors */
 	switch (ret) {
 	case -EPROBE_DEFER:
 	case -ENOTSUPP:
-	case 0:
 		break;
 	default:
 		dev_err(rtd->dev,
@@ -34,6 +38,12 @@ int snd_soc_link_init(struct snd_soc_pcm_runtime *rtd)
 		ret = rtd->dai_link->init(rtd);
 
 	return soc_link_ret(rtd, ret);
+}
+
+void snd_soc_link_exit(struct snd_soc_pcm_runtime *rtd)
+{
+	if (rtd->dai_link->exit)
+		rtd->dai_link->exit(rtd);
 }
 
 int snd_soc_link_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
