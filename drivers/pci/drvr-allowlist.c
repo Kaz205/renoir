@@ -6,6 +6,7 @@
 #include <linux/ctype.h>
 #include <linux/module.h>
 #include <linux/pci.h>
+#include "pci.h"
 
 /*
  * Parameter to disable allowlist (thus allow all drivers to connect
