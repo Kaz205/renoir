@@ -2,6 +2,7 @@
 config DRM_VIRTIO_GPU
 	tristate "Virtio GPU driver"
 	depends on DRM && VIRTIO && MMU
+	depends on VIRTIO_MENU
 	depends on PCI
 	select DRM_KMS_HELPER
 	select DRM_TTM
