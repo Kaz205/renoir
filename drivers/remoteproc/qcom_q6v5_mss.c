@@ -131,6 +131,7 @@ struct qcom_mss_reg_res {
 struct rproc_hexagon_res {
 	const char *hexagon_mba_image;
 	struct qcom_mss_reg_res *proxy_supply;
+	struct qcom_mss_reg_res *fallback_proxy_supply;
 	struct qcom_mss_reg_res *active_supply;
 	char **proxy_clk_names;
 	char **reset_clk_names;
@@ -176,9 +177,11 @@ struct q6v5 {
 	int proxy_pd_count;
 
 	struct reg_info active_regs[1];
-	struct reg_info proxy_regs[3];
+	struct reg_info proxy_regs[1];
+	struct reg_info fallback_proxy_regs[2];
 	int active_reg_count;
 	int proxy_reg_count;
+	int fallback_proxy_reg_count;
 
 	bool dump_mba_loaded;
 	size_t current_dump_size;
@@ -889,11 +892,18 @@ static int q6v5_mba_load(struct q6v5 *qproc)
 		goto disable_active_pds;
 	}
 
+	ret = q6v5_regulator_enable(qproc, qproc->fallback_proxy_regs,
+				    qproc->fallback_proxy_reg_count);
+	if (ret) {
+		dev_err(qproc->dev, "failed to enable fallback proxy supplies\n");
+		goto disable_proxy_pds;
+	}
+
 	ret = q6v5_regulator_enable(qproc, qproc->proxy_regs,
 				    qproc->proxy_reg_count);
 	if (ret) {
 		dev_err(qproc->dev, "failed to enable proxy supplies\n");
-		goto disable_proxy_pds;
+		goto disable_fallback_proxy_reg;
 	}
 
 	ret = q6v5_clk_enable(qproc->dev, qproc->proxy_clks,
@@ -1007,6 +1017,9 @@ disable_proxy_clk:
 disable_proxy_reg:
 	q6v5_regulator_disable(qproc, qproc->proxy_regs,
 			       qproc->proxy_reg_count);
+disable_fallback_proxy_reg:
+	q6v5_regulator_disable(qproc, qproc->fallback_proxy_regs,
+			       qproc->fallback_proxy_reg_count);
 disable_proxy_pds:
 	q6v5_pds_disable(qproc, qproc->proxy_pds, qproc->proxy_pd_count);
 disable_active_pds:
@@ -1062,6 +1075,8 @@ static void q6v5_mba_reclaim(struct q6v5 *qproc)
 				 qproc->proxy_pd_count);
 		q6v5_clk_disable(qproc->dev, qproc->proxy_clks,
 				 qproc->proxy_clk_count);
+		q6v5_regulator_disable(qproc, qproc->fallback_proxy_regs,
+				       qproc->fallback_proxy_reg_count);
 		q6v5_regulator_disable(qproc, qproc->proxy_regs,
 				       qproc->proxy_reg_count);
 	}
@@ -1422,6 +1437,8 @@ static void qcom_msa_handover(struct qcom_q6v5 *q6v5)
 			 qproc->proxy_clk_count);
 	q6v5_regulator_disable(qproc, qproc->proxy_regs,
 			       qproc->proxy_reg_count);
+	q6v5_regulator_disable(qproc, qproc->fallback_proxy_regs,
+			       qproc->fallback_proxy_reg_count);
 	q6v5_pds_disable(qproc, qproc->proxy_pds, qproc->proxy_pd_count);
 }
 
@@ -1716,11 +1733,22 @@ static int q6v5_probe(struct platform_device *pdev)
 
 	ret = q6v5_pds_attach(&pdev->dev, qproc->proxy_pds,
 			      desc->proxy_pd_names);
-	if (ret < 0) {
+	/* Fallback to regulators for old device trees */
+	if (ret == -ENODATA && desc->fallback_proxy_supply) {
+		ret = q6v5_regulator_init(&pdev->dev,
+					  qproc->fallback_proxy_regs,
+					  desc->fallback_proxy_supply);
+		if (ret < 0) {
+			dev_err(&pdev->dev, "Failed to get fallback proxy regulators.\n");
+			goto detach_active_pds;
+		}
+		qproc->fallback_proxy_reg_count = ret;
+	} else if (ret < 0) {
 		dev_err(&pdev->dev, "Failed to init power domains\n");
 		goto detach_active_pds;
+	} else {
+		qproc->proxy_pd_count = ret;
 	}
-	qproc->proxy_pd_count = ret;
 
 	qproc->has_alt_reset = desc->has_alt_reset;
 	ret = q6v5_init_reset(qproc);
@@ -1922,15 +1950,18 @@ static const struct rproc_hexagon_res msm8916_mss = {
 	.hexagon_mba_image = "mba.mbn",
 	.proxy_supply = (struct qcom_mss_reg_res[]) {
 		{
+			.supply = "pll",
+			.uA = 100000,
+		},
+		{}
+	},
+	.fallback_proxy_supply = (struct qcom_mss_reg_res[]) {
+		{
 			.supply = "mx",
 			.uV = 1050000,
 		},
 		{
 			.supply = "cx",
-			.uA = 100000,
-		},
-		{
-			.supply = "pll",
 			.uA = 100000,
 		},
 		{}
@@ -1945,6 +1976,11 @@ static const struct rproc_hexagon_res msm8916_mss = {
 		"mem",
 		NULL
 	},
+	.proxy_pd_names = (char*[]){
+		"mx",
+		"cx",
+		NULL
+	},
 	.need_mem_protection = false,
 	.has_alt_reset = false,
 	.has_mba_logs = false,
@@ -1956,15 +1992,18 @@ static const struct rproc_hexagon_res msm8974_mss = {
 	.hexagon_mba_image = "mba.b00",
 	.proxy_supply = (struct qcom_mss_reg_res[]) {
 		{
+			.supply = "pll",
+			.uA = 100000,
+		},
+		{}
+	},
+	.fallback_proxy_supply = (struct qcom_mss_reg_res[]) {
+		{
 			.supply = "mx",
 			.uV = 1050000,
 		},
 		{
 			.supply = "cx",
-			.uA = 100000,
-		},
-		{
-			.supply = "pll",
 			.uA = 100000,
 		},
 		{}
@@ -1985,6 +2024,11 @@ static const struct rproc_hexagon_res msm8974_mss = {
 		"iface",
 		"bus",
 		"mem",
+		NULL
+	},
+	.proxy_pd_names = (char*[]){
+		"mx",
+		"cx",
 		NULL
 	},
 	.need_mem_protection = false,
