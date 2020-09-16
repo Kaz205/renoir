@@ -200,6 +200,7 @@ static const struct of_device_id sc7180_lpass_cpu_device_id[] = {
 	{.compatible = "qcom,lpass-cpu-sc7180", .data = &sc7180_data},
 	{}
 };
+MODULE_DEVICE_TABLE(of, sc7180_lpass_cpu_device_id);
 
 static struct platform_driver sc7180_lpass_cpu_platform_driver = {
 	.driver = {
