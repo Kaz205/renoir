@@ -50,7 +50,7 @@ static const struct dmi_system_id sof_tplg_table[] = {
 		.callback = sof_tplg_cb,
 		.matches = {
 			DMI_MATCH(DMI_PRODUCT_FAMILY, "Google_Volteer"),
-			DMI_MATCH(DMI_PRODUCT_NAME, "Terrador"),
+			DMI_MATCH(DMI_OEM_STRING, "AUDIO-MAX98373_ALC5682I_I2S_UP4"),
 		},
 		.driver_data = "sof-tgl-rt5682-ssp0-max98373-ssp2.tplg",
 	},
@@ -221,7 +221,7 @@ static const struct sof_dev_desc tgl_desc = {
 	.default_tplg_path = "intel/sof-tplg",
 	.default_fw_filename = "sof-tgl.ri",
 	.nocodec_tplg_filename = "sof-tgl-nocodec.tplg",
-	.ops = &sof_cnl_ops,
+	.ops = &sof_tgl_ops,
 };
 #endif
 
@@ -302,10 +302,10 @@ static int sof_pci_probe(struct pci_dev *pci,
 	int ret;
 
 	ret = snd_intel_dsp_driver_probe(pci);
-	if (ret != SND_INTEL_DSP_DRIVER_ANY &&
-	    ret != SND_INTEL_DSP_DRIVER_SOF)
+	if (ret != SND_INTEL_DSP_DRIVER_ANY && ret != SND_INTEL_DSP_DRIVER_SOF) {
+		dev_dbg(&pci->dev, "SOF PCI driver not selected, aborting probe\n");
 		return -ENODEV;
-
+	}
 	dev_dbg(&pci->dev, "PCI DSP detected");
 
 	/* get ops for platform */

@@ -310,7 +310,7 @@ static int hda_tegra_first_init(struct azx *chip, struct platform_device *pdev)
 		return err;
 	}
 	bus->irq = irq_id;
-
+	bus->dma_stop_delay = 100;
 	synchronize_irq(bus->irq);
 
 	/*
@@ -335,6 +335,8 @@ static int hda_tegra_first_init(struct azx *chip, struct platform_device *pdev)
 
 	gcap = azx_readw(chip, GCAP);
 	dev_dbg(card->dev, "chipset global capabilities = 0x%x\n", gcap);
+
+	chip->align_buffer_size = 1;
 
 	/* read number of streams from GCAP register instead of using
 	 * hardcoded value

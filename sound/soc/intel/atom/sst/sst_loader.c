@@ -276,12 +276,10 @@ void sst_memcpy_free_resources(struct intel_sst_drv *sst_drv_ctx)
 	struct sst_memcpy_list *listnode, *tmplistnode;
 
 	/* Free the list */
-	if (!list_empty(&sst_drv_ctx->memcpy_list)) {
-		list_for_each_entry_safe(listnode, tmplistnode,
-				&sst_drv_ctx->memcpy_list, memcpylist) {
-			list_del(&listnode->memcpylist);
-			kfree(listnode);
-		}
+	list_for_each_entry_safe(listnode, tmplistnode,
+				 &sst_drv_ctx->memcpy_list, memcpylist) {
+		list_del(&listnode->memcpylist);
+		kfree(listnode);
 	}
 }
 
@@ -400,8 +398,7 @@ int sst_load_fw(struct intel_sst_drv *sst_drv_ctx)
 
 	dev_dbg(sst_drv_ctx->dev, "sst_load_fw\n");
 
-	if (sst_drv_ctx->sst_state !=  SST_RESET ||
-			sst_drv_ctx->sst_state == SST_SHUTDOWN)
+	if (sst_drv_ctx->sst_state !=  SST_RESET)
 		return -EAGAIN;
 
 	if (!sst_drv_ctx->fw_in_mem) {
