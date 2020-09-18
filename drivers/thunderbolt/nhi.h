@@ -49,6 +49,7 @@ struct tb_nhi_ops {
 };
 
 extern const struct tb_nhi_ops icl_nhi_ops;
+extern const struct tb_nhi_ops tgl_nhi_ops;
 
 /*
  * PCI IDs used in this driver from Win Ridge forward. There is no
