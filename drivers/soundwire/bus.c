@@ -1415,7 +1415,7 @@ static int sdw_handle_slave_alerts(struct sdw_slave *slave)
 	int port_num, stat, ret, count = 0;
 	unsigned long port;
 	bool slave_notify = false;
-	u8 sdca_cascade = 0;
+	bool sdca_cascade = false;
 	u8 buf, buf2[2], _buf, _buf2[2];
 	bool parity_check;
 	bool parity_quirk;
@@ -1453,6 +1453,8 @@ static int sdw_handle_slave_alerts(struct sdw_slave *slave)
 			goto io_err;
 		}
 		sdca_cascade = ret & SDW_DP0_SDCA_CASCADE;
+		if (sdca_cascade)
+			slave_notify = true;
 	}
 
 	do {
@@ -1490,10 +1492,6 @@ static int sdw_handle_slave_alerts(struct sdw_slave *slave)
 			}
 			clear |= SDW_SCP_INT1_IMPL_DEF;
 		}
-
-		/* the SDCA interrupts are cleared in the codec driver .interrupt_callback() */
-		if (sdca_cascade)
-			slave_notify = true;
 
 		/* Check port 0 - 3 interrupts */
 		port = buf & SDW_SCP_INT1_PORT0_3;
@@ -1570,21 +1568,11 @@ static int sdw_handle_slave_alerts(struct sdw_slave *slave)
 			goto io_err;
 		}
 
-		if (slave->prop.is_sdca) {
-			ret = sdw_read(slave, SDW_DP0_INT);
-			if (ret < 0) {
-				dev_err(slave->bus->dev,
-					"SDW_DP0_INT read failed:%d\n", ret);
-				goto io_err;
-			}
-			sdca_cascade = ret & SDW_DP0_SDCA_CASCADE;
-		}
-
 		/* Make sure no interrupts are pending */
 		buf &= _buf;
 		buf2[0] &= _buf2[0];
 		buf2[1] &= _buf2[1];
-		stat = buf || buf2[0] || buf2[1] || sdca_cascade;
+		stat = buf || buf2[0] || buf2[1];
 
 		/*
 		 * Exit loop if Slave is continuously in ALERT state even
