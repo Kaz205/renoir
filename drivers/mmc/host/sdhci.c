@@ -2017,13 +2017,12 @@ void sdhci_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 		host->timing = ios->timing;
 
 		if (!(host->quirks2 & SDHCI_QUIRK2_PRESET_VALUE_BROKEN) &&
-		    !mmc_doing_retune(mmc) &&
-		    ((ios->timing == MMC_TIMING_UHS_SDR12) ||
-		     (ios->timing == MMC_TIMING_UHS_SDR25) ||
-		     (ios->timing == MMC_TIMING_UHS_SDR50) ||
-		     (ios->timing == MMC_TIMING_UHS_SDR104) ||
-		     (ios->timing == MMC_TIMING_UHS_DDR50) ||
-		     (ios->timing == MMC_TIMING_MMC_DDR52))) {
+				((ios->timing == MMC_TIMING_UHS_SDR12) ||
+				 (ios->timing == MMC_TIMING_UHS_SDR25) ||
+				 (ios->timing == MMC_TIMING_UHS_SDR50) ||
+				 (ios->timing == MMC_TIMING_UHS_SDR104) ||
+				 (ios->timing == MMC_TIMING_UHS_DDR50) ||
+				 (ios->timing == MMC_TIMING_MMC_DDR52))) {
 			u16 preset;
 
 			sdhci_enable_preset_value(host, true);
