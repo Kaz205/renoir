@@ -1419,14 +1419,12 @@ static int sdw_handle_slave_alerts(struct sdw_slave *slave)
 		 * interrupt
 		 */
 		if (buf & SDW_SCP_INT1_PARITY) {
-			if (slave->prop.scp_int1_mask & SDW_SCP_INT1_PARITY)
-				dev_err(&slave->dev, "Parity error detected\n");
+			dev_err(&slave->dev, "Parity error detected\n");
 			clear |= SDW_SCP_INT1_PARITY;
 		}
 
 		if (buf & SDW_SCP_INT1_BUS_CLASH) {
-			if (slave->prop.scp_int1_mask & SDW_SCP_INT1_BUS_CLASH)
-				dev_err(&slave->dev, "Bus clash detected\n");
+			dev_err(&slave->dev, "Bus clash error detected\n");
 			clear |= SDW_SCP_INT1_BUS_CLASH;
 		}
 
@@ -1438,11 +1436,9 @@ static int sdw_handle_slave_alerts(struct sdw_slave *slave)
 		 */
 
 		if (buf & SDW_SCP_INT1_IMPL_DEF) {
-			if (slave->prop.scp_int1_mask & SDW_SCP_INT1_IMPL_DEF) {
-				dev_dbg(&slave->dev, "Slave impl defined interrupt\n");
-				slave_notify = true;
-			}
+			dev_dbg(&slave->dev, "Slave impl defined interrupt\n");
 			clear |= SDW_SCP_INT1_IMPL_DEF;
+			slave_notify = true;
 		}
 
 		/* Check port 0 - 3 interrupts */
