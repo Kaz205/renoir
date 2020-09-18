@@ -97,7 +97,7 @@ static int icl_nhi_lc_mailbox_cmd_complete(struct tb_nhi *nhi, int timeout)
 		pci_read_config_dword(nhi->pdev, VS_CAP_18, &data);
 		if (data & VS_CAP_18_DONE)
 			goto clear;
-		usleep_range(1000, 1100);
+		msleep(100);
 	} while (time_before(jiffies, end));
 
 	return -ETIMEDOUT;
