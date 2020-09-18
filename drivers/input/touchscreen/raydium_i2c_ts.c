@@ -51,7 +51,6 @@
 
 /* Touch relative info */
 #define RM_MAX_RETRIES		3
-#define RM_RETRY_DELAY_MS	20
 #define RM_MAX_TOUCH_NUM	10
 #define RM_BOOT_DELAY_MS	100
 
@@ -137,89 +136,105 @@ struct raydium_data {
 	bool wake_irq_enabled;
 };
 
-static int raydium_i2c_xfer(struct i2c_client *client, u32 addr, void *data,
-				size_t len, bool is_read)
+static int raydium_i2c_send(struct i2c_client *client,
+			    u8 addr, const void *data, size_t len)
 {
-	struct raydium_bank_switch_header {
-		u8 cmd;
-		__be32 be_addr;
-	} __packed header = {
-		.cmd = RM_CMD_BANK_SWITCH,
-		.be_addr = cpu_to_be32(addr),
-	};
-
-	u8 reg_addr = addr & 0xff;
-
-	struct i2c_msg xfer[] = {
-		{
-			.addr = client->addr,
-			.len = sizeof(header),
-			.buf = (u8 *)&header,
-		},
-		{
-			.addr = client->addr,
-			.len = 1,
-			.buf = &reg_addr,
-		},
-		{
-			.addr = client->addr,
-			.len = len,
-			.buf = data,
-			.flags = is_read ? I2C_M_RD : 0,
-		}
-	};
-
-	/*
-	 * If address is greater than 255, then RM_CMD_BANK_SWITCH needs to be
-	 * sent first. Else, skip the header i.e. xfer[0].
-	 */
-	int xfer_start_idx = (addr > 0xff) ? 0 : 1;
-	size_t xfer_count = ARRAY_SIZE(xfer) - xfer_start_idx;
-	int ret;
-
-	ret = i2c_transfer(client->adapter, &xfer[xfer_start_idx], xfer_count);
-	if (likely(ret == xfer_count))
-		return 0;
-
-	return -EIO;
-}
-
-static int raydium_i2c_send(struct i2c_client *client, u32 addr,
-				const void *data, size_t len)
-{
+	u8 *buf;
 	int tries = 0;
 	int ret;
 
-	do {
-		ret = raydium_i2c_xfer(client, addr, (void *)data, len, false);
-		if (likely(ret == 0))
-			return 0;
+	buf = kmalloc(len + 1, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
 
-		msleep(RM_RETRY_DELAY_MS);
+	buf[0] = addr;
+	memcpy(buf + 1, data, len);
+
+	do {
+		ret = i2c_master_send(client, buf, len + 1);
+		if (likely(ret == len + 1))
+			break;
+
+		msleep(20);
 	} while (++tries < RM_MAX_RETRIES);
 
-	dev_err(&client->dev, "%s failed\n", __func__);
-	return -EIO;
+	kfree(buf);
+
+	if (unlikely(ret != len + 1)) {
+		if (ret >= 0)
+			ret = -EIO;
+		dev_err(&client->dev, "%s failed: %d\n", __func__, ret);
+		return ret;
+	}
+
+	return 0;
 }
 
-static int raydium_i2c_read(struct i2c_client *client, u32 addr, void *data,
-				size_t len)
+static int raydium_i2c_read(struct i2c_client *client,
+			    u8 addr, void *data, size_t len)
 {
+	struct i2c_msg xfer[] = {
+		{
+			.addr = client->addr,
+			.len = 1,
+			.buf = &addr,
+		},
+		{
+			.addr = client->addr,
+			.flags = I2C_M_RD,
+			.len = len,
+			.buf = data,
+		}
+	};
 	int ret;
+
+	ret = i2c_transfer(client->adapter, xfer, ARRAY_SIZE(xfer));
+	if (unlikely(ret != ARRAY_SIZE(xfer)))
+		return ret < 0 ? ret : -EIO;
+
+	return 0;
+}
+
+static int raydium_i2c_read_message(struct i2c_client *client,
+				    u32 addr, void *data, size_t len)
+{
+	__be32 be_addr;
 	size_t xfer_len;
+	int error;
 
 	while (len) {
 		xfer_len = min_t(size_t, len, RM_MAX_READ_SIZE);
-		ret = raydium_i2c_xfer(client, addr, data, len, true);
 
-		if (unlikely(ret != 0))
-			return ret;
+		be_addr = cpu_to_be32(addr);
+
+		error = raydium_i2c_send(client, RM_CMD_BANK_SWITCH,
+					 &be_addr, sizeof(be_addr));
+		if (!error)
+			error = raydium_i2c_read(client, addr & 0xff,
+						 data, xfer_len);
+		if (error)
+			return error;
 
 		len -= xfer_len;
 		data += xfer_len;
 		addr += xfer_len;
 	}
+
 	return 0;
+}
+
+static int raydium_i2c_send_message(struct i2c_client *client,
+				    u32 addr, const void *data, size_t len)
+{
+	__be32 be_addr = cpu_to_be32(addr);
+	int error;
+
+	error = raydium_i2c_send(client, RM_CMD_BANK_SWITCH,
+				 &be_addr, sizeof(be_addr));
+	if (!error)
+		error = raydium_i2c_send(client, addr & 0xff, data, len);
+
+	return error;
 }
 
 static int raydium_i2c_sw_reset(struct i2c_client *client)
@@ -227,8 +242,8 @@ static int raydium_i2c_sw_reset(struct i2c_client *client)
 	const u8 soft_rst_cmd = 0x01;
 	int error;
 
-	error = raydium_i2c_send(client, RM_RESET_MSG_ADDR, &soft_rst_cmd,
-					sizeof(soft_rst_cmd));
+	error = raydium_i2c_send_message(client, RM_RESET_MSG_ADDR,
+					 &soft_rst_cmd, sizeof(soft_rst_cmd));
 	if (error) {
 		dev_err(&client->dev, "software reset failed: %d\n", error);
 		return error;
@@ -280,8 +295,9 @@ static int raydium_i2c_query_ts_info(struct raydium_data *ts)
 		if (error)
 			continue;
 
-		error = raydium_i2c_read(client, le32_to_cpu(query_bank_addr),
-						&ts->info, sizeof(ts->info));
+		error = raydium_i2c_read_message(client,
+						 le32_to_cpu(query_bank_addr),
+						 &ts->info, sizeof(ts->info));
 		if (error)
 			continue;
 
@@ -818,7 +834,7 @@ static irqreturn_t raydium_i2c_irq(int irq, void *_dev)
 	if (ts->boot_mode != RAYDIUM_TS_MAIN)
 		goto out;
 
-	error = raydium_i2c_read(ts->client, ts->data_bank_addr,
+	error = raydium_i2c_read_message(ts->client, ts->data_bank_addr,
 					 ts->report_data, ts->pkg_size);
 	if (error)
 		goto out;
