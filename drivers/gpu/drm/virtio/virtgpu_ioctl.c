@@ -674,6 +674,7 @@ static int virtio_gpu_resource_create_blob_ioctl(struct drm_device *dev,
 
 	if (!has_guest && mappable) {
 		virtio_gpu_cmd_map(vgdev, obj, obj->tbo.offset, fence);
+		obj->mapped = 1;
 	}
 
 
