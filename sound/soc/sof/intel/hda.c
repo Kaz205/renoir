@@ -562,7 +562,7 @@ static int check_nhlt_dmic(struct snd_sof_dev *sdev)
 	if (nhlt) {
 		dmic_num = intel_nhlt_get_dmic_geo(sdev->dev, nhlt);
 		intel_nhlt_free(nhlt);
-		if (dmic_num == 2 || dmic_num == 4)
+		if (dmic_num >= 1 && dmic_num <= 4)
 			return dmic_num;
 	}
 
@@ -928,7 +928,7 @@ int hda_dsp_remove(struct snd_sof_dev *sdev)
 
 	/* disable cores */
 	if (chip)
-		hda_dsp_core_reset_power_down(sdev, chip->cores_mask);
+		hda_dsp_core_reset_power_down(sdev, chip->host_managed_cores_mask);
 
 	/* disable DSP */
 	snd_sof_dsp_update_bits(sdev, HDA_DSP_PP_BAR, SOF_HDA_REG_PP_PPCTL,
@@ -1010,8 +1010,14 @@ static int hda_generic_machine_select(struct snd_sof_dev *sdev)
 				dmic_num = hda_dmic_num;
 
 			switch (dmic_num) {
+			case 1:
+				dmic_str = "-1ch";
+				break;
 			case 2:
 				dmic_str = "-2ch";
+				break;
+			case 3:
+				dmic_str = "-3ch";
 				break;
 			case 4:
 				dmic_str = "-4ch";

@@ -1,32 +1,27 @@
 // SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
 //
-// This file is provided under a dual BSD/GPLv2 license.  When using or
-// redistributing this file, you may do so under either license.
+// Copyright(c) 2020 Intel Corporation. All rights reserved.
 //
-// Copyright(c) 2018 Intel Corporation. All rights reserved.
-//
-// Authors: Liam Girdwood <liam.r.girdwood@linux.intel.com>
-//	    Ranjani Sridharan <ranjani.sridharan@linux.intel.com>
-//	    Rander Wang <rander.wang@intel.com>
-//          Keyon Jie <yang.jie@linux.intel.com>
+// Authors: Ranjani Sridharan <ranjani.sridharan@linux.intel.com>
 //
 
 /*
- * Hardware interface for audio DSP on Apollolake and GeminiLake
+ * Hardware interface for audio DSP on Tigerlake.
  */
 
-#include "../sof-priv.h"
+#include "../ops.h"
 #include "hda.h"
+#include "hda-ipc.h"
 #include "../sof-audio.h"
 
-static const struct snd_sof_debugfs_map apl_dsp_debugfs[] = {
+static const struct snd_sof_debugfs_map tgl_dsp_debugfs[] = {
 	{"hda", HDA_DSP_HDA_BAR, 0, 0x4000, SOF_DEBUGFS_ACCESS_ALWAYS},
 	{"pp", HDA_DSP_PP_BAR,  0, 0x1000, SOF_DEBUGFS_ACCESS_ALWAYS},
 	{"dsp", HDA_DSP_BAR,  0, 0x10000, SOF_DEBUGFS_ACCESS_ALWAYS},
 };
 
-/* apollolake ops */
-const struct snd_sof_dsp_ops sof_apl_ops = {
+/* Tigerlake ops */
+const struct snd_sof_dsp_ops sof_tgl_ops = {
 	/* probe and remove */
 	.probe		= hda_dsp_probe,
 	.remove		= hda_dsp_remove,
@@ -42,10 +37,10 @@ const struct snd_sof_dsp_ops sof_apl_ops = {
 	.block_write	= sof_block_write,
 
 	/* doorbell */
-	.irq_thread	= hda_dsp_ipc_irq_thread,
+	.irq_thread	= cnl_ipc_irq_thread,
 
 	/* ipc */
-	.send_msg	= hda_dsp_ipc_send_msg,
+	.send_msg	= cnl_ipc_send_msg,
 	.fw_ready	= sof_fw_ready,
 	.get_mailbox_offset = hda_dsp_ipc_get_mailbox_offset,
 	.get_window_offset = hda_dsp_ipc_get_window_offset,
@@ -60,10 +55,10 @@ const struct snd_sof_dsp_ops sof_apl_ops = {
 	.set_mach_params = hda_set_mach_params,
 
 	/* debug */
-	.debug_map	= apl_dsp_debugfs,
-	.debug_map_count	= ARRAY_SIZE(apl_dsp_debugfs),
+	.debug_map	= tgl_dsp_debugfs,
+	.debug_map_count	= ARRAY_SIZE(tgl_dsp_debugfs),
 	.dbg_dump	= hda_dsp_dump,
-	.ipc_dump	= hda_ipc_dump,
+	.ipc_dump	= cnl_ipc_dump,
 
 	/* stream callbacks */
 	.pcm_open	= hda_dsp_pcm_open,
@@ -85,9 +80,6 @@ const struct snd_sof_dsp_ops sof_apl_ops = {
 	/* firmware loading */
 	.load_firmware = snd_sof_load_firmware_raw,
 
-	/* firmware run */
-	.run = hda_dsp_cl_boot_firmware,
-
 	/* pre/post fw run */
 	.pre_fw_run = hda_dsp_pre_fw_run,
 	.post_fw_run = hda_dsp_post_fw_run,
@@ -95,6 +87,9 @@ const struct snd_sof_dsp_ops sof_apl_ops = {
 	/* dsp core power up/down */
 	.core_power_up = hda_dsp_enable_core,
 	.core_power_down = hda_dsp_core_reset_power_down,
+
+	/* firmware run */
+	.run = hda_dsp_cl_boot_firmware_iccmax,
 
 	/* trace callback */
 	.trace_init = hda_dsp_trace_init,
@@ -112,6 +107,7 @@ const struct snd_sof_dsp_ops sof_apl_ops = {
 	.runtime_resume		= hda_dsp_runtime_resume,
 	.runtime_idle		= hda_dsp_runtime_idle,
 	.set_hw_params_upon_resume = hda_dsp_set_hw_params_upon_resume,
+	.set_power_state	= hda_dsp_set_power_state,
 
 	/* ALSA HW info flags */
 	.hw_info =	SNDRV_PCM_INFO_MMAP |
@@ -122,20 +118,20 @@ const struct snd_sof_dsp_ops sof_apl_ops = {
 
 	.arch_ops = &sof_xtensa_arch_ops,
 };
-EXPORT_SYMBOL_NS(sof_apl_ops, SND_SOC_SOF_INTEL_HDA_COMMON);
+EXPORT_SYMBOL_NS(sof_tgl_ops, SND_SOC_SOF_INTEL_HDA_COMMON);
 
-const struct sof_intel_dsp_desc apl_chip_info = {
-	/* Apollolake */
-	.cores_num = 2,
+const struct sof_intel_dsp_desc tgl_chip_info = {
+	/* Tigerlake */
+	.cores_num = 4,
 	.init_core_mask = 1,
-	.host_managed_cores_mask = GENMASK(1, 0),
-	.ipc_req = HDA_DSP_REG_HIPCI,
-	.ipc_req_mask = HDA_DSP_REG_HIPCI_BUSY,
-	.ipc_ack = HDA_DSP_REG_HIPCIE,
-	.ipc_ack_mask = HDA_DSP_REG_HIPCIE_DONE,
-	.ipc_ctl = HDA_DSP_REG_HIPCCTL,
-	.rom_init_timeout	= 150,
-	.ssp_count = APL_SSP_COUNT,
-	.ssp_base_offset = APL_SSP_BASE_OFFSET,
+	.host_managed_cores_mask = BIT(0),
+	.ipc_req = CNL_DSP_REG_HIPCIDR,
+	.ipc_req_mask = CNL_DSP_REG_HIPCIDR_BUSY,
+	.ipc_ack = CNL_DSP_REG_HIPCIDA,
+	.ipc_ack_mask = CNL_DSP_REG_HIPCIDA_DONE,
+	.ipc_ctl = CNL_DSP_REG_HIPCCTL,
+	.rom_init_timeout	= 300,
+	.ssp_count = ICL_SSP_COUNT,
+	.ssp_base_offset = CNL_SSP_BASE_OFFSET,
 };
-EXPORT_SYMBOL_NS(apl_chip_info, SND_SOC_SOF_INTEL_HDA_COMMON);
+EXPORT_SYMBOL_NS(tgl_chip_info, SND_SOC_SOF_INTEL_HDA_COMMON);
