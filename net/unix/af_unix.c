@@ -866,7 +866,6 @@ static int unix_autobind(struct socket *sock)
 	if (err)
 		return err;
 
-	err = 0;
 	if (u->addr)
 		goto out;
 
