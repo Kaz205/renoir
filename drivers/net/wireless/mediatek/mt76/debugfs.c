@@ -25,8 +25,7 @@ mt76_reg_get(void *data, u64 *val)
 DEFINE_DEBUGFS_ATTRIBUTE(fops_regval, mt76_reg_get, mt76_reg_set,
 			 "0x%08llx\n");
 
-static int
-mt76_queues_read(struct seq_file *s, void *data)
+int mt76_queues_read(struct seq_file *s, void *data)
 {
 	struct mt76_dev *dev = dev_get_drvdata(s->private);
 	int i;
@@ -41,6 +40,23 @@ mt76_queues_read(struct seq_file *s, void *data)
 			   "%d:	queued=%d head=%d tail=%d swq_queued=%d\n",
 			   i, q->q->queued, q->q->head, q->q->tail,
 			   q->swq_queued);
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(mt76_queues_read);
+
+static int mt76_rx_queues_read(struct seq_file *s, void *data)
+{
+	struct mt76_dev *dev = dev_get_drvdata(s->private);
+	int i, queued;
+
+	mt76_for_each_q_rx(dev, i) {
+		struct mt76_queue *q = &dev->q_rx[i];
+
+		queued = mt76_is_usb(dev) ? q->ndesc - q->queued : q->queued;
+		seq_printf(s, "%d:	queued=%d head=%d tail=%d\n",
+			   i, queued, q->head, q->tail);
 	}
 
 	return 0;
@@ -90,9 +106,10 @@ struct dentry *mt76_register_debugfs(struct mt76_dev *dev)
 	debugfs_create_blob("eeprom", 0400, dir, &dev->eeprom);
 	if (dev->otp.data)
 		debugfs_create_blob("otp", 0400, dir, &dev->otp);
-	debugfs_create_devm_seqfile(dev->dev, "queues", dir, mt76_queues_read);
 	debugfs_create_devm_seqfile(dev->dev, "rate_txpower", dir,
 				    mt76_read_rate_txpower);
+	debugfs_create_devm_seqfile(dev->dev, "rx-queues", dir,
+				    mt76_rx_queues_read);
 
 	return dir;
 }
