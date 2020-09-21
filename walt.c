@@ -1439,7 +1439,7 @@ static void rollover_task_window(struct task_struct *p, bool full_window)
 	}
 
 	if (is_new_task(p))
-		p->wts.active_time += p->wts.last_win_size;
+		p->wts.active_time += task_rq(p)->wrq.prev_window_size;
 }
 
 void sched_set_io_is_busy(int val)
@@ -1926,7 +1926,7 @@ static void update_history(struct rq *rq, struct task_struct *p,
 	else
 		if (p->wts.unfilter)
 			p->wts.unfilter = max_t(int, 0,
-				p->wts.unfilter - p->wts.last_win_size);
+				p->wts.unfilter - rq->wrq.prev_window_size);
 
 done:
 	trace_sched_update_history(rq, p, runtime, samples, event);
@@ -2167,7 +2167,6 @@ void walt_update_task_ravg(struct task_struct *p, struct rq *rq, int event,
 
 done:
 	p->wts.mark_start = wallclock;
-	p->wts.last_win_size = sched_ravg_window;
 
 	run_walt_irq_work(old_window_start, rq);
 }
@@ -2203,7 +2202,6 @@ void init_new_task_load(struct task_struct *p)
 	p->wts.curr_window = 0;
 	p->wts.prev_window = 0;
 	p->wts.active_time = 0;
-	p->wts.last_win_size = 0;
 	for (i = 0; i < NUM_BUSY_BUCKETS; ++i)
 		p->wts.busy_buckets[i] = 0;
 
@@ -2281,7 +2279,6 @@ void reset_task_stats(struct task_struct *p)
 	p->wts.demand_scaled = 0;
 	p->wts.pred_demand_scaled = 0;
 	p->wts.active_time = 0;
-	p->wts.last_win_size = 0;
 
 	p->wts.curr_window_cpu = curr_window_ptr;
 	p->wts.prev_window_cpu = prev_window_ptr;
