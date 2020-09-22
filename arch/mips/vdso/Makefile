@@ -70,7 +70,7 @@ endif
 VDSO_LDFLAGS := \
 	-Wl,-Bsymbolic -Wl,--no-undefined -Wl,-soname=linux-vdso.so.1 \
 	$(addprefix -Wl$(comma),$(filter -E%,$(KBUILD_CFLAGS))) \
-	-nostdlib -shared -Wl,--hash-style=sysv -Wl,--build-id
+	-nostdlib -shared -Wl,--hash-style=sysv -Wl,--build-id=sha1
 
 CFLAGS_REMOVE_vdso.o = -pg
 
