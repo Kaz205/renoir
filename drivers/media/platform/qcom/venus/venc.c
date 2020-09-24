@@ -256,31 +256,33 @@ static int venc_s_fmt(struct file *file, void *fh, struct v4l2_format *f)
 
 	memset(&format, 0, sizeof(format));
 
-	format.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-	format.fmt.pix_mp.pixelformat = pixfmt_out;
-	format.fmt.pix_mp.width = orig_pixmp.width;
-	format.fmt.pix_mp.height = orig_pixmp.height;
-	venc_try_fmt_common(inst, &format);
-
-	if (f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
-		inst->out_width = format.fmt.pix_mp.width;
-		inst->out_height = format.fmt.pix_mp.height;
-		inst->colorspace = pixmp->colorspace;
-		inst->ycbcr_enc = pixmp->ycbcr_enc;
-		inst->quantization = pixmp->quantization;
-		inst->xfer_func = pixmp->xfer_func;
-	}
-
-	memset(&format, 0, sizeof(format));
-
 	format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
 	format.fmt.pix_mp.pixelformat = pixfmt_cap;
 	format.fmt.pix_mp.width = orig_pixmp.width;
 	format.fmt.pix_mp.height = orig_pixmp.height;
 	venc_try_fmt_common(inst, &format);
 
-	inst->width = format.fmt.pix_mp.width;
-	inst->height = format.fmt.pix_mp.height;
+	if (f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
+		inst->width = format.fmt.pix_mp.width;
+		inst->height = format.fmt.pix_mp.height;
+	}
+
+	memset(&format, 0, sizeof(format));
+
+	format.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+	format.fmt.pix_mp.pixelformat = pixfmt_out;
+	format.fmt.pix_mp.width = orig_pixmp.width;
+	format.fmt.pix_mp.height = orig_pixmp.height;
+	venc_try_fmt_common(inst, &format);
+
+	inst->out_width = format.fmt.pix_mp.width;
+	inst->out_height = format.fmt.pix_mp.height;
+	if (f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
+		inst->colorspace = pixmp->colorspace;
+		inst->ycbcr_enc = pixmp->ycbcr_enc;
+		inst->quantization = pixmp->quantization;
+		inst->xfer_func = pixmp->xfer_func;
+	}
 
 	if (f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE)
 		inst->fmt_out = fmt;
