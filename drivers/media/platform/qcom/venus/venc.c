@@ -337,12 +337,12 @@ venc_g_selection(struct file *file, void *fh, struct v4l2_selection *s)
 	switch (s->target) {
 	case V4L2_SEL_TGT_CROP_DEFAULT:
 	case V4L2_SEL_TGT_CROP_BOUNDS:
-		s->r.width = inst->width;
-		s->r.height = inst->height;
-		break;
-	case V4L2_SEL_TGT_CROP:
 		s->r.width = inst->out_width;
 		s->r.height = inst->out_height;
+		break;
+	case V4L2_SEL_TGT_CROP:
+		s->r.width = inst->width;
+		s->r.height = inst->height;
 		break;
 	default:
 		return -EINVAL;
@@ -364,10 +364,14 @@ venc_s_selection(struct file *file, void *fh, struct v4l2_selection *s)
 
 	switch (s->target) {
 	case V4L2_SEL_TGT_CROP:
-		if (s->r.width != inst->out_width ||
-		    s->r.height != inst->out_height ||
-		    s->r.top != 0 || s->r.left != 0)
-			return -EINVAL;
+		if (s->r.width != inst->width ||
+		    s->r.height != inst->height ||
+		    s->r.top != 0 || s->r.left != 0) {
+			s->r.top = 0;
+			s->r.left = 0;
+			s->r.width = inst->width;
+			s->r.height = inst->height;
+		}
 		break;
 	default:
 		return -EINVAL;
