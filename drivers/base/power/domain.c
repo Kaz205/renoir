@@ -123,7 +123,7 @@ static const struct genpd_lock_ops genpd_spin_ops = {
 #define genpd_lock_interruptible(p)	p->lock_ops->lock_interruptible(p)
 #define genpd_unlock(p)			p->lock_ops->unlock(p)
 
-#define genpd_status_on(genpd)		(genpd->status == GPD_STATE_ACTIVE)
+#define genpd_status_on(genpd)		(genpd->status == GENPD_STATE_ON)
 #define genpd_is_irq_safe(genpd)	(genpd->flags & GENPD_FLAG_IRQ_SAFE)
 #define genpd_is_always_on(genpd)	(genpd->flags & GENPD_FLAG_ALWAYS_ON)
 #define genpd_is_active_wakeup(genpd)	(genpd->flags & GENPD_FLAG_ACTIVE_WAKEUP)
@@ -223,7 +223,7 @@ static void genpd_update_accounting(struct generic_pm_domain *genpd)
 	 * out of off and so update the idle time and vice
 	 * versa.
 	 */
-	if (genpd->status == GPD_STATE_ACTIVE) {
+	if (genpd->status == GENPD_STATE_ON) {
 		int state_idx = genpd->state_idx;
 
 		genpd->states[state_idx].idle_time =
@@ -564,7 +564,7 @@ static int genpd_power_off(struct generic_pm_domain *genpd, bool one_dev_on,
 			return ret;
 	}
 
-	genpd->status = GPD_STATE_POWER_OFF;
+	genpd->status = GENPD_STATE_OFF;
 	genpd_update_accounting(genpd);
 
 	list_for_each_entry(link, &genpd->slave_links, slave_node) {
@@ -617,7 +617,7 @@ static int genpd_power_on(struct generic_pm_domain *genpd, unsigned int depth)
 	if (ret)
 		goto err;
 
-	genpd->status = GPD_STATE_ACTIVE;
+	genpd->status = GENPD_STATE_ON;
 	genpd_update_accounting(genpd);
 
 	return 0;
@@ -973,7 +973,7 @@ static void genpd_sync_power_off(struct generic_pm_domain *genpd, bool use_lock,
 	if (_genpd_power_off(genpd, false))
 		return;
 
-	genpd->status = GPD_STATE_POWER_OFF;
+	genpd->status = GENPD_STATE_OFF;
 
 	list_for_each_entry(link, &genpd->slave_links, slave_node) {
 		genpd_sd_counter_dec(link->master);
@@ -1019,8 +1019,7 @@ static void genpd_sync_power_on(struct generic_pm_domain *genpd, bool use_lock,
 	}
 
 	_genpd_power_on(genpd, false);
-
-	genpd->status = GPD_STATE_ACTIVE;
+	genpd->status = GENPD_STATE_ON;
 }
 
 /**
@@ -1299,7 +1298,7 @@ static int genpd_restore_noirq(struct device *dev)
 		 * so make it appear as powered off to genpd_sync_power_on(),
 		 * so that it tries to power it on in case it was really off.
 		 */
-		genpd->status = GPD_STATE_POWER_OFF;
+		genpd->status = GENPD_STATE_OFF;
 
 	genpd_sync_power_on(genpd, true, 0);
 	genpd_unlock(genpd);
@@ -1789,7 +1788,7 @@ int pm_genpd_init(struct generic_pm_domain *genpd,
 	genpd->gov = gov;
 	INIT_WORK(&genpd->power_off_work, genpd_power_off_work_fn);
 	atomic_set(&genpd->sd_count, 0);
-	genpd->status = is_off ? GPD_STATE_POWER_OFF : GPD_STATE_ACTIVE;
+	genpd->status = is_off ? GENPD_STATE_OFF : GENPD_STATE_ON;
 	genpd->device_count = 0;
 	genpd->max_off_time_ns = -1;
 	genpd->max_off_time_changed = true;
@@ -2803,8 +2802,8 @@ static int genpd_summary_one(struct seq_file *s,
 			struct generic_pm_domain *genpd)
 {
 	static const char * const status_lookup[] = {
-		[GPD_STATE_ACTIVE] = "on",
-		[GPD_STATE_POWER_OFF] = "off"
+		[GENPD_STATE_ON] = "on",
+		[GENPD_STATE_OFF] = "off"
 	};
 	struct pm_domain_data *pm_data;
 	const char *kobj_path;
@@ -2882,8 +2881,8 @@ static int summary_show(struct seq_file *s, void *data)
 static int status_show(struct seq_file *s, void *data)
 {
 	static const char * const status_lookup[] = {
-		[GPD_STATE_ACTIVE] = "on",
-		[GPD_STATE_POWER_OFF] = "off"
+		[GENPD_STATE_ON] = "on",
+		[GENPD_STATE_OFF] = "off"
 	};
 
 	struct generic_pm_domain *genpd = s->private;
@@ -2896,7 +2895,7 @@ static int status_show(struct seq_file *s, void *data)
 	if (WARN_ON_ONCE(genpd->status >= ARRAY_SIZE(status_lookup)))
 		goto exit;
 
-	if (genpd->status == GPD_STATE_POWER_OFF)
+	if (genpd->status == GENPD_STATE_OFF)
 		seq_printf(s, "%s-%u\n", status_lookup[genpd->status],
 			genpd->state_idx);
 	else
@@ -2939,7 +2938,7 @@ static int idle_states_show(struct seq_file *s, void *data)
 		ktime_t delta = 0;
 		s64 msecs;
 
-		if ((genpd->status == GPD_STATE_POWER_OFF) &&
+		if ((genpd->status == GENPD_STATE_OFF) &&
 				(genpd->state_idx == i))
 			delta = ktime_sub(ktime_get(), genpd->accounting_time);
 
@@ -2962,7 +2961,7 @@ static int active_time_show(struct seq_file *s, void *data)
 	if (ret)
 		return -ERESTARTSYS;
 
-	if (genpd->status == GPD_STATE_ACTIVE)
+	if (genpd->status == GENPD_STATE_ON)
 		delta = ktime_sub(ktime_get(), genpd->accounting_time);
 
 	seq_printf(s, "%lld ms\n", ktime_to_ms(
@@ -2985,7 +2984,7 @@ static int total_idle_time_show(struct seq_file *s, void *data)
 
 	for (i = 0; i < genpd->state_count; i++) {
 
-		if ((genpd->status == GPD_STATE_POWER_OFF) &&
+		if ((genpd->status == GENPD_STATE_OFF) &&
 				(genpd->state_idx == i))
 			delta = ktime_sub(ktime_get(), genpd->accounting_time);
 
