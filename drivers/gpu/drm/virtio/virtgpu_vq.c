@@ -1280,9 +1280,19 @@ virtio_gpu_cmd_resource_create_blob(struct virtio_gpu_device *vgdev,
 {
 	struct virtio_gpu_resource_create_blob *cmd_p;
 	struct virtio_gpu_vbuffer *vbuf;
+	struct virtio_gpu_resp_resource_plane_info *resp_buf;
+
+	/* freed after the response is processed */
+	resp_buf = kzalloc(sizeof(*resp_buf), GFP_KERNEL);
+	if (!resp_buf) {
+		DRM_ERROR("allocation failure\n");
+		return;
+	}
 
 	/* gets freed when the ring has consumed it */
-	cmd_p = virtio_gpu_alloc_cmd(vgdev, &vbuf, sizeof(*cmd_p));
+	cmd_p = virtio_gpu_alloc_cmd_resp(vgdev,
+		virtio_gpu_cmd_resource_create_cb, &vbuf, sizeof(*cmd_p),
+		sizeof(struct virtio_gpu_resp_resource_plane_info), resp_buf);
 	memset(cmd_p, 0, sizeof(*cmd_p));
 
 	cmd_p->hdr.type = cpu_to_le32(VIRTIO_GPU_CMD_RESOURCE_CREATE_BLOB);
@@ -1296,6 +1306,11 @@ virtio_gpu_cmd_resource_create_blob(struct virtio_gpu_device *vgdev,
 
 	vbuf->data_buf = ents;
 	vbuf->data_size = sizeof(*ents) * nents;
+
+	/* Reuse the data_buf pointer for the object pointer. */
+	vbuf->data_buf = bo;
+	bo->create_callback_done = false;
+	drm_gem_object_get(&bo->gem_base);
 
 	virtio_gpu_queue_ctrl_buffer(vgdev, vbuf);
 	bo->created = true;
