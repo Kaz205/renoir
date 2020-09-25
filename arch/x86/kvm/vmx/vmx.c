@@ -5957,7 +5957,7 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
  * information but as all relevant affected CPUs have 32KiB L1D cache size
  * there is no point in doing so.
  */
-static void vmx_l1d_flush(struct kvm_vcpu *vcpu)
+static __maybe_unused void vmx_l1d_flush(struct kvm_vcpu *vcpu)
 {
 	int size = PAGE_SIZE << L1D_CACHE_ORDER;
 
@@ -6539,13 +6539,16 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 	/* VM entries need to wait if the core is not ready. */
 #ifdef CONFIG_SCHED_CORE
 	sched_core_user_enter();
-#endif
 
+	/* Don't need to flush if VM is trusted. */
+	if (current && current->core_cookie)
+#else
 	/* L1D Flush includes CPU buffer clear to mitigate MDS */
 	if (static_branch_unlikely(&vmx_l1d_should_flush))
 		vmx_l1d_flush(vcpu);
 	else if (static_branch_unlikely(&mds_user_clear))
 		mds_clear_cpu_buffers();
+#endif
 
 	if (vcpu->arch.cr2 != read_cr2())
 		write_cr2(vcpu->arch.cr2);
