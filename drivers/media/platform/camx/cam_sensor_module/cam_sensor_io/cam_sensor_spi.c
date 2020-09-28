@@ -117,8 +117,6 @@ static int32_t cam_spi_tx_helper(struct camera_io_master *client,
 	char *ctx = NULL, *crx = NULL;
 	uint32_t len, hlen;
 	uint8_t retries = client->spi_client->retries;
-	uint32_t txr = 0, rxr = 0;
-	struct page *page_tx = NULL, *page_rx = NULL;
 
 	hlen = cam_camera_spi_get_hlen(inst);
 	len = hlen + num_byte;
@@ -132,30 +130,16 @@ static int32_t cam_spi_tx_helper(struct camera_io_master *client,
 	if (tx) {
 		ctx = tx;
 	} else {
-		txr = PAGE_ALIGN(len) >> PAGE_SHIFT;
-		page_tx = cma_alloc(dev_get_cma_area(dev),
-			txr, 0, GFP_KERNEL);
-		if (!page_tx)
-			return -ENOMEM;
-
-		ctx = page_address(page_tx);
+		CAM_ERR(CAM_SENSOR, "CMA allocation not supported");
+		return -ENOMEM;
 	}
 
 	if (num_byte) {
 		if (rx) {
 			crx = rx;
 		} else {
-			rxr = PAGE_ALIGN(len) >> PAGE_SHIFT;
-			page_rx = cma_alloc(dev_get_cma_area(dev),
-				rxr, 0, GFP_KERNEL);
-			if (!page_rx) {
-				if (!tx)
-					cma_release(dev_get_cma_area(dev),
-						page_tx, txr);
-
-				return -ENOMEM;
-			}
-			crx = page_address(page_rx);
+			CAM_ERR(CAM_SENSOR, "CMA allocation not supported");
+			return -ENOMEM;
 		}
 	} else {
 		crx = NULL;
@@ -169,16 +153,11 @@ static int32_t cam_spi_tx_helper(struct camera_io_master *client,
 	}
 	if (rc < 0) {
 		CAM_ERR(CAM_EEPROM, "failed: spi txfr rc %d", rc);
-		goto out;
+		return rc;
 	}
 	if (data && num_byte && !rx)
 		memcpy(data, crx + hlen, num_byte);
 
-out:
-	if (!tx)
-		cma_release(dev_get_cma_area(dev), page_tx, txr);
-	if (!rx)
-		cma_release(dev_get_cma_area(dev), page_rx, rxr);
 	return rc;
 }
 
