@@ -15,7 +15,9 @@ description:
 
 properties:
   compatible:
-    const: qcom,sc7180-sndcard-rt5682-m98357-1mic
+    enum:
+      - qcom,sc7180-sndcard-rt5682-m98357-1mic
+      - qcom,sc7180-sndcard-rt5682-m98357-2mic
 
   audio-routing:
     $ref: /schemas/types.yaml#/definitions/non-unique-string-array
@@ -33,6 +35,11 @@ properties:
 
   "#size-cells":
     const: 0
+
+  dmic-gpios:
+    description:
+      GPIO for switching between DMICs, it is required when
+      compatible is "qcom,sc7180-sndcard-rt5682-m98357-2mic".
 
 patternProperties:
   "^dai-link(@[0-9])?$":
@@ -81,6 +88,7 @@ additionalProperties: false
 examples:
 
   - |
+    //Example 1
     sound {
         compatible = "qcom,sc7180-sndcard-rt5682-m98357-1mic";
         model = "sc7180-snd-card";
@@ -128,3 +136,57 @@ examples:
             };
         };
     };
+
+  - |
+    //Example 2 (2mic case)
+    sound {
+        compatible = "qcom,sc7180-sndcard-rt5682-m98357-2mic";
+        model = "sc7180-snd-card";
+
+        audio-routing =
+                    "Headphone Jack", "HPOL",
+                    "Headphone Jack", "HPOR";
+
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        dmic-gpios = <&tlmm 86 0>;
+
+        dai-link@0 {
+            link-name = "MultiMedia0";
+            reg = <0>;
+            cpu {
+                sound-dai = <&lpass_cpu 0>;
+            };
+
+            codec {
+                sound-dai = <&alc5682 0>;
+            };
+        };
+
+        dai-link@1 {
+            link-name = "MultiMedia1";
+            reg = <1>;
+            cpu {
+                sound-dai = <&lpass_cpu 1>;
+            };
+
+            codec {
+                sound-dai = <&max98357a>;
+            };
+        };
+
+        dai-link@2 {
+            link-name = "MultiMedia2";
+            reg = <2>;
+            cpu {
+                sound-dai = <&lpass_hdmi 0>;
+            };
+
+            codec {
+                sound-dai = <&msm_dp>;
+            };
+        };
+    };
+
+...
