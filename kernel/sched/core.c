@@ -4902,7 +4902,7 @@ again:
 				 * there's no point. We don't skip for RT/DL
 				 * because that could make CFS force-idle RT.
 				 */
-                               if (i == cpu && !need_sync && class == &fair_sched_class)
+				if (i == cpu && !need_sync && class == &fair_sched_class)
 					goto next_class;
 
 				continue;
