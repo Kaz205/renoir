@@ -127,10 +127,6 @@ static int icl_nhi_suspend(struct tb_nhi *nhi)
 	if (icl_nhi_is_device_connected(nhi))
 		return 0;
 
-	/* Tiger Lake ES step does not have PREPARE_FOR_RESET implemented */
-	if (tb_switch_is_tgl_es(tb->root_switch))
-		goto skip_prepare_for_reset;
-
 	if (tb_switch_is_icm(tb->root_switch)) {
 		/*
 		 * If there is no device connected we need to perform
@@ -143,7 +139,6 @@ static int icl_nhi_suspend(struct tb_nhi *nhi)
 			return ret;
 	}
 
-skip_prepare_for_reset:
 	return icl_nhi_force_power(nhi, false);
 }
 
