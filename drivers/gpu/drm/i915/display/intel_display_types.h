@@ -1302,8 +1302,6 @@ struct intel_dp {
 	unsigned long last_backlight_off;
 	ktime_t panel_power_off_time;
 
-	struct notifier_block edp_notifier;
-
 	/*
 	 * Pipe whose power sequencer is currently locked into
 	 * this port. Only relevant on VLV/CHV.
