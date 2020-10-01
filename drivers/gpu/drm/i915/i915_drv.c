@@ -1657,6 +1657,22 @@ static int vlv_resume_prepare(struct drm_i915_private *dev_priv,
 			      bool rpm_resume);
 static int vlv_suspend_complete(struct drm_i915_private *dev_priv);
 
+void i915_driver_shutdown(struct drm_i915_private *i915)
+{
+	i915_gem_suspend(i915);
+
+	drm_kms_helper_poll_disable(&i915->drm);
+
+	drm_atomic_helper_shutdown(&i915->drm);
+
+	intel_dp_mst_suspend(i915);
+
+	intel_runtime_pm_disable_interrupts(i915);
+	intel_hpd_cancel_work(i915);
+
+	intel_suspend_encoders(i915);
+}
+
 static bool suspend_to_idle(struct drm_i915_private *dev_priv)
 {
 #if IS_ENABLED(CONFIG_ACPI_SLEEP)
