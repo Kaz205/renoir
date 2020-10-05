@@ -5254,7 +5254,6 @@ static struct spi_mem_driver spi_nor_driver = {
 		.driver = {
 			.name = "spi-nor",
 			.of_match_table = spi_nor_of_table,
-			.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 		},
 		.id_table = spi_nor_dev_ids,
 	},
