@@ -13,6 +13,10 @@
 	compatible = "google,lazor-sku0", "qcom,sc7180";
 };
 
+&ap_sar_sensor {
+	status = "okay";
+};
+
 &keyboard_backlight {
 	status = "okay";
 };
