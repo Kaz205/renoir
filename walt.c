@@ -2950,14 +2950,21 @@ add_task_to_group(struct task_struct *p, struct walt_related_thread_group *grp)
 #ifdef CONFIG_UCLAMP_TASK_GROUP
 static inline bool uclamp_task_colocated(struct task_struct *p)
 {
-	struct cgroup_subsys_state *css = task_css(p, cpu_cgrp_id);
+	struct cgroup_subsys_state *css;
 	struct task_group *tg;
+	bool colocate;
 
-	if (!css)
+	rcu_read_lock();
+	css = task_css(p, cpu_cgrp_id);
+	if (!css) {
+		rcu_read_unlock();
 		return false;
+	}
 	tg = container_of(css, struct task_group, css);
+	colocate = tg->wtg.colocate;
+	rcu_read_unlock();
 
-	return tg->wtg.colocate;
+	return colocate;
 }
 #else
 static inline bool uclamp_task_colocated(struct task_struct *p)
