@@ -3514,9 +3514,6 @@ void walt_irq_work(struct irq_work *irq_work)
 					sched_ravg_window,
 					new_sched_ravg_window,
 					sched_ravg_window_change_time);
-			trace_sched_ravg_window_change(sched_ravg_window,
-					new_sched_ravg_window,
-					sched_ravg_window_change_time);
 			sched_ravg_window = new_sched_ravg_window;
 			walt_tunables_fixup();
 		}
