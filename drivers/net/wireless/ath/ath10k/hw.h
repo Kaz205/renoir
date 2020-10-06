@@ -620,6 +620,11 @@ struct ath10k_hw_params {
 
 	/* tx stats support over pktlog */
 	bool tx_stats_over_pktlog;
+
+	/* Disable all thermal support.
+	 * HACK: waiting for a real fix for b/164183337.
+	 */
+	bool disable_thermal;
 };
 
 struct htt_rx_desc;
