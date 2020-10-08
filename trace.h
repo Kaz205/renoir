@@ -617,6 +617,31 @@ TRACE_EVENT(sched_isolate,
 		__entry->requested_cpu, __entry->isolated_cpus,
 		__entry->time, __entry->isolate)
 );
+
+TRACE_EVENT(sched_ravg_window_change,
+
+	TP_PROTO(unsigned int sched_ravg_window, unsigned int new_sched_ravg_window
+		, u64 change_time),
+
+	TP_ARGS(sched_ravg_window, new_sched_ravg_window, change_time),
+
+	TP_STRUCT__entry(
+		__field(unsigned int, sched_ravg_window)
+		__field(unsigned int, new_sched_ravg_window)
+		__field(u64, change_time)
+	),
+
+	TP_fast_assign(
+		__entry->sched_ravg_window = sched_ravg_window;
+		__entry->new_sched_ravg_window = new_sched_ravg_window;
+		__entry->change_time = change_time;
+	),
+
+	TP_printk("from=%u to=%u at=%lu",
+		__entry->sched_ravg_window, __entry->new_sched_ravg_window,
+		__entry->change_time)
+);
+
 #endif /* CONFIG_SCHED_WALT */
 #endif /* _TRACE_WALT_H */
 

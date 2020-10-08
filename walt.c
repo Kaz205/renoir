@@ -1439,7 +1439,7 @@ static void rollover_task_window(struct task_struct *p, bool full_window)
 	}
 
 	if (is_new_task(p))
-		p->wts.active_time += p->wts.last_win_size;
+		p->wts.active_time += task_rq(p)->wrq.prev_window_size;
 }
 
 void sched_set_io_is_busy(int val)
@@ -1926,7 +1926,7 @@ static void update_history(struct rq *rq, struct task_struct *p,
 	else
 		if (p->wts.unfilter)
 			p->wts.unfilter = max_t(int, 0,
-				p->wts.unfilter - p->wts.last_win_size);
+				p->wts.unfilter - rq->wrq.prev_window_size);
 
 done:
 	trace_sched_update_history(rq, p, runtime, samples, event);
@@ -2167,7 +2167,6 @@ void walt_update_task_ravg(struct task_struct *p, struct rq *rq, int event,
 
 done:
 	p->wts.mark_start = wallclock;
-	p->wts.last_win_size = sched_ravg_window;
 
 	run_walt_irq_work(old_window_start, rq);
 }
@@ -2203,7 +2202,6 @@ void init_new_task_load(struct task_struct *p)
 	p->wts.curr_window = 0;
 	p->wts.prev_window = 0;
 	p->wts.active_time = 0;
-	p->wts.last_win_size = 0;
 	for (i = 0; i < NUM_BUSY_BUCKETS; ++i)
 		p->wts.busy_buckets[i] = 0;
 
@@ -2281,7 +2279,6 @@ void reset_task_stats(struct task_struct *p)
 	p->wts.demand_scaled = 0;
 	p->wts.pred_demand_scaled = 0;
 	p->wts.active_time = 0;
-	p->wts.last_win_size = 0;
 
 	p->wts.curr_window_cpu = curr_window_ptr;
 	p->wts.prev_window_cpu = prev_window_ptr;
@@ -3504,14 +3501,25 @@ void walt_irq_work(struct irq_work *irq_work)
 	/*
 	 * If the window change request is in pending, good place to
 	 * change sched_ravg_window since all rq locks are acquired.
+	 *
+	 * If the current window roll over is delayed such that the
+	 * mark_start (current wallclock with which roll over is done)
+	 * of the current task went past the window start with the
+	 * updated new window size, delay the update to the next
+	 * window roll over. Otherwise the CPU counters (prs and crs) are
+	 * not rolled over properly as mark_start > window_start.
 	 */
 	if (!is_migration) {
 		spin_lock_irqsave(&sched_ravg_window_lock, flags);
 
-		if (sched_ravg_window != new_sched_ravg_window) {
+		if ((sched_ravg_window != new_sched_ravg_window) &&
+		    (wc < this_rq()->wrq.window_start + new_sched_ravg_window)) {
 			sched_ravg_window_change_time = sched_ktime_clock();
 			printk_deferred("ALERT: changing window size from %u to %u at %lu\n",
 					sched_ravg_window,
+					new_sched_ravg_window,
+					sched_ravg_window_change_time);
+			trace_sched_ravg_window_change(sched_ravg_window,
 					new_sched_ravg_window,
 					sched_ravg_window_change_time);
 			sched_ravg_window = new_sched_ravg_window;
