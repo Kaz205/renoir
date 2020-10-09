@@ -273,17 +273,16 @@ static struct platform_driver onboard_hub_driver = {
 
 static struct onboard_hub *_find_onboard_hub(struct device *dev)
 {
-	const phandle *ph;
+	phandle ph;
 	struct device_node *np;
 	struct platform_device *pdev;
 
-	ph = of_get_property(dev->of_node, "hub", NULL);
-	if (!ph) {
+	if (of_property_read_u32(dev->of_node, "hub", &ph)) {
 		dev_err(dev, "failed to read 'hub' property\n");
 		return ERR_PTR(-EINVAL);
 	}
 
-	np = of_find_node_by_phandle(be32_to_cpu(*ph));
+	np = of_find_node_by_phandle(ph);
 	if (!np) {
 		dev_err(dev, "failed find device node for onboard hub\n");
 		return ERR_PTR(-EINVAL);
