@@ -1229,6 +1229,36 @@ void rtsx_pci_clear_ocpstat(struct rtsx_pcr *pcr)
 	}
 }
 
+void rtsx_pci_enable_oobs_polling(struct rtsx_pcr *pcr)
+{
+	u16 val;
+
+	if ((PCI_PID(pcr) != PID_525A) && (PCI_PID(pcr) != PID_5260)) {
+		rtsx_pci_read_phy_register(pcr, 0x01, &val);
+		val |= 1<<9;
+		rtsx_pci_write_phy_register(pcr, 0x01, val);
+	}
+	rtsx_pci_write_register(pcr, REG_CFG_OOBS_OFF_TIMER, 0xFF, 0x32);
+	rtsx_pci_write_register(pcr, REG_CFG_OOBS_ON_TIMER, 0xFF, 0x05);
+	rtsx_pci_write_register(pcr, REG_CFG_VCM_ON_TIMER, 0xFF, 0x83);
+	rtsx_pci_write_register(pcr, REG_CFG_OOBS_POLLING, 0xFF, 0xDE);
+
+}
+
+void rtsx_pci_disable_oobs_polling(struct rtsx_pcr *pcr)
+{
+	u16 val;
+
+	if ((PCI_PID(pcr) != PID_525A) && (PCI_PID(pcr) != PID_5260)) {
+		rtsx_pci_read_phy_register(pcr, 0x01, &val);
+		val &= ~(1<<9);
+		rtsx_pci_write_phy_register(pcr, 0x01, val);
+	}
+	rtsx_pci_write_register(pcr, REG_CFG_VCM_ON_TIMER, 0xFF, 0x03);
+	rtsx_pci_write_register(pcr, REG_CFG_OOBS_POLLING, 0xFF, 0x00);
+
+}
+
 int rtsx_sd_power_off_card3v3(struct rtsx_pcr *pcr)
 {
 	rtsx_pci_write_register(pcr, CARD_CLK_EN, SD_CLK_EN |
