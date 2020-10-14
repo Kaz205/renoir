@@ -216,6 +216,18 @@
 		gpio = <&pio 136 GPIO_ACTIVE_HIGH>;
 	};
 
+	reserved_memory: reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		scp_mem_reserved: scp_mem_region {
+			compatible = "shared-dma-pool";
+			reg = <0 0x50000000 0 0x2900000>;
+			no-map;
+		};
+	};
+
 	usb_vbus_3v3: fixedregulator@1 {
 		compatible = "regulator-fixed";
 		regulator-name = "usb vbus";
@@ -1203,6 +1215,16 @@
 	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pwm0_pin_default>;
+};
+
+&scp {
+	memory-region = <&scp_mem_reserved>;
+	status = "okay";
+
+	cros_ec {
+		compatible = "google,cros-ec-rpmsg";
+		mtk,rpmsg-name = "cros-ec-rpmsg";
+	};
 };
 
 &spi1 {
