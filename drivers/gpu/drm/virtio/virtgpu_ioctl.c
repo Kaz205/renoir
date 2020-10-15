@@ -677,14 +677,13 @@ static int virtio_gpu_resource_create_blob_ioctl(struct drm_device *dev,
 		obj->mapped = 1;
 	}
 
+	ret = virtio_gpu_object_reserve(obj, false);
+	if (ret)
+		goto err_unmap;
 
-	/*
-	 * No need to call virtio_gpu_object_reserve since the buffer is not
-	 * being used for ttm validation and no other processes can access
-	 * the reservation object at this point.
-	 */
 	dma_resv_add_excl_fence(obj->tbo.base.resv, &fence->f);
 
+	virtio_gpu_object_unreserve(obj);
 	dma_fence_put(&fence->f);
 	drm_gem_object_put_unlocked(&obj->gem_base);
 
@@ -692,6 +691,10 @@ static int virtio_gpu_resource_create_blob_ioctl(struct drm_device *dev,
 	rc_blob->bo_handle = handle;
 	return 0;
 
+err_unmap:
+	if (obj->mapped)
+		virtio_gpu_cmd_unmap(vgdev, obj->hw_res_handle);
+	drm_gem_handle_delete(file, handle);
 err_fence_put:
 	dma_fence_put(&fence->f);
 err_free_ents:
