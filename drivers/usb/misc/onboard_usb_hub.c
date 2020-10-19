@@ -252,7 +252,7 @@ static const struct of_device_id onboard_hub_match[] = {
 };
 MODULE_DEVICE_TABLE(of, onboard_hub_match);
 
-static const struct dev_pm_ops onboard_hub_pm_ops = {
+static const struct dev_pm_ops __maybe_unused onboard_hub_pm_ops = {
 	SET_LATE_SYSTEM_SLEEP_PM_OPS(onboard_hub_suspend, onboard_hub_resume)
 };
 
