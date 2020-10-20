@@ -20,11 +20,6 @@
 #include <linux/dma-mapping.h>
 #include <linux/workqueue.h>
 #include <linux/genalloc.h>
-#if defined(CONFIG_ARCH_SM6150)
-#include <asm/dma-iommu.h>
-#include <linux/msm_dma_iommu_mapping.h>
-#include <soc/qcom/scm.h>
-#endif
 #include <uapi/media/cam_req_mgr.h>
 #include <linux/debugfs.h>
 #include "cam_smmu_api.h"
@@ -88,11 +83,7 @@ struct secheap_buf_info {
 
 struct cam_context_bank_info {
 	struct device *dev;
-#if defined(CONFIG_ARCH_SM6150)
-	struct dma_iommu_mapping *mapping;
-#else
 	struct iommu_domain *domain;
-#endif
 	dma_addr_t va_start;
 	size_t va_len;
 	const char *name;
@@ -204,25 +195,6 @@ static void cam_smmu_print_table(void);
 static int cam_smmu_probe(struct platform_device *pdev);
 
 static uint32_t cam_smmu_find_closest_mapping(int idx, void *vaddr);
-
-static inline struct iommu_domain *cam_smmu_get_domain(
-	struct cam_context_bank_info *cb_info)
-{
-#if defined(CONFIG_ARCH_SM6150)
-	return cb_info->mapping->domain;
-#else
-	return cb_info->domain;
-#endif
-}
-
-static inline struct iommu_domain *cam_smmu_get_domain_by_idx(int idx)
-{
-#if defined(CONFIG_ARCH_SM6150)
-	return iommu_cb_set.cb_info[idx].mapping->domain;
-#else
-	return iommu_cb_set.cb_info[idx].domain;
-#endif
-}
 
 static void cam_smmu_page_fault_work(struct work_struct *work)
 {
@@ -611,19 +583,14 @@ static int cam_smmu_create_iommu_handle(int idx)
 
 static int cam_smmu_attach_device(int idx)
 {
-	int rc = 0;
-#if defined(CONFIG_ARCH_SM6150)
 	struct cam_context_bank_info *cb = &iommu_cb_set.cb_info[idx];
 
-	/* attach the mapping to device */
-	rc = arm_iommu_attach_device(cb->dev, cb->mapping);
-	if (rc < 0) {
-		CAM_ERR(CAM_SMMU, "Error: ARM IOMMU attach failed. ret = %d",
-			rc);
-		rc = -ENODEV;
+	if (IS_ERR_OR_NULL(cb->domain)) {
+		CAM_ERR(CAM_SMMU, "Cannot get context bank domain");
+		return PTR_ERR(cb->domain);
 	}
-#endif
-	return rc;
+
+	return iommu_attach_device(cb->domain, cb->dev);
 }
 
 static int cam_smmu_create_add_handle_in_table(char *name,
@@ -805,22 +772,16 @@ static int cam_smmu_attach(int idx)
 
 static int cam_smmu_detach_device(int idx)
 {
-	int rc = 0;
-#if defined(CONFIG_ARCH_SM6150)
 	struct cam_context_bank_info *cb = &iommu_cb_set.cb_info[idx];
-#endif
 
-	/* detach the mapping to device if not already detached */
-	if (iommu_cb_set.cb_info[idx].state == CAM_SMMU_DETACH) {
-		rc = -EALREADY;
-	} else if (iommu_cb_set.cb_info[idx].state == CAM_SMMU_ATTACH) {
-#if defined(CONFIG_ARCH_SM6150)
-		arm_iommu_detach_device(cb->dev);
-#endif
-		iommu_cb_set.cb_info[idx].state = CAM_SMMU_DETACH;
+	if (IS_ERR_OR_NULL(cb->domain)) {
+		CAM_ERR(CAM_SMMU, "Invalid context bank domain");
+		return PTR_ERR(cb->domain);
 	}
 
-	return rc;
+	iommu_detach_device(cb->domain, cb->dev);
+
+	return 0;
 }
 
 static int cam_smmu_alloc_iova(size_t size,
@@ -961,7 +922,7 @@ int cam_smmu_alloc_firmware(int32_t smmu_hdl,
 			icp_fw.fw_kva, (void *)icp_fw.fw_dma_hdl);
 	}
 
-	domain = cam_smmu_get_domain_by_idx(idx);
+	domain = iommu_cb_set.cb_info[idx].domain;
 	rc = iommu_map(domain,
 		firmware_start,
 		icp_fw.fw_dma_hdl,
@@ -1033,7 +994,7 @@ int cam_smmu_dealloc_firmware(int32_t smmu_hdl)
 
 	firmware_len = iommu_cb_set.cb_info[idx].firmware_info.iova_len;
 	firmware_start = iommu_cb_set.cb_info[idx].firmware_info.iova_start;
-	domain = cam_smmu_get_domain_by_idx(idx);
+	domain = iommu_cb_set.cb_info[idx].domain;
 	unmapped = iommu_unmap(domain,
 		firmware_start,
 		firmware_len);
@@ -1106,7 +1067,7 @@ int cam_smmu_alloc_qdss(int32_t smmu_hdl,
 	qdss_phy_addr = iommu_cb_set.cb_info[idx].qdss_phy_addr;
 	CAM_DBG(CAM_SMMU, "QDSS area len from DT = %zu", qdss_len);
 
-	domain = cam_smmu_get_domain_by_idx(idx);
+	domain = iommu_cb_set.cb_info[idx].domain;
 	rc = iommu_map(domain,
 		qdss_start,
 		qdss_phy_addr,
@@ -1173,7 +1134,7 @@ int cam_smmu_dealloc_qdss(int32_t smmu_hdl)
 
 	qdss_len = iommu_cb_set.cb_info[idx].qdss_info.iova_len;
 	qdss_start = iommu_cb_set.cb_info[idx].qdss_info.iova_start;
-	domain = cam_smmu_get_domain_by_idx(idx);
+	domain = iommu_cb_set.cb_info[idx].domain;
 	unmapped = iommu_unmap(domain, qdss_start, qdss_len);
 
 	if (unmapped != qdss_len) {
@@ -1323,110 +1284,90 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 
 	if (IS_ERR_OR_NULL(buf)) {
 		rc = PTR_ERR(buf);
-		CAM_ERR(CAM_SMMU,
-			"Error: dma get buf failed. rc = %d", rc);
-		goto err_out;
+		CAM_ERR(CAM_SMMU, "Error: mapping_info is invalid");
+		return rc;
 	}
 
 	if (!mapping_info) {
-		rc = -EINVAL;
+		rc = PTR_ERR(buf);
 		CAM_ERR(CAM_SMMU, "Error: mapping_info is invalid");
-		goto err_out;
+		return rc;
 	}
 
 	attach = dma_buf_attach(buf, iommu_cb_set.cb_info[idx].dev);
 	if (IS_ERR_OR_NULL(attach)) {
 		rc = PTR_ERR(attach);
 		CAM_ERR(CAM_SMMU, "Error: dma buf attach failed");
-		goto err_put;
+		return rc;
+	}
+
+	table = dma_buf_map_attachment(attach, dma_dir);
+	if (IS_ERR_OR_NULL(table)) {
+		rc = PTR_ERR(table);
+		CAM_ERR(CAM_SMMU, "Error: dma map attachment failed");
+		goto err_buf_detach;
 	}
 
 	if (region_id == CAM_SMMU_REGION_SHARED) {
-		table = dma_buf_map_attachment(attach, dma_dir);
-		if (IS_ERR_OR_NULL(table)) {
-			rc = PTR_ERR(table);
-			CAM_ERR(CAM_SMMU, "Error: dma map attachment failed");
-			goto err_detach;
-		}
-
-		domain = cam_smmu_get_domain_by_idx(idx);
+		domain = iommu_cb_set.cb_info[idx].domain;
 		if (!domain) {
 			CAM_ERR(CAM_SMMU, "CB has no domain set");
-			goto err_unmap_sg;
+			goto err_buf_unmap_attach;
 		}
 
 		rc = cam_smmu_alloc_iova(*len_ptr,
 			iommu_cb_set.cb_info[idx].handle,
 			&iova);
-
 		if (rc < 0) {
 			CAM_ERR(CAM_SMMU,
-				"IOVA alloc failed for shared memory, size=%zu, idx=%d, handle=%d",
+				"Alloc failed, size=%zu, idx=%d, handle=%d",
 				*len_ptr, idx,
 				iommu_cb_set.cb_info[idx].handle);
-			goto err_unmap_sg;
+			goto err_buf_unmap_attach;
 		}
 
 		size = iommu_map_sg(domain, iova, table->sgl, table->nents,
 				IOMMU_READ | IOMMU_WRITE);
-
 		if (size < 0) {
 			CAM_ERR(CAM_SMMU, "IOMMU mapping failed");
-			rc = cam_smmu_free_iova(iova,
-				size, iommu_cb_set.cb_info[idx].handle);
 			if (rc)
 				CAM_ERR(CAM_SMMU, "IOVA free failed");
 			rc = -ENOMEM;
-			goto err_unmap_sg;
-		} else {
-			CAM_DBG(CAM_SMMU,
-				"iommu_map_sg returned iova=%pK, size=%zu",
-				iova, size);
-			*paddr_ptr = iova;
-			*len_ptr = size;
-		}
-	} else if (region_id == CAM_SMMU_REGION_IO) {
-#if defined(CONFIG_ARCH_SM6150)
-		attach->dma_map_attrs |= DMA_ATTR_DELAYED_UNMAP;
-#endif
-		table = dma_buf_map_attachment(attach, dma_dir);
-		if (IS_ERR_OR_NULL(table)) {
-			rc = PTR_ERR(table);
-			CAM_ERR(CAM_SMMU, "Error: dma map attachment failed");
-			goto err_detach;
+			goto err_free_iova;
 		}
 
+		CAM_DBG(CAM_SMMU, "iommu_map_sg returned iova=%pK, size=%zu",
+			iova, size);
+		*paddr_ptr = iova;
+		*len_ptr = size;
+
+	} else {
 		*paddr_ptr = sg_dma_address(table->sgl);
 		*len_ptr = (size_t)buf->size;
-	} else {
-		CAM_ERR(CAM_SMMU, "Error: Wrong region id passed");
-		rc = -EINVAL;
-		goto err_unmap_sg;
 	}
 
 	CAM_DBG(CAM_SMMU, "iova=%pK, region_id=%d, paddr=%pK, len=%d",
 		iova, region_id, *paddr_ptr, *len_ptr);
 
-	if (table->sgl) {
-		CAM_DBG(CAM_SMMU,
-			"DMA buf: %pK, device: %pK, attach: %pK, table: %pK",
-			(void *)buf,
-			(void *)iommu_cb_set.cb_info[idx].dev,
-			(void *)attach, (void *)table);
-		CAM_DBG(CAM_SMMU, "table sgl: %pK, rc: %d, dma_address: 0x%x",
-			(void *)table->sgl, rc,
-			(unsigned int)table->sgl->dma_address);
-	} else {
-		rc = -EINVAL;
+	if (IS_ERR_OR_NULL(table->sgl)) {
 		CAM_ERR(CAM_SMMU, "Error: table sgl is null");
-		goto err_unmap_sg;
+		goto err_free_iova;
 	}
+
+	CAM_DBG(CAM_SMMU,
+		"DMA buf: %pK, device: %pK, attach: %pK, table: %pK",
+		(void *)buf,
+		(void *)iommu_cb_set.cb_info[idx].dev,
+		(void *)attach, (void *)table);
+	CAM_DBG(CAM_SMMU, "table sgl: %pK, rc: %d, dma_address: 0x%x",
+		(void *)table->sgl, rc,
+		(unsigned int)table->sgl->dma_address);
 
 	/* fill up mapping_info */
 	*mapping_info = kzalloc(sizeof(struct cam_dma_buff_info), GFP_KERNEL);
-	if (!(*mapping_info)) {
-		rc = -ENOSPC;
-		goto err_alloc;
+	if (IS_ERR_OR_NULL(*mapping_info)) {
+		rc = PTR_ERR(*mapping_info);
+		goto err_free_iova;
 	}
 
 	(*mapping_info)->buf = buf;
@@ -1443,35 +1384,29 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 		kfree(*mapping_info);
 		*mapping_info = NULL;
 		rc = -ENOSPC;
-		goto err_alloc;
+		goto err_free_iova;
 	}
+
 	CAM_DBG(CAM_SMMU, "idx=%d, dma_buf=%pK, dev=%pK, paddr=%pK, len=%u",
 		idx, buf, (void *)iommu_cb_set.cb_info[idx].dev,
 		(void *)*paddr_ptr, (unsigned int)*len_ptr);
 
 	return 0;
 
-err_alloc:
+err_free_iova:
 	if (region_id == CAM_SMMU_REGION_SHARED) {
-		cam_smmu_free_iova(iova,
-			size,
-			iommu_cb_set.cb_info[idx].handle);
-
-		domain = cam_smmu_get_domain_by_idx(idx);
-		iommu_unmap(domain,
-			*paddr_ptr,
-			*len_ptr);
+		domain = iommu_cb_set.cb_info[idx].domain;
+		iommu_unmap(domain, *paddr_ptr, *len_ptr);
+		cam_smmu_free_iova(iova, size,
+				   iommu_cb_set.cb_info[idx].handle);
 	}
-err_unmap_sg:
+err_buf_unmap_attach:
 	dma_buf_unmap_attachment(attach, table, dma_dir);
-err_detach:
+err_buf_detach:
 	dma_buf_detach(buf, attach);
-err_put:
-	dma_buf_put(buf);
-err_out:
+
 	return rc;
 }
-
 
 static int cam_smmu_map_buffer_and_add_to_list(int idx, int dma_fd,
 	 enum dma_data_direction dma_dir, dma_addr_t *paddr_ptr,
@@ -1551,7 +1486,7 @@ static int cam_smmu_unmap_buf_and_remove_from_list(
 			"Removing SHARED buffer paddr = %pK, len = %zu",
 			(void *)mapping_info->paddr, mapping_info->len);
 
-		domain = cam_smmu_get_domain_by_idx(idx);
+		domain = iommu_cb_set.cb_info[idx].domain;
 		size = iommu_unmap(domain,
 			mapping_info->paddr,
 			mapping_info->len);
@@ -1570,16 +1505,14 @@ static int cam_smmu_unmap_buf_and_remove_from_list(
 		if (rc)
 			CAM_ERR(CAM_SMMU, "IOVA free failed");
 
-	} else if (mapping_info->region_id == CAM_SMMU_REGION_IO) {
-#if defined(CONFIG_ARCH_SM6150)
-		mapping_info->attach->dma_map_attrs |= DMA_ATTR_DELAYED_UNMAP;
-#endif
 	}
 
 	dma_buf_unmap_attachment(mapping_info->attach,
 		mapping_info->table, mapping_info->dir);
 	dma_buf_detach(mapping_info->buf, mapping_info->attach);
-	dma_buf_put(mapping_info->buf);
+
+	if (mapping_info->dma_fd)
+		dma_buf_put(mapping_info->buf);
 
 	mapping_info->buf = NULL;
 
@@ -2088,17 +2021,11 @@ EXPORT_SYMBOL(cam_smmu_destroy_handle);
 
 static void cam_smmu_deinit_cb(struct cam_context_bank_info *cb)
 {
-#if defined(CONFIG_ARCH_SM6150)
-	arm_iommu_detach_device(cb->dev);
-
-	if (cb->io_support && cb->mapping) {
-		arm_iommu_release_mapping(cb->mapping);
-		cb->mapping = NULL;
-	}
-#endif
 	if (cb->shared_support) {
 		gen_pool_destroy(cb->shared_mem_pool);
 		cb->shared_mem_pool = NULL;
+	} else {
+		iommu_cb_set.non_fatal_fault = false;
 	}
 }
 
@@ -2116,7 +2043,6 @@ static void cam_smmu_release_cb(struct platform_device *pdev)
 static int cam_smmu_setup_cb(struct cam_context_bank_info *cb,
 	struct device *dev)
 {
-	struct iommu_domain *domain;
 	int rc = 0;
 
 	if (!cb || !dev) {
@@ -2156,36 +2082,10 @@ static int cam_smmu_setup_cb(struct cam_context_bank_info *cb,
 
 	/* create a virtual mapping */
 	if (cb->io_support) {
-#if defined(CONFIG_ARCH_SM6150)
-		cb->mapping = arm_iommu_create_mapping(&platform_bus_type,
-			cb->io_info.iova_start, cb->io_info.iova_len);
-		if (IS_ERR(cb->mapping)) {
-			CAM_ERR(CAM_SMMU, "Error: create mapping Failed");
-			rc = -ENODEV;
-			goto end;
-		}
-#endif
 		iommu_cb_set.non_fatal_fault = smmu_fatal_flag;
-		domain = cam_smmu_get_domain(cb);
-#if defined(CONFIG_ARCH_SM6150)
-		if (iommu_domain_set_attr(domain,
-			DOMAIN_ATTR_NON_FATAL_FAULTS,
-			&iommu_cb_set.non_fatal_fault) < 0) {
-			CAM_ERR(CAM_SMMU,
-				"Error: failed to set non fatal fault attribute");
-		}
-#endif
 	} else {
 		CAM_ERR(CAM_SMMU, "Context bank does not have IO region");
 		rc = -ENODEV;
-		goto end;
-	}
-
-	return rc;
-end:
-	if (cb->shared_support) {
-		gen_pool_destroy(cb->shared_mem_pool);
-		cb->shared_mem_pool = NULL;
 	}
 
 	return rc;
@@ -2361,7 +2261,6 @@ static int cam_populate_smmu_context_banks(struct device *dev,
 	int rc = 0;
 	struct cam_context_bank_info *cb;
 	struct device *ctx = NULL;
-	struct iommu_domain *domain;
 
 	if (!dev) {
 		CAM_ERR(CAM_SMMU, "Error: Invalid device");
@@ -2408,12 +2307,16 @@ static int cam_populate_smmu_context_banks(struct device *dev,
 		CAM_ERR(CAM_SMMU, "Error: failed to setup cb : %s", cb->name);
 		goto cb_init_fail;
 	}
-	if (cb->io_support) {
-		domain = cam_smmu_get_domain(cb);
-		iommu_set_fault_handler(domain,
-			cam_smmu_iommu_fault_handler,
-			(void *)cb->name);
+
+	cb->domain = iommu_get_domain_for_dev(dev);
+	if (IS_ERR_OR_NULL(cb->domain)) {
+		CAM_ERR(CAM_SMMU, "Invalid domain for device");
+		return PTR_ERR(cb->domain);
 	}
+
+	iommu_set_fault_handler(cb->domain, cam_smmu_iommu_fault_handler,
+				(void *)cb->name);
+
 	/* increment count to next bank */
 	iommu_cb_set.cb_init_count++;
 
