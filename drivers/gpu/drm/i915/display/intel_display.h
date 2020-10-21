@@ -313,15 +313,20 @@ enum phy_fia {
 };
 
 #define for_each_pipe(__dev_priv, __p) \
-	for ((__p) = 0; (__p) < INTEL_NUM_PIPES(__dev_priv); (__p)++)
+	for ((__p) = 0; (__p) < I915_MAX_PIPES; (__p)++) \
+		for_each_if(INTEL_INFO(__dev_priv)->pipe_mask & BIT(__p))
 
 #define for_each_pipe_masked(__dev_priv, __p, __mask) \
-	for ((__p) = 0; (__p) < INTEL_NUM_PIPES(__dev_priv); (__p)++) \
+	for_each_pipe(__dev_priv, __p) \
 		for_each_if((__mask) & BIT(__p))
 
-#define for_each_cpu_transcoder_masked(__dev_priv, __t, __mask) \
+#define for_each_cpu_transcoder(__dev_priv, __t) \
 	for ((__t) = 0; (__t) < I915_MAX_TRANSCODERS; (__t)++)	\
-		for_each_if ((__mask) & (1 << (__t)))
+		for_each_if (INTEL_INFO(__dev_priv)->cpu_transcoder_mask & BIT(__t))
+
+#define for_each_cpu_transcoder_masked(__dev_priv, __t, __mask) \
+	for_each_cpu_transcoder(__dev_priv, __t) \
+		for_each_if ((__mask) & BIT(__t))
 
 #define for_each_universal_plane(__dev_priv, __pipe, __p)		\
 	for ((__p) = 0;							\
@@ -489,6 +494,7 @@ enum phy intel_port_to_phy(struct drm_i915_private *i915, enum port port);
 bool is_trans_port_sync_mode(const struct intel_crtc_state *state);
 
 void intel_plane_destroy(struct drm_plane *plane);
+void intel_enable_pipe(const struct intel_crtc_state *new_crtc_state);
 void intel_disable_pipe(const struct intel_crtc_state *old_crtc_state);
 void i830_enable_pipe(struct drm_i915_private *dev_priv, enum pipe pipe);
 void i830_disable_pipe(struct drm_i915_private *dev_priv, enum pipe pipe);
@@ -498,6 +504,7 @@ int vlv_get_cck_clock(struct drm_i915_private *dev_priv,
 		      const char *name, u32 reg, int ref_freq);
 int vlv_get_cck_clock_hpll(struct drm_i915_private *dev_priv,
 			   const char *name, u32 reg);
+void lpt_pch_enable(const struct intel_crtc_state *crtc_state);
 void lpt_disable_pch_transcoder(struct drm_i915_private *dev_priv);
 void lpt_disable_iclkip(struct drm_i915_private *dev_priv);
 void intel_init_display_hooks(struct drm_i915_private *dev_priv);
@@ -523,11 +530,12 @@ enum tc_port intel_port_to_tc(struct drm_i915_private *dev_priv,
 int intel_get_pipe_from_crtc_id_ioctl(struct drm_device *dev, void *data,
 				      struct drm_file *file_priv);
 u32 intel_crtc_get_vblank_counter(struct intel_crtc *crtc);
+void intel_crtc_vblank_on(const struct intel_crtc_state *crtc_state);
 void intel_crtc_vblank_off(const struct intel_crtc_state *crtc_state);
 
 int ilk_get_lanes_required(int target_clock, int link_bw, int bpp);
 void vlv_wait_port_ready(struct drm_i915_private *dev_priv,
-			 struct intel_digital_port *dport,
+			 struct intel_digital_port *dig_port,
 			 unsigned int expected_mask);
 int intel_get_load_detect_pipe(struct drm_connector *connector,
 			       struct intel_load_detect_pipe *old,

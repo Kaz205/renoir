@@ -287,7 +287,7 @@ centre_vertically(struct drm_display_mode *adjusted_mode,
 	adjusted_mode->crtc_vsync_end = adjusted_mode->crtc_vsync_start + sync_width;
 }
 
-static inline u32 panel_fitter_scaling(u32 source, u32 target)
+static u32 panel_fitter_scaling(u32 source, u32 target)
 {
 	/*
 	 * Floating point operation is not supported. So the FACTOR
@@ -484,20 +484,10 @@ static u32 scale(u32 source_val,
 	return target_val;
 }
 
-/* Scale user_level in range [0..user_max] to [hw_min..hw_max]. */
-static inline u32 scale_user_to_hw(struct intel_connector *connector,
-				   u32 user_level, u32 user_max)
-{
-	struct intel_panel *panel = &connector->panel;
-
-	return scale(user_level, 0, user_max,
-		     panel->backlight.min, panel->backlight.max);
-}
-
 /* Scale user_level in range [0..user_max] to [0..hw_max], clamping the result
  * to [hw_min..hw_max]. */
-static inline u32 clamp_user_to_hw(struct intel_connector *connector,
-				   u32 user_level, u32 user_max)
+static u32 clamp_user_to_hw(struct intel_connector *connector,
+			    u32 user_level, u32 user_max)
 {
 	struct intel_panel *panel = &connector->panel;
 	u32 hw_level;
@@ -509,8 +499,8 @@ static inline u32 clamp_user_to_hw(struct intel_connector *connector,
 }
 
 /* Scale hw_level in range [hw_min..hw_max] to [0..user_max]. */
-static inline u32 scale_hw_to_user(struct intel_connector *connector,
-				   u32 hw_level, u32 user_max)
+static u32 scale_hw_to_user(struct intel_connector *connector,
+			    u32 hw_level, u32 user_max)
 {
 	struct intel_panel *panel = &connector->panel;
 
@@ -1249,6 +1239,16 @@ static u32 intel_panel_get_backlight(struct intel_connector *connector)
 	return val;
 }
 
+/* Scale user_level in range [0..user_max] to [hw_min..hw_max]. */
+static u32 scale_user_to_hw(struct intel_connector *connector,
+			    u32 user_level, u32 user_max)
+{
+	struct intel_panel *panel = &connector->panel;
+
+	return scale(user_level, 0, user_max,
+		     panel->backlight.min, panel->backlight.max);
+}
+
 /* set backlight brightness to level in range [0..max], scaling wrt hw min */
 static void intel_panel_set_backlight(const struct drm_connector_state *conn_state,
 				      u32 user_level, u32 user_max)
@@ -1930,7 +1930,8 @@ static int pwm_setup_backlight(struct intel_connector *connector,
 	return 0;
 }
 
-void intel_panel_update_backlight(struct intel_encoder *encoder,
+void intel_panel_update_backlight(struct intel_atomic_state *state,
+				  struct intel_encoder *encoder,
 				  const struct intel_crtc_state *crtc_state,
 				  const struct drm_connector_state *conn_state)
 {

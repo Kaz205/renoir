@@ -412,13 +412,11 @@ int evdi_fbdev_init(struct drm_device *dev)
 	evdi->fbdev = ufbdev;
 	drm_fb_helper_prepare(dev, &ufbdev->helper, &evdi_fb_helper_funcs);
 
-	ret = drm_fb_helper_init(dev, &ufbdev->helper, 1);
+	ret = drm_fb_helper_init(dev, &ufbdev->helper);
 	if (ret) {
 		kfree(ufbdev);
 		return ret;
 	}
-
-	drm_fb_helper_single_add_all_connectors(&ufbdev->helper);
 
 	ret = drm_fb_helper_initial_config(&ufbdev->helper, 32);
 	if (ret) {
