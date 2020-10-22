@@ -1,15 +1,8 @@
-/* SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause) */
+/* SPDX-License-Identifier: (GPL-2.0 OR BSD-3-Clause) */
 /* Copyright(c) 2015-17 Intel Corporation. */
 
 #ifndef __SDW_REGISTERS_H
 #define __SDW_REGISTERS_H
-
-/*
- * typically we define register and shifts but if one observes carefully,
- * the shift can be generated from MASKS using few bit primitaives like ffs
- * etc, so we use that and avoid defining shifts
- */
-#define SDW_REG_SHIFT(n)			(ffs(n) - 1)
 
 /*
  * SDW registers as defined by MIPI 1.2 Spec
@@ -48,12 +41,6 @@
 #define SDW_DP0_INT_IMPDEF1			BIT(5)
 #define SDW_DP0_INT_IMPDEF2			BIT(6)
 #define SDW_DP0_INT_IMPDEF3			BIT(7)
-#define SDW_DP0_INTERRUPTS			(SDW_DP0_INT_TEST_FAIL | \
-						 SDW_DP0_INT_PORT_READY | \
-						 SDW_DP0_INT_BRA_FAILURE | \
-						 SDW_DP0_INT_IMPDEF1 | \
-						 SDW_DP0_INT_IMPDEF2 | \
-						 SDW_DP0_INT_IMPDEF3)
 
 #define SDW_DP0_PORTCTRL_DATAMODE		GENMASK(3, 2)
 #define SDW_DP0_PORTCTRL_NXTINVBANK		BIT(4)
@@ -115,9 +102,10 @@
 #define SDW_SCP_KEEPEREN			0x4A
 #define SDW_SCP_BANKDELAY			0x4B
 #define SDW_SCP_COMMIT				0x4C
-
 #define SDW_SCP_BUS_CLOCK_BASE			0x4D
 #define SDW_SCP_BASE_CLOCK_FREQ			GENMASK(2, 0)
+/* 0x4E is not allocated in SoundWire specification 1.2 */
+
 #define SDW_SCP_BASE_CLOCK_UNKNOWN		0x0
 #define SDW_SCP_BASE_CLOCK_19200000_HZ		0x1
 #define SDW_SCP_BASE_CLOCK_24000000_HZ		0x2
@@ -127,7 +115,6 @@
 #define SDW_SCP_BASE_CLOCK_RESERVED		0x6
 #define SDW_SCP_BASE_CLOCK_IMP_DEF		0x7
 
-/* 0x4E is not allocated in SoundWire specification 1.2 */
 #define SDW_SCP_TESTMODE			0x4F
 #define SDW_SCP_DEVID_0				0x50
 #define SDW_SCP_DEVID_1				0x51
@@ -254,11 +241,6 @@
 #define SDW_DPN_INT_IMPDEF1			BIT(5)
 #define SDW_DPN_INT_IMPDEF2			BIT(6)
 #define SDW_DPN_INT_IMPDEF3			BIT(7)
-#define SDW_DPN_INTERRUPTS			(SDW_DPN_INT_TEST_FAIL | \
-						 SDW_DPN_INT_PORT_READY | \
-						 SDW_DPN_INT_IMPDEF1 | \
-						 SDW_DPN_INT_IMPDEF2 | \
-						 SDW_DPN_INT_IMPDEF3)
 
 #define SDW_DPN_PORTCTRL_FLOWMODE		GENMASK(1, 0)
 #define SDW_DPN_PORTCTRL_DATAMODE		GENMASK(3, 2)
@@ -315,17 +297,5 @@
 #define SDW_CASC_PORT_START_INTSTAT3		11
 #define SDW_CASC_PORT_MASK_INTSTAT3		1
 #define SDW_CASC_PORT_REG_OFFSET_INTSTAT3	2
-
-/* v1.2 device - SDCA address mapping */
-#define SDW_SDCA_CTL(fun, ent, ctl, ch)		(BIT(30) |			\
-						 (((fun) & 0x7) << 22) |	\
-						 (((ent) & 0x40) << 15) |	\
-						 (((ent) & 0x3f) << 7) |	\
-						 (((ctl) & 0x30) << 15) |	\
-						 (((ctl) & 0x0f) << 3) |	\
-						 (((ch) & 0x38) << 12) |	\
-						 ((ch) & 0x07))
-
-#define SDW_SDCA_MBQ_CTL(reg)			((reg) | BIT(13))
 
 #endif /* __SDW_REGISTERS_H */
