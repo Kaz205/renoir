@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
+// SPDX-License-Identifier: (GPL-2.0 OR BSD-3-Clause)
 // Copyright(c) 2015-17 Intel Corporation.
 
 /*
@@ -156,7 +156,7 @@ static int intel_wait_bit(void __iomem *base, int offset, u32 mask, u32 target)
 			return 0;
 
 		timeout--;
-		udelay(50);
+		usleep_range(50, 100);
 	} while (timeout != 0);
 
 	return -EAGAIN;
@@ -363,8 +363,7 @@ static int intel_link_power_up(struct sdw_intel *sdw)
 		syncprd = SDW_SHIM_SYNC_SYNCPRD_VAL_24;
 
 	if (!*shim_mask) {
-		dev_dbg(sdw->cdns.dev,
-			"%s: powering up all links\n", __func__);
+		dev_dbg(sdw->cdns.dev, "%s: powering up all links\n", __func__);
 
 		/* we first need to program the SyncPRD/CPU registers */
 		dev_dbg(sdw->cdns.dev,
@@ -372,8 +371,7 @@ static int intel_link_power_up(struct sdw_intel *sdw)
 
 		/* set SyncPRD period */
 		sync_reg = intel_readl(shim, SDW_SHIM_SYNC);
-		sync_reg |= (syncprd <<
-			     SDW_REG_SHIFT(SDW_SHIM_SYNC_SYNCPRD));
+		u32p_replace_bits(&sync_reg, syncprd, SDW_SHIM_SYNC_SYNCPRD);
 
 		/* Set SyncCPU bit */
 		sync_reg |= SDW_SHIM_SYNC_SYNCCPU;
@@ -383,10 +381,8 @@ static int intel_link_power_up(struct sdw_intel *sdw)
 		link_control = intel_readl(shim, SDW_SHIM_LCTL);
 
 		/* only power-up enabled links */
-		spa_mask = sdw->link_res->link_mask <<
-			SDW_REG_SHIFT(SDW_SHIM_LCTL_SPA_MASK);
-		cpa_mask = sdw->link_res->link_mask <<
-			SDW_REG_SHIFT(SDW_SHIM_LCTL_CPA_MASK);
+		spa_mask = FIELD_PREP(SDW_SHIM_LCTL_SPA_MASK, sdw->link_res->link_mask);
+		cpa_mask = FIELD_PREP(SDW_SHIM_LCTL_CPA_MASK, sdw->link_res->link_mask);
 
 		link_control |=  spa_mask;
 
@@ -494,7 +490,7 @@ static int intel_shim_init(struct sdw_intel *sdw, bool clock_stop)
 
 	intel_shim_glue_to_master_ip(sdw);
 
-	act |= 0x1 << SDW_REG_SHIFT(SDW_SHIM_CTMCTL_DOAIS);
+	u16p_replace_bits(&act, 0x1, SDW_SHIM_CTMCTL_DOAIS);
 	act |= SDW_SHIM_CTMCTL_DACTQE;
 	act |= SDW_SHIM_CTMCTL_DODS;
 	intel_writew(shim, SDW_SHIM_CTMCTL(link_id), act);
@@ -551,17 +547,14 @@ static int intel_link_power_down(struct sdw_intel *sdw)
 
 	if (!*shim_mask) {
 
-		dev_dbg(sdw->cdns.dev,
-			"%s: powering down all links\n", __func__);
+		dev_dbg(sdw->cdns.dev, "%s: powering down all links\n", __func__);
 
 		/* Link power down sequence */
 		link_control = intel_readl(shim, SDW_SHIM_LCTL);
 
 		/* only power-down enabled links */
-		spa_mask = (~sdw->link_res->link_mask) <<
-			SDW_REG_SHIFT(SDW_SHIM_LCTL_SPA_MASK);
-		cpa_mask = sdw->link_res->link_mask <<
-			SDW_REG_SHIFT(SDW_SHIM_LCTL_CPA_MASK);
+		spa_mask = FIELD_PREP(SDW_SHIM_LCTL_SPA_MASK, ~sdw->link_res->link_mask);
+		cpa_mask = FIELD_PREP(SDW_SHIM_LCTL_CPA_MASK, sdw->link_res->link_mask);
 
 		link_control &=  spa_mask;
 
@@ -573,8 +566,7 @@ static int intel_link_power_down(struct sdw_intel *sdw)
 	mutex_unlock(sdw->link_res->shim_lock);
 
 	if (ret < 0) {
-		dev_err(sdw->cdns.dev,
-			"%s: could not power down link\n", __func__);
+		dev_err(sdw->cdns.dev, "%s: could not power down link\n", __func__);
 
 		return ret;
 	}
@@ -649,12 +641,9 @@ static void intel_pdi_init(struct sdw_intel *sdw,
 	/* PCM Stream Capability */
 	pcm_cap = intel_readw(shim, SDW_SHIM_PCMSCAP(link_id));
 
-	config->pcm_bd = (pcm_cap & SDW_SHIM_PCMSCAP_BSS) >>
-					SDW_REG_SHIFT(SDW_SHIM_PCMSCAP_BSS);
-	config->pcm_in = (pcm_cap & SDW_SHIM_PCMSCAP_ISS) >>
-					SDW_REG_SHIFT(SDW_SHIM_PCMSCAP_ISS);
-	config->pcm_out = (pcm_cap & SDW_SHIM_PCMSCAP_OSS) >>
-					SDW_REG_SHIFT(SDW_SHIM_PCMSCAP_OSS);
+	config->pcm_bd = FIELD_GET(SDW_SHIM_PCMSCAP_BSS, pcm_cap);
+	config->pcm_in = FIELD_GET(SDW_SHIM_PCMSCAP_ISS, pcm_cap);
+	config->pcm_out = FIELD_GET(SDW_SHIM_PCMSCAP_OSS, pcm_cap);
 
 	dev_dbg(sdw->cdns.dev, "PCM cap bd:%d in:%d out:%d\n",
 		config->pcm_bd, config->pcm_in, config->pcm_out);
@@ -662,12 +651,9 @@ static void intel_pdi_init(struct sdw_intel *sdw,
 	/* PDM Stream Capability */
 	pdm_cap = intel_readw(shim, SDW_SHIM_PDMSCAP(link_id));
 
-	config->pdm_bd = (pdm_cap & SDW_SHIM_PDMSCAP_BSS) >>
-					SDW_REG_SHIFT(SDW_SHIM_PDMSCAP_BSS);
-	config->pdm_in = (pdm_cap & SDW_SHIM_PDMSCAP_ISS) >>
-					SDW_REG_SHIFT(SDW_SHIM_PDMSCAP_ISS);
-	config->pdm_out = (pdm_cap & SDW_SHIM_PDMSCAP_OSS) >>
-					SDW_REG_SHIFT(SDW_SHIM_PDMSCAP_OSS);
+	config->pdm_bd = FIELD_GET(SDW_SHIM_PDMSCAP_BSS, pdm_cap);
+	config->pdm_in = FIELD_GET(SDW_SHIM_PDMSCAP_ISS, pdm_cap);
+	config->pdm_out = FIELD_GET(SDW_SHIM_PDMSCAP_OSS, pdm_cap);
 
 	dev_dbg(sdw->cdns.dev, "PDM cap bd:%d in:%d out:%d\n",
 		config->pdm_bd, config->pdm_in, config->pdm_out);
@@ -694,8 +680,7 @@ intel_pdi_get_ch_cap(struct sdw_intel *sdw, unsigned int pdi_num, bool pcm)
 
 	} else {
 		count = intel_readw(shim, SDW_SHIM_PDMSCAP(link_id));
-		count = ((count & SDW_SHIM_PDMSCAP_CPSS) >>
-					SDW_REG_SHIFT(SDW_SHIM_PDMSCAP_CPSS));
+		count = FIELD_GET(SDW_SHIM_PDMSCAP_CPSS, count);
 	}
 
 	/* zero based values for channel count in register */
@@ -769,10 +754,9 @@ intel_pdi_shim_configure(struct sdw_intel *sdw, struct sdw_cdns_pdi *pdi)
 	else
 		pdi_conf &= ~(SDW_SHIM_PCMSYCM_DIR);
 
-	pdi_conf |= (pdi->intel_alh_id <<
-			SDW_REG_SHIFT(SDW_SHIM_PCMSYCM_STREAM));
-	pdi_conf |= (pdi->l_ch_num << SDW_REG_SHIFT(SDW_SHIM_PCMSYCM_LCHN));
-	pdi_conf |= (pdi->h_ch_num << SDW_REG_SHIFT(SDW_SHIM_PCMSYCM_HCHN));
+	u32p_replace_bits(&pdi_conf, pdi->intel_alh_id, SDW_SHIM_PCMSYCM_STREAM);
+	u32p_replace_bits(&pdi_conf, pdi->l_ch_num, SDW_SHIM_PCMSYCM_LCHN);
+	u32p_replace_bits(&pdi_conf, pdi->h_ch_num, SDW_SHIM_PCMSYCM_HCHN);
 
 	intel_writew(shim, SDW_SHIM_PCMSYCHM(link_id, pdi->num), pdi_conf);
 }
@@ -792,11 +776,8 @@ intel_pdi_alh_configure(struct sdw_intel *sdw, struct sdw_cdns_pdi *pdi)
 	/* Program Stream config ALH register */
 	conf = intel_readl(alh, SDW_ALH_STRMZCFG(pdi->intel_alh_id));
 
-	conf |= (SDW_ALH_STRMZCFG_DMAT_VAL <<
-			SDW_REG_SHIFT(SDW_ALH_STRMZCFG_DMAT));
-
-	conf |= ((pdi->ch_count - 1) <<
-			SDW_REG_SHIFT(SDW_ALH_STRMZCFG_CHN));
+	u32p_replace_bits(&conf, SDW_ALH_STRMZCFG_DMAT_VAL, SDW_ALH_STRMZCFG_DMAT);
+	u32p_replace_bits(&conf, pdi->ch_count - 1, SDW_ALH_STRMZCFG_CHN);
 
 	intel_writel(alh, SDW_ALH_STRMZCFG(pdi->intel_alh_id), conf);
 }
@@ -1008,8 +989,6 @@ error:
 static int intel_prepare(struct snd_pcm_substream *substream,
 			 struct snd_soc_dai *dai)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_dai *first_cpu_dai = asoc_rtd_to_cpu(rtd, 0);
 	struct sdw_cdns *cdns = snd_soc_dai_get_drvdata(dai);
 	struct sdw_intel *sdw = cdns_to_intel(cdns);
 	struct sdw_cdns_dma_data *dma;
@@ -1024,7 +1003,6 @@ static int intel_prepare(struct snd_pcm_substream *substream,
 	}
 
 	if (dma->suspended) {
-
 		dma->suspended = false;
 
 		/*
@@ -1051,74 +1029,14 @@ static int intel_prepare(struct snd_pcm_substream *substream,
 					  dma->hw_params,
 					  sdw->instance,
 					  dma->pdi->intel_alh_id);
-		if (ret)
-			goto err;
 	}
 
-	/*
-	 * All cpu dais belong to a stream. To ensure sdw_prepare_stream
-	 * is called once per stream, we should call it only when
-	 * dai = first_cpu_dai.
-	 */
-	if (first_cpu_dai == dai)
-		ret = sdw_prepare_stream(dma->stream);
-
-err:
-	return ret;
-}
-
-static int intel_trigger(struct snd_pcm_substream *substream, int cmd,
-			 struct snd_soc_dai *dai)
-{
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_dai *first_cpu_dai = asoc_rtd_to_cpu(rtd, 0);
-	struct sdw_cdns_dma_data *dma;
-	int ret;
-
-	/*
-	 * All cpu dais belong to a stream. To ensure sdw_enable/disable_stream
-	 * are called once per stream, we should call them only when
-	 * dai = first_cpu_dai.
-	 */
-	if (first_cpu_dai != dai)
-		return 0;
-
-	dma = snd_soc_dai_get_dma_data(dai, substream);
-	if (!dma) {
-		dev_err(dai->dev, "failed to get dma data in %s", __func__);
-		return -EIO;
-	}
-
-	switch (cmd) {
-	case SNDRV_PCM_TRIGGER_START:
-	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
-	case SNDRV_PCM_TRIGGER_RESUME:
-		ret = sdw_enable_stream(dma->stream);
-		break;
-
-	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
-	case SNDRV_PCM_TRIGGER_SUSPEND:
-	case SNDRV_PCM_TRIGGER_STOP:
-		ret = sdw_disable_stream(dma->stream);
-		break;
-
-	default:
-		ret = -EINVAL;
-		break;
-	}
-
-	if (ret)
-		dev_err(dai->dev,
-			"%s trigger %d failed: %d",
-			__func__, cmd, ret);
 	return ret;
 }
 
 static int
 intel_hw_free(struct snd_pcm_substream *substream, struct snd_soc_dai *dai)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_dai *first_cpu_dai = asoc_rtd_to_cpu(rtd, 0);
 	struct sdw_cdns *cdns = snd_soc_dai_get_drvdata(dai);
 	struct sdw_intel *sdw = cdns_to_intel(cdns);
 	struct sdw_cdns_dma_data *dma;
@@ -1127,20 +1045,6 @@ intel_hw_free(struct snd_pcm_substream *substream, struct snd_soc_dai *dai)
 	dma = snd_soc_dai_get_dma_data(dai, substream);
 	if (!dma)
 		return -EIO;
-
-	/*
-	 * All cpu dais belong to a stream. To ensure sdw_deprepare_stream
-	 * is called once per stream, we should call it only when
-	 * dai = first_cpu_dai.
-	 */
-	if (first_cpu_dai == dai) {
-		ret = sdw_deprepare_stream(dma->stream);
-		if (ret) {
-			dev_err(dai->dev, "sdw_deprepare_stream: failed %d",
-				ret);
-			return ret;
-		}
-	}
 
 	/*
 	 * The sdw stream state will transition to RELEASED when stream->
@@ -1182,7 +1086,6 @@ static int intel_component_dais_suspend(struct snd_soc_component *component)
 	struct snd_soc_dai *dai;
 
 	for_each_component_dais(component, dai) {
-
 		/*
 		 * we don't have a .suspend dai_ops, and we don't have access
 		 * to the substream, so let's mark both capture and playback
@@ -1223,7 +1126,7 @@ static void *intel_get_sdw_stream(struct snd_soc_dai *dai,
 		dma = dai->capture_dma_data;
 
 	if (!dma)
-		return NULL;
+		return ERR_PTR(-EINVAL);
 
 	return dma->stream;
 }
@@ -1232,7 +1135,6 @@ static const struct snd_soc_dai_ops intel_pcm_dai_ops = {
 	.startup = intel_startup,
 	.hw_params = intel_hw_params,
 	.prepare = intel_prepare,
-	.trigger = intel_trigger,
 	.hw_free = intel_hw_free,
 	.shutdown = intel_shutdown,
 	.set_sdw_stream = intel_pcm_set_sdw_stream,
@@ -1243,7 +1145,6 @@ static const struct snd_soc_dai_ops intel_pdm_dai_ops = {
 	.startup = intel_startup,
 	.hw_params = intel_hw_params,
 	.prepare = intel_prepare,
-	.trigger = intel_trigger,
 	.hw_free = intel_hw_free,
 	.shutdown = intel_shutdown,
 	.set_sdw_stream = intel_pdm_set_sdw_stream,
@@ -1648,7 +1549,6 @@ int intel_master_process_wakeen_event(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct sdw_intel *sdw;
 	struct sdw_bus *bus;
-	struct sdw_slave *slave;
 	void __iomem *shim;
 	u16 wake_sts;
 
@@ -1656,9 +1556,7 @@ int intel_master_process_wakeen_event(struct platform_device *pdev)
 	bus = &sdw->cdns.bus;
 
 	if (bus->prop.hw_disabled) {
-		dev_dbg(dev,
-			"SoundWire master %d is disabled, ignoring\n",
-			bus->link_id);
+		dev_dbg(dev, "SoundWire master %d is disabled, ignoring\n", bus->link_id);
 		return 0;
 	}
 
@@ -1672,18 +1570,13 @@ int intel_master_process_wakeen_event(struct platform_device *pdev)
 	intel_shim_wake(sdw, false);
 
 	/*
-	 * wake up master and slave so that slave can notify master
-	 * the wakeen event and let codec driver check codec status
+	 * resume the Master, which will generate a bus reset and result in
+	 * Slaves re-attaching and be re-enumerated. The SoundWire physical
+	 * device which generated the wake will trigger an interrupt, which
+	 * will in turn cause the corresponding Linux Slave device to be
+	 * resumed and the Slave codec driver to check the status.
 	 */
-	list_for_each_entry(slave, &bus->slaves, node) {
-		/*
-		 * discard devices that are defined in ACPI tables but
-		 * not physically present and devices that cannot
-		 * generate wakes
-		 */
-		if (slave->dev_num_sticky && slave->prop.wake_capable)
-			pm_request_resume(&slave->dev);
-	}
+	pm_request_resume(dev);
 
 	return 0;
 }
@@ -1692,9 +1585,9 @@ int intel_master_process_wakeen_event(struct platform_device *pdev)
  * PM calls
  */
 
-#ifdef CONFIG_PM_SLEEP
+#ifdef CONFIG_PM
 
-static int intel_suspend(struct device *dev)
+static int __maybe_unused intel_suspend(struct device *dev)
 {
 	struct sdw_cdns *cdns = dev_get_drvdata(dev);
 	struct sdw_intel *sdw = cdns_to_intel(cdns);
@@ -1709,9 +1602,7 @@ static int intel_suspend(struct device *dev)
 	}
 
 	if (pm_runtime_suspended(dev)) {
-		dev_dbg(dev,
-			"%s: pm_runtime status: suspended\n",
-			__func__);
+		dev_dbg(dev, "%s: pm_runtime status: suspended\n", __func__);
 
 		clock_stop_quirks = sdw->link_res->clock_stop_quirks;
 
@@ -1749,9 +1640,6 @@ static int intel_suspend(struct device *dev)
 
 	return 0;
 }
-#endif
-
-#ifdef CONFIG_PM
 
 static int intel_suspend_runtime(struct device *dev)
 {
@@ -1787,7 +1675,6 @@ static int intel_suspend_runtime(struct device *dev)
 
 	} else if (clock_stop_quirks & SDW_INTEL_CLK_STOP_BUS_RESET ||
 		   !clock_stop_quirks) {
-
 		ret = sdw_cdns_clock_stop(cdns, true);
 		if (ret < 0) {
 			dev_err(dev, "cannot enable clock stop on suspend\n");
@@ -1815,11 +1702,8 @@ static int intel_suspend_runtime(struct device *dev)
 
 	return ret;
 }
-#endif
 
-#ifdef CONFIG_PM_SLEEP
-
-static int intel_resume(struct device *dev)
+static int __maybe_unused intel_resume(struct device *dev)
 {
 	struct sdw_cdns *cdns = dev_get_drvdata(dev);
 	struct sdw_intel *sdw = cdns_to_intel(cdns);
@@ -1838,9 +1722,7 @@ static int intel_resume(struct device *dev)
 	multi_link = !(link_flags & SDW_INTEL_MASTER_DISABLE_MULTI_LINK);
 
 	if (pm_runtime_suspended(dev)) {
-		dev_dbg(dev,
-			"%s: pm_runtime status was suspended, forcing active\n",
-			__func__);
+		dev_dbg(dev, "%s: pm_runtime status was suspended, forcing active\n", __func__);
 
 		/* follow required sequence from runtime_pm.rst */
 		pm_runtime_disable(dev);
@@ -1913,9 +1795,6 @@ static int intel_resume(struct device *dev)
 
 	return ret;
 }
-#endif
-
-#ifdef CONFIG_PM
 
 static int intel_resume_runtime(struct device *dev)
 {
@@ -2062,9 +1941,7 @@ static int intel_resume_runtime(struct device *dev)
 
 		clock_stop0 = sdw_cdns_is_clock_stop(&sdw->cdns);
 		if (!clock_stop0)
-			dev_err(dev,
-				"%s invalid configuration, clock was not stopped",
-				__func__);
+			dev_err(dev, "%s invalid configuration, clock was not stopped", __func__);
 
 		ret = intel_init(sdw);
 		if (ret) {
@@ -2091,6 +1968,7 @@ static int intel_resume_runtime(struct device *dev)
 
 	return ret;
 }
+
 #endif
 
 static const struct dev_pm_ops intel_pm = {
