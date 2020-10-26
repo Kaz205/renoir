@@ -92,7 +92,7 @@ int of_dma_configure_id(struct device *dev, struct device_node *np,
 {
 	const struct iommu_ops *iommu;
 	const struct bus_dma_region *map = NULL;
-	dma_addr_t dma_start = 0;
+	u64 dma_start = 0;
 	u64 mask, end, size = 0;
 	bool coherent;
 	int ret;
@@ -108,10 +108,10 @@ int of_dma_configure_id(struct device *dev, struct device_node *np,
 			return ret == -ENODEV ? 0 : ret;
 	} else {
 		const struct bus_dma_region *r = map;
-		dma_addr_t dma_end = 0;
+		u64 dma_end = 0;
 
 		/* Determine the overall bounds of all DMA regions */
-		for (dma_start = ~(dma_addr_t)0; r->size; r++) {
+		for (dma_start = ~0ULL; r->size; r++) {
 			/* Take lower and upper limits */
 			if (r->dma_start < dma_start)
 				dma_start = r->dma_start;
