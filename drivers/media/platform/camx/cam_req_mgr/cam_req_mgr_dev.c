@@ -27,6 +27,7 @@
 #include "cam_mem_mgr.h"
 #include "cam_debug_util.h"
 #include "cam_common_util.h"
+#include "cam_buf_mgr.h"
 #if defined(CONFIG_ARCH_SM6150)
 #include <linux/slub_def.h>
 #endif
@@ -122,7 +123,7 @@ static int cam_req_mgr_open(struct file *filep)
 	spin_unlock_bh(&g_dev.cam_eventq_lock);
 
 	g_dev.open_cnt++;
-	rc = cam_mem_mgr_init();
+	rc = cam_mem_mgr_open();
 	if (rc) {
 		g_dev.open_cnt--;
 		CAM_ERR(CAM_CRM, "mem mgr init failed");
@@ -188,7 +189,7 @@ static int cam_req_mgr_close(struct file *filep)
 	spin_unlock_bh(&g_dev.cam_eventq_lock);
 
 	cam_req_mgr_util_free_hdls();
-	cam_mem_mgr_deinit();
+	cam_mem_mgr_close();
 	mutex_unlock(&g_dev.cam_lock);
 
 	return 0;
@@ -660,6 +661,7 @@ static int cam_req_mgr_remove(struct platform_device *pdev)
 	cam_media_device_cleanup();
 	cam_video_device_cleanup();
 	cam_v4l2_device_cleanup();
+	cam_mem_mgr_exit(pdev);
 	mutex_destroy(&g_dev.dev_lock);
 	g_dev.state = false;
 	g_dev.subdev_nodes_created = false;
@@ -692,9 +694,17 @@ static int cam_req_mgr_probe(struct platform_device *pdev)
 	}
 	put_device(&smmu_pdev->dev);
 
+	platform_set_drvdata(pdev, &g_dev);
+
+	rc = cam_mem_mgr_init(pdev);
+	if (rc) {
+		CAM_ERR(CAM_CRM, "Cannot initialize camera memory manager");
+		return rc;
+	}
+
 	rc = cam_v4l2_device_setup(&pdev->dev);
 	if (rc)
-		return rc;
+		goto err_mem_mgr_exit;
 
 	rc = cam_media_device_setup(&pdev->dev);
 	if (rc)
@@ -743,6 +753,8 @@ static int cam_req_mgr_probe(struct platform_device *pdev)
 
 	return rc;
 
+err_mem_mgr_exit:
+	cam_mem_mgr_exit(pdev);
 req_mgr_core_fail:
 	cam_req_mgr_util_deinit();
 req_mgr_util_fail:

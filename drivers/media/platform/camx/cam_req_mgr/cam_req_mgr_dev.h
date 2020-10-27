@@ -14,6 +14,8 @@
 #ifndef _CAM_REQ_MGR_DEV_H_
 #define _CAM_REQ_MGR_DEV_H_
 
+struct cmm_buf_context;
+
 /**
  * struct cam_req_mgr_device - a camera request manager device
  *
