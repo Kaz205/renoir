@@ -96,60 +96,39 @@ static int cam_mem_util_unmap_cpu_va(struct dma_buf *dmabuf,
 	return 0;
 }
 
-int cam_mem_mgr_open(void)
+static int32_t cam_mem_get_slot(struct cam_mem_table *table)
 {
-	int i;
-	int bitmap_size;
+	int idx;
 
-	memset(tbl.bufq, 0, sizeof(tbl.bufq));
-
-	bitmap_size = BITS_TO_LONGS(CAM_MEM_BUFQ_MAX) * sizeof(long);
-	tbl.bitmap = kzalloc(bitmap_size, GFP_KERNEL);
-	if (!tbl.bitmap)
-		return -ENOMEM;
-
-	tbl.bits = bitmap_size * BITS_PER_BYTE;
-	bitmap_zero(tbl.bitmap, tbl.bits);
-	/* We need to reserve slot 0 because 0 is invalid */
-	set_bit(0, tbl.bitmap);
-
-	for (i = 1; i < CAM_MEM_BUFQ_MAX; i++) {
-		tbl.bufq[i].fd = -1;
-		tbl.bufq[i].buf_handle = -1;
-	}
-	mutex_init(&tbl.m_lock);
-
-	return 0;
-}
-
-static int32_t cam_mem_get_slot(void)
-{
-	int32_t idx;
-
-	mutex_lock(&tbl.m_lock);
-	idx = find_first_zero_bit(tbl.bitmap, tbl.bits);
+	mutex_lock(&table->m_lock);
+	idx = find_first_zero_bit(table->bitmap, table->bits);
 	if (idx >= CAM_MEM_BUFQ_MAX || idx <= 0) {
-		mutex_unlock(&tbl.m_lock);
-		return -ENOMEM;
+		CAM_ERR(CAM_MEM, "Cannot get zero bit, idx:%d", idx);
+		idx = -ENOMEM;
+		goto err_tbl_unlock;
 	}
 
-	set_bit(idx, tbl.bitmap);
-	tbl.bufq[idx].active = true;
-	mutex_init(&tbl.bufq[idx].q_lock);
-	mutex_unlock(&tbl.m_lock);
+	set_bit(idx, table->bitmap);
+	mutex_lock(&table->bufq[idx].q_lock);
+	table->bufq[idx].active = true;
+	mutex_unlock(&table->bufq[idx].q_lock);
+	mutex_unlock(&table->m_lock);
 
+	return idx;
+
+err_tbl_unlock:
+	mutex_unlock(&table->m_lock);
 	return idx;
 }
 
-static void cam_mem_put_slot(int32_t idx)
+static void cam_mem_put_slot(struct cam_mem_table *table, int idx)
 {
-	mutex_lock(&tbl.m_lock);
-	mutex_lock(&tbl.bufq[idx].q_lock);
-	tbl.bufq[idx].active = false;
-	mutex_unlock(&tbl.bufq[idx].q_lock);
-	mutex_destroy(&tbl.bufq[idx].q_lock);
-	clear_bit(idx, tbl.bitmap);
-	mutex_unlock(&tbl.m_lock);
+	mutex_lock(&table->m_lock);
+	clear_bit(idx, table->bitmap);
+	mutex_lock(&table->bufq[idx].q_lock);
+	table->bufq[idx].active = false;
+	mutex_unlock(&table->bufq[idx].q_lock);
+	mutex_unlock(&table->m_lock);
 }
 
 int cam_mem_get_io_buf(int32_t buf_handle, int32_t mmu_handle,
@@ -493,7 +472,7 @@ int cam_mem_mgr_alloc_and_map(struct cam_mem_mgr_alloc_cmd *cmd)
 		return rc;
 	}
 
-	idx = cam_mem_get_slot();
+	idx = cam_mem_get_slot(&tbl);
 	if (idx < 0) {
 		CAM_ERR(CAM_MEM, "Failed in getting mem slot, idx=%d", idx);
 		rc = -ENOMEM;
@@ -571,7 +550,7 @@ int cam_mem_mgr_alloc_and_map(struct cam_mem_mgr_alloc_cmd *cmd)
 map_kernel_fail:
 	mutex_unlock(&tbl.bufq[idx].q_lock);
 map_hw_fail:
-	cam_mem_put_slot(idx);
+	cam_mem_put_slot(&tbl, idx);
 slot_fail:
 	cmm_free_buffer(dmabuf);
 	return rc;
@@ -627,7 +606,7 @@ int cam_mem_mgr_map(struct cam_mem_mgr_map_cmd *cmd)
 		}
 	}
 
-	idx = cam_mem_get_slot();
+	idx = cam_mem_get_slot(&tbl);
 	if (idx < 0) {
 		rc = -ENOMEM;
 		goto map_fail;
@@ -719,74 +698,6 @@ static int cam_mem_util_unmap_hw_va(int32_t idx,
 unmap_end:
 	CAM_ERR(CAM_MEM, "unmapping failed");
 	return rc;
-}
-
-static void cam_mem_mgr_unmap_active_buf(int idx)
-{
-	enum cam_smmu_region_id region = CAM_SMMU_REGION_SHARED;
-
-	if (tbl.bufq[idx].flags & CAM_MEM_FLAG_HW_SHARED_ACCESS)
-		region = CAM_SMMU_REGION_SHARED;
-	else if (tbl.bufq[idx].flags & CAM_MEM_FLAG_HW_READ_WRITE)
-		region = CAM_SMMU_REGION_IO;
-
-	cam_mem_util_unmap_hw_va(idx, region, CAM_SMMU_MAPPING_USER);
-}
-
-static int cam_mem_mgr_cleanup_table(void)
-{
-	int i;
-
-	mutex_lock(&tbl.m_lock);
-	for (i = 1; i < CAM_MEM_BUFQ_MAX; i++) {
-		if (!tbl.bufq[i].active) {
-			CAM_DBG(CAM_MEM,
-				"Buffer inactive at idx=%d, continuing", i);
-			continue;
-		} else {
-			CAM_DBG(CAM_MEM,
-			"Active buffer at idx=%d, possible leak needs unmapping",
-			i);
-			cam_mem_mgr_unmap_active_buf(i);
-		}
-
-		mutex_lock(&tbl.bufq[i].q_lock);
-		if (tbl.bufq[i].dma_buf) {
-			dma_buf_put(tbl.bufq[i].dma_buf);
-			tbl.bufq[i].dma_buf = NULL;
-		}
-		tbl.bufq[i].fd = -1;
-		tbl.bufq[i].flags = 0;
-		tbl.bufq[i].buf_handle = -1;
-		tbl.bufq[i].vaddr = 0;
-		tbl.bufq[i].len = 0;
-		memset(tbl.bufq[i].hdls, 0,
-			sizeof(int32_t) * tbl.bufq[i].num_hdl);
-		tbl.bufq[i].num_hdl = 0;
-		tbl.bufq[i].dma_buf = NULL;
-		tbl.bufq[i].active = false;
-		tbl.bufq[i].kmdvaddr = 0;
-		mutex_unlock(&tbl.bufq[i].q_lock);
-		mutex_destroy(&tbl.bufq[i].q_lock);
-	}
-
-	bitmap_zero(tbl.bitmap, tbl.bits);
-	/* We need to reserve slot 0 because 0 is invalid */
-	set_bit(0, tbl.bitmap);
-	mutex_unlock(&tbl.m_lock);
-
-	return 0;
-}
-
-void cam_mem_mgr_close(void)
-{
-	cam_mem_mgr_cleanup_table();
-	mutex_lock(&tbl.m_lock);
-	bitmap_zero(tbl.bitmap, tbl.bits);
-	kfree(tbl.bitmap);
-	tbl.bitmap = NULL;
-	mutex_unlock(&tbl.m_lock);
-	mutex_destroy(&tbl.m_lock);
 }
 
 static int cam_mem_util_unmap(int32_t idx,
@@ -984,7 +895,7 @@ int cam_mem_mgr_request_mem(struct cam_mem_mgr_request_desc *inp,
 	smmu_hdl = inp->smmu_hdl;
 	num_hdl = 1;
 
-	idx = cam_mem_get_slot();
+	idx = cam_mem_get_slot(&tbl);
 	if (idx < 0) {
 		CAM_ERR(CAM_MEM, "Get slot failed");
 		rc = -ENOMEM;
@@ -1066,6 +977,49 @@ int cam_mem_mgr_release_mem(struct cam_mem_mgr_memory_desc *inp)
 }
 EXPORT_SYMBOL(cam_mem_mgr_release_mem);
 
+static int cmm_slot_table_create(struct cam_mem_table *table)
+{
+	int i, bitmap_size;
+	int rc = 0;
+
+	bitmap_size = BITS_TO_LONGS(CAM_MEM_BUFQ_MAX) * sizeof(long);
+	table->bitmap = kzalloc(bitmap_size, GFP_KERNEL);
+	if (IS_ERR_OR_NULL(table->bitmap)) {
+		rc = PTR_ERR(table->bitmap);
+		CAM_ERR(CAM_MEM, "Cannot allocate bitmap, rc:%d", rc);
+		return rc;
+	}
+
+	mutex_init(&table->m_lock);
+	mutex_lock(&table->m_lock);
+	table->bits = bitmap_size * BITS_PER_BYTE;
+	/* We need to reserve slot 0 */
+	set_bit(0, table->bitmap);
+	for (i = 1; i < CAM_MEM_BUFQ_MAX; i++) {
+		table->bufq[i].fd	  = -1;
+		table->bufq[i].buf_handle = -1;
+		mutex_init(&table->bufq[i].q_lock);
+	}
+	mutex_unlock(&table->m_lock);
+
+	return rc;
+}
+
+static void cmm_slot_table_destroy(struct cam_mem_table *table)
+{
+	int i;
+
+	mutex_lock(&table->m_lock);
+	for (i = 1; i < CAM_MEM_BUFQ_MAX; i++) {
+		mutex_unlock(&table->bufq[i].q_lock);
+		mutex_destroy(&table->bufq[i].q_lock);
+	}
+	memset(table->bufq, 0, sizeof(table->bufq));
+	mutex_unlock(&table->m_lock);
+	mutex_destroy(&table->m_lock);
+	kfree(table->bitmap);
+}
+
 int cam_mem_mgr_init(struct platform_device *pdev)
 {
 	int rc;
@@ -1076,10 +1030,12 @@ int cam_mem_mgr_init(struct platform_device *pdev)
 		return rc;
 	}
 
-	return rc;
+	return cmm_slot_table_create(&tbl);
 }
 
 void cam_mem_mgr_exit(struct platform_device *pdev)
 {
+	cmm_slot_table_destroy(&tbl);
+
 	cam_buf_mgr_exit(pdev);
 }

@@ -112,21 +112,8 @@ int cam_mem_mgr_map(struct cam_mem_mgr_map_cmd *cmd);
 int cam_mem_mgr_cache_ops(struct cam_mem_cache_ops_cmd *cmd);
 
 /**
- * @brief: Open the memory manager
- *
- * @return Status of operation. Negative in case of error. Zero otherwise.
- */
-int cam_mem_mgr_open(void);
-
-/**
- * @brief:  Close down the memory manager
- *
- * @return None
- */
-void cam_mem_mgr_close(void);
-
-/**
  * @brief: Initializes the memory manager
+ * @pdev:   Platform device context
  *
  * @return Status of operation. Negative in case of error. Zero otherwise.
  */
@@ -134,6 +121,7 @@ int cam_mem_mgr_init(struct platform_device *pdev);
 
 /**
  * @brief:  Tears down the memory manager
+ * @pdev:   Platform device context
  *
  * @return None
  */
