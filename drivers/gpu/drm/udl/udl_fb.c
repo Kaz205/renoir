@@ -244,6 +244,7 @@ static int udl_fb_open(struct fb_info *info, int user)
 	return 0;
 }
 
+static struct fb_ops udlfb_ops;
 
 /*
  * Assumes caller is holding info->lock mutex (for open and release at least)
@@ -259,7 +260,7 @@ static int udl_fb_release(struct fb_info *info, int user)
 		fb_deferred_io_cleanup(info);
 		kfree(info->fbdefio);
 		info->fbdefio = NULL;
-		info->fbops->fb_mmap = udl_fb_mmap;
+		udlfb_ops.fb_mmap = udl_fb_mmap;
 	}
 #endif
 
@@ -452,13 +453,9 @@ int udl_fbdev_init(struct drm_device *dev)
 
 	drm_fb_helper_prepare(dev, &ufbdev->helper, &udl_fb_helper_funcs);
 
-	ret = drm_fb_helper_init(dev, &ufbdev->helper, 1);
+	ret = drm_fb_helper_init(dev, &ufbdev->helper);
 	if (ret)
 		goto free;
-
-	ret = drm_fb_helper_single_add_all_connectors(&ufbdev->helper);
-	if (ret)
-		goto fini;
 
 	/* disable all the possible outputs/crtcs before entering KMS mode */
 	drm_helper_disable_unused_functions(dev);
