@@ -1318,6 +1318,18 @@ config I2C_MULTI_INSTANTIATE
 	  To compile this driver as a module, choose M here: the module
 	  will be called i2c-multi-instantiate.
 
+config INTEL_PMT_CLASS
+	tristate "Intel Platform Monitoring Technology (PMT) Class driver"
+	help
+	  The Intel Platform Monitoring Technology (PMT) class driver provides
+	  the basic sysfs interface and file hierarchy uses by PMT devices.
+
+	  For more information, see:
+	  <file:Documentation/ABI/testing/sysfs-class-intel_pmt>
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called intel_pmt_class.
+
 config INTEL_ATOMISP2_PM
 	tristate "Intel AtomISP2 dummy / power-management driver"
 	depends on PCI && IOSF_MBI && PM
