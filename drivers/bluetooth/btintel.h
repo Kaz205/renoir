@@ -132,6 +132,12 @@ struct intel_debug_features {
 	__u8    page1[16];
 } __packed;
 
+#define INTEL_TLV_TYPE_ID		0x1
+
+#define INTEL_TLV_SYSTEM_EXCEPTION	0x0
+#define INTEL_TLV_FATAL_EXCEPTION	0x1
+#define INTEL_TLV_DEBUG_EXCEPTION	0x2
+
 #define INTEL_HW_PLATFORM(cnvx_bt)	((u8)(((cnvx_bt) & 0x0000ff00) >> 8))
 #define INTEL_HW_VARIANT(cnvx_bt)	((u8)(((cnvx_bt) & 0x003f0000) >> 16))
 #define INTEL_CNVX_TOP_TYPE(cnvx_top)	((cnvx_top) & 0x00000fff)
@@ -178,6 +184,8 @@ int btintel_set_debug_features(struct hci_dev *hdev,
 int btintel_set_quality_report(struct hci_dev *hdev, bool enable);
 bool btintel_is_quality_report_evt(struct sk_buff *skb);
 bool btintel_pull_quality_report_data(struct sk_buff *skb);
+int btintel_register_devcoredump_support(struct hci_dev *hdev,
+					 const char *driver_name);
 #else
 
 static inline int btintel_check_bdaddr(struct hci_dev *hdev)
@@ -323,5 +331,11 @@ static inline bool btintel_is_quality_report_evt(struct sk_buff *skb)
 static inline bool btintel_pull_quality_report_data(struct sk_buff *skb)
 {
 	return false;
+}
+
+static int btintel_register_devcoredump_support(struct hci_dev *hdev,
+						const char *driver_name)
+{
+		return -EOPNOTSUPP;
 }
 #endif
