@@ -11,7 +11,6 @@
  * Intel TCSS (Type-C Sub System)
  */
 
-#include <linux/io.h>
 #include <linux/module.h>
 #include <linux/platform_data/cros_ec_proto.h>
 #include <linux/platform_data/cros_usbpd_notify.h>
@@ -110,9 +109,6 @@ static int cros_ec_pd_get_num_ports(struct cros_ec_tcss_info *info)
 				 NULL, 0, &resp, sizeof(resp));
 	if (ret < 0)
 		return ret;
-
-	if (resp.num_ports > IOM_MAX_PORTS)
-		return -EINVAL;
 
 	info->num_ports = resp.num_ports;
 
@@ -340,13 +336,6 @@ static void cros_ec_tcss_altmode_req(struct tcss_mux *mux_data, u8 *tcss_req)
 			PMC_IPC_ALTMODE_REQ_MODE_CABLE_GEN_SHIFT);
 }
 
-static bool cros_ec_tcss_port_connected(u8 port, void __iomem *status_reg)
-{
-	void __iomem *reg = status_reg + (IOM_REG_LEN * port);
-
-	return !!(ioread32(reg) & IOM_PORT_STATUS_CONNECTED);
-}
-
 static int cros_ec_tcss_req(struct cros_ec_tcss_info *info, int req_type,
 			    u8 port, struct tcss_mux *mux_data)
 {
@@ -355,26 +344,7 @@ static int cros_ec_tcss_req(struct cros_ec_tcss_info *info, int req_type,
 	struct device *dev = info->dev;
 	u32 write_size, tcss_res = 0;
 	u8 tcss_req[8] = { 0 };
-	bool connected;
 	int ret;
-
-	/*
-	 * Duplicate connect (e.g firmware does TCSS mux configuration during
-	 * boot with devices connected to Type-C ports and kernel tries to
-	 * configure again) and disconnect requests are not supported in
-	 * TCSS mux configuration by IOM. Hence, bail out on duplicate
-	 * requests with success.
-	 */
-	connected = cros_ec_tcss_port_connected(port, info->iom_port_status);
-	dev_dbg(info->dev, "port %u connected status %u\n", port, connected);
-
-	if (req_type == PMC_IPC_DIS_REQ_RES && !connected) {
-		dev_dbg(info->dev, "port %u already disconnected\n", port);
-		return 0;
-	} else if (req_type == PMC_IPC_CONN_REQ_RES && connected) {
-		dev_dbg(info->dev, "port %u already connected\n", port);
-		return 0;
-	}
 
 	tcss_req[0] = req_type | tcss_info->usb3_port << EC_USB3_PORT_SHIFT;
 
@@ -562,7 +532,6 @@ static int cros_ec_tcss_remove(struct platform_device *pdev)
 	cros_usbpd_unregister_notify(&info->notifier);
 	cancel_work_sync(&info->bh_work);
 	mutex_destroy(&info->lock);
-	iounmap(info->iom_port_status);
 
 	return 0;
 }
@@ -611,20 +580,12 @@ static int cros_ec_tcss_probe(struct platform_device *pdev)
 	mutex_init(&info->lock);
 	INIT_WORK(&info->bh_work, cros_ec_tcss_bh_work);
 
-	info->iom_port_status = ioremap(IOM_PORT_STATUS_ADDR,
-					IOM_PORT_STATUS_LEN);
-
-	if (!info->iom_port_status) {
-		dev_err(dev, "failed to map iom port status register\n");
-		goto destroy_mutex;
-	}
-
 	/* Get Port detection events from the EC */
 	info->notifier.notifier_call = cros_ec_tcss_event;
 	ret = cros_usbpd_register_notify(&info->notifier);
 	if (ret < 0) {
 		dev_err(dev, "failed to register notifier\n");
-		goto iom_iounmap;
+		goto destroy_mutex;
 	}
 
 	mutex_lock(&info->lock);
@@ -645,14 +606,12 @@ static int cros_ec_tcss_probe(struct platform_device *pdev)
 	}
 	mutex_unlock(&info->lock);
 
-	return 0;
+return 0;
 
 remove_tcss:
 	mutex_unlock(&info->lock);
 	cros_usbpd_unregister_notify(&info->notifier);
 	cancel_work_sync(&info->bh_work);
-iom_iounmap:
-	iounmap(info->iom_port_status);
 destroy_mutex:
 	mutex_destroy(&info->lock);
 
