@@ -473,7 +473,8 @@ err:
 	return -EIO;
 }
 
-static int cros_ec_tcss_detect_cable(struct cros_ec_tcss_info *info, u8 port)
+static int cros_ec_tcss_detect_cable(struct cros_ec_tcss_info *info,
+				     bool force, u8 port)
 {
 	struct cros_ec_tcss_data *tcss_info;
 	struct cros_ec_tcss_data port_data;
@@ -548,7 +549,7 @@ static void cros_ec_tcss_bh_work(struct work_struct *work)
 
 	mutex_lock(&info->lock);
 	for (i = 0; i < info->num_ports; i++) {
-		if (cros_ec_tcss_detect_cable(info, i) >= 0)
+		if (cros_ec_tcss_detect_cable(info, false, i) >= 0)
 			continue;
 		dev_err(info->dev, "Port %d, Error detecting cable\n", i);
 		break;
@@ -651,7 +652,7 @@ static int cros_ec_tcss_probe(struct platform_device *pdev)
 			goto remove_tcss;
 		}
 
-		ret = cros_ec_tcss_detect_cable(info, i);
+		ret = cros_ec_tcss_detect_cable(info, true, i);
 		if (ret < 0) {
 			dev_err(dev, "failed to detect initial cable state\n");
 			goto remove_tcss;
@@ -682,7 +683,7 @@ static int cros_ec_tcss_resume(struct device *dev)
 
 	mutex_lock(&info->lock);
 	for (i = 0; i < info->num_ports; i++) {
-		ret = cros_ec_tcss_detect_cable(info, i);
+		ret = cros_ec_tcss_detect_cable(info, false, i);
 		if (ret < 0) {
 			dev_err(dev, "cable detection failed on resume\n");
 			mutex_unlock(&info->lock);
