@@ -32,6 +32,7 @@
  */
 
 #include "amdgpu.h"
+#include "amdgpu_dma_buf.h"
 #include "amdgpu_display.h"
 #include "amdgpu_gem.h"
 #include <drm/drm_drv.h>
@@ -327,8 +328,8 @@ int amdgpu_try_dma_buf_mmap(struct file *filp, struct vm_area_struct *vma)
        struct amdgpu_device *adev = dev->dev_private;
        struct ttm_bo_device *bdev = &adev->mman.bdev;
        struct ttm_buffer_object *tbo = NULL;
-       struct amdgpu_bo *bo = NULL;
-       struct drm_gem_object *obj = NULL;
+       struct amdgpu_bo *bo;
+       struct drm_gem_object *obj;
        struct drm_vma_offset_node *node;
        int ret;
 

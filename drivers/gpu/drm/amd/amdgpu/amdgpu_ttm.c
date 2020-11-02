@@ -51,6 +51,7 @@
 #include <drm/amdgpu_drm.h>
 
 #include "amdgpu.h"
+#include "amdgpu_dma_buf.h"
 #include "amdgpu_object.h"
 #include "amdgpu_trace.h"
 #include "amdgpu_amdkfd.h"
@@ -1891,8 +1892,6 @@ void amdgpu_ttm_set_buffer_funcs_status(struct amdgpu_device *adev, bool enable)
 	man->size = size >> PAGE_SHIFT;
 	adev->mman.buffer_funcs_enabled = enable;
 }
-
-int amdgpu_try_dma_buf_mmap(struct file *filp, struct vm_area_struct *vma);
 
 int amdgpu_mmap(struct file *filp, struct vm_area_struct *vma)
 {
