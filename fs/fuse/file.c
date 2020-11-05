@@ -39,7 +39,8 @@ static int fuse_send_open(struct fuse_conn *fc, u64 nodeid, struct file *file,
 	FUSE_ARGS(args);
 
 	memset(&inarg, 0, sizeof(inarg));
-	inarg.flags = file->f_flags & ~(O_CREAT | O_EXCL | O_NOCTTY);
+	inarg.flags =
+		file->f_flags & ~(O_CREAT | O_EXCL | O_NOCTTY | O_TMPFILE);
 	if (!fc->atomic_o_trunc)
 		inarg.flags &= ~O_TRUNC;
 	args.opcode = opcode;
