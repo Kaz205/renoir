@@ -5,9 +5,7 @@
  * Copyright 2020 Google LLC.
  */
 
-/dts-v1/;
-
-#include "sc7180-trogdor-lazor.dtsi"
+#include "sc7180-trogdor-lazor-r1.dts"
 #include "sc7180-trogdor-lte-sku.dtsi"
 
 / {
