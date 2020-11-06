@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
-// Copyright(c) 2015-2019 Intel Corporation.
+// Copyright(c) 2015-2020 Intel Corporation.
 
 /*
  * Bandwidth management algorithm based on 2^n gears
@@ -219,12 +219,15 @@ static int sdw_add_element_group_count(struct sdw_group *group,
 			continue;
 
 		if (group->count >= group->max_size) {
+			unsigned int *rates;
+
 			group->max_size += 1;
-			group->rates = krealloc(group->rates,
-						(sizeof(int) * group->max_size),
-						GFP_KERNEL);
-			if (!group->rates)
+			rates = krealloc(group->rates,
+					 (sizeof(int) * group->max_size),
+					 GFP_KERNEL);
+			if (!rates)
 				return -ENOMEM;
+			group->rates = rates;
 		}
 
 		group->rates[group->count++] = rate;
@@ -341,14 +344,10 @@ static int sdw_select_row_col(struct sdw_bus *bus, int clk_freq)
 static int sdw_compute_bus_params(struct sdw_bus *bus)
 {
 	unsigned int max_dr_freq, curr_dr_freq = 0;
-	struct sdw_master_prop *mstr_prop = NULL;
+	struct sdw_master_prop *mstr_prop = &bus->prop;
 	int i, clk_values, ret;
 	bool is_gear = false;
 	u32 *clk_buf;
-
-	mstr_prop = &bus->prop;
-	if (!mstr_prop)
-		return -EINVAL;
 
 	if (mstr_prop->num_clk_gears) {
 		clk_values = mstr_prop->num_clk_gears;

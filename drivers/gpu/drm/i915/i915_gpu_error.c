@@ -37,6 +37,7 @@
 #include <drm/drm_print.h>
 
 #include "display/intel_atomic.h"
+#include "display/intel_csr.h"
 #include "display/intel_overlay.h"
 
 #include "gem/i915_gem_context.h"
@@ -47,7 +48,6 @@
 #include "i915_gpu_error.h"
 #include "i915_memcpy.h"
 #include "i915_scatterlist.h"
-#include "intel_csr.h"
 
 #define ALLOW_FAIL (GFP_KERNEL | __GFP_RETRY_MAYFAIL | __GFP_NOWARN)
 #define ATOMIC_MAYFAIL (GFP_ATOMIC | __GFP_NOWARN)
@@ -473,9 +473,13 @@ static void error_print_context(struct drm_i915_error_state_buf *m,
 				const char *header,
 				const struct i915_gem_context_coredump *ctx)
 {
-	err_printf(m, "%s%s[%d] prio %d, guilty %d active %d\n",
+	const u32 period = RUNTIME_INFO(m->i915)->cs_timestamp_period_ns;
+
+	err_printf(m, "%s%s[%d] prio %d, guilty %d active %d, runtime total %lluns, avg %lluns\n",
 		   header, ctx->comm, ctx->pid, ctx->sched_attr.priority,
-		   ctx->guilty, ctx->active);
+		   ctx->guilty, ctx->active,
+		   ctx->total_runtime * period,
+		   mul_u32_u32(ctx->avg_runtime, period));
 }
 
 static struct i915_vma_coredump *
@@ -1230,7 +1234,7 @@ static bool record_context(struct i915_gem_context_coredump *e,
 {
 	struct i915_gem_context *ctx;
 	struct task_struct *task;
-	bool capture;
+	bool simulated;
 
 	rcu_read_lock();
 	ctx = rcu_dereference(rq->context->gem_context);
@@ -1238,7 +1242,7 @@ static bool record_context(struct i915_gem_context_coredump *e,
 		ctx = NULL;
 	rcu_read_unlock();
 	if (!ctx)
-		return false;
+		return true;
 
 	rcu_read_lock();
 	task = pid_task(ctx->pid, PIDTYPE_PID);
@@ -1252,10 +1256,13 @@ static bool record_context(struct i915_gem_context_coredump *e,
 	e->guilty = atomic_read(&ctx->guilty_count);
 	e->active = atomic_read(&ctx->active_count);
 
-	capture = i915_gem_context_no_error_capture(ctx);
+	e->total_runtime = rq->context->runtime.total;
+	e->avg_runtime = ewma_runtime_read(&rq->context->runtime.avg);
+
+	simulated = i915_gem_context_no_error_capture(ctx);
 
 	i915_gem_context_put(ctx);
-	return capture;
+	return simulated;
 }
 
 struct intel_engine_capture_vma {
@@ -1285,7 +1292,7 @@ capture_vma(struct intel_engine_capture_vma *next,
 	}
 
 	strcpy(c->name, name);
-	c->vma = i915_vma_get(vma);
+	c->vma = vma; /* reference held while active */
 
 	c->next = next;
 	return c;
@@ -1302,26 +1309,6 @@ capture_user(struct intel_engine_capture_vma *capture,
 		capture = capture_vma(capture, c->vma, "user", gfp);
 
 	return capture;
-}
-
-static struct i915_vma_coredump *
-capture_object(const struct intel_gt *gt,
-	       struct drm_i915_gem_object *obj,
-	       const char *name,
-	       struct i915_vma_compress *compress)
-{
-	if (obj && i915_gem_object_has_pages(obj)) {
-		struct i915_vma fake = {
-			.node = { .start = U64_MAX, .size = obj->base.size },
-			.size = obj->base.size,
-			.pages = obj->mm.pages,
-			.obj = obj,
-		};
-
-		return i915_vma_coredump_create(gt, &fake, name, compress);
-	} else {
-		return NULL;
-	}
 }
 
 static void add_vma(struct intel_engine_coredump *ee,
@@ -1395,7 +1382,6 @@ intel_engine_coredump_add_vma(struct intel_engine_coredump *ee,
 						 compress));
 
 		i915_active_release(&vma->active);
-		i915_vma_put(vma);
 
 		capture = this->next;
 		kfree(this);
@@ -1412,12 +1398,6 @@ intel_engine_coredump_add_vma(struct intel_engine_coredump *ee,
 					 engine->wa_ctx.vma,
 					 "WA context",
 					 compress));
-
-	add_vma(ee,
-		capture_object(engine->gt,
-			       engine->default_state,
-			       "NULL context",
-			       compress));
 }
 
 static struct intel_engine_coredump *

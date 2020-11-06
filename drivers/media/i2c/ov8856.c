@@ -581,6 +581,9 @@ struct ov8856 {
 
 	/* Streaming on/off */
 	bool streaming;
+
+	/* True if the device has been identified */
+	bool identified;
 };
 
 static u64 to_pixel_rate(u32 f_index)
@@ -664,6 +667,31 @@ static int ov8856_write_reg_list(struct ov8856 *ov8856,
 			return ret;
 		}
 	}
+
+	return 0;
+}
+
+static int ov8856_identify_module(struct ov8856 *ov8856)
+{
+	struct i2c_client *client = v4l2_get_subdevdata(&ov8856->sd);
+	int ret;
+	u32 val;
+
+	if (ov8856->identified)
+		return 0;
+
+	ret = ov8856_read_reg(ov8856, OV8856_REG_CHIP_ID,
+			      OV8856_REG_VALUE_24BIT, &val);
+	if (ret)
+		return ret;
+
+	if (val != OV8856_CHIP_ID) {
+		dev_err(&client->dev, "chip id mismatch: %x!=%x",
+			OV8856_CHIP_ID, val);
+		return -ENXIO;
+	}
+
+	ov8856->identified = true;
 
 	return 0;
 }
@@ -834,6 +862,10 @@ static int ov8856_start_streaming(struct ov8856 *ov8856)
 	struct i2c_client *client = v4l2_get_subdevdata(&ov8856->sd);
 	const struct ov8856_reg_list *reg_list;
 	int link_freq_index, ret;
+
+	ret = ov8856_identify_module(ov8856);
+	if (ret)
+		return ret;
 
 	link_freq_index = ov8856->cur_mode->link_freq_index;
 	reg_list = &link_freq_configs[link_freq_index].reg_list;
@@ -1072,26 +1104,6 @@ static const struct v4l2_subdev_internal_ops ov8856_internal_ops = {
 	.open = ov8856_open,
 };
 
-static int ov8856_identify_module(struct ov8856 *ov8856)
-{
-	struct i2c_client *client = v4l2_get_subdevdata(&ov8856->sd);
-	int ret;
-	u32 val;
-
-	ret = ov8856_read_reg(ov8856, OV8856_REG_CHIP_ID,
-			      OV8856_REG_VALUE_24BIT, &val);
-	if (ret)
-		return ret;
-
-	if (val != OV8856_CHIP_ID) {
-		dev_err(&client->dev, "chip id mismatch: %x!=%x",
-			OV8856_CHIP_ID, val);
-		return -ENXIO;
-	}
-
-	return 0;
-}
-
 static int ov8856_check_hwcfg(struct device *dev)
 {
 	struct fwnode_handle *ep;
@@ -1176,6 +1188,7 @@ static int ov8856_probe(struct i2c_client *client)
 {
 	struct ov8856 *ov8856;
 	int ret;
+	bool low_power;
 
 	ret = ov8856_check_hwcfg(&client->dev);
 	if (ret) {
@@ -1189,10 +1202,14 @@ static int ov8856_probe(struct i2c_client *client)
 		return -ENOMEM;
 
 	v4l2_i2c_subdev_init(&ov8856->sd, client, &ov8856_subdev_ops);
-	ret = ov8856_identify_module(ov8856);
-	if (ret) {
-		dev_err(&client->dev, "failed to find sensor: %d", ret);
-		return ret;
+
+	low_power = acpi_dev_state_low_power(&client->dev);
+	if (!low_power) {
+		ret = ov8856_identify_module(ov8856);
+		if (ret) {
+			dev_err(&client->dev, "failed to find sensor: %d", ret);
+			return ret;
+		}
 	}
 
 	mutex_init(&ov8856->mutex);
@@ -1222,10 +1239,10 @@ static int ov8856_probe(struct i2c_client *client)
 	}
 
 	/*
-	 * Device is already turned on by i2c-core with ACPI domain PM.
-	 * Enable runtime PM and turn off the device.
+	 * Don't set the device's state to active if it's in a low power state.
 	 */
-	pm_runtime_set_active(&client->dev);
+	if (!low_power)
+		pm_runtime_set_active(&client->dev);
 	pm_runtime_enable(&client->dev);
 	pm_runtime_idle(&client->dev);
 
@@ -1247,7 +1264,7 @@ static const struct dev_pm_ops ov8856_pm_ops = {
 
 #ifdef CONFIG_ACPI
 static const struct acpi_device_id ov8856_acpi_ids[] = {
-	{"OVTI8856"},
+	{ "OVTI8856" },
 	{}
 };
 
@@ -1262,6 +1279,7 @@ static struct i2c_driver ov8856_i2c_driver = {
 	},
 	.probe_new = ov8856_probe,
 	.remove = ov8856_remove,
+	.flags = I2C_DRV_FL_ALLOW_LOW_POWER_PROBE,
 };
 
 module_i2c_driver(ov8856_i2c_driver);

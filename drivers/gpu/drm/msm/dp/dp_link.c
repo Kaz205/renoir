@@ -5,6 +5,8 @@
 
 #define pr_fmt(fmt)	"[drm-dp] %s: " fmt, __func__
 
+#include <drm/drm_print.h>
+
 #include "dp_link.h"
 #include "dp_panel.h"
 
@@ -755,7 +757,7 @@ static void dp_link_parse_sink_status_field(struct dp_link_private *link)
  *
  * This function will handle new link training requests that are initiated by
  * the sink. In particular, it will update the requested lane count and link
- * link rate, and then trigger the link retraining procedure.
+ * rate, and then trigger the link retraining procedure.
  *
  * The function will return 0 if a link training request has been processed,
  * otherwise it will return -EINVAL.
@@ -867,6 +869,9 @@ static int dp_link_parse_vx_px(struct dp_link_private *link)
 		drm_dp_get_adjust_request_voltage(link->link_status, 0);
 	link->dp_link.phy_params.p_level =
 		drm_dp_get_adjust_request_pre_emphasis(link->link_status, 0);
+
+	link->dp_link.phy_params.p_level >>= DP_TRAIN_PRE_EMPHASIS_SHIFT;
+
 	DRM_DEBUG_DP("Requested: v_level = 0x%x, p_level = 0x%x\n",
 			link->dp_link.phy_params.v_level,
 			link->dp_link.phy_params.p_level);
@@ -909,7 +914,8 @@ static int dp_link_process_phy_test_pattern_request(
 			link->request.test_lane_count);
 
 	link->dp_link.link_params.num_lanes = link->request.test_lane_count;
-	link->dp_link.link_params.rate = link->request.test_link_rate;
+	link->dp_link.link_params.rate =
+		drm_dp_bw_code_to_link_rate(link->request.test_link_rate);
 
 	ret = dp_link_parse_vx_px(link);
 
@@ -1152,6 +1158,12 @@ int dp_link_adjust_levels(struct dp_link *dp_link, u8 *link_status)
 		dp_link->phy_params.v_level, dp_link->phy_params.p_level);
 
 	return 0;
+}
+
+void dp_link_reset_phy_params_vx_px(struct dp_link *dp_link)
+{
+	dp_link->phy_params.v_level = 0;
+	dp_link->phy_params.p_level = 0;
 }
 
 u32 dp_link_get_test_bits_depth(struct dp_link *dp_link, u32 bpp)

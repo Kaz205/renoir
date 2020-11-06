@@ -86,10 +86,8 @@ static void s2idle_begin(void)
 	s2idle_state = S2IDLE_STATE_NONE;
 }
 
-static int s2idle_enter(void)
+static void s2idle_enter(void)
 {
-	int error = 0;
-
 	trace_suspend_resume(TPS("machine_suspend"), PM_SUSPEND_TO_IDLE, true);
 
 	raw_spin_lock_irq(&s2idle_lock);
@@ -100,7 +98,7 @@ static int s2idle_enter(void)
 	raw_spin_unlock_irq(&s2idle_lock);
 
 	get_online_cpus();
-	cpuidle_prepare_freeze();
+	cpuidle_resume();
 
 	/* Push all the CPUs into the idle loop. */
 	wake_up_all_idle_cpus();
@@ -108,7 +106,7 @@ static int s2idle_enter(void)
 	swait_event_exclusive(s2idle_wait_head,
 		    s2idle_state == S2IDLE_STATE_WAKE);
 
-	error = cpuidle_complete_freeze();
+	cpuidle_pause();
 	put_online_cpus();
 
 	raw_spin_lock_irq(&s2idle_lock);
@@ -118,12 +116,10 @@ static int s2idle_enter(void)
 	raw_spin_unlock_irq(&s2idle_lock);
 
 	trace_suspend_resume(TPS("machine_suspend"), PM_SUSPEND_TO_IDLE, false);
-	return error;
 }
 
-static int s2idle_loop(void)
+static void s2idle_loop(void)
 {
-	int ret = 0;
 	pm_pr_dbg("suspend-to-idle\n");
 
 	/*
@@ -145,13 +141,10 @@ static int s2idle_loop(void)
 
 		pm_wakeup_clear(false);
 
-		ret = s2idle_enter();
-		if (ret < 0)
-			break;
+		s2idle_enter();
 	}
 
 	pm_pr_dbg("resume from suspend-to-idle\n");
-	return ret;
 }
 
 void s2idle_wake(void)
@@ -435,7 +428,7 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 		goto Platform_wake;
 
 	if (state == PM_SUSPEND_TO_IDLE) {
-		error = s2idle_loop();
+		s2idle_loop();
 		goto Platform_wake;
 	}
 

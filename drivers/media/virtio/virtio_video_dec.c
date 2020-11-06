@@ -170,8 +170,12 @@ int virtio_video_dec_init_ctrls(struct virtio_video_stream *stream)
 	if (ctrl)
 		ctrl->flags |= V4L2_CTRL_FLAG_VOLATILE;
 
-	if (stream->ctrl_handler.error)
-		return stream->ctrl_handler.error;
+	if (stream->ctrl_handler.error) {
+		int err = stream->ctrl_handler.error;
+
+		v4l2_ctrl_handler_free(&stream->ctrl_handler);
+		return err;
+	}
 
 	v4l2_ctrl_handler_setup(&stream->ctrl_handler);
 
@@ -263,6 +267,12 @@ static int virtio_video_decoder_cmd(struct file *file, void *fh,
 	switch (cmd->cmd) {
 	case V4L2_DEC_CMD_START:
 		vb2_clear_last_buffer_dequeued(dst_vq);
+		if (stream->state == STREAM_STATE_STOPPED) {
+			stream->state = STREAM_STATE_RUNNING;
+		} else {
+			v4l2_warn(&vv->v4l2_dev, "state(%d) is not STOPPED\n",
+				  stream->state);
+		}
 		break;
 	case V4L2_DEC_CMD_STOP:
 		src_vq = v4l2_m2m_get_vq(stream->fh.m2m_ctx,

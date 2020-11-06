@@ -75,17 +75,19 @@
  * @ipa:	IPA pointer
  * @irq_id:	IPA interrupt type (unused)
  *
- * When in suspended state, the IPA can trigger a resume by sending a SUSPEND
- * IPA interrupt.
+ * If an RX endpoint is in suspend state, and the IPA has a packet
+ * destined for that endpoint, the IPA generates a SUSPEND interrupt
+ * to inform the AP that it should resume the endpoint.  If we get
+ * one of these interrupts we just resume everything.
  */
 static void ipa_suspend_handler(struct ipa *ipa, enum ipa_irq_id irq_id)
 {
-	/* Take a a single clock reference to prevent suspend.  All
-	 * endpoints will be resumed as a result.  This reference will
-	 * be dropped when we get a power management suspend request.
+	/* Just report the event, and let system resume handle the rest.
+	 * More than one endpoint could signal this; if so, ignore
+	 * all but the first.
 	 */
-	if (!atomic_xchg(&ipa->suspend_ref, 1))
-		ipa_clock_get(ipa);
+	if (!test_and_set_bit(IPA_FLAG_RESUMED, ipa->flags))
+		pm_wakeup_dev_event(&ipa->pdev->dev, 0, true);
 
 	/* Acknowledge/clear the suspend interrupt on all endpoints */
 	ipa_interrupt_suspend_clear_all(ipa->interrupt);
@@ -106,6 +108,7 @@ int ipa_setup(struct ipa *ipa)
 {
 	struct ipa_endpoint *exception_endpoint;
 	struct ipa_endpoint *command_endpoint;
+	struct device *dev = &ipa->pdev->dev;
 	int ret;
 
 	/* Setup for IPA v3.5.1 has some slight differences */
@@ -122,6 +125,10 @@ int ipa_setup(struct ipa *ipa)
 			  ipa_suspend_handler);
 
 	ipa_uc_setup(ipa);
+
+	ret = device_init_wakeup(dev, true);
+	if (ret)
+		goto err_uc_teardown;
 
 	ipa_endpoint_setup(ipa);
 
@@ -158,7 +165,7 @@ int ipa_setup(struct ipa *ipa)
 
 	ipa->setup_complete = true;
 
-	dev_info(&ipa->pdev->dev, "IPA driver setup completed successfully\n");
+	dev_info(dev, "IPA driver setup completed successfully\n");
 
 	return 0;
 
@@ -173,6 +180,8 @@ err_command_disable:
 	ipa_endpoint_disable_one(command_endpoint);
 err_endpoint_teardown:
 	ipa_endpoint_teardown(ipa);
+	(void)device_init_wakeup(dev, false);
+err_uc_teardown:
 	ipa_uc_teardown(ipa);
 	ipa_interrupt_remove(ipa->interrupt, IPA_IRQ_TX_SUSPEND);
 	ipa_interrupt_teardown(ipa->interrupt);
@@ -200,6 +209,7 @@ static void ipa_teardown(struct ipa *ipa)
 	command_endpoint = ipa->name_map[IPA_ENDPOINT_AP_COMMAND_TX];
 	ipa_endpoint_disable_one(command_endpoint);
 	ipa_endpoint_teardown(ipa);
+	(void)device_init_wakeup(&ipa->pdev->dev, false);
 	ipa_uc_teardown(ipa);
 	ipa_interrupt_remove(ipa->interrupt, IPA_IRQ_TX_SUSPEND);
 	ipa_interrupt_teardown(ipa->interrupt);
@@ -353,52 +363,41 @@ static void ipa_hardware_deconfig(struct ipa *ipa)
 
 #ifdef IPA_VALIDATION
 
-/* # IPA resources used based on version (see IPA_RESOURCE_GROUP_COUNT) */
-static int ipa_resource_group_count(struct ipa *ipa)
-{
-	switch (ipa->version) {
-	case IPA_VERSION_3_5_1:
-		return 3;
-
-	case IPA_VERSION_4_0:
-	case IPA_VERSION_4_1:
-		return 4;
-
-	case IPA_VERSION_4_2:
-		return 1;
-
-	default:
-		return 0;
-	}
-}
-
 static bool ipa_resource_limits_valid(struct ipa *ipa,
 				      const struct ipa_resource_data *data)
 {
-	u32 group_count = ipa_resource_group_count(ipa);
+	u32 group_count;
 	u32 i;
 	u32 j;
 
-	if (!group_count)
+	/* We program at most 6 source or destination resource group limits */
+	BUILD_BUG_ON(IPA_RESOURCE_GROUP_SRC_MAX > 6);
+
+	group_count = ipa_resource_group_src_count(ipa->version);
+	if (!group_count || group_count > IPA_RESOURCE_GROUP_SRC_MAX)
 		return false;
 
-	/* Return an error if a non-zero resource group limit is specified
-	 * for a resource not supported by hardware.
+	/* Return an error if a non-zero resource limit is specified
+	 * for a resource group not supported by hardware.
 	 */
 	for (i = 0; i < data->resource_src_count; i++) {
 		const struct ipa_resource_src *resource;
 
 		resource = &data->resource_src[i];
-		for (j = group_count; j < IPA_RESOURCE_GROUP_COUNT; j++)
+		for (j = group_count; j < IPA_RESOURCE_GROUP_SRC_MAX; j++)
 			if (resource->limits[j].min || resource->limits[j].max)
 				return false;
 	}
+
+	group_count = ipa_resource_group_dst_count(ipa->version);
+	if (!group_count || group_count > IPA_RESOURCE_GROUP_DST_MAX)
+		return false;
 
 	for (i = 0; i < data->resource_dst_count; i++) {
 		const struct ipa_resource_dst *resource;
 
 		resource = &data->resource_dst[i];
-		for (j = group_count; j < IPA_RESOURCE_GROUP_COUNT; j++)
+		for (j = group_count; j < IPA_RESOURCE_GROUP_DST_MAX; j++)
 			if (resource->limits[j].min || resource->limits[j].max)
 				return false;
 	}
@@ -425,46 +424,64 @@ ipa_resource_config_common(struct ipa *ipa, u32 offset,
 
 	val = u32_encode_bits(xlimits->min, X_MIN_LIM_FMASK);
 	val |= u32_encode_bits(xlimits->max, X_MAX_LIM_FMASK);
-	val |= u32_encode_bits(ylimits->min, Y_MIN_LIM_FMASK);
-	val |= u32_encode_bits(ylimits->max, Y_MAX_LIM_FMASK);
+	if (ylimits) {
+		val |= u32_encode_bits(ylimits->min, Y_MIN_LIM_FMASK);
+		val |= u32_encode_bits(ylimits->max, Y_MAX_LIM_FMASK);
+	}
 
 	iowrite32(val, ipa->reg_virt + offset);
 }
 
-static void ipa_resource_config_src_01(struct ipa *ipa,
-				       const struct ipa_resource_src *resource)
+static void ipa_resource_config_src(struct ipa *ipa,
+				    const struct ipa_resource_src *resource)
 {
-	u32 offset = IPA_REG_SRC_RSRC_GRP_01_RSRC_TYPE_N_OFFSET(resource->type);
+	u32 group_count = ipa_resource_group_src_count(ipa->version);
+	const struct ipa_resource_limits *ylimits;
+	u32 offset;
 
-	ipa_resource_config_common(ipa, offset,
-				   &resource->limits[0], &resource->limits[1]);
+	offset = IPA_REG_SRC_RSRC_GRP_01_RSRC_TYPE_N_OFFSET(resource->type);
+	ylimits = group_count == 1 ? NULL : &resource->limits[1];
+	ipa_resource_config_common(ipa, offset, &resource->limits[0], ylimits);
+
+	if (group_count < 2)
+		return;
+
+	offset = IPA_REG_SRC_RSRC_GRP_23_RSRC_TYPE_N_OFFSET(resource->type);
+	ylimits = group_count == 3 ? NULL : &resource->limits[3];
+	ipa_resource_config_common(ipa, offset, &resource->limits[2], ylimits);
+
+	if (group_count < 4)
+		return;
+
+	offset = IPA_REG_SRC_RSRC_GRP_45_RSRC_TYPE_N_OFFSET(resource->type);
+	ylimits = group_count == 5 ? NULL : &resource->limits[5];
+	ipa_resource_config_common(ipa, offset, &resource->limits[4], ylimits);
 }
 
-static void ipa_resource_config_src_23(struct ipa *ipa,
-				       const struct ipa_resource_src *resource)
+static void ipa_resource_config_dst(struct ipa *ipa,
+				    const struct ipa_resource_dst *resource)
 {
-	u32 offset = IPA_REG_SRC_RSRC_GRP_23_RSRC_TYPE_N_OFFSET(resource->type);
+	u32 group_count = ipa_resource_group_dst_count(ipa->version);
+	const struct ipa_resource_limits *ylimits;
+	u32 offset;
 
-	ipa_resource_config_common(ipa, offset,
-				   &resource->limits[2], &resource->limits[3]);
-}
+	offset = IPA_REG_DST_RSRC_GRP_01_RSRC_TYPE_N_OFFSET(resource->type);
+	ylimits = group_count == 1 ? NULL : &resource->limits[1];
+	ipa_resource_config_common(ipa, offset, &resource->limits[0], ylimits);
 
-static void ipa_resource_config_dst_01(struct ipa *ipa,
-				       const struct ipa_resource_dst *resource)
-{
-	u32 offset = IPA_REG_DST_RSRC_GRP_01_RSRC_TYPE_N_OFFSET(resource->type);
+	if (group_count < 2)
+		return;
 
-	ipa_resource_config_common(ipa, offset,
-				   &resource->limits[0], &resource->limits[1]);
-}
+	offset = IPA_REG_DST_RSRC_GRP_23_RSRC_TYPE_N_OFFSET(resource->type);
+	ylimits = group_count == 3 ? NULL : &resource->limits[3];
+	ipa_resource_config_common(ipa, offset, &resource->limits[2], ylimits);
 
-static void ipa_resource_config_dst_23(struct ipa *ipa,
-				       const struct ipa_resource_dst *resource)
-{
-	u32 offset = IPA_REG_DST_RSRC_GRP_23_RSRC_TYPE_N_OFFSET(resource->type);
+	if (group_count < 4)
+		return;
 
-	ipa_resource_config_common(ipa, offset,
-				   &resource->limits[2], &resource->limits[3]);
+	offset = IPA_REG_DST_RSRC_GRP_45_RSRC_TYPE_N_OFFSET(resource->type);
+	ylimits = group_count == 5 ? NULL : &resource->limits[5];
+	ipa_resource_config_common(ipa, offset, &resource->limits[4], ylimits);
 }
 
 static int
@@ -475,15 +492,11 @@ ipa_resource_config(struct ipa *ipa, const struct ipa_resource_data *data)
 	if (!ipa_resource_limits_valid(ipa, data))
 		return -EINVAL;
 
-	for (i = 0; i < data->resource_src_count; i++) {
-		ipa_resource_config_src_01(ipa, &data->resource_src[i]);
-		ipa_resource_config_src_23(ipa, &data->resource_src[i]);
-	}
+	for (i = 0; i < data->resource_src_count; i++)
+		ipa_resource_config_src(ipa, data->resource_src);
 
-	for (i = 0; i < data->resource_dst_count; i++) {
-		ipa_resource_config_dst_01(ipa, &data->resource_dst[i]);
-		ipa_resource_config_dst_23(ipa, &data->resource_dst[i]);
-	}
+	for (i = 0; i < data->resource_dst_count; i++)
+		ipa_resource_config_dst(ipa, data->resource_dst);
 
 	return 0;
 }
@@ -508,7 +521,6 @@ static int ipa_config(struct ipa *ipa, const struct ipa_data *data)
 	 * is held after initialization completes, and won't get dropped
 	 * unless/until a system suspend request arrives.
 	 */
-	atomic_set(&ipa->suspend_ref, 1);
 	ipa_clock_get(ipa);
 
 	ipa_hardware_config(ipa);
@@ -544,7 +556,6 @@ err_endpoint_deconfig:
 err_hardware_deconfig:
 	ipa_hardware_deconfig(ipa);
 	ipa_clock_put(ipa);
-	atomic_set(&ipa->suspend_ref, 0);
 
 	return ret;
 }
@@ -562,7 +573,6 @@ static void ipa_deconfig(struct ipa *ipa)
 	ipa_endpoint_deconfig(ipa);
 	ipa_hardware_deconfig(ipa);
 	ipa_clock_put(ipa);
-	atomic_set(&ipa->suspend_ref, 0);
 }
 
 static int ipa_firmware_load(struct device *dev)
@@ -709,7 +719,6 @@ static void ipa_validate_build(void)
  */
 static int ipa_probe(struct platform_device *pdev)
 {
-	struct wakeup_source *wakeup_source;
 	struct device *dev = &pdev->dev;
 	const struct ipa_data *data;
 	struct ipa_clock *clock;
@@ -717,8 +726,8 @@ static int ipa_probe(struct platform_device *pdev)
 	bool modem_alloc;
 	bool modem_init;
 	struct ipa *ipa;
-	phandle phandle;
 	bool prefetch;
+	phandle ph;
 	int ret;
 
 	ipa_validate_build();
@@ -730,13 +739,13 @@ static int ipa_probe(struct platform_device *pdev)
 			return -EPROBE_DEFER;
 
 	/* We rely on remoteproc to tell us about modem state changes */
-	phandle = of_property_read_phandle(dev->of_node, "modem-remoteproc");
-	if (!phandle) {
+	ph = of_property_read_phandle(dev->of_node, "modem-remoteproc");
+	if (!ph) {
 		dev_err(dev, "DT missing \"modem-remoteproc\" property\n");
 		return -EINVAL;
 	}
 
-	rproc = rproc_get_by_phandle(phandle);
+	rproc = rproc_get_by_phandle(ph);
 	if (!rproc)
 		return -EPROBE_DEFER;
 
@@ -758,27 +767,17 @@ static int ipa_probe(struct platform_device *pdev)
 		goto err_clock_exit;
 	}
 
-	/* Create a wakeup source. */
-	wakeup_source = wakeup_source_register(dev, "ipa");
-	if (!wakeup_source) {
-		/* The most likely reason for failure is memory exhaustion */
-		ret = -ENOMEM;
-		goto err_clock_exit;
-	}
-
 	/* Allocate and initialize the IPA structure */
 	ipa = kzalloc(sizeof(*ipa), GFP_KERNEL);
 	if (!ipa) {
 		ret = -ENOMEM;
-		goto err_wakeup_source_unregister;
+		goto err_clock_exit;
 	}
 
 	ipa->pdev = pdev;
 	dev_set_drvdata(dev, ipa);
 	ipa->modem_rproc = rproc;
 	ipa->clock = clock;
-	atomic_set(&ipa->suspend_ref, 0);
-	ipa->wakeup_source = wakeup_source;
 	ipa->version = data->version;
 
 	ret = ipa_reg_init(ipa);
@@ -857,8 +856,6 @@ err_reg_exit:
 	ipa_reg_exit(ipa);
 err_kfree_ipa:
 	kfree(ipa);
-err_wakeup_source_unregister:
-	wakeup_source_unregister(wakeup_source);
 err_clock_exit:
 	ipa_clock_exit(clock);
 err_rproc_put:
@@ -872,10 +869,7 @@ static int ipa_remove(struct platform_device *pdev)
 	struct ipa *ipa = dev_get_drvdata(&pdev->dev);
 	struct rproc *rproc = ipa->modem_rproc;
 	struct ipa_clock *clock = ipa->clock;
-	struct wakeup_source *wakeup_source;
 	int ret;
-
-	wakeup_source = ipa->wakeup_source;
 
 	if (ipa->setup_complete) {
 		ret = ipa_modem_stop(ipa);
@@ -893,7 +887,6 @@ static int ipa_remove(struct platform_device *pdev)
 	ipa_mem_exit(ipa);
 	ipa_reg_exit(ipa);
 	kfree(ipa);
-	wakeup_source_unregister(wakeup_source);
 	ipa_clock_exit(clock);
 	rproc_put(rproc);
 
@@ -907,13 +900,22 @@ static int ipa_remove(struct platform_device *pdev)
  * Return:	Always returns zero
  *
  * Called by the PM framework when a system suspend operation is invoked.
+ * Suspends endpoints and releases the clock reference held to keep
+ * the IPA clock running until this point.
  */
 static int ipa_suspend(struct device *dev)
 {
 	struct ipa *ipa = dev_get_drvdata(dev);
 
+	/* When a suspended RX endpoint has a packet ready to receive, we
+	 * get an IPA SUSPEND interrupt.  We trigger a system resume in
+	 * that case, but only on the first such interrupt since suspend.
+	 */
+	__clear_bit(IPA_FLAG_RESUMED, ipa->flags);
+
+	ipa_endpoint_suspend(ipa);
+
 	ipa_clock_put(ipa);
-	atomic_set(&ipa->suspend_ref, 0);
 
 	return 0;
 }
@@ -925,6 +927,8 @@ static int ipa_suspend(struct device *dev)
  * Return:	Always returns 0
  *
  * Called by the PM framework when a system resume operation is invoked.
+ * Takes an IPA clock reference to keep the clock running until suspend,
+ * and resumes endpoints.
  */
 static int ipa_resume(struct device *dev)
 {
@@ -933,8 +937,9 @@ static int ipa_resume(struct device *dev)
 	/* This clock reference will keep the IPA out of suspend
 	 * until we get a power management suspend request.
 	 */
-	atomic_set(&ipa->suspend_ref, 1);
 	ipa_clock_get(ipa);
+
+	ipa_endpoint_resume(ipa);
 
 	return 0;
 }

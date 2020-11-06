@@ -965,18 +965,6 @@ static int cmd_handler_lri(struct parser_exec_state *s)
 	int i, ret = 0;
 	int cmd_len = cmd_length(s);
 	struct intel_gvt *gvt = s->vgpu->gvt;
-	u32 valid_len = CMD_LEN(1);
-
-	/*
-	 * Official intel docs are somewhat sloppy , check the definition of
-	 * MI_LOAD_REGISTER_IMM.
-	 */
-	#define MAX_VALID_LEN 127
-	if ((cmd_len < valid_len) || (cmd_len > MAX_VALID_LEN)) {
-		gvt_err("len is not valid:  len=%u  valid_len=%u\n",
-			cmd_len, valid_len);
-		return -EFAULT;
-	}
 
 	for (i = 1; i < cmd_len; i += 2) {
 		if (IS_BROADWELL(gvt->dev_priv) && s->ring_id != RCS0) {
@@ -1230,7 +1218,7 @@ static int gen8_decode_mi_display_flip(struct parser_exec_state *s,
 	dword2 = cmd_val(s, 2);
 
 	v = (dword0 & GENMASK(21, 19)) >> 19;
-	if (WARN_ON(v >= ARRAY_SIZE(gen8_plane_code)))
+	if (drm_WARN_ON(&dev_priv->drm, v >= ARRAY_SIZE(gen8_plane_code)))
 		return -EBADRQC;
 
 	info->pipe = gen8_plane_code[v].pipe;
@@ -1250,7 +1238,7 @@ static int gen8_decode_mi_display_flip(struct parser_exec_state *s,
 		info->stride_reg = SPRSTRIDE(info->pipe);
 		info->surf_reg = SPRSURF(info->pipe);
 	} else {
-		WARN_ON(1);
+		drm_WARN_ON(&dev_priv->drm, 1);
 		return -EBADRQC;
 	}
 	return 0;

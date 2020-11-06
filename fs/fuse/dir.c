@@ -488,7 +488,7 @@ static int fuse_create_open(struct inode *dir, struct dentry *entry,
 						    &security_ctx,
 						    &security_ctxlen);
 		if (err)
-			goto out_put_forget_req;
+			goto out_free_ff;
 
 		if (security_ctxlen > 0) {
 			args.in_numargs = 3;
@@ -498,6 +498,7 @@ static int fuse_create_open(struct inode *dir, struct dentry *entry,
 	}
 
 	err = fuse_simple_request(fc, &args);
+	kfree(security_ctx);
 	if (err)
 		goto out_free_ff;
 
@@ -533,7 +534,6 @@ static int fuse_create_open(struct inode *dir, struct dentry *entry,
 	return err;
 
 out_free_ff:
-	kfree(security_ctx);
 	fuse_file_free(ff);
 out_put_forget_req:
 	kfree(forget);
@@ -620,7 +620,7 @@ static int create_new_entry(struct fuse_conn *fc, struct fuse_args *args,
 						    &security_ctx,
 						    &security_ctxlen);
 		if (err)
-			return err;
+			goto out_put_forget_req;
 
 		if (security_ctxlen > 0) {
 			args->in_args[idx].size = security_ctxlen;

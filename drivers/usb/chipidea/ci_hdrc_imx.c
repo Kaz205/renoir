@@ -382,8 +382,7 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 	}
 
 	if (pdata.flags & CI_HDRC_PMQOS)
-		pm_qos_add_request(&data->pm_qos_req,
-			PM_QOS_CPU_DMA_LATENCY, 0);
+		cpu_latency_qos_add_request(&data->pm_qos_req, 0);
 
 	ret = imx_get_clks(dev);
 	if (ret)
@@ -457,7 +456,7 @@ disable_hsic_regulator:
 		/* don't overwrite original ret (cf. EPROBE_DEFER) */
 		regulator_disable(data->hsic_pad_regulator);
 	if (pdata.flags & CI_HDRC_PMQOS)
-		pm_qos_remove_request(&data->pm_qos_req);
+		cpu_latency_qos_remove_request(&data->pm_qos_req);
 	data->ci_pdev = NULL;
 	return ret;
 }
@@ -478,7 +477,7 @@ static int ci_hdrc_imx_remove(struct platform_device *pdev)
 	if (data->ci_pdev) {
 		imx_disable_unprepare_clks(&pdev->dev);
 		if (data->plat_data->flags & CI_HDRC_PMQOS)
-			pm_qos_remove_request(&data->pm_qos_req);
+			cpu_latency_qos_remove_request(&data->pm_qos_req);
 		if (data->hsic_pad_regulator)
 			regulator_disable(data->hsic_pad_regulator);
 	}
@@ -506,7 +505,7 @@ static int __maybe_unused imx_controller_suspend(struct device *dev)
 
 	imx_disable_unprepare_clks(dev);
 	if (data->plat_data->flags & CI_HDRC_PMQOS)
-		pm_qos_remove_request(&data->pm_qos_req);
+		cpu_latency_qos_remove_request(&data->pm_qos_req);
 
 	data->in_lpm = true;
 
@@ -526,8 +525,7 @@ static int __maybe_unused imx_controller_resume(struct device *dev)
 	}
 
 	if (data->plat_data->flags & CI_HDRC_PMQOS)
-		pm_qos_add_request(&data->pm_qos_req,
-			PM_QOS_CPU_DMA_LATENCY, 0);
+		cpu_latency_qos_add_request(&data->pm_qos_req, 0);
 
 	ret = imx_prepare_enable_clks(dev);
 	if (ret)

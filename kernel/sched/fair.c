@@ -468,59 +468,17 @@ static inline struct cfs_rq *core_cfs_rq(struct cfs_rq *cfs_rq)
 
 static inline u64 cfs_rq_min_vruntime(struct cfs_rq *cfs_rq)
 {
-	if (!sched_core_enabled(rq_of(cfs_rq)))
-		return cfs_rq->min_vruntime;
-
-#ifdef CONFIG_SCHED_CORE
-	if (is_root_cfs_rq(cfs_rq))
-		return core_cfs_rq(cfs_rq)->min_vruntime;
-#endif
 	return cfs_rq->min_vruntime;
 }
-
-#ifdef CONFIG_SCHED_CORE
-static void coresched_adjust_vruntime(struct cfs_rq *cfs_rq, u64 delta)
-{
-	struct sched_entity *se, *next;
-
-	if (!cfs_rq)
-		return;
-
-	cfs_rq->min_vruntime -= delta;
-	rbtree_postorder_for_each_entry_safe(se, next,
-			&cfs_rq->tasks_timeline.rb_root, run_node) {
-		if (se->vruntime > delta)
-			se->vruntime -= delta;
-		if (se->my_q)
-			coresched_adjust_vruntime(se->my_q, delta);
-	}
-}
-
-static void update_core_cfs_rq_min_vruntime(struct cfs_rq *cfs_rq)
-{
-	struct cfs_rq *cfs_rq_core;
-
-	if (!sched_core_enabled(rq_of(cfs_rq)))
-		return;
-
-	if (!is_root_cfs_rq(cfs_rq))
-		return;
-
-	cfs_rq_core = core_cfs_rq(cfs_rq);
-	if (cfs_rq_core != cfs_rq &&
-	    cfs_rq->min_vruntime < cfs_rq_core->min_vruntime) {
-		u64 delta = cfs_rq_core->min_vruntime - cfs_rq->min_vruntime;
-		coresched_adjust_vruntime(cfs_rq_core, delta);
-	}
-}
-#endif
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 bool cfs_prio_less(struct task_struct *a, struct task_struct *b)
 {
+	bool samecpu = task_cpu(a) == task_cpu(b);
 	struct sched_entity *sea = &a->se;
 	struct sched_entity *seb = &b->se;
-	bool samecpu = task_cpu(a) == task_cpu(b);
+	struct cfs_rq *cfs_rqa;
+	struct cfs_rq *cfs_rqb;
 	s64 delta;
 
 	if (samecpu) {
@@ -544,8 +502,13 @@ bool cfs_prio_less(struct task_struct *a, struct task_struct *b)
 		sea = sea->parent;
 	while (seb->parent)
 		seb = seb->parent;
-	delta = (s64)(sea->vruntime - seb->vruntime);
 
+	cfs_rqa = sea->cfs_rq;
+	cfs_rqb = seb->cfs_rq;
+
+	/* normalize vruntime WRT their rq's base */
+	delta = (s64)(sea->vruntime - seb->vruntime) +
+		(s64)(cfs_rqb->min_vruntime_fi - cfs_rqa->min_vruntime_fi);
 out:
 	return delta > 0;
 }
@@ -608,10 +571,6 @@ static void update_min_vruntime(struct cfs_rq *cfs_rq)
 
 	/* ensure we never gain time by being placed backwards. */
 	cfs_rq->min_vruntime = max_vruntime(cfs_rq_min_vruntime(cfs_rq), vruntime);
-
-#ifdef CONFIG_SCHED_CORE
-	update_core_cfs_rq_min_vruntime(cfs_rq);
-#endif
 
 #ifndef CONFIG_64BIT
 	smp_wmb();
@@ -4191,10 +4150,12 @@ dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 }
 
 static inline bool
-__entity_slice_used(struct sched_entity *se)
+__entity_slice_used(struct sched_entity *se, int min_nr_tasks)
 {
-	return (se->sum_exec_runtime - se->prev_sum_exec_runtime) >
-		sched_slice(cfs_rq_of(se), se);
+	u64 slice = sched_slice(cfs_rq_of(se), se);
+	u64 rtime = se->sum_exec_runtime - se->prev_sum_exec_runtime;
+
+	return (rtime * min_nr_tasks > slice);
 }
 
 /*
@@ -4459,16 +4420,16 @@ static inline struct cfs_bandwidth *tg_cfs_bandwidth(struct task_group *tg)
 }
 
 /* returns 0 on failure to allocate runtime */
-static int assign_cfs_rq_runtime(struct cfs_rq *cfs_rq)
+static int __assign_cfs_rq_runtime(struct cfs_bandwidth *cfs_b,
+				   struct cfs_rq *cfs_rq, u64 target_runtime)
 {
-	struct task_group *tg = cfs_rq->tg;
-	struct cfs_bandwidth *cfs_b = tg_cfs_bandwidth(tg);
-	u64 amount = 0, min_amount;
+	u64 min_amount, amount = 0;
+
+	lockdep_assert_held(&cfs_b->lock);
 
 	/* note: this is a positive sum as runtime_remaining <= 0 */
-	min_amount = sched_cfs_bandwidth_slice() - cfs_rq->runtime_remaining;
+	min_amount = target_runtime - cfs_rq->runtime_remaining;
 
-	raw_spin_lock(&cfs_b->lock);
 	if (cfs_b->quota == RUNTIME_INF)
 		amount = min_amount;
 	else {
@@ -4480,11 +4441,23 @@ static int assign_cfs_rq_runtime(struct cfs_rq *cfs_rq)
 			cfs_b->idle = 0;
 		}
 	}
-	raw_spin_unlock(&cfs_b->lock);
 
 	cfs_rq->runtime_remaining += amount;
 
 	return cfs_rq->runtime_remaining > 0;
+}
+
+/* returns 0 on failure to allocate runtime */
+static int assign_cfs_rq_runtime(struct cfs_rq *cfs_rq)
+{
+	struct cfs_bandwidth *cfs_b = tg_cfs_bandwidth(cfs_rq->tg);
+	int ret;
+
+	raw_spin_lock(&cfs_b->lock);
+	ret = __assign_cfs_rq_runtime(cfs_b, cfs_rq, sched_cfs_bandwidth_slice());
+	raw_spin_unlock(&cfs_b->lock);
+
+	return ret;
 }
 
 static void __account_cfs_rq_runtime(struct cfs_rq *cfs_rq, u64 delta_exec)
@@ -4575,13 +4548,33 @@ static int tg_throttle_down(struct task_group *tg, void *data)
 	return 0;
 }
 
-static void throttle_cfs_rq(struct cfs_rq *cfs_rq)
+static bool throttle_cfs_rq(struct cfs_rq *cfs_rq)
 {
 	struct rq *rq = rq_of(cfs_rq);
 	struct cfs_bandwidth *cfs_b = tg_cfs_bandwidth(cfs_rq->tg);
 	struct sched_entity *se;
 	long task_delta, idle_task_delta, dequeue = 1;
-	bool empty;
+
+	raw_spin_lock(&cfs_b->lock);
+	/* This will start the period timer if necessary */
+	if (__assign_cfs_rq_runtime(cfs_b, cfs_rq, 1)) {
+		/*
+		 * We have raced with bandwidth becoming available, and if we
+		 * actually throttled the timer might not unthrottle us for an
+		 * entire period. We additionally needed to make sure that any
+		 * subsequent check_cfs_rq_runtime calls agree not to throttle
+		 * us, as we may commit to do cfs put_prev+pick_next, so we ask
+		 * for 1ns of runtime rather than just check cfs_b.
+		 */
+		dequeue = 0;
+	} else {
+		list_add_tail_rcu(&cfs_rq->throttled_list,
+				  &cfs_b->throttled_cfs_rq);
+	}
+	raw_spin_unlock(&cfs_b->lock);
+
+	if (!dequeue)
+		return false;  /* Throttle no longer required. */
 
 	se = cfs_rq->tg->se[cpu_of(rq_of(cfs_rq))];
 
@@ -4610,29 +4603,13 @@ static void throttle_cfs_rq(struct cfs_rq *cfs_rq)
 	if (!se)
 		sub_nr_running(rq, task_delta);
 
+	/*
+	 * Note: distribution will already see us throttled via the
+	 * throttled-list.  rq->lock protects completion.
+	 */
 	cfs_rq->throttled = 1;
 	cfs_rq->throttled_clock = rq_clock(rq);
-	raw_spin_lock(&cfs_b->lock);
-	empty = list_empty(&cfs_b->throttled_cfs_rq);
-
-	/*
-	 * Add to the _head_ of the list, so that an already-started
-	 * distribute_cfs_runtime will not see us. If disribute_cfs_runtime is
-	 * not running add to the tail so that later runqueues don't get starved.
-	 */
-	if (cfs_b->distribute_running)
-		list_add_rcu(&cfs_rq->throttled_list, &cfs_b->throttled_cfs_rq);
-	else
-		list_add_tail_rcu(&cfs_rq->throttled_list, &cfs_b->throttled_cfs_rq);
-
-	/*
-	 * If we're the first throttled task, make sure the bandwidth
-	 * timer is running.
-	 */
-	if (empty)
-		start_cfs_bandwidth(cfs_b);
-
-	raw_spin_unlock(&cfs_b->lock);
+	return true;
 }
 
 void unthrottle_cfs_rq(struct cfs_rq *cfs_rq)
@@ -4991,8 +4968,7 @@ static bool check_cfs_rq_runtime(struct cfs_rq *cfs_rq)
 	if (cfs_rq_throttled(cfs_rq))
 		return true;
 
-	throttle_cfs_rq(cfs_rq);
-	return true;
+	return throttle_cfs_rq(cfs_rq);
 }
 
 static enum hrtimer_restart sched_cfs_slack_timer(struct hrtimer *timer)
@@ -6021,7 +5997,7 @@ static int select_idle_core(struct task_struct *p, struct sched_domain *sd, int 
 /*
  * Scan the local SMT mask for idle CPUs.
  */
-static int select_idle_smt(struct task_struct *p, int target)
+static int select_idle_smt(struct task_struct *p, struct sched_domain *sd, int target)
 {
 	int cpu, si_cpu = -1;
 
@@ -6029,7 +6005,8 @@ static int select_idle_smt(struct task_struct *p, int target)
 		return -1;
 
 	for_each_cpu(cpu, cpu_smt_mask(target)) {
-		if (!cpumask_test_cpu(cpu, p->cpus_ptr))
+		if (!cpumask_test_cpu(cpu, p->cpus_ptr) ||
+		    !cpumask_test_cpu(cpu, sched_domain_span(sd)))
 			continue;
 		if (available_idle_cpu(cpu))
 			return cpu;
@@ -6047,7 +6024,7 @@ static inline int select_idle_core(struct task_struct *p, struct sched_domain *s
 	return -1;
 }
 
-static inline int select_idle_smt(struct task_struct *p, int target)
+static inline int select_idle_smt(struct task_struct *p, struct sched_domain *sd, int target)
 {
 	return -1;
 }
@@ -6168,7 +6145,7 @@ static int select_idle_sibling(struct task_struct *p, int prev, int target)
 	if ((unsigned)i < nr_cpumask_bits)
 		return i;
 
-	i = select_idle_smt(p, target);
+	i = select_idle_smt(p, sd, target);
 	if ((unsigned)i < nr_cpumask_bits)
 		return i;
 
@@ -6646,6 +6623,9 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int sd_flag, int wake_f
 	int new_cpu = prev_cpu;
 	int want_affine = 0;
 	int sync = (wake_flags & WF_SYNC) && !(current->flags & PF_EXITING);
+
+	if ((wake_flags & WF_CURRENT_CPU) && cpumask_test_cpu(cpu, p->cpus_ptr))
+		return cpu;
 
 	/*
 	 * required for stable ->cpus_allowed
@@ -10301,6 +10281,7 @@ static void core_sched_deactivate_fair(struct rq *rq)
 #endif /* CONFIG_SMP */
 
 #ifdef CONFIG_SCHED_CORE
+#define MIN_NR_TASKS_DURING_FORCEIDLE	2
 /*
  * If runqueue has only one task which used up its slice and
  * if the sibling is forced idle, then trigger schedule
@@ -10309,7 +10290,22 @@ static void core_sched_deactivate_fair(struct rq *rq)
 static void resched_forceidle_sibling(struct rq *rq, struct sched_entity *se)
 {
 	int cpu = cpu_of(rq), sibling_cpu;
-	if (rq->cfs.nr_running > 1 || !__entity_slice_used(se))
+
+	/*
+	 * If runqueue has only one task which used up its slice and if the
+	 * sibling is forced idle, then trigger schedule to give forced idle
+	 * task a chance.
+	 *
+	 * sched_slice() considers only this active rq and it gets the whole
+	 * slice. But during force idle, we have siblings acting like a single
+	 * runqueue and hence we need to consider runnable tasks on this cpu
+	 * and the forced idle cpu. Ideally, we should go through the forced
+	 * idle rq, but that would be a perf hit.  We can assume that the
+	 * forced idle cpu has atleast MIN_NR_TASKS_DURING_FORCEIDLE - 1 tasks
+	 * and use that to check if we need to give up the cpu.
+	 */
+	if (rq->cfs.nr_running > 1 ||
+	    !__entity_slice_used(se, MIN_NR_TASKS_DURING_FORCEIDLE))
 		return;
 
 	for_each_cpu(sibling_cpu, cpu_smt_mask(cpu)) {
@@ -10321,7 +10317,8 @@ static void resched_forceidle_sibling(struct rq *rq, struct sched_entity *se)
 
 		sibling_rq = cpu_rq(sibling_cpu);
 		if (sibling_rq->core_forceidle) {
-			resched_curr(sibling_rq);
+			resched_curr(rq);
+			break;
 		}
 	}
 }

@@ -5,13 +5,14 @@
 // sc7180.c -- ALSA SoC Machine driver for SC7180
 
 #include <dt-bindings/sound/sc7180-lpass.h>
+#include <linux/gpio.h>
+#include <linux/gpio/consumer.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <sound/core.h>
 #include <sound/jack.h>
 #include <sound/pcm.h>
-#include <sound/pcm_params.h>
 #include <sound/soc.h>
 #include <uapi/linux/input-event-codes.h>
 
@@ -19,13 +20,20 @@
 #include "common.h"
 #include "lpass.h"
 
-#define DEFAULT_SAMPLE_RATE_48K		48000
 #define DEFAULT_MCLK_RATE		19200000
 #define RT5682_PLL1_FREQ (48000 * 512)
 
+// This will be defined in include/dt-bindings/sound/sc7180-lpass.h
+#define LPASS_DP_RX 2
+
+static struct gpio_desc *dmic_sel;
+static int dmic_switch;
+
 struct sc7180_snd_data {
-	struct snd_soc_jack jack;
+	struct snd_soc_card card;
 	u32 pri_mi2s_clk_count;
+	struct snd_soc_jack hs_jack;
+	struct snd_soc_jack hdmi_jack;
 };
 
 static void sc7180_jack_free(struct snd_jack *jack)
@@ -35,10 +43,12 @@ static void sc7180_jack_free(struct snd_jack *jack)
 	snd_soc_component_set_jack(component, NULL, NULL);
 }
 
-static int sc7180_headset_init(struct snd_soc_component *component)
+static int sc7180_headset_init(struct snd_soc_pcm_runtime *rtd)
 {
-	struct snd_soc_card *card = component->card;
+	struct snd_soc_card *card = rtd->card;
 	struct sc7180_snd_data *pdata = snd_soc_card_get_drvdata(card);
+	struct snd_soc_dai *codec_dai = asoc_rtd_to_codec(rtd, 0);
+	struct snd_soc_component *component = codec_dai->component;
 	struct snd_jack *jack;
 	int rval;
 
@@ -48,14 +58,14 @@ static int sc7180_headset_init(struct snd_soc_component *component)
 			SND_JACK_HEADPHONE |
 			SND_JACK_BTN_0 | SND_JACK_BTN_1 |
 			SND_JACK_BTN_2 | SND_JACK_BTN_3,
-			&pdata->jack, NULL, 0);
+			&pdata->hs_jack, NULL, 0);
 
 	if (rval < 0) {
 		dev_err(card->dev, "Unable to add Headset Jack\n");
 		return rval;
 	}
 
-	jack = pdata->jack.jack;
+	jack = pdata->hs_jack.jack;
 
 	snd_jack_set_key(jack, SND_JACK_BTN_0, KEY_PLAYPAUSE);
 	snd_jack_set_key(jack, SND_JACK_BTN_1, KEY_VOICECOMMAND);
@@ -65,20 +75,53 @@ static int sc7180_headset_init(struct snd_soc_component *component)
 	jack->private_data = component;
 	jack->private_free = sc7180_jack_free;
 
-	rval = snd_soc_component_set_jack(component,
-					  &pdata->jack, NULL);
-	if (rval != 0 && rval != -EOPNOTSUPP) {
-		dev_warn(card->dev, "Failed to set jack: %d\n", rval);
+	return snd_soc_component_set_jack(component, &pdata->hs_jack, NULL);
+}
+
+static int sc7180_hdmi_init(struct snd_soc_pcm_runtime *rtd)
+{
+	struct snd_soc_card *card = rtd->card;
+	struct sc7180_snd_data *pdata = snd_soc_card_get_drvdata(card);
+	struct snd_soc_dai *codec_dai = asoc_rtd_to_codec(rtd, 0);
+	struct snd_soc_component *component = codec_dai->component;
+	struct snd_jack *jack;
+	int rval;
+
+	rval = snd_soc_card_jack_new(
+			card, "HDMI Jack",
+			SND_JACK_LINEOUT,
+			&pdata->hdmi_jack, NULL, 0);
+
+	if (rval < 0) {
+		dev_err(card->dev, "Unable to add HDMI Jack\n");
 		return rval;
 	}
 
-	return 0;
+	jack = pdata->hdmi_jack.jack;
+	jack->private_data = component;
+	jack->private_free = sc7180_jack_free;
+
+	return snd_soc_component_set_jack(component, &pdata->hdmi_jack, NULL);
 }
 
-static struct snd_soc_aux_dev sc7180_headset_dev = {
-	.dlc = COMP_EMPTY(),
-	.init = sc7180_headset_init,
-};
+static int sc7180_init(struct snd_soc_pcm_runtime *rtd)
+{
+	struct snd_soc_dai *cpu_dai = asoc_rtd_to_cpu(rtd, 0);
+
+	switch (cpu_dai->id) {
+	case MI2S_PRIMARY:
+		return sc7180_headset_init(rtd);
+	case MI2S_SECONDARY:
+		return 0;
+	case LPASS_DP_RX:
+		return sc7180_hdmi_init(rtd);
+	default:
+		dev_err(rtd->dev, "%s: invalid dai id 0x%x\n", __func__,
+			cpu_dai->id);
+		return -EINVAL;
+	}
+	return 0;
+}
 
 static int sc7180_snd_startup(struct snd_pcm_substream *substream)
 {
@@ -122,10 +165,29 @@ static int sc7180_snd_startup(struct snd_pcm_substream *substream)
 		break;
 	case MI2S_SECONDARY:
 		break;
+	case LPASS_DP_RX:
+		break;
 	default:
 		dev_err(rtd->dev, "%s: invalid dai id 0x%x\n", __func__,
 			cpu_dai->id);
 		return -EINVAL;
+	}
+	return 0;
+}
+
+static int dmic_get(struct snd_kcontrol *kcontrol,
+		    struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.integer.value[0] = dmic_switch;
+	return 0;
+}
+
+static int dmic_set(struct snd_kcontrol *kcontrol,
+		    struct snd_ctl_elem_value *ucontrol)
+{
+	if (dmic_sel) {
+		dmic_switch = ucontrol->value.integer.value[0];
+		gpiod_set_value(dmic_sel, dmic_switch);
 	}
 	return 0;
 }
@@ -148,6 +210,8 @@ static void sc7180_snd_shutdown(struct snd_pcm_substream *substream)
 		break;
 	case MI2S_SECONDARY:
 		break;
+	case LPASS_DP_RX:
+		break;
 	default:
 		dev_err(rtd->dev, "%s: invalid dai id 0x%x\n", __func__,
 			cpu_dai->id);
@@ -165,36 +229,44 @@ static const struct snd_soc_dapm_widget sc7180_snd_widgets[] = {
 	SND_SOC_DAPM_MIC("Headset Mic", NULL),
 };
 
-static struct snd_soc_card sc7180_card = {
-	.owner = THIS_MODULE,
-	.aux_dev = &sc7180_headset_dev,
-	.num_aux_devs = 1,
-	.dapm_widgets = sc7180_snd_widgets,
-	.num_dapm_widgets = ARRAY_SIZE(sc7180_snd_widgets),
+static const char * const dmic_mux_text[] = {
+	"Front Mic",
+	"Rear Mic",
 };
 
-static int sc7180_parse_aux_of(struct device *dev)
-{
-	sc7180_headset_dev.dlc.of_node = of_parse_phandle(
-			dev->of_node, "aux-dev", 0);
+static SOC_ENUM_SINGLE_DECL(sc7180_dmic_enum,
+			    SND_SOC_NOPM, 0, dmic_mux_text);
 
-	if (!sc7180_headset_dev.dlc.of_node)
-		return -EINVAL;
-	return 0;
-}
+static const struct snd_kcontrol_new sc7180_dmic_mux_control =
+	SOC_DAPM_ENUM_EXT("DMIC Select Mux", sc7180_dmic_enum,
+			  dmic_get, dmic_set);
+
+static const struct snd_soc_dapm_widget sc7180_snd_dual_mic_widgets[] = {
+	SND_SOC_DAPM_HP("Headphone Jack", NULL),
+	SND_SOC_DAPM_MIC("Headset Mic", NULL),
+	SND_SOC_DAPM_MIC("DMIC", NULL),
+	SND_SOC_DAPM_MUX("Dmic Mux", SND_SOC_NOPM, 0, 0, &sc7180_dmic_mux_control),
+};
+
+static const struct snd_soc_dapm_route sc7180_snd_dual_mic_audio_route[] = {
+	{"Dmic Mux", "Front Mic", "DMIC"},
+	{"Dmic Mux", "Rear Mic", "DMIC"},
+};
 
 static void sc7180_add_ops(struct snd_soc_card *card)
 {
 	struct snd_soc_dai_link *link;
 	int i;
 
-	for_each_card_prelinks(card, i, link)
+	for_each_card_prelinks(card, i, link) {
 		link->ops = &sc7180_ops;
+		link->init = sc7180_init;
+	}
 }
 
 static int sc7180_snd_platform_probe(struct platform_device *pdev)
 {
-	struct snd_soc_card *card = &sc7180_card;
+	struct snd_soc_card *card;
 	struct sc7180_snd_data *data;
 	struct device *dev = &pdev->dev;
 	int ret;
@@ -204,29 +276,39 @@ static int sc7180_snd_platform_probe(struct platform_device *pdev)
 	if (!data)
 		return -ENOMEM;
 
-	card->dev = dev;
-
-	ret = qcom_snd_parse_of(card);
-	if (ret) {
-		dev_err(dev, "Error parsing OF data\n");
-		return ret;
-	}
-
+	card = &data->card;
 	snd_soc_card_set_drvdata(card, data);
 
-	sc7180_add_ops(card);
+	card->owner = THIS_MODULE,
+	card->dev = dev;
+	card->dapm_widgets = sc7180_snd_widgets;
+	card->num_dapm_widgets = ARRAY_SIZE(sc7180_snd_widgets);
 
-	ret = sc7180_parse_aux_of(dev);
-	if (ret) {
-		dev_err(dev, "Failed to parse OF for jack device\n");
-		return ret;
+	if (of_device_is_compatible(dev->of_node, "qcom,sc7180-sndcard-rt5682-m98357-2mic")) {
+		card->dapm_widgets = sc7180_snd_dual_mic_widgets,
+		card->num_dapm_widgets = ARRAY_SIZE(sc7180_snd_dual_mic_widgets),
+		card->dapm_routes = sc7180_snd_dual_mic_audio_route,
+		card->num_dapm_routes = ARRAY_SIZE(sc7180_snd_dual_mic_audio_route),
+		dmic_sel = devm_gpiod_get(&pdev->dev, "dmic", GPIOD_OUT_LOW);
+		if (IS_ERR(dmic_sel)) {
+			dev_err(&pdev->dev, "DMIC gpio failed err=%d\n",
+				PTR_ERR(dmic_sel));
+				return PTR_ERR(dmic_sel);
+		}
 	}
+
+	ret = qcom_snd_parse_of(card);
+	if (ret)
+		return ret;
+
+	sc7180_add_ops(card);
 
 	return devm_snd_soc_register_card(dev, card);
 }
 
 static const struct of_device_id sc7180_snd_device_id[]  = {
-	{ .compatible = "qcom,sc7180-sndcard" },
+	{ .compatible = "qcom,sc7180-sndcard-rt5682-m98357-1mic" },
+	{ .compatible = "qcom,sc7180-sndcard-rt5682-m98357-2mic" },
 	{},
 };
 MODULE_DEVICE_TABLE(of, sc7180_snd_device_id);
@@ -236,6 +318,7 @@ static struct platform_driver sc7180_snd_driver = {
 	.driver = {
 		.name = "msm-snd-sc7180",
 		.of_match_table = sc7180_snd_device_id,
+		.pm = &snd_soc_pm_ops,
 	},
 };
 module_platform_driver(sc7180_snd_driver);

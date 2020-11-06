@@ -12,6 +12,7 @@
 #include "intel_context.h"
 #include "intel_engine_pm.h"
 #include "intel_gt.h"
+#include "intel_gt_clock_utils.h"
 #include "intel_gt_pm.h"
 #include "intel_gt_requests.h"
 #include "intel_llc.h"
@@ -138,6 +139,8 @@ static void gt_sanitize(struct intel_gt *gt, bool force)
 	wakeref = intel_runtime_pm_get(gt->uncore->rpm);
 	intel_uncore_forcewake_get(gt->uncore, FORCEWAKE_ALL);
 
+	intel_gt_check_clock_frequency(gt);
+
 	/*
 	 * As we have just resumed the machine and woken the device up from
 	 * deep PCI sleep (presumably D3_cold), assume the HW has been reset
@@ -163,6 +166,8 @@ static void gt_sanitize(struct intel_gt *gt, bool force)
 	for_each_engine(engine, gt, id)
 		if (engine->reset.finish)
 			engine->reset.finish(engine);
+
+	intel_rps_sanitize(&gt->rps);
 
 	intel_uncore_forcewake_put(gt->uncore, FORCEWAKE_ALL);
 	intel_runtime_pm_put(gt->uncore->rpm, wakeref);

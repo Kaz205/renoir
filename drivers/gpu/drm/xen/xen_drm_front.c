@@ -400,7 +400,7 @@ static int xen_drm_drv_dumb_create(struct drm_file *filp,
 	args->size = args->pitch * args->height;
 
 	obj = xen_drm_front_gem_create(dev, args->size);
-	if (IS_ERR_OR_NULL(obj)) {
+	if (IS_ERR(obj)) {
 		ret = PTR_ERR(obj);
 		goto fail;
 	}
@@ -419,7 +419,7 @@ static int xen_drm_drv_dumb_create(struct drm_file *filp,
 		goto fail_handle;
 
 	/* Drop reference from allocate - handle holds it now */
-	drm_gem_object_put_unlocked(obj);
+	drm_gem_object_put(obj);
 	return 0;
 
 fail_handle:
@@ -427,7 +427,7 @@ fail_handle:
 				   xen_drm_front_dbuf_to_cookie(obj));
 fail_backend:
 	/* drop reference from allocate */
-	drm_gem_object_put_unlocked(obj);
+	drm_gem_object_put(obj);
 fail:
 	DRM_ERROR("Failed to create dumb buffer: %d\n", ret);
 	return ret;

@@ -20,6 +20,7 @@
 #include <dt-bindings/reset/qcom,sdm845-aoss.h>
 #include <dt-bindings/reset/qcom,sdm845-pdc.h>
 #include <dt-bindings/soc/qcom,rpmh-rsc.h>
+#include <dt-bindings/sound/sc7180-lpass.h>
 #include <dt-bindings/thermal/thermal.h>
 
 / {
@@ -660,7 +661,7 @@
 		};
 
 		qfprom: efuse@784000 {
-			compatible = "qcom,qfprom";
+			compatible = "qcom,sc7180-qfprom", "qcom,qfprom";
 			reg = <0 0x00784000 0 0x8ff>,
 			      <0 0x00780000 0 0x7a0>,
 			      <0 0x00782000 0 0x100>,
@@ -677,13 +678,13 @@
 			};
 		};
 
-		lpass_cpu: lpass {
-			compatible = "qcom,lpass-cpu-sc7180";
+		lpass_cpu: lpass@62d87000 {
+			compatible = "qcom,sc7180-lpass-cpu";
 
-			reg = <0 0x62F00000 0 0x29000>;
-			reg-names = "lpass-lpaif";
+			reg = <0 0x62d87000 0 0x68000>, <0 0x62f00000 0 0x29000>;
+			reg-names =  "lpass-hdmiif", "lpass-lpaif";
 
-			iommus = <&apps_smmu 0x1020 0>;
+			iommus = <&apps_smmu 0x1020 0>, <&apps_smmu 0x1032 0>;
 
 			power-domains = <&lpass_hm LPASS_CORE_HM_GDSCR>;
 
@@ -696,13 +697,17 @@
 				 <&lpasscc LPASS_AUDIO_CORE_LPAIF_PRI_IBIT_CLK>,
 				 <&lpasscc LPASS_AUDIO_CORE_LPAIF_SEC_IBIT_CLK>;
 
-			clock-names = "noc", "audio-core", "mclk0", "sysnoc_mport",
-				      "pri_ibit", "sec_ibit";
+			clock-names = "pcnoc-sway-clk", "audio-core",
+				      "mclk0", "pcnoc-mport-clk",
+				      "mi2s-bit-clk0", "mi2s-bit-clk1";
 
 			#sound-dai-cells = <1>;
+			#address-cells = <1>;
+			#size-cells = <0>;
 
-			interrupts = <0 160 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-names = "lpass-irq-lpaif";
+			interrupts = <GIC_SPI 160 IRQ_TYPE_LEVEL_HIGH>,
+					<GIC_SPI 268 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "lpass-irq-lpaif", "lpass-irq-hdmi";
 		};
 
 		sdhc_1: sdhci@7c4000 {
@@ -719,6 +724,9 @@
 			clocks = <&gcc GCC_SDCC1_APPS_CLK>,
 					<&gcc GCC_SDCC1_AHB_CLK>;
 			clock-names = "core", "iface";
+			interconnects = <&aggre1_noc MASTER_EMMC 0 &mc_virt SLAVE_EBI1 0>,
+					<&gem_noc MASTER_APPSS_PROC 0 &config_noc SLAVE_EMMC_CFG 0>;
+			interconnect-names = "sdhc-ddr","cpu-sdhc";
 			power-domains = <&rpmhpd SC7180_CX>;
 			operating-points-v2 = <&sdhc1_opp_table>;
 
@@ -739,11 +747,15 @@
 				opp-100000000 {
 					opp-hz = /bits/ 64 <100000000>;
 					required-opps = <&rpmhpd_opp_low_svs>;
+					opp-peak-kBps = <100000 100000>;
+					opp-avg-kBps = <100000 50000>;
 				};
 
 				opp-384000000 {
 					opp-hz = /bits/ 64 <384000000>;
 					required-opps = <&rpmhpd_opp_svs_l1>;
+					opp-peak-kBps = <600000 900000>;
+					opp-avg-kBps = <261438 300000>;
 				};
 			};
 		};
@@ -1603,11 +1615,37 @@
 				};
 			};
 
+			qup_spi0_cs_gpio: qup-spi0-cs-gpio {
+				pinmux {
+					pins = "gpio34", "gpio35",
+					       "gpio36";
+					function = "qup00";
+				};
+
+				pinmux-cs {
+					pins = "gpio37";
+					function = "gpio";
+				};
+			};
+
 			qup_spi1_default: qup-spi1-default {
 				pinmux {
 					pins = "gpio0", "gpio1",
 					       "gpio2", "gpio3";
 					function = "qup01";
+				};
+			};
+
+			qup_spi1_cs_gpio: qup-spi1-cs-gpio {
+				pinmux {
+					pins = "gpio0", "gpio1",
+					       "gpio2";
+					function = "qup01";
+				};
+
+				pinmux-cs {
+					pins = "gpio3";
+					function = "gpio";
 				};
 			};
 
@@ -1619,11 +1657,37 @@
 				};
 			};
 
+			qup_spi3_cs_gpio: qup-spi3-cs-gpio {
+				pinmux {
+					pins = "gpio38", "gpio39",
+					       "gpio40";
+					function = "qup03";
+				};
+
+				pinmux-cs {
+					pins = "gpio41";
+					function = "gpio";
+				};
+			};
+
 			qup_spi5_default: qup-spi5-default {
 				pinmux {
 					pins = "gpio25", "gpio26",
 					       "gpio27", "gpio28";
 					function = "qup05";
+				};
+			};
+
+			qup_spi5_cs_gpio: qup-spi5-cs-gpio {
+				pinmux {
+					pins = "gpio25", "gpio26",
+					       "gpio27";
+					function = "qup05";
+				};
+
+				pinmux-cs {
+					pins = "gpio28";
+					function = "gpio";
 				};
 			};
 
@@ -1635,11 +1699,37 @@
 				};
 			};
 
+			qup_spi6_cs_gpio: qup-spi6-cs-gpio {
+				pinmux {
+					pins = "gpio59", "gpio60",
+					       "gpio61";
+					function = "qup10";
+				};
+
+				pinmux-cs {
+					pins = "gpio62";
+					function = "gpio";
+				};
+			};
+
 			qup_spi8_default: qup-spi8-default {
 				pinmux {
 					pins = "gpio42", "gpio43",
 					       "gpio44", "gpio45";
 					function = "qup12";
+				};
+			};
+
+			qup_spi8_cs_gpio: qup-spi8-cs-gpio {
+				pinmux {
+					pins = "gpio42", "gpio43",
+					       "gpio44";
+					function = "qup12";
+				};
+
+				pinmux-cs {
+					pins = "gpio45";
+					function = "gpio";
 				};
 			};
 
@@ -1651,11 +1741,37 @@
 				};
 			};
 
+			qup_spi10_cs_gpio: qup-spi10-cs-gpio {
+				pinmux {
+					pins = "gpio86", "gpio87",
+					       "gpio88";
+					function = "qup14";
+				};
+
+				pinmux-cs {
+					pins = "gpio89";
+					function = "gpio";
+				};
+			};
+
 			qup_spi11_default: qup-spi11-default {
 				pinmux {
 					pins = "gpio53", "gpio54",
 					       "gpio55", "gpio56";
 					function = "qup15";
+				};
+			};
+
+			qup_spi11_cs_gpio: qup-spi11-cs-gpio {
+				pinmux {
+					pins = "gpio53", "gpio54",
+					       "gpio55";
+					function = "qup15";
+				};
+
+				pinmux-cs {
+					pins = "gpio56";
+					function = "gpio";
 				};
 			};
 
@@ -1752,38 +1868,12 @@
 
 			sec_mi2s_active: sec-mi2s-active {
 				pinmux {
-					pins = "gpio49";
+					pins = "gpio49", "gpio50", "gpio51";
 					function = "mi2s_1";
 				};
 
 				pinconf {
-					pins = "gpio49";
-					drive-strength = <8>;
-					bias-pull-up;
-				};
-			};
-
-			sec_mi2s_ws_active: sec-mi2s-ws-active {
-				pinmux {
-					pins = "gpio50";
-					function = "mi2s_1";
-				};
-
-				pinconf {
-					pins = "gpio50";
-					drive-strength = <8>;
-					bias-pull-up;
-				};
-			};
-
-			sec_mi2s_dout_active: sec-mi2s-dout-active {
-				pinmux {
-					pins = "gpio51";
-					function = "mi2s_1";
-				};
-
-				pinconf {
-					pins = "gpio51";
+					pins = "gpio49", "gpio50", "gpio51";
 					drive-strength = <8>;
 					bias-pull-up;
 				};
@@ -1791,51 +1881,12 @@
 
 			pri_mi2s_active: pri-mi2s-active {
 				pinmux {
-					pins = "gpio53";
+					pins = "gpio53", "gpio54", "gpio55", "gpio56";
 					function = "mi2s_0";
 				};
 
 				pinconf {
-					pins = "gpio53";
-					drive-strength = <8>;
-					bias-pull-up;
-				};
-			};
-
-			pri_mi2s_ws_active: pri-mi2s-ws-active {
-				pinmux {
-					pins = "gpio54";
-					function = "mi2s_0";
-				};
-
-				pinconf {
-					pins = "gpio54";
-					drive-strength = <8>;
-					bias-pull-up;
-				};
-			};
-
-			pri_mi2s_dout_active: pri-mi2s-dout-active {
-				pinmux {
-					pins = "gpio55";
-					function = "mi2s_0";
-				};
-
-				pinconf {
-					pins = "gpio55";
-					drive-strength = <8>;
-					bias-pull-up;
-				};
-			};
-
-			pri_mi2s_din_active: pri-mi2s-din-active {
-				pinmux {
-					pins = "gpio56";
-					function = "mi2s_0";
-				};
-
-				pinconf {
-					pins = "gpio56";
+					pins = "gpio53", "gpio54", "gpio55", "gpio56";
 					drive-strength = <8>;
 					bias-pull-up;
 				};
@@ -2362,27 +2413,6 @@
 			};
 		};
 
-		lpasscc: clock-controller@62d00000 {
-			compatible = "qcom,sc7180-lpasscorecc";
-			reg = <0 0x62d00000 0 0x50000>,
-			    <0 0x62780000 0 0x30000>;
-			reg-names = "lpass_core_cc", "lpass_audio_cc";
-			clocks = <&gcc GCC_LPASS_CFG_NOC_SWAY_CLK>;
-			clock-names = "iface";
-			power-domains = <&lpass_hm LPASS_CORE_HM_GDSCR>;
-			#clock-cells = <1>;
-			#power-domain-cells = <1>;
-		};
-
-		lpass_hm: clock-controller@63000000 {
-			compatible = "qcom,sc7180-lpasshm";
-			reg = <0 0x63000000 0 0x28>;
-			clocks = <&gcc GCC_LPASS_CFG_NOC_SWAY_CLK>;
-			clock-names = "iface";
-			#clock-cells = <1>;
-			#power-domain-cells = <1>;
-		};
-
 		etm@7040000 {
 			compatible = "arm,coresight-etm4x", "arm,primecell";
 			reg = <0 0x07040000 0 0x1000>;
@@ -2656,6 +2686,10 @@
 			clocks = <&gcc GCC_SDCC2_APPS_CLK>,
 					<&gcc GCC_SDCC2_AHB_CLK>;
 			clock-names = "core", "iface";
+
+			interconnects = <&aggre1_noc MASTER_SDCC_2 0 &mc_virt SLAVE_EBI1 0>,
+					<&gem_noc MASTER_APPSS_PROC 0 &config_noc SLAVE_SDCC_2 0>;
+			interconnect-names = "sdhc-ddr","cpu-sdhc";
 			power-domains = <&rpmhpd SC7180_CX>;
 			operating-points-v2 = <&sdhc2_opp_table>;
 
@@ -2669,11 +2703,15 @@
 				opp-100000000 {
 					opp-hz = /bits/ 64 <100000000>;
 					required-opps = <&rpmhpd_opp_low_svs>;
+					opp-peak-kBps = <160000 100000>;
+					opp-avg-kBps = <80000 50000>;
 				};
 
 				opp-202000000 {
 					opp-hz = /bits/ 64 <202000000>;
 					required-opps = <&rpmhpd_opp_svs_l1>;
+					opp-peak-kBps = <200000	120000>;
+					opp-avg-kBps = <100000 60000>;
 				};
 			};
 		};
@@ -2728,12 +2766,11 @@
 		};
 
 		usb_1_qmpphy: phy-wrapper@88e9000 {
-			compatible = "qcom,sc7180-qmp-usb3-phy";
+			compatible = "qcom,sc7180-qmp-usb3-dp-phy";
 			reg = <0 0x088e9000 0 0x18c>,
-			      <0 0x088e8000 0 0x38>;
-			reg-names = "reg-base", "dp_com";
+			      <0 0x088e8000 0 0x38>,
+			      <0 0x088ea000 0 0x40>;
 			status = "disabled";
-			#clock-cells = <1>;
 			#address-cells = <2>;
 			#size-cells = <2>;
 			ranges;
@@ -2748,7 +2785,7 @@
 				 <&gcc GCC_USB3_DP_PHY_PRIM_BCR>;
 			reset-names = "phy", "common";
 
-			usb_1_ssphy: phy@88e9200 {
+			usb_1_ssphy: usb3-phy@88e9200 {
 				reg = <0 0x088e9200 0 0x128>,
 				      <0 0x088e9400 0 0x200>,
 				      <0 0x088e9c00 0 0x218>,
@@ -2761,6 +2798,16 @@
 				clock-names = "pipe0";
 				clock-output-names = "usb3_phy_pipe_clk_src";
 			};
+
+			dp_phy: dp-phy@88ea200 {
+				reg = <0 0x088ea200 0 0x200>,
+				      <0 0x088ea400 0 0x200>,
+				      <0 0x088eaa00 0 0x200>,
+				      <0 0x088ea600 0 0x200>,
+				      <0 0x088ea800 0 0x200>;
+				#clock-cells = <1>;
+				#phy-cells = <0>;
+			};
 		};
 
 		dc_noc: interconnect@9160000 {
@@ -2772,7 +2819,7 @@
 
 		system-cache-controller@9200000 {
 			compatible = "qcom,sc7180-llcc";
-			reg = <0 0x09200000 0 0x200000>, <0 0x09600000 0 0x50000>;
+			reg = <0 0x09200000 0 0x50000>, <0 0x09600000 0 0x50000>;
 			reg-names = "llcc_base", "llcc_broadcast_base";
 			interrupts = <GIC_SPI 582 IRQ_TYPE_LEVEL_HIGH>;
 		};
@@ -3130,11 +3177,14 @@
 				#clock-cells = <1>;
 				assigned-clocks = <&dispcc DISP_CC_MDSS_DP_LINK_CLK_SRC>,
 						  <&dispcc DISP_CC_MDSS_DP_PIXEL_CLK_SRC>;
-				assigned-clock-parents = <&msm_dp 0>, <&msm_dp 1>;
+				assigned-clock-parents = <&dp_phy 0>, <&dp_phy 1>;
+				phys = <&dp_phy>;
+				phy-names = "dp";
 
 				operating-points-v2 = <&dp_opp_table>;
 				power-domains = <&rpmhpd SC7180_CX>;
 
+				#sound-dai-cells = <0>;
 				ports {
 					#address-cells = <1>;
 					#size-cells = <0>;
@@ -3184,8 +3234,8 @@
 				 <&gcc GCC_DISP_GPLL0_CLK_SRC>,
 				 <&dsi_phy 0>,
 				 <&dsi_phy 1>,
-				 <&msm_dp 0>,
-				 <&msm_dp 1>;
+				 <&dp_phy 0>,
+				 <&dp_phy 1>;
 			clock-names = "bi_tcxo",
 				      "gcc_disp_gpll0_clk_src",
 				      "dsi0_phy_pll_out_byteclk",
@@ -3577,6 +3627,29 @@
 			qcom,msa-fixed-perm;
 			status = "disabled";
 		};
+
+		lpasscc: clock-controller@62d00000 {
+			compatible = "qcom,sc7180-lpasscorecc";
+			reg = <0 0x62d00000 0 0x50000>,
+			      <0 0x62780000 0 0x30000>;
+			reg-names = "lpass_core_cc", "lpass_audio_cc";
+			clocks = <&gcc GCC_LPASS_CFG_NOC_SWAY_CLK>,
+				 <&rpmhcc RPMH_CXO_CLK>;
+			clock-names = "iface", "bi_tcxo";
+			power-domains = <&lpass_hm LPASS_CORE_HM_GDSCR>;
+			#clock-cells = <1>;
+			#power-domain-cells = <1>;
+		};
+
+		lpass_hm: clock-controller@63000000 {
+			compatible = "qcom,sc7180-lpasshm";
+			reg = <0 0x63000000 0 0x28>;
+			clocks = <&gcc GCC_LPASS_CFG_NOC_SWAY_CLK>,
+				 <&rpmhcc RPMH_CXO_CLK>;
+			clock-names = "iface", "bi_tcxo";
+			#clock-cells = <1>;
+			#power-domain-cells = <1>;
+		};
 	};
 
 	thermal-zones {
@@ -3585,6 +3658,7 @@
 			polling-delay = <0>;
 
 			thermal-sensors = <&tsens0 1>;
+			sustainable-power = <768>;
 
 			trips {
 				cpu0_alert0: trip-point0 {
@@ -3633,6 +3707,7 @@
 			polling-delay = <0>;
 
 			thermal-sensors = <&tsens0 2>;
+			sustainable-power = <768>;
 
 			trips {
 				cpu1_alert0: trip-point0 {
@@ -3681,6 +3756,7 @@
 			polling-delay = <0>;
 
 			thermal-sensors = <&tsens0 3>;
+			sustainable-power = <768>;
 
 			trips {
 				cpu2_alert0: trip-point0 {
@@ -3729,6 +3805,7 @@
 			polling-delay = <0>;
 
 			thermal-sensors = <&tsens0 4>;
+			sustainable-power = <768>;
 
 			trips {
 				cpu3_alert0: trip-point0 {
@@ -3777,6 +3854,7 @@
 			polling-delay = <0>;
 
 			thermal-sensors = <&tsens0 5>;
+			sustainable-power = <768>;
 
 			trips {
 				cpu4_alert0: trip-point0 {
@@ -3825,6 +3903,7 @@
 			polling-delay = <0>;
 
 			thermal-sensors = <&tsens0 6>;
+			sustainable-power = <768>;
 
 			trips {
 				cpu5_alert0: trip-point0 {
@@ -3873,6 +3952,7 @@
 			polling-delay = <0>;
 
 			thermal-sensors = <&tsens0 9>;
+			sustainable-power = <1202>;
 
 			trips {
 				cpu6_alert0: trip-point0 {
@@ -3913,6 +3993,7 @@
 			polling-delay = <0>;
 
 			thermal-sensors = <&tsens0 10>;
+			sustainable-power = <1202>;
 
 			trips {
 				cpu7_alert0: trip-point0 {
@@ -3953,6 +4034,7 @@
 			polling-delay = <0>;
 
 			thermal-sensors = <&tsens0 11>;
+			sustainable-power = <1202>;
 
 			trips {
 				cpu8_alert0: trip-point0 {
@@ -3993,6 +4075,7 @@
 			polling-delay = <0>;
 
 			thermal-sensors = <&tsens0 12>;
+			sustainable-power = <1202>;
 
 			trips {
 				cpu9_alert0: trip-point0 {

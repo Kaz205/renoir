@@ -1600,18 +1600,25 @@ int native_cpu_disable(void)
 		return ret;
 
 	cpu_disable_common();
-	/*
-	 * Disable the local APIC. Otherwise IPI broadcasts will reach
-	 * it. It still responds normally to INIT, NMI, SMI, and SIPI
-	 * messages. Its important to do apic_soft_disable() after
-	 * fixup_irqs(), because fixup_irqs() called from cpu_disable_common()
-	 * depends on IRR being set. After apic_soft_disable() CPU preserves
-	 * currently set IRR/ISR but new interrupts will not set IRR.
-	 * This causes interrupts sent to outgoing cpu before completion
-	 * of irq migration to be lost. Check SDM Vol 3 "10.4.7.2 Local
-	 * APIC State after It Has been Software Disabled" section for more
-	 * details.
-	 */
+
+        /*
+         * Disable the local APIC. Otherwise IPI broadcasts will reach
+         * it. It still responds normally to INIT, NMI, SMI, and SIPI
+         * messages.
+         *
+         * Disabling the APIC must happen after cpu_disable_common()
+         * which invokes fixup_irqs().
+         *
+         * Disabling the APIC preserves already set bits in IRR, but
+         * an interrupt arriving after disabling the local APIC does not
+         * set the corresponding IRR bit.
+         *
+         * fixup_irqs() scans IRR for set bits so it can raise a not
+         * yet handled interrupt on the new destination CPU via an IPI
+         * but obviously it can't do so for IRR bits which are not set.
+         * IOW, interrupts arriving after disabling the local APIC will
+         * be lost.
+         */
 	apic_soft_disable();
 
 	return 0;

@@ -285,7 +285,7 @@ static void panfrost_job_cleanup(struct kref *ref)
 
 		for (i = 0; i < job->bo_count; i++) {
 			bo = to_panfrost_bo(job->bos[i]);
-			drm_gem_object_put_unlocked(job->bos[i]);
+			drm_gem_object_put(job->bos[i]);
 		}
 
 		kvfree(job->bos);

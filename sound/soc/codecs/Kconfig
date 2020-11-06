@@ -115,7 +115,7 @@ config SND_SOC_ALL_CODECS
 	imply SND_SOC_MAX98925
 	imply SND_SOC_MAX98926
 	imply SND_SOC_MAX98927
-	imply SND_SOC_MAX98373
+	imply SND_SOC_MAX98373_I2C
 	imply SND_SOC_MAX98373_SDW
 	imply SND_SOC_MAX9850
 	imply SND_SOC_MAX9860
@@ -169,7 +169,7 @@ config SND_SOC_ALL_CODECS
 	imply SND_SOC_RT5668
 	imply SND_SOC_RT5670
 	imply SND_SOC_RT5677
-	imply SND_SOC_RT5682
+	imply SND_SOC_RT5682_I2C
 	imply SND_SOC_RT5682_SDW
 	imply SND_SOC_RT700_SDW
 	imply SND_SOC_RT711_SDW
@@ -826,8 +826,12 @@ config SND_SOC_MAX98927
 	depends on I2C
 
 config SND_SOC_MAX98373
+	tristate
+
+config SND_SOC_MAX98373_I2C
 	tristate "Maxim Integrated MAX98373 Speaker Amplifier"
 	depends on I2C
+	select SND_SOC_MAX98373
 
 config SND_SOC_MAX98373_SDW
 	tristate "Maxim Integrated MAX98373 Speaker Amplifier - SDW"
@@ -1110,7 +1114,11 @@ config SND_SOC_RT5677_SPI
 
 config SND_SOC_RT5682
 	tristate
-	depends on I2C || SOUNDWIRE
+
+config SND_SOC_RT5682_I2C
+	tristate
+	depends on I2C
+	select SND_SOC_RT5682
 
 config SND_SOC_RT5682_SDW
 	tristate "Realtek RT5682 Codec - SDW"

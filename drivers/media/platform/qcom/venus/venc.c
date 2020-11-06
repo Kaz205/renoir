@@ -113,80 +113,6 @@ find_format_by_index(struct venus_inst *inst, unsigned int index, u32 type)
 static int venc_v4l2_to_hfi(int id, int value)
 {
 	switch (id) {
-	case V4L2_CID_MPEG_VIDEO_MPEG4_LEVEL:
-		switch (value) {
-		case V4L2_MPEG_VIDEO_MPEG4_LEVEL_0:
-		default:
-			return HFI_MPEG4_LEVEL_0;
-		case V4L2_MPEG_VIDEO_MPEG4_LEVEL_0B:
-			return HFI_MPEG4_LEVEL_0b;
-		case V4L2_MPEG_VIDEO_MPEG4_LEVEL_1:
-			return HFI_MPEG4_LEVEL_1;
-		case V4L2_MPEG_VIDEO_MPEG4_LEVEL_2:
-			return HFI_MPEG4_LEVEL_2;
-		case V4L2_MPEG_VIDEO_MPEG4_LEVEL_3:
-			return HFI_MPEG4_LEVEL_3;
-		case V4L2_MPEG_VIDEO_MPEG4_LEVEL_4:
-			return HFI_MPEG4_LEVEL_4;
-		case V4L2_MPEG_VIDEO_MPEG4_LEVEL_5:
-			return HFI_MPEG4_LEVEL_5;
-		}
-	case V4L2_CID_MPEG_VIDEO_MPEG4_PROFILE:
-		switch (value) {
-		case V4L2_MPEG_VIDEO_MPEG4_PROFILE_SIMPLE:
-		default:
-			return HFI_MPEG4_PROFILE_SIMPLE;
-		case V4L2_MPEG_VIDEO_MPEG4_PROFILE_ADVANCED_SIMPLE:
-			return HFI_MPEG4_PROFILE_ADVANCEDSIMPLE;
-		}
-	case V4L2_CID_MPEG_VIDEO_H264_PROFILE:
-		switch (value) {
-		case V4L2_MPEG_VIDEO_H264_PROFILE_BASELINE:
-			return HFI_H264_PROFILE_BASELINE;
-		case V4L2_MPEG_VIDEO_H264_PROFILE_CONSTRAINED_BASELINE:
-			return HFI_H264_PROFILE_CONSTRAINED_BASE;
-		case V4L2_MPEG_VIDEO_H264_PROFILE_MAIN:
-			return HFI_H264_PROFILE_MAIN;
-		case V4L2_MPEG_VIDEO_H264_PROFILE_HIGH:
-		default:
-			return HFI_H264_PROFILE_HIGH;
-		}
-	case V4L2_CID_MPEG_VIDEO_H264_LEVEL:
-		switch (value) {
-		case V4L2_MPEG_VIDEO_H264_LEVEL_1_0:
-			return HFI_H264_LEVEL_1;
-		case V4L2_MPEG_VIDEO_H264_LEVEL_1B:
-			return HFI_H264_LEVEL_1b;
-		case V4L2_MPEG_VIDEO_H264_LEVEL_1_1:
-			return HFI_H264_LEVEL_11;
-		case V4L2_MPEG_VIDEO_H264_LEVEL_1_2:
-			return HFI_H264_LEVEL_12;
-		case V4L2_MPEG_VIDEO_H264_LEVEL_1_3:
-			return HFI_H264_LEVEL_13;
-		case V4L2_MPEG_VIDEO_H264_LEVEL_2_0:
-			return HFI_H264_LEVEL_2;
-		case V4L2_MPEG_VIDEO_H264_LEVEL_2_1:
-			return HFI_H264_LEVEL_21;
-		case V4L2_MPEG_VIDEO_H264_LEVEL_2_2:
-			return HFI_H264_LEVEL_22;
-		case V4L2_MPEG_VIDEO_H264_LEVEL_3_0:
-			return HFI_H264_LEVEL_3;
-		case V4L2_MPEG_VIDEO_H264_LEVEL_3_1:
-			return HFI_H264_LEVEL_31;
-		case V4L2_MPEG_VIDEO_H264_LEVEL_3_2:
-			return HFI_H264_LEVEL_32;
-		case V4L2_MPEG_VIDEO_H264_LEVEL_4_0:
-			return HFI_H264_LEVEL_4;
-		case V4L2_MPEG_VIDEO_H264_LEVEL_4_1:
-			return HFI_H264_LEVEL_41;
-		case V4L2_MPEG_VIDEO_H264_LEVEL_4_2:
-			return HFI_H264_LEVEL_42;
-		case V4L2_MPEG_VIDEO_H264_LEVEL_5_0:
-		default:
-			return HFI_H264_LEVEL_5;
-		case V4L2_MPEG_VIDEO_H264_LEVEL_5_1:
-			return HFI_H264_LEVEL_51;
-		}
 	case V4L2_CID_MPEG_VIDEO_H264_ENTROPY_MODE:
 		switch (value) {
 		case V4L2_MPEG_VIDEO_H264_ENTROPY_MODE_CAVLC:
@@ -194,18 +120,6 @@ static int venc_v4l2_to_hfi(int id, int value)
 			return HFI_H264_ENTROPY_CAVLC;
 		case V4L2_MPEG_VIDEO_H264_ENTROPY_MODE_CABAC:
 			return HFI_H264_ENTROPY_CABAC;
-		}
-	case V4L2_CID_MPEG_VIDEO_VP8_PROFILE:
-		switch (value) {
-		case 0:
-		default:
-			return HFI_VPX_PROFILE_VERSION_0;
-		case 1:
-			return HFI_VPX_PROFILE_VERSION_1;
-		case 2:
-			return HFI_VPX_PROFILE_VERSION_2;
-		case 3:
-			return HFI_VPX_PROFILE_VERSION_3;
 		}
 	case V4L2_CID_MPEG_VIDEO_H264_LOOP_FILTER_MODE:
 		switch (value) {
@@ -216,46 +130,6 @@ static int venc_v4l2_to_hfi(int id, int value)
 			return HFI_H264_DB_MODE_DISABLE;
 		case V4L2_MPEG_VIDEO_H264_LOOP_FILTER_MODE_DISABLED_AT_SLICE_BOUNDARY:
 			return HFI_H264_DB_MODE_SKIP_SLICE_BOUNDARY;
-		}
-	case V4L2_CID_MPEG_VIDEO_HEVC_PROFILE:
-		switch (value) {
-		case V4L2_MPEG_VIDEO_HEVC_PROFILE_MAIN:
-		default:
-			return HFI_HEVC_PROFILE_MAIN;
-		case V4L2_MPEG_VIDEO_HEVC_PROFILE_MAIN_STILL_PICTURE:
-			return HFI_HEVC_PROFILE_MAIN_STILL_PIC;
-		case V4L2_MPEG_VIDEO_HEVC_PROFILE_MAIN_10:
-			return HFI_HEVC_PROFILE_MAIN10;
-		}
-	case V4L2_CID_MPEG_VIDEO_HEVC_LEVEL:
-		switch (value) {
-		case V4L2_MPEG_VIDEO_HEVC_LEVEL_1:
-		default:
-			return HFI_HEVC_LEVEL_1;
-		case V4L2_MPEG_VIDEO_HEVC_LEVEL_2:
-			return HFI_HEVC_LEVEL_2;
-		case V4L2_MPEG_VIDEO_HEVC_LEVEL_2_1:
-			return HFI_HEVC_LEVEL_21;
-		case V4L2_MPEG_VIDEO_HEVC_LEVEL_3:
-			return HFI_HEVC_LEVEL_3;
-		case V4L2_MPEG_VIDEO_HEVC_LEVEL_3_1:
-			return HFI_HEVC_LEVEL_31;
-		case V4L2_MPEG_VIDEO_HEVC_LEVEL_4:
-			return HFI_HEVC_LEVEL_4;
-		case V4L2_MPEG_VIDEO_HEVC_LEVEL_4_1:
-			return HFI_HEVC_LEVEL_41;
-		case V4L2_MPEG_VIDEO_HEVC_LEVEL_5:
-			return HFI_HEVC_LEVEL_5;
-		case V4L2_MPEG_VIDEO_HEVC_LEVEL_5_1:
-			return HFI_HEVC_LEVEL_51;
-		case V4L2_MPEG_VIDEO_HEVC_LEVEL_5_2:
-			return HFI_HEVC_LEVEL_52;
-		case V4L2_MPEG_VIDEO_HEVC_LEVEL_6:
-			return HFI_HEVC_LEVEL_6;
-		case V4L2_MPEG_VIDEO_HEVC_LEVEL_6_1:
-			return HFI_HEVC_LEVEL_61;
-		case V4L2_MPEG_VIDEO_HEVC_LEVEL_6_2:
-			return HFI_HEVC_LEVEL_62;
 		}
 	}
 
@@ -382,31 +256,33 @@ static int venc_s_fmt(struct file *file, void *fh, struct v4l2_format *f)
 
 	memset(&format, 0, sizeof(format));
 
-	format.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-	format.fmt.pix_mp.pixelformat = pixfmt_out;
-	format.fmt.pix_mp.width = orig_pixmp.width;
-	format.fmt.pix_mp.height = orig_pixmp.height;
-	venc_try_fmt_common(inst, &format);
-
-	if (f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
-		inst->out_width = format.fmt.pix_mp.width;
-		inst->out_height = format.fmt.pix_mp.height;
-		inst->colorspace = pixmp->colorspace;
-		inst->ycbcr_enc = pixmp->ycbcr_enc;
-		inst->quantization = pixmp->quantization;
-		inst->xfer_func = pixmp->xfer_func;
-	}
-
-	memset(&format, 0, sizeof(format));
-
 	format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
 	format.fmt.pix_mp.pixelformat = pixfmt_cap;
 	format.fmt.pix_mp.width = orig_pixmp.width;
 	format.fmt.pix_mp.height = orig_pixmp.height;
 	venc_try_fmt_common(inst, &format);
 
-	inst->width = format.fmt.pix_mp.width;
-	inst->height = format.fmt.pix_mp.height;
+	if (f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
+		inst->width = format.fmt.pix_mp.width;
+		inst->height = format.fmt.pix_mp.height;
+	}
+
+	memset(&format, 0, sizeof(format));
+
+	format.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+	format.fmt.pix_mp.pixelformat = pixfmt_out;
+	format.fmt.pix_mp.width = orig_pixmp.width;
+	format.fmt.pix_mp.height = orig_pixmp.height;
+	venc_try_fmt_common(inst, &format);
+
+	inst->out_width = format.fmt.pix_mp.width;
+	inst->out_height = format.fmt.pix_mp.height;
+	if (f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
+		inst->colorspace = pixmp->colorspace;
+		inst->ycbcr_enc = pixmp->ycbcr_enc;
+		inst->quantization = pixmp->quantization;
+		inst->xfer_func = pixmp->xfer_func;
+	}
 
 	if (f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE)
 		inst->fmt_out = fmt;
@@ -461,12 +337,12 @@ venc_g_selection(struct file *file, void *fh, struct v4l2_selection *s)
 	switch (s->target) {
 	case V4L2_SEL_TGT_CROP_DEFAULT:
 	case V4L2_SEL_TGT_CROP_BOUNDS:
-		s->r.width = inst->width;
-		s->r.height = inst->height;
-		break;
-	case V4L2_SEL_TGT_CROP:
 		s->r.width = inst->out_width;
 		s->r.height = inst->out_height;
+		break;
+	case V4L2_SEL_TGT_CROP:
+		s->r.width = inst->width;
+		s->r.height = inst->height;
 		break;
 	default:
 		return -EINVAL;
@@ -488,10 +364,14 @@ venc_s_selection(struct file *file, void *fh, struct v4l2_selection *s)
 
 	switch (s->target) {
 	case V4L2_SEL_TGT_CROP:
-		if (s->r.width != inst->out_width ||
-		    s->r.height != inst->out_height ||
-		    s->r.top != 0 || s->r.left != 0)
-			return -EINVAL;
+		if (s->r.width != inst->width ||
+		    s->r.height != inst->height ||
+		    s->r.top != 0 || s->r.left != 0) {
+			s->r.top = 0;
+			s->r.left = 0;
+			s->r.width = inst->width;
+			s->r.height = inst->height;
+		}
 		break;
 	default:
 		return -EINVAL;
@@ -584,6 +464,7 @@ static int venc_enum_frameintervals(struct file *file, void *fh,
 {
 	struct venus_inst *inst = to_inst(file);
 	const struct venus_format *fmt;
+	unsigned int framerate_factor = 1;
 
 	fival->type = V4L2_FRMIVAL_TYPE_STEPWISE;
 
@@ -608,14 +489,59 @@ static int venc_enum_frameintervals(struct file *file, void *fh,
 	    fival->height < frame_height_min(inst))
 		return -EINVAL;
 
+	if (IS_V1(inst->core)) {
+		/* framerate is reported in 1/65535 fps unit */
+		framerate_factor = (1 << 16);
+	}
+
 	fival->stepwise.min.numerator = 1;
-	fival->stepwise.min.denominator = frate_max(inst);
+	fival->stepwise.min.denominator = frate_max(inst) / framerate_factor;
 	fival->stepwise.max.numerator = 1;
-	fival->stepwise.max.denominator = frate_min(inst);
+	fival->stepwise.max.denominator = frate_min(inst) / framerate_factor;
 	fival->stepwise.step.numerator = 1;
-	fival->stepwise.step.denominator = frate_max(inst);
+	fival->stepwise.step.denominator = frate_max(inst) / framerate_factor;
 
 	return 0;
+}
+
+static int
+venc_encoder_cmd(struct file *file, void *fh, struct v4l2_encoder_cmd *cmd)
+{
+	struct venus_inst *inst = to_inst(file);
+	struct hfi_frame_data fdata = {0};
+	int ret = 0;
+
+	ret = v4l2_m2m_ioctl_try_encoder_cmd(file, fh, cmd);
+	if (ret)
+		return ret;
+
+	mutex_lock(&inst->lock);
+
+	if (cmd->cmd == V4L2_ENC_CMD_STOP &&
+	    inst->enc_state == VENUS_ENC_STATE_ENCODING) {
+		/*
+		 * Implement V4L2_ENC_CMD_STOP by enqueue an empty buffer on
+		 * encoder input to signal EOS.
+		 */
+		if (!(inst->streamon_out && inst->streamon_cap))
+			goto unlock;
+
+		fdata.buffer_type = HFI_BUFFER_INPUT;
+		fdata.flags |= HFI_BUFFERFLAG_EOS;
+		fdata.device_addr = 0xdeadb000;
+
+		ret = hfi_session_process_buf(inst, &fdata);
+
+		inst->enc_state = VENUS_ENC_STATE_DRAIN;
+	} else if (cmd->cmd == V4L2_ENC_CMD_START &&
+		inst->enc_state == VENUS_ENC_STATE_STOPPED) {
+		vb2_clear_last_buffer_dequeued(&inst->fh.m2m_ctx->cap_q_ctx.q);
+		inst->enc_state = VENUS_ENC_STATE_ENCODING;
+	}
+
+unlock:
+	mutex_unlock(&inst->lock);
+	return ret;
 }
 
 static const struct v4l2_ioctl_ops venc_ioctl_ops = {
@@ -645,19 +571,19 @@ static const struct v4l2_ioctl_ops venc_ioctl_ops = {
 	.vidioc_enum_frameintervals = venc_enum_frameintervals,
 	.vidioc_subscribe_event = v4l2_ctrl_subscribe_event,
 	.vidioc_unsubscribe_event = v4l2_event_unsubscribe,
+	.vidioc_encoder_cmd = venc_encoder_cmd,
 };
 
 static int venc_set_properties(struct venus_inst *inst)
 {
 	struct venc_controls *ctr = &inst->controls.enc;
 	struct hfi_intra_period intra_period;
-	struct hfi_profile_level pl;
 	struct hfi_framerate frate;
 	struct hfi_bitrate brate;
 	struct hfi_idr_period idrp;
 	struct hfi_quantization quant;
 	struct hfi_quantization_range quant_range;
-	u32 ptype, rate_control, bitrate, profile = 0, level = 0;
+	u32 ptype, rate_control, bitrate;
 	int ret;
 
 	ret = venus_helper_set_work_mode(inst, VIDC_WORK_MODE_2);
@@ -739,14 +665,28 @@ static int venc_set_properties(struct venus_inst *inst)
 	if (!ctr->rc_enable)
 		rate_control = HFI_RATE_CONTROL_OFF;
 	else if (ctr->bitrate_mode == V4L2_MPEG_VIDEO_BITRATE_MODE_VBR)
-		rate_control = HFI_RATE_CONTROL_VBR_CFR;
-	else
-		rate_control = HFI_RATE_CONTROL_CBR_CFR;
+		rate_control = ctr->frame_skip_mode ? HFI_RATE_CONTROL_VBR_VFR :
+						      HFI_RATE_CONTROL_VBR_CFR;
+	else if (ctr->bitrate_mode == V4L2_MPEG_VIDEO_BITRATE_MODE_CBR)
+		rate_control = ctr->frame_skip_mode ? HFI_RATE_CONTROL_CBR_VFR :
+						      HFI_RATE_CONTROL_CBR_CFR;
+	else if (ctr->bitrate_mode == V4L2_MPEG_VIDEO_BITRATE_MODE_CQ)
+		rate_control = HFI_RATE_CONTROL_CQ;
 
 	ptype = HFI_PROPERTY_PARAM_VENC_RATE_CONTROL;
 	ret = hfi_session_set_property(inst, ptype, &rate_control);
 	if (ret)
 		return ret;
+
+	if (rate_control == HFI_RATE_CONTROL_CQ && ctr->const_quality) {
+		struct hfi_heic_frame_quality quality = {};
+
+		ptype = HFI_PROPERTY_CONFIG_HEIC_FRAME_QUALITY;
+		quality.frame_quality = ctr->const_quality;
+		ret = hfi_session_set_property(inst, ptype, &quality);
+		if (ret)
+			return ret;
+	}
 
 	if (!ctr->bitrate)
 		bitrate = 64000;
@@ -791,35 +731,7 @@ static int venc_set_properties(struct venus_inst *inst)
 	if (ret)
 		return ret;
 
-	if (inst->fmt_cap->pixfmt == V4L2_PIX_FMT_H264) {
-		profile = venc_v4l2_to_hfi(V4L2_CID_MPEG_VIDEO_H264_PROFILE,
-					   ctr->profile.h264);
-		level = venc_v4l2_to_hfi(V4L2_CID_MPEG_VIDEO_H264_LEVEL,
-					 ctr->level.h264);
-	} else if (inst->fmt_cap->pixfmt == V4L2_PIX_FMT_VP8) {
-		profile = venc_v4l2_to_hfi(V4L2_CID_MPEG_VIDEO_VP8_PROFILE,
-					   ctr->profile.vpx);
-		level = 0;
-	} else if (inst->fmt_cap->pixfmt == V4L2_PIX_FMT_MPEG4) {
-		profile = venc_v4l2_to_hfi(V4L2_CID_MPEG_VIDEO_MPEG4_PROFILE,
-					   ctr->profile.mpeg4);
-		level = venc_v4l2_to_hfi(V4L2_CID_MPEG_VIDEO_MPEG4_LEVEL,
-					 ctr->level.mpeg4);
-	} else if (inst->fmt_cap->pixfmt == V4L2_PIX_FMT_H263) {
-		profile = 0;
-		level = 0;
-	} else if (inst->fmt_cap->pixfmt == V4L2_PIX_FMT_HEVC) {
-		profile = venc_v4l2_to_hfi(V4L2_CID_MPEG_VIDEO_HEVC_PROFILE,
-					   ctr->profile.hevc);
-		level = venc_v4l2_to_hfi(V4L2_CID_MPEG_VIDEO_HEVC_LEVEL,
-					 ctr->level.hevc);
-	}
-
-	ptype = HFI_PROPERTY_PARAM_PROFILE_LEVEL_CURRENT;
-	pl.profile = profile;
-	pl.level = level;
-
-	ret = hfi_session_set_property(inst, ptype, &pl);
+	ret = venus_helper_set_profile_level(inst, ctr->profile, ctr->level);
 	if (ret)
 		return ret;
 
@@ -1019,6 +931,8 @@ static int venc_start_streaming(struct vb2_queue *q, unsigned int count)
 	if (ret)
 		goto deinit_sess;
 
+	inst->enc_state = VENUS_ENC_STATE_ENCODING;
+
 	mutex_unlock(&inst->lock);
 
 	return 0;
@@ -1035,13 +949,33 @@ bufs_done:
 	return ret;
 }
 
+static void venc_vb2_buf_queue(struct vb2_buffer *vb)
+{
+	struct venus_inst *inst = vb2_get_drv_priv(vb->vb2_queue);
+	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb);
+
+	mutex_lock(&inst->lock);
+
+	if (inst->enc_state == VENUS_ENC_STATE_STOPPED) {
+		vbuf->sequence = inst->sequence_cap++;
+		vbuf->field = V4L2_FIELD_NONE;
+		vb2_set_plane_payload(vb, 0, 0);
+		v4l2_m2m_buf_done(vbuf, VB2_BUF_STATE_DONE);
+		mutex_unlock(&inst->lock);
+		return;
+	}
+
+	venus_helper_vb2_buf_queue(vb);
+	mutex_unlock(&inst->lock);
+}
+
 static const struct vb2_ops venc_vb2_ops = {
 	.queue_setup = venc_queue_setup,
 	.buf_init = venus_helper_vb2_buf_init,
 	.buf_prepare = venus_helper_vb2_buf_prepare,
 	.start_streaming = venc_start_streaming,
 	.stop_streaming = venus_helper_vb2_stop_streaming,
-	.buf_queue = venus_helper_vb2_buf_queue,
+	.buf_queue = venc_vb2_buf_queue,
 };
 
 static void venc_buf_done(struct venus_inst *inst, unsigned int buf_type,
@@ -1069,6 +1003,11 @@ static void venc_buf_done(struct venus_inst *inst, unsigned int buf_type,
 		vb->planes[0].data_offset = data_offset;
 		vb->timestamp = timestamp_us * NSEC_PER_USEC;
 		vbuf->sequence = inst->sequence_cap++;
+
+		if ((vbuf->flags & V4L2_BUF_FLAG_LAST) &&
+		    inst->enc_state == VENUS_ENC_STATE_DRAIN) {
+			inst->enc_state = VENUS_ENC_STATE_STOPPED;
+		}
 	} else {
 		vbuf->sequence = inst->sequence_out++;
 	}
@@ -1173,11 +1112,14 @@ static int venc_open(struct file *file)
 	inst->clk_data.core_id = VIDC_CORE_ID_DEFAULT;
 	inst->core_acquired = false;
 
+	if (inst->enc_state == VENUS_ENC_STATE_DEINIT)
+		inst->enc_state = VENUS_ENC_STATE_INIT;
+
 	venus_helper_init_instance(inst);
 
 	ret = pm_runtime_get_sync(core->dev_enc);
 	if (ret < 0)
-		goto err_free_inst;
+		goto err_put_sync;
 
 	ret = venc_ctrl_init(inst);
 	if (ret)
@@ -1222,7 +1164,6 @@ err_ctrl_deinit:
 	venc_ctrl_deinit(inst);
 err_put_sync:
 	pm_runtime_put_sync(core->dev_enc);
-err_free_inst:
 	kfree(inst);
 	return ret;
 }
@@ -1238,7 +1179,7 @@ static int venc_close(struct file *file)
 	mutex_destroy(&inst->lock);
 	v4l2_fh_del(&inst->fh);
 	v4l2_fh_exit(&inst->fh);
-
+	inst->enc_state = VENUS_ENC_STATE_DEINIT;
 	pm_runtime_put_sync(inst->core->dev_enc);
 
 	kfree(inst);

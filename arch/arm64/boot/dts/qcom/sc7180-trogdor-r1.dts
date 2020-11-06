@@ -17,26 +17,6 @@ ap_h1_spi: &spi0 {};
 / {
 	model = "Google Trogdor (rev1+)";
 	compatible = "google,trogdor", "qcom,sc7180";
-
-	panel: panel {
-		compatible = "auo,b116xa01";
-		power-supply = <&pp3300_dx_edp>;
-		backlight = <&backlight>;
-		hpd-gpios = <&sn65dsi86_bridge 2 GPIO_ACTIVE_HIGH>;
-
-		ports {
-			port {
-				panel_in_edp: endpoint {
-					remote-endpoint = <&sn65dsi86_out>;
-				};
-			};
-		};
-	};
-};
-
-&ap_sar_sensor_i2c {
-	/* Not hooked up */
-	status = "disabled";
 };
 
 ap_ts_pen_1v8: &i2c4 {
@@ -58,23 +38,28 @@ ap_ts_pen_1v8: &i2c4 {
 	};
 };
 
-&sdhc_1 {
-	/*
-	 * HACK: due to b/155826689 we are temporarily overriding the
-	 * compatible string which will cause us to restore the DLL config
-	 * at runtime resume.
-	 */
-	compatible = "qcom,sdm845-sdhci", "qcom,sdhci-msm-v5";
-
-	/* HACK: this emmc is also causing us s2r problems, so further hack. */
-	max-frequency = <100000000>;
-	/delete-property/mmc-ddr-1_8v;
-	/delete-property/mmc-hs400-1_8v;
-	/delete-property/mmc-hs400-enhanced-strobe;
+&panel {
+	compatible = "auo,b116xa01";
 };
 
 &sdhc_2 {
 	status = "okay";
+};
+
+&trackpad {
+	interrupts = <58 IRQ_TYPE_EDGE_FALLING>;
+};
+
+/* PINCTRL - modifications to sc7180-trogdor.dtsi */
+
+&trackpad_int_1v8_odl {
+	pinmux {
+		pins = "gpio58";
+	};
+
+	pinconf {
+		pins = "gpio58";
+	};
 };
 
 /* PINCTRL - board-specific pinctrl */

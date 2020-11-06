@@ -16,4 +16,5 @@
  * Tests are executed in order by igt/i915_selftest
  */
 selftest(engine_cs, intel_engine_cs_perf_selftests)
+selftest(request, i915_request_perf_selftests)
 selftest(blt, i915_gem_object_blt_perf_selftests)

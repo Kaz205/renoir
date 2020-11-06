@@ -6,6 +6,7 @@
  */
 
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/gpio-keys.h>
 #include <dt-bindings/input/input.h>
 #include <dt-bindings/regulator/qcom,rpmh-regulator.h>
 #include <dt-bindings/sound/sc7180-lpass.h>
@@ -14,12 +15,28 @@
 #include "pm6150.dtsi"
 #include "pm6150l.dtsi"
 
+/ {
+	thermal-zones {
+		charger-thermal {
+			polling-delay-passive = <0>;
+			polling-delay = <0>;
+
+			thermal-sensors = <&pm6150_adc_tm 1>;
+
+			trips {
+				temperature = <125000>;
+				hysteresis = <1000>;
+				type = "critical";
+			};
+		};
+	};
+};
+
 /*
  * Reserved memory changes
  *
  * Delete all unused memory nodes and define the peripheral memory regions
  * required by the board dts.
- *
  */
 
 /delete-node/ &hyp_mem;
@@ -34,7 +51,6 @@
 };
 
 / {
-
 	reserved-memory {
 		atf_mem: memory@80b00000 {
 			reg = <0x0 0x80b00000 0x0 0x100000>;
@@ -42,7 +58,7 @@
 		};
 
 		mpss_mem: memory@86000000 {
-			reg = <0x0 0x86000000 0x0 0x8c00000>;
+			reg = <0x0 0x86000000 0x0 0x2000000>;
 			no-map;
 		};
 
@@ -211,16 +227,32 @@
 			gpios = <&tlmm 52 GPIO_ACTIVE_LOW>;
 			linux,code = <SW_PEN_INSERTED>;
 			linux,input-type = <EV_SW>;
+			wakeup-event-action = <EV_ACT_DEASSERTED>;
 			wakeup-source;
 		};
 	};
 
-	max98357a: max98357a {
+	max98357a: audio-codec-0 {
 		compatible = "maxim,max98357a";
 		pinctrl-names = "default";
 		pinctrl-0 = <&amp_en>;
 		sdmode-gpios = <&tlmm 23 GPIO_ACTIVE_HIGH>;
 		#sound-dai-cells = <0>;
+	};
+
+	panel: panel {
+		/* Compatible will be filled in per-board */
+		power-supply = <&pp3300_dx_edp>;
+		backlight = <&backlight>;
+		hpd-gpios = <&sn65dsi86_bridge 2 GPIO_ACTIVE_HIGH>;
+
+		ports {
+			port {
+				panel_in_edp: endpoint {
+					remote-endpoint = <&sn65dsi86_out>;
+				};
+			};
+		};
 	};
 
 	pwmleds {
@@ -233,15 +265,13 @@
 		};
 	};
 
-	sound {
-		compatible = "qcom,sc7180-sndcard";
+	sound: sound  {
+		compatible = "qcom,sc7180-sndcard-rt5682-m98357-1mic";
 		model = "sc7180-snd-card";
 
 		audio-routing =
 			"Headphone Jack", "HPOL",
 			"Headphone Jack", "HPOR";
-
-		aux-dev = <&alc5682>;
 
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -269,13 +299,29 @@
 				sound-dai = <&max98357a>;
 			};
 		};
+
+		dai-link@2 {
+			link-name = "MultiMedia2";
+			reg = <2>;
+			cpu {
+				sound-dai = <&lpass_cpu 2>;
+			};
+
+			codec {
+				sound-dai = <&msm_dp>;
+			};
+		};
+	};
+
+	usb_hub: usb-hub {
+		compatible = "realtek,rts5411", "onboard-usb-hub";
+		vdd-supply = <&pp3300_hub>;
 	};
 };
 
 &qfprom {
 	vcc-supply = <&pp1800_l11a>;
 };
-
 
 &qspi {
 	status = "okay";
@@ -292,7 +338,6 @@
 		spi-rx-bus-width = <2>;
 	};
 };
-
 
 &apps_rsc {
 	pm6150-rpmh-regulators {
@@ -329,14 +374,12 @@
 		};
 
 		pp1000_l2a: ldo2 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <944000>;
 			regulator-max-microvolt = <1056000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
 		};
 
 		pp1000_l3a: ldo3 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <968000>;
 			regulator-max-microvolt = <1064000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -355,7 +398,6 @@
 		vdda_qrefs_0p9:
 		vdda_usb_ss_dp_core:
 		pp900_l4a: ldo4 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <824000>;
 			regulator-max-microvolt = <928000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -374,7 +416,6 @@
 		vddio_ebi0:
 		vddq:
 		pp600_l6a: ldo6 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <568000>;
 			regulator-max-microvolt = <648000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -382,7 +423,6 @@
 
 		vdd_cx_wlan:
 		pp800_l9a: ldo9 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <488000>;
 			regulator-max-microvolt = <800000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -438,7 +478,6 @@
 		};
 
 		pp2700_l16a: ldo16 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <2496000>;
 			regulator-max-microvolt = <3304000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -447,7 +486,6 @@
 		vdda_qusb_hs0_3p1:
 		vdd_pdphy:
 		pp3100_l17a: ldo17 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <2920000>;
 			regulator-max-microvolt = <3232000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -462,7 +500,6 @@
 
 		mcp_vcc:
 		pp2850_l19a: ldo19 {
-			/* TODO: IDP sets this higher so we'll match */
 			regulator-min-microvolt = <2960000>;
 			regulator-max-microvolt = <2960000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -474,7 +511,6 @@
 		qcom,pmic-id = "c";
 
 		pp1300_s8c: smps8 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <1120000>;
 			regulator-max-microvolt = <1408000>;
 		};
@@ -487,7 +523,6 @@
 
 		vdd_wcss_adc_dac:
 		pp1300_l2c: ldo2 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <1168000>;
 			regulator-max-microvolt = <1304000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -512,7 +547,6 @@
 		ld_pp1800_esim_l4c:
 		vddpx_5:
 		pp1800_l4c: ldo4 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <1648000>;
 			regulator-max-microvolt = <3304000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -527,7 +561,6 @@
 
 		vddpx_2:
 		ppvar_l6c: ldo6 {
-			/* TODO: max should probably be 2.95 to match vmmc */
 			regulator-min-microvolt = <1800000>;
 			regulator-max-microvolt = <3304000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -538,9 +571,6 @@
 			regulator-min-microvolt = <3304000>;
 			regulator-max-microvolt = <3304000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
-			/* TODO: Implement hub driver to turn this off */
-			regulator-always-on;
-			regulator-boot-on;
 		};
 
 		pp1800_brij_vccio:
@@ -558,14 +588,12 @@
 		};
 
 		pp3300_l10c: ldo10 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <3000000>;
 			regulator-max-microvolt = <3400000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
 		};
 
 		pp3300_l11c: ldo11 {
-			/* TODO: not ppvar, so min/max should be the same */
 			regulator-min-microvolt = <3000000>;
 			regulator-max-microvolt = <3400000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
@@ -611,7 +639,7 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			connector@0 {
+			usb_c0: connector@0 {
 				compatible = "usb-c-connector";
 				reg = <0>;
 				label = "left";
@@ -620,7 +648,7 @@
 				try-power-role = "source";
 			};
 
-			connector@1 {
+			usb_c1: connector@1 {
 				compatible = "usb-c-connector";
 				reg = <1>;
 				label = "right";
@@ -712,7 +740,6 @@ edp_brij_i2c: &i2c2 {
 };
 
 ap_sar_sensor_i2c: &i2c5 {
-	status = "okay";
 	clock-frequency = <400000>;
 
 	ap_sar_sensor: proximity@28 {
@@ -737,14 +764,14 @@ ap_tp_i2c: &i2c7 {
 	status = "okay";
 	clock-frequency = <400000>;
 
-	trackpad@15 {
+	trackpad: trackpad@15 {
 		compatible = "elan,ekth3000";
 		reg = <0x15>;
 		pinctrl-names = "default";
-		pinctrl-0 = <&trackpad_int_1v8_odl>;
+		pinctrl-0 = <&tp_int_odl>;
 
 		interrupt-parent = <&tlmm>;
-		interrupts = <58 IRQ_TYPE_EDGE_FALLING>;
+		interrupts = <0 IRQ_TYPE_EDGE_FALLING>;
 
 		vcc-supply = <&pp3300_fp_tp>;
 
@@ -796,10 +823,7 @@ hp_i2c: &i2c9 {
 	status = "okay";
 
 	pinctrl-names = "default";
-	pinctrl-0 = <&sec_mi2s_active &sec_mi2s_dout_active
-		     &sec_mi2s_ws_active &pri_mi2s_active
-		     &pri_mi2s_dout_active &pri_mi2s_ws_active
-		     &pri_mi2s_din_active &pri_mi2s_mclk_active>;
+	pinctrl-0 = <&sec_mi2s_active &pri_mi2s_active &pri_mi2s_mclk_active>;
 
 	#address-cells = <1>;
 	#size-cells = <0>;
@@ -813,6 +837,9 @@ hp_i2c: &i2c9 {
 	mi2s-secondary@1 {
 		reg = <MI2S_SECONDARY>;
 		qcom,playback-sd-lines = <0>;
+	};
+	hdmi-primary@0 {
+		reg = <LPASS_DP_RX>;
 	};
 };
 
@@ -831,6 +858,25 @@ hp_i2c: &i2c9 {
 	data-lanes = <0 1>;
 	vdda-1p2-supply = <&vdda_usb_ss_dp_1p2>;
 	vdda-0p9-supply = <&vdda_usb_ss_dp_core>;
+};
+
+&pm6150_adc {
+	charger-thermistor@4f {
+		reg = <ADC5_AMUX_THM3_100K_PU>;
+		qcom,ratiometric;
+		qcom,hw-settle-time = <200>;
+	};
+};
+
+&pm6150_adc_tm {
+	status = "okay";
+
+	charger-thermistor@1 {
+		reg = <1>;
+		io-channels = <&pm6150_adc ADC5_AMUX_THM3_100K_PU>;
+		qcom,ratiometric;
+		qcom,hw-settle-time-us = <200>;
+	};
 };
 
 &pm6150_pwrkey {
@@ -876,7 +922,20 @@ hp_i2c: &i2c9 {
 	cd-gpios = <&tlmm 69 GPIO_ACTIVE_LOW>;
 };
 
+&spi0 {
+	pinctrl-0 = <&qup_spi0_cs_gpio>;
+	cs-gpios = <&tlmm 37 GPIO_ACTIVE_LOW>;
+};
+
+&spi6 {
+	pinctrl-0 = <&qup_spi6_cs_gpio>;
+	cs-gpios = <&tlmm 62 GPIO_ACTIVE_LOW>;
+};
+
 ap_spi_fp: &spi10 {
+	pinctrl-0 = <&qup_spi10_cs_gpio>;
+	cs-gpios = <&tlmm 89 GPIO_ACTIVE_LOW>;
+
 	cros_ec_fp: ec@0 {
 		compatible = "google,cros-ec-spi";
 		reg = <0>;
@@ -894,6 +953,13 @@ ap_spi_fp: &spi10 {
 &uart3 {
 	status = "okay";
 
+	/delete-property/interrupts;
+	interrupts-extended = <&intc GIC_SPI 604 IRQ_TYPE_LEVEL_HIGH>,
+				<&tlmm 41 IRQ_TYPE_EDGE_FALLING>;
+
+	pinctrl-names = "default", "sleep";
+	pinctrl-1 = <&qup_uart3_sleep>;
+
 	bluetooth: bluetooth {
 		compatible = "qcom,wcn3991-bt";
 		vddio-supply = <&pp1800_l10a>;
@@ -901,7 +967,6 @@ ap_spi_fp: &spi10 {
 		vddrf-supply = <&pp1300_l2c>;
 		vddch0-supply = <&pp3300_l10c>;
 		max-speed = <3200000>;
-		clocks = <&rpmhcc RPMH_RF_CLK2>;
 	};
 };
 
@@ -915,6 +980,22 @@ ap_spi_fp: &spi10 {
 
 &usb_1_dwc3 {
 	dr_mode = "host";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	/* 2.0 hub on port 1 */
+	hub@1 {
+		compatible = "usbbda,5411";
+		reg = <1>;
+		hub = <&usb_hub>;
+	};
+
+	/* 3.0 hub on port 2 */
+	hub@2 {
+		compatible = "usbbda,411";
+		reg = <2>;
+		hub = <&usb_hub>;
+	};
 };
 
 &usb_1_hsphy {
@@ -936,23 +1017,26 @@ ap_spi_fp: &spi10 {
 	vdda-pll-supply = <&vdda_usb_ss_dp_core>;
 };
 
+&venus {
+	video-firmware {
+		iommus = <&apps_smmu 0x0c42 0x0>;
+	};
+};
+
 &wifi {
 	status = "okay";
 	vdd-0.8-cx-mx-supply = <&vdd_cx_wlan>;
 	vdd-1.8-xo-supply = <&pp1800_l1c>;
 	vdd-1.3-rfa-supply = <&pp1300_l2c>;
+	vdd-3.3-ch0-supply = <&pp3300_l10c>;
+	vdd-3.3-ch1-supply = <&pp3300_l11c>;
 
-	/*
-	 * TODO: Put ch1 supply in its rightful place, rather than in ch0's
-	 * spot. Channel 0 is held open by bluetooth for now.
-	 */
-	vdd-3.3-ch0-supply = <&pp3300_l11c>;
 	wifi-firmware {
 		iommus = <&apps_smmu 0xc2 0x1>;
 	};
 };
 
-/* PINCTRL - additions to nodes defined in sdm845.dtsi */
+/* PINCTRL - additions to nodes defined in sc7180.dtsi */
 
 &qspi_cs0 {
 	pinconf {
@@ -1027,7 +1111,7 @@ ap_spi_fp: &spi10 {
 	};
 };
 
-&qup_spi0_default {
+&qup_spi0_cs_gpio {
 	pinconf {
 		pins = "gpio34", "gpio35", "gpio36", "gpio37";
 		drive-strength = <2>;
@@ -1035,7 +1119,7 @@ ap_spi_fp: &spi10 {
 	};
 };
 
-&qup_spi6_default {
+&qup_spi6_cs_gpio {
 	pinconf {
 		pins = "gpio59", "gpio60", "gpio61", "gpio62";
 		drive-strength = <2>;
@@ -1043,7 +1127,7 @@ ap_spi_fp: &spi10 {
 	};
 };
 
-&qup_spi10_default {
+&qup_spi10_cs_gpio {
 	pinconf {
 		pins = "gpio86", "gpio87", "gpio88", "gpio89";
 		drive-strength = <2>;
@@ -1101,7 +1185,7 @@ ap_spi_fp: &spi10 {
 };
 
 &pm6150l_gpio {
-	gpio-line-names = "AP_SUSPEND", /* TODO: Remove if doesn't work */
+	gpio-line-names = "AP_SUSPEND",
 			  "",
 			  "",
 			  "",
@@ -1163,7 +1247,6 @@ ap_spi_fp: &spi10 {
 		};
 	};
 
-	/* We will totally remove this in r2+ */
 	ap_suspend_l_neuter: ap-suspend-l-neuter {
 		pinmux  {
 			pins = "gpio27";
@@ -1405,14 +1488,63 @@ ap_spi_fp: &spi10 {
 		};
 	};
 
-	trackpad_int_1v8_odl: trackpad-int-1v8-odl {
+	qup_uart3_sleep: qup-uart3-sleep {
 		pinmux {
-			pins = "gpio58";
+			pins = "gpio38", "gpio39",
+			       "gpio40", "gpio41";
+			function = "gpio";
+		};
+
+		pinconf-cts {
+			/*
+			 * Configure a pull-down on CTS to match the pull of
+			 * the Bluetooth module.
+			 */
+			pins = "gpio38";
+			bias-pull-down;
+		};
+
+		pinconf-rts {
+			/*
+			 * Configure pull-down on RTS. As RTS is active low
+			 * signal, pull it low to indicate the BT SoC that it
+			 * can wakeup the system anytime from suspend state by
+			 * pulling RX low (by sending wakeup bytes).
+			 */
+			 pins = "gpio39";
+			 bias-pull-down;
+		};
+
+		pinconf-tx {
+			/*
+			 * Configure pull-up on TX when it isn't actively driven
+			 * to prevent BT SoC from receiving garbage during sleep.
+			 */
+			pins = "gpio40";
+			bias-pull-up;
+		};
+
+		pinconf-rx {
+			/*
+			 * Configure a pull-up on RX. This is needed to avoid
+			 * garbage data when the TX pin of the Bluetooth module
+			 * is floating which may cause spurious wakeups.
+			 */
+			pins = "gpio41";
+			bias-pull-up;
+		};
+	};
+
+	/* Named trackpad_int_1v8_odl on earlier revision schematics */
+	trackpad_int_1v8_odl:
+	tp_int_odl: tp-int-odl {
+		pinmux {
+			pins = "gpio0";
 			function = "gpio";
 		};
 
 		pinconf {
-			pins = "gpio58";
+			pins = "gpio0";
 
 			/* Has external pullup */
 			bias-disable;
@@ -1442,11 +1574,5 @@ ap_spi_fp: &spi10 {
 			bias-disable;
 			drive-strength = <2>;
 		};
-	};
-};
-
-&venus {
-	video-firmware {
-		iommus = <&apps_smmu 0x0c42 0x0>;
 	};
 };

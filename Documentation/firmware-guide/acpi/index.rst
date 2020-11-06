@@ -11,6 +11,7 @@ ACPI Support
    dsd/graph
    dsd/data-node-references
    dsd/leds
+   dsd/i2c-allow-low-power-probe
    enumeration
    osi
    method-customizing

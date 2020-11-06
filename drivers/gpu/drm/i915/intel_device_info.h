@@ -168,6 +168,7 @@ struct intel_device_info {
 	u32 display_mmio_offset;
 
 	u8 pipe_mask;
+	u8 cpu_transcoder_mask;
 
 #define DEFINE_FLAG(name) u8 name:1
 	DEV_INFO_FOR_EACH_FLAG(DEFINE_FLAG);
@@ -180,6 +181,7 @@ struct intel_device_info {
 	} display;
 
 	u16 ddb_size; /* in blocks */
+	u8 num_supported_dbuf_slices; /* number of DBuf slices */
 
 	/* Register offsets for the various display pipes and transcoders */
 	int pipe_offsets[I915_MAX_TRANSCODERS];
@@ -215,7 +217,10 @@ struct intel_runtime_info {
 	/* Slice/subslice/EU info */
 	struct sseu_dev_info sseu;
 
+	u32 rawclk_freq;
+
 	u32 cs_timestamp_frequency_khz;
+	u32 cs_timestamp_period_ns;
 
 	/* Media engine access to SFC per instance */
 	u8 vdbox_sfc_access;

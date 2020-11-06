@@ -147,6 +147,7 @@
 #include "intel_reset.h"
 #include "intel_ring.h"
 #include "intel_workarounds.h"
+#include "shmem_utils.h"
 
 #define RING_EXECLIST_QFULL		(1 << 0x2)
 #define RING_EXECLIST1_VALID		(1 << 0x3)
@@ -1042,17 +1043,14 @@ static void intel_engine_context_in(struct intel_engine_cs *engine)
 {
 	unsigned long flags;
 
-	if (READ_ONCE(engine->stats.enabled) == 0)
+	if (atomic_add_unless(&engine->stats.active, 1, 0))
 		return;
 
 	write_seqlock_irqsave(&engine->stats.lock, flags);
-
-	if (engine->stats.enabled > 0) {
-		if (engine->stats.active++ == 0)
-			engine->stats.start = ktime_get();
-		GEM_BUG_ON(engine->stats.active == 0);
+	if (!atomic_add_unless(&engine->stats.active, 1, 0)) {
+		engine->stats.start = ktime_get();
+		atomic_inc(&engine->stats.active);
 	}
-
 	write_sequnlock_irqrestore(&engine->stats.lock, flags);
 }
 
@@ -1060,36 +1058,17 @@ static void intel_engine_context_out(struct intel_engine_cs *engine)
 {
 	unsigned long flags;
 
-	if (READ_ONCE(engine->stats.enabled) == 0)
+	GEM_BUG_ON(!atomic_read(&engine->stats.active));
+
+	if (atomic_add_unless(&engine->stats.active, -1, 1))
 		return;
 
 	write_seqlock_irqsave(&engine->stats.lock, flags);
-
-	if (engine->stats.enabled > 0) {
-		ktime_t last;
-
-		if (engine->stats.active && --engine->stats.active == 0) {
-			/*
-			 * Decrement the active context count and in case GPU
-			 * is now idle add up to the running total.
-			 */
-			last = ktime_sub(ktime_get(), engine->stats.start);
-
-			engine->stats.total = ktime_add(engine->stats.total,
-							last);
-		} else if (engine->stats.active == 0) {
-			/*
-			 * After turning on engine stats, context out might be
-			 * the first event in which case we account from the
-			 * time stats gathering was turned on.
-			 */
-			last = ktime_sub(ktime_get(), engine->stats.enabled_at);
-
-			engine->stats.total = ktime_add(engine->stats.total,
-							last);
-		}
+	if (atomic_dec_and_test(&engine->stats.active)) {
+		engine->stats.total =
+			ktime_add(engine->stats.total,
+				  ktime_sub(ktime_get(), engine->stats.start));
 	}
-
 	write_sequnlock_irqrestore(&engine->stats.lock, flags);
 }
 
@@ -1197,6 +1176,42 @@ static void reset_active(struct i915_request *rq,
 	ce->lrc_desc |= CTX_DESC_FORCE_RESTORE;
 }
 
+static u32 intel_context_get_runtime(const struct intel_context *ce)
+{
+	/*
+	 * We can use either ppHWSP[16] which is recorded before the context
+	 * switch (and so excludes the cost of context switches) or use the
+	 * value from the context image itself, which is saved/restored earlier
+	 * and so includes the cost of the save.
+	 */
+	return READ_ONCE(ce->lrc_reg_state[CTX_TIMESTAMP]);
+}
+
+static void intel_context_update_runtime(struct intel_context *ce)
+{
+	u32 old;
+	s32 dt;
+
+	if (intel_context_is_barrier(ce))
+		return;
+
+	old = ce->runtime.last;
+	ce->runtime.last = intel_context_get_runtime(ce);
+	dt = ce->runtime.last - old;
+
+	if (unlikely(dt <= 0)) {
+		CE_TRACE(ce, "runtime underflow: last=%u, new=%u, delta=%d\n",
+			 old, ce->runtime.last, dt);
+		I915_SELFTEST_ONLY(ce->runtime.num_underflow += dt < 0);
+		I915_SELFTEST_ONLY(ce->runtime.max_underflow =
+				   max_t(u32, ce->runtime.max_underflow, -dt));
+		return;
+	}
+
+	ewma_runtime_add(&ce->runtime.avg, dt);
+	ce->runtime.total += dt;
+}
+
 static inline struct intel_engine_cs *
 __execlists_schedule_in(struct i915_request *rq)
 {
@@ -1280,6 +1295,7 @@ __execlists_schedule_out(struct i915_request *rq,
 	    i915_request_completed(rq))
 		intel_engine_add_retire(engine, ce->timeline);
 
+	intel_context_update_runtime(ce);
 	intel_engine_context_out(engine);
 	execlists_context_status_change(rq, INTEL_CONTEXT_SCHEDULE_OUT);
 	intel_gt_pm_put_async(engine->gt);
@@ -3316,7 +3332,8 @@ static int intel_init_workaround_bb(struct intel_engine_cs *engine)
 
 	ret = lrc_setup_wa_ctx(engine);
 	if (ret) {
-		DRM_DEBUG_DRIVER("Failed to setup context WA page: %d\n", ret);
+		drm_dbg(&engine->i915->drm,
+			"Failed to setup context WA page: %d\n", ret);
 		return ret;
 	}
 
@@ -3378,7 +3395,8 @@ static bool unexpected_starting_state(struct intel_engine_cs *engine)
 	bool unexpected = false;
 
 	if (ENGINE_READ_FW(engine, RING_MI_MODE) & STOP_RING) {
-		DRM_DEBUG_DRIVER("STOP_RING still set in RING_MI_MODE\n");
+		drm_dbg(&engine->i915->drm,
+			"STOP_RING still set in RING_MI_MODE\n");
 		unexpected = true;
 	}
 
@@ -4336,7 +4354,7 @@ int intel_execlists_submission_setup(struct intel_engine_cs *engine)
 		 * because we only expect rare glitches but nothing
 		 * critical to prevent us from using GPU
 		 */
-		DRM_ERROR("WA batch buffer initialization failed\n");
+		drm_err(&i915->drm, "WA batch buffer initialization failed\n");
 
 	if (HAS_LOGICAL_RING_ELSQ(i915)) {
 		execlists->submit_reg = uncore->regs +
@@ -4506,43 +4524,35 @@ populate_lr_context(struct intel_context *ce,
 {
 	bool inhibit = true;
 	void *vaddr;
-	int ret;
 
 	vaddr = i915_gem_object_pin_map(ctx_obj, I915_MAP_WB);
 	if (IS_ERR(vaddr)) {
-		ret = PTR_ERR(vaddr);
-		DRM_DEBUG_DRIVER("Could not map object pages! (%d)\n", ret);
-		return ret;
+		drm_dbg(&engine->i915->drm, "Could not map object pages!\n");
+		return PTR_ERR(vaddr);
 	}
 
 	set_redzone(vaddr, engine);
 
 	if (engine->default_state) {
-		void *defaults;
-
-		defaults = i915_gem_object_pin_map(engine->default_state,
-						   I915_MAP_WB);
-		if (IS_ERR(defaults)) {
-			ret = PTR_ERR(defaults);
-			goto err_unpin_ctx;
-		}
-
-		memcpy(vaddr, defaults, engine->context_size);
-		i915_gem_object_unpin_map(engine->default_state);
+		shmem_read(engine->default_state, 0,
+			   vaddr, engine->context_size);
 		__set_bit(CONTEXT_VALID_BIT, &ce->flags);
 		inhibit = false;
 	}
 
-	/* The second page of the context object contains some fields which must
-	 * be set up prior to the first execution. */
+	/* Clear the ppHWSP (inc. per-context counters) */
+	memset(vaddr, 0, PAGE_SIZE);
+
+	/*
+	 * The second page of the context object contains some registers which
+	 * must be set up prior to the first execution.
+	 */
 	execlists_init_reg_state(vaddr + LRC_STATE_PN * PAGE_SIZE,
 				 ce, engine, ring, inhibit);
 
-	ret = 0;
-err_unpin_ctx:
 	__i915_gem_object_flush_map(ctx_obj, 0, engine->context_size);
 	i915_gem_object_unpin_map(ctx_obj);
-	return ret;
+	return 0;
 }
 
 static int __execlists_context_alloc(struct intel_context *ce,
@@ -4590,7 +4600,8 @@ static int __execlists_context_alloc(struct intel_context *ce,
 
 	ret = populate_lr_context(ce, ctx_obj, engine, ring);
 	if (ret) {
-		DRM_DEBUG_DRIVER("Failed to populate LRC: %d\n", ret);
+		drm_dbg(&engine->i915->drm,
+			"Failed to populate LRC: %d\n", ret);
 		goto error_ring_free;
 	}
 

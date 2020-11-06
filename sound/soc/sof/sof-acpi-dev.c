@@ -35,24 +35,7 @@ MODULE_PARM_DESC(sof_acpi_debug, "SOF ACPI debug options (0x0 all off)");
 
 #define SOF_ACPI_DISABLE_PM_RUNTIME BIT(0)
 
-#if IS_ENABLED(CONFIG_SND_SOC_SOF_HASWELL)
-static const struct sof_dev_desc sof_acpi_haswell_desc = {
-	.machines = snd_soc_acpi_intel_haswell_machines,
-	.resindex_lpe_base = 0,
-	.resindex_pcicfg_base = 1,
-	.resindex_imr_base = -1,
-	.irqindex_host_ipc = 0,
-	.chip_info = &hsw_chip_info,
-	.default_fw_path = "intel/sof",
-	.default_tplg_path = "intel/sof-tplg",
-	.default_fw_filename = "sof-hsw.ri",
-	.nocodec_tplg_filename = "sof-hsw-nocodec.tplg",
-	.ops = &sof_hsw_ops,
-	.arch_ops = &sof_xtensa_arch_ops
-};
-#endif
-
-#if IS_ENABLED(CONFIG_SND_SOC_SOF_BROADWELL)
+#if IS_ENABLED(CONFIG_ACPI) && IS_ENABLED(CONFIG_SND_SOC_SOF_BROADWELL)
 static const struct sof_dev_desc sof_acpi_broadwell_desc = {
 	.machines = snd_soc_acpi_intel_broadwell_machines,
 	.resindex_lpe_base = 0,
@@ -68,7 +51,7 @@ static const struct sof_dev_desc sof_acpi_broadwell_desc = {
 };
 #endif
 
-#if IS_ENABLED(CONFIG_SND_SOC_SOF_BAYTRAIL)
+#if IS_ENABLED(CONFIG_ACPI) && IS_ENABLED(CONFIG_SND_SOC_SOF_BAYTRAIL)
 
 /* BYTCR uses different IRQ index */
 static const struct sof_dev_desc sof_acpi_baytrailcr_desc = {
@@ -123,6 +106,8 @@ static const struct dev_pm_ops sof_acpi_pm = {
 
 static void sof_acpi_probe_complete(struct device *dev)
 {
+	dev_dbg(dev, "Completing SOF ACPI probe");
+
 	if (sof_acpi_debug & SOF_ACPI_DISABLE_PM_RUNTIME)
 		return;
 
@@ -150,7 +135,7 @@ static int sof_acpi_probe(struct platform_device *pdev)
 	if (!desc)
 		return -ENODEV;
 
-#if IS_ENABLED(CONFIG_SND_SOC_SOF_BAYTRAIL)
+#if IS_ENABLED(CONFIG_ACPI) && IS_ENABLED(CONFIG_SND_SOC_SOF_BAYTRAIL)
 	if (desc == &sof_acpi_baytrail_desc && soc_intel_is_byt_cr(pdev))
 		desc = &sof_acpi_baytrailcr_desc;
 #endif
@@ -208,10 +193,8 @@ static int sof_acpi_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_ACPI
 static const struct acpi_device_id sof_acpi_match[] = {
-#if IS_ENABLED(CONFIG_SND_SOC_SOF_HASWELL)
-	{ "INT33C8", (unsigned long)&sof_acpi_haswell_desc },
-#endif
 #if IS_ENABLED(CONFIG_SND_SOC_SOF_BROADWELL)
 	{ "INT3438", (unsigned long)&sof_acpi_broadwell_desc },
 #endif
@@ -222,6 +205,7 @@ static const struct acpi_device_id sof_acpi_match[] = {
 	{ }
 };
 MODULE_DEVICE_TABLE(acpi, sof_acpi_match);
+#endif
 
 /* acpi_driver definition */
 static struct platform_driver snd_sof_acpi_driver = {

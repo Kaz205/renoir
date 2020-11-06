@@ -19,7 +19,6 @@
 #include <linux/slab.h>
 #include <linux/types.h>
 
-#define PDC_MAX_IRQS_PER_REG	32
 #define PDC_MAX_IRQS		168
 #define PDC_MAX_GPIO_IRQS	256
 
@@ -37,7 +36,6 @@ struct pdc_pin_region {
 	u32 cnt;
 };
 
-static DECLARE_BITMAP(pdc_wake_irqs, PDC_MAX_IRQS);
 static DEFINE_RAW_SPINLOCK(pdc_lock);
 static void __iomem *pdc_base;
 static struct pdc_pin_region *pdc_region;
@@ -89,17 +87,22 @@ static void pdc_enable_intr(struct irq_data *d, bool on)
 	raw_spin_unlock(&pdc_lock);
 }
 
-static int qcom_pdc_gic_set_wake(struct irq_data *d, unsigned int on)
+static void qcom_pdc_gic_disable(struct irq_data *d)
 {
-	if (on) {
-		pdc_enable_intr(d, true);
-		irq_chip_enable_parent(d);
-		set_bit(d->hwirq, pdc_wake_irqs);
-	} else {
-		clear_bit(d->hwirq, pdc_wake_irqs);
-	}
+	if (d->hwirq == GPIO_NO_WAKE_IRQ)
+		return;
 
-	return irq_chip_set_wake_parent(d, on);
+	pdc_enable_intr(d, false);
+	irq_chip_disable_parent(d);
+}
+
+static void qcom_pdc_gic_enable(struct irq_data *d)
+{
+	if (d->hwirq == GPIO_NO_WAKE_IRQ)
+		return;
+
+	pdc_enable_intr(d, true);
+	irq_chip_enable_parent(d);
 }
 
 static void qcom_pdc_gic_mask(struct irq_data *d)
@@ -108,9 +111,6 @@ static void qcom_pdc_gic_mask(struct irq_data *d)
 		return;
 
 	irq_chip_mask_parent(d);
-
-	if (!test_bit(d->hwirq, pdc_wake_irqs))
-		pdc_enable_intr(d, false);
 }
 
 static void qcom_pdc_gic_unmask(struct irq_data *d)
@@ -118,7 +118,6 @@ static void qcom_pdc_gic_unmask(struct irq_data *d)
 	if (d->hwirq == GPIO_NO_WAKE_IRQ)
 		return;
 
-	pdc_enable_intr(d, true);
 	irq_chip_unmask_parent(d);
 }
 
@@ -198,13 +197,16 @@ static struct irq_chip qcom_pdc_gic_chip = {
 	.irq_eoi		= irq_chip_eoi_parent,
 	.irq_mask		= qcom_pdc_gic_mask,
 	.irq_unmask		= qcom_pdc_gic_unmask,
+	.irq_disable		= qcom_pdc_gic_disable,
+	.irq_enable		= qcom_pdc_gic_enable,
 	.irq_get_irqchip_state	= qcom_pdc_gic_get_irqchip_state,
 	.irq_set_irqchip_state	= qcom_pdc_gic_set_irqchip_state,
 	.irq_retrigger		= irq_chip_retrigger_hierarchy,
 	.irq_set_type		= qcom_pdc_gic_set_type,
-	.irq_set_wake		= qcom_pdc_gic_set_wake,
 	.flags			= IRQCHIP_MASK_ON_SUSPEND |
-				  IRQCHIP_SET_TYPE_MASKED,
+				  IRQCHIP_SET_TYPE_MASKED |
+				  IRQCHIP_SKIP_SET_WAKE |
+				  IRQCHIP_ENABLE_WAKEUP_ON_SUSPEND,
 	.irq_set_vcpu_affinity	= irq_chip_set_vcpu_affinity_parent,
 	.irq_set_affinity	= irq_chip_set_affinity_parent,
 };
@@ -339,8 +341,8 @@ static const struct irq_domain_ops qcom_pdc_gpio_ops = {
 
 static int pdc_setup_pin_mapping(struct device_node *np)
 {
-	int ret, n;
-	u32 reg, max_regs, max_pins = 0;
+	int ret, n, i;
+	u32 irq_index, reg_index, val;
 
 	n = of_property_count_elems_of_size(np, "qcom,pdc-ranges", sizeof(u32));
 	if (n <= 0 || n % 3)
@@ -369,18 +371,15 @@ static int pdc_setup_pin_mapping(struct device_node *np)
 						 &pdc_region[n].cnt);
 		if (ret)
 			return ret;
-		max_pins += pdc_region[n].cnt;
+
+		for (i = 0; i < pdc_region[n].cnt; i++) {
+			reg_index = (i + pdc_region[n].pin_base) >> 5;
+			irq_index = (i + pdc_region[n].pin_base) & 0x1f;
+			val = pdc_reg_read(IRQ_ENABLE_BANK, reg_index);
+			val &= ~BIT(irq_index);
+			pdc_reg_write(IRQ_ENABLE_BANK, reg_index, val);
+		}
 	}
-
-	if (max_pins > PDC_MAX_IRQS)
-		return -EINVAL;
-
-	max_regs = max_pins / PDC_MAX_IRQS_PER_REG;
-	if (max_pins % PDC_MAX_IRQS_PER_REG)
-		max_regs++;
-
-	for (reg = 0; reg < max_regs; reg++)
-		pdc_reg_write(IRQ_ENABLE_BANK, reg, 0);
 
 	return 0;
 }

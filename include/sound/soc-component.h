@@ -325,17 +325,12 @@ static inline int snd_soc_component_cache_sync(
 	return regcache_sync(component->regmap);
 }
 
-int snd_soc_component_initialize(struct snd_soc_component *component,
-				 const struct snd_soc_component_driver *driver,
-				 struct device *dev, const char *name);
 void snd_soc_component_set_aux(struct snd_soc_component *component,
 			       struct snd_soc_aux_dev *aux);
 int snd_soc_component_init(struct snd_soc_component *component);
 
 /* component IO */
-int snd_soc_component_read(struct snd_soc_component *component,
-			   unsigned int reg, unsigned int *val);
-unsigned int snd_soc_component_read32(struct snd_soc_component *component,
+unsigned int snd_soc_component_read(struct snd_soc_component *component,
 				      unsigned int reg);
 int snd_soc_component_write(struct snd_soc_component *component,
 			    unsigned int reg, unsigned int val);

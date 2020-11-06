@@ -687,4 +687,6 @@ static inline int pci_acpi_program_hp_params(struct pci_dev *dev)
 }
 #endif
 
+bool pci_allowed_to_attach(struct pci_driver *drv, struct pci_dev *dev);
+
 #endif /* DRIVERS_PCI_H */

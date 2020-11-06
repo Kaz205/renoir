@@ -157,6 +157,7 @@ static int proc_get_tree(struct fs_context *fc)
 {
 	struct proc_fs_context *ctx = fc->fs_private;
 
+	proc_apply_options(NULL, fc, ctx->pid_ns, current_user_ns());
 	return get_tree_keyed(fc, proc_fill_super, ctx->pid_ns);
 }
 

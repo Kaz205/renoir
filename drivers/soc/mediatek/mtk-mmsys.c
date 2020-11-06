@@ -4,7 +4,6 @@
  * Author: James Liao <jamesjj.liao@mediatek.com>
  */
 
-#include <linux/clk-provider.h>
 #include <linux/device.h>
 #include <linux/of_device.h>
 #include <linux/platform_device.h>
@@ -80,8 +79,28 @@ struct mtk_mmsys_driver_data {
 	const char *clk_driver;
 };
 
+static const struct mtk_mmsys_driver_data mt2701_mmsys_driver_data = {
+	.clk_driver = "clk-mt2701-mm",
+};
+
+static const struct mtk_mmsys_driver_data mt2712_mmsys_driver_data = {
+	.clk_driver = "clk-mt2712-mm",
+};
+
+static const struct mtk_mmsys_driver_data mt6779_mmsys_driver_data = {
+	.clk_driver = "clk-mt6779-mm",
+};
+
+static const struct mtk_mmsys_driver_data mt6797_mmsys_driver_data = {
+	.clk_driver = "clk-mt6797-mm",
+};
+
 static const struct mtk_mmsys_driver_data mt8173_mmsys_driver_data = {
 	.clk_driver = "clk-mt8173-mm",
+};
+
+static const struct mtk_mmsys_driver_data mt8183_mmsys_driver_data = {
+	.clk_driver = "clk-mt8183-mm",
 };
 
 static unsigned int mtk_mmsys_ddp_mout_en(enum mtk_ddp_comp_id cur,
@@ -312,16 +331,38 @@ static int mtk_mmsys_probe(struct platform_device *pdev)
 
 	drm = platform_device_register_data(&pdev->dev, "mediatek-drm",
 					    PLATFORM_DEVID_AUTO, NULL, 0);
-	if (IS_ERR(drm))
+	if (IS_ERR(drm)) {
+		platform_device_unregister(clks);
 		return PTR_ERR(drm);
+	}
 
 	return 0;
 }
 
 static const struct of_device_id of_match_mtk_mmsys[] = {
 	{
+		.compatible = "mediatek,mt2701-mmsys",
+		.data = &mt2701_mmsys_driver_data,
+	},
+	{
+		.compatible = "mediatek,mt2712-mmsys",
+		.data = &mt2712_mmsys_driver_data,
+	},
+	{
+		.compatible = "mediatek,mt6779-mmsys",
+		.data = &mt6779_mmsys_driver_data,
+	},
+	{
+		.compatible = "mediatek,mt6797-mmsys",
+		.data = &mt6797_mmsys_driver_data,
+	},
+	{
 		.compatible = "mediatek,mt8173-mmsys",
 		.data = &mt8173_mmsys_driver_data,
+	},
+	{
+		.compatible = "mediatek,mt8183-mmsys",
+		.data = &mt8183_mmsys_driver_data,
 	},
 	{ }
 };

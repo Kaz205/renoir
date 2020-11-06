@@ -525,6 +525,20 @@ static void amdgpu_block_invalid_wreg(struct amdgpu_device *adev,
 }
 
 /**
+ * amdgpu_device_asic_init - Wrapper for atom asic_init
+ *
+ * @dev: drm_device pointer
+ *
+ * Does any asic specific work and then calls atom asic init.
+ */
+static int amdgpu_device_asic_init(struct amdgpu_device *adev)
+{
+	amdgpu_asic_pre_asic_init(adev);
+
+	return amdgpu_atom_asic_init(adev->mode_info.atom_context);
+}
+
+/**
  * amdgpu_device_vram_scratch_init - allocate the VRAM scratch page
  *
  * @adev: amdgpu device pointer
@@ -2800,7 +2814,7 @@ int amdgpu_device_init(struct amdgpu_device *adev,
 			goto failed;
 		}
 		DRM_INFO("GPU posting now...\n");
-		r = amdgpu_atom_asic_init(adev->mode_info.atom_context);
+		r = amdgpu_device_asic_init(adev);
 		if (r) {
 			dev_err(adev->dev, "gpu post error!\n");
 			goto failed;
@@ -3044,6 +3058,7 @@ int amdgpu_device_suspend(struct drm_device *dev, bool suspend, bool fbcon)
 	struct amdgpu_device *adev;
 	struct drm_crtc *crtc;
 	struct drm_connector *connector;
+	struct drm_connector_list_iter iter;
 	int r;
 
 	if (dev == NULL || dev->dev_private == NULL) {
@@ -3066,9 +3081,11 @@ int amdgpu_device_suspend(struct drm_device *dev, bool suspend, bool fbcon)
 	if (!amdgpu_device_has_dc_support(adev)) {
 		/* turn off display hw */
 		drm_modeset_lock_all(dev);
-		list_for_each_entry(connector, &dev->mode_config.connector_list, head) {
-			drm_helper_connector_dpms(connector, DRM_MODE_DPMS_OFF);
-		}
+		drm_connector_list_iter_begin(dev, &iter);
+		drm_for_each_connector_iter(connector, &iter)
+			drm_helper_connector_dpms(connector,
+						  DRM_MODE_DPMS_OFF);
+		drm_connector_list_iter_end(&iter);
 		drm_modeset_unlock_all(dev);
 			/* unpin the front buffers and cursors */
 		list_for_each_entry(crtc, &dev->mode_config.crtc_list, head) {
@@ -3147,6 +3164,7 @@ int amdgpu_device_suspend(struct drm_device *dev, bool suspend, bool fbcon)
 int amdgpu_device_resume(struct drm_device *dev, bool resume, bool fbcon)
 {
 	struct drm_connector *connector;
+	struct drm_connector_list_iter iter;
 	struct amdgpu_device *adev = dev->dev_private;
 	struct drm_crtc *crtc;
 	int r = 0;
@@ -3164,7 +3182,7 @@ int amdgpu_device_resume(struct drm_device *dev, bool resume, bool fbcon)
 
 	/* post card */
 	if (amdgpu_device_need_post(adev)) {
-		r = amdgpu_atom_asic_init(adev->mode_info.atom_context);
+		r = amdgpu_device_asic_init(adev);
 		if (r)
 			DRM_ERROR("amdgpu asic init failed\n");
 	}
@@ -3217,9 +3235,13 @@ int amdgpu_device_resume(struct drm_device *dev, bool resume, bool fbcon)
 
 			/* turn on display hw */
 			drm_modeset_lock_all(dev);
-			list_for_each_entry(connector, &dev->mode_config.connector_list, head) {
-				drm_helper_connector_dpms(connector, DRM_MODE_DPMS_ON);
-			}
+
+			drm_connector_list_iter_begin(dev, &iter);
+			drm_for_each_connector_iter(connector, &iter)
+				drm_helper_connector_dpms(connector,
+							  DRM_MODE_DPMS_ON);
+			drm_connector_list_iter_end(&iter);
+
 			drm_modeset_unlock_all(dev);
 		}
 		amdgpu_fbdev_set_suspend(adev, 0);
@@ -3496,6 +3518,8 @@ static int amdgpu_device_reset_sriov(struct amdgpu_device *adev,
 	if (r)
 		return r;
 
+	amdgpu_amdkfd_pre_reset(adev);
+
 	/* Resume IP prior to SMC */
 	r = amdgpu_device_ip_reinit_early_sriov(adev);
 	if (r)
@@ -3675,7 +3699,7 @@ static int amdgpu_do_asic_reset(struct amdgpu_hive_info *hive,
 	list_for_each_entry(tmp_adev, device_list_handle, gmc.xgmi.head) {
 		if (need_full_reset) {
 			/* post card */
-			if (amdgpu_atom_asic_init(tmp_adev->mode_info.atom_context))
+			if (amdgpu_device_asic_init(tmp_adev))
 				DRM_WARN("asic atom init failed!");
 
 			if (!r) {

@@ -8,6 +8,7 @@
 
 #include "fuse_i.h"
 
+#include <linux/fs.h>
 #include <linux/pagemap.h>
 #include <linux/slab.h>
 #include <linux/file.h>
@@ -187,6 +188,13 @@ void fuse_change_attributes_common(struct inode *inode, struct fuse_attr *attr,
 		inode->i_mode &= ~S_ISVTX;
 
 	fi->orig_ino = attr->ino;
+
+	/*
+	 * Reset S_NOSEC since the file server observed that the suid/sgid bit
+	 * is set.
+	 */
+	if (IS_NOSEC(inode) && is_sxid(inode->i_mode))
+		inode->i_flags &= ~S_NOSEC;
 }
 
 void fuse_change_attributes(struct inode *inode, struct fuse_attr *attr,
@@ -323,6 +331,8 @@ struct inode *fuse_iget(struct super_block *sb, u64 nodeid,
 int fuse_reverse_inval_inode(struct super_block *sb, u64 nodeid,
 			     loff_t offset, loff_t len)
 {
+	struct fuse_conn *fc = get_fuse_conn_super(sb);
+	struct fuse_inode *fi;
 	struct inode *inode;
 	pgoff_t pg_start;
 	pgoff_t pg_end;
@@ -330,6 +340,11 @@ int fuse_reverse_inval_inode(struct super_block *sb, u64 nodeid,
 	inode = ilookup5(sb, nodeid, fuse_inode_eq, &nodeid);
 	if (!inode)
 		return -ENOENT;
+
+	fi = get_fuse_inode(inode);
+	spin_lock(&fi->lock);
+	fi->attr_version = atomic64_inc_return(&fc->attr_version);
+	spin_unlock(&fi->lock);
 
 	fuse_invalidate_attr(inode);
 	forget_all_cached_acls(inode);

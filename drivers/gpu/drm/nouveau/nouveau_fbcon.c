@@ -189,8 +189,10 @@ nouveau_fbcon_open(struct fb_info *info, int user)
 	struct nouveau_fbdev *fbcon = info->par;
 	struct nouveau_drm *drm = nouveau_drm(fbcon->helper.dev);
 	int ret = pm_runtime_get_sync(drm->dev->dev);
-	if (ret < 0 && ret != -EACCES)
+	if (ret < 0 && ret != -EACCES) {
+		pm_runtime_put(drm->dev->dev);
 		return ret;
+	}
 	return 0;
 }
 
@@ -203,7 +205,7 @@ nouveau_fbcon_release(struct fb_info *info, int user)
 	return 0;
 }
 
-static struct fb_ops nouveau_fbcon_ops = {
+static const struct fb_ops nouveau_fbcon_ops = {
 	.owner = THIS_MODULE,
 	DRM_FB_HELPER_DEFAULT_OPS,
 	.fb_open = nouveau_fbcon_open,
@@ -214,7 +216,7 @@ static struct fb_ops nouveau_fbcon_ops = {
 	.fb_sync = nouveau_fbcon_sync,
 };
 
-static struct fb_ops nouveau_fbcon_sw_ops = {
+static const struct fb_ops nouveau_fbcon_sw_ops = {
 	.owner = THIS_MODULE,
 	DRM_FB_HELPER_DEFAULT_OPS,
 	.fb_open = nouveau_fbcon_open,
@@ -558,13 +560,9 @@ nouveau_fbcon_init(struct drm_device *dev)
 
 	drm_fb_helper_prepare(dev, &fbcon->helper, &nouveau_fbcon_helper_funcs);
 
-	ret = drm_fb_helper_init(dev, &fbcon->helper, 4);
+	ret = drm_fb_helper_init(dev, &fbcon->helper);
 	if (ret)
 		goto free;
-
-	ret = drm_fb_helper_single_add_all_connectors(&fbcon->helper);
-	if (ret)
-		goto fini;
 
 	if (preferred_bpp != 8 && preferred_bpp != 16 && preferred_bpp != 32) {
 		if (drm->client.device.info.ram_size <= 32 * 1024 * 1024)

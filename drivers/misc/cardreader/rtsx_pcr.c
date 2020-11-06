@@ -1199,10 +1199,6 @@ void rtsx_pci_init_ocp(struct rtsx_pcr *pcr)
 			rtsx_pci_write_register(pcr, REG_OCPGLITCH,
 				SD_OCP_GLITCH_MASK, pcr->hw_param.ocp_glitch);
 			rtsx_pci_enable_ocp(pcr);
-		} else {
-			/* OC power down */
-			rtsx_pci_write_register(pcr, FPDCTL, OC_POWER_DOWN,
-				OC_POWER_DOWN);
 		}
 	}
 }
@@ -1227,6 +1223,36 @@ void rtsx_pci_clear_ocpstat(struct rtsx_pcr *pcr)
 		udelay(100);
 		rtsx_pci_write_register(pcr, REG_OCPCTL, mask, 0);
 	}
+}
+
+void rtsx_pci_enable_oobs_polling(struct rtsx_pcr *pcr)
+{
+	u16 val;
+
+	if ((PCI_PID(pcr) != PID_525A) && (PCI_PID(pcr) != PID_5260)) {
+		rtsx_pci_read_phy_register(pcr, 0x01, &val);
+		val |= 1<<9;
+		rtsx_pci_write_phy_register(pcr, 0x01, val);
+	}
+	rtsx_pci_write_register(pcr, REG_CFG_OOBS_OFF_TIMER, 0xFF, 0x32);
+	rtsx_pci_write_register(pcr, REG_CFG_OOBS_ON_TIMER, 0xFF, 0x05);
+	rtsx_pci_write_register(pcr, REG_CFG_VCM_ON_TIMER, 0xFF, 0x83);
+	rtsx_pci_write_register(pcr, REG_CFG_OOBS_POLLING, 0xFF, 0xDE);
+
+}
+
+void rtsx_pci_disable_oobs_polling(struct rtsx_pcr *pcr)
+{
+	u16 val;
+
+	if ((PCI_PID(pcr) != PID_525A) && (PCI_PID(pcr) != PID_5260)) {
+		rtsx_pci_read_phy_register(pcr, 0x01, &val);
+		val &= ~(1<<9);
+		rtsx_pci_write_phy_register(pcr, 0x01, val);
+	}
+	rtsx_pci_write_register(pcr, REG_CFG_VCM_ON_TIMER, 0xFF, 0x03);
+	rtsx_pci_write_register(pcr, REG_CFG_OOBS_POLLING, 0xFF, 0x00);
+
 }
 
 int rtsx_sd_power_off_card3v3(struct rtsx_pcr *pcr)
@@ -1563,12 +1589,14 @@ static int rtsx_pci_probe(struct pci_dev *pcidev,
 	ret = mfd_add_devices(&pcidev->dev, pcr->id, rtsx_pcr_cells,
 			ARRAY_SIZE(rtsx_pcr_cells), NULL, 0, NULL);
 	if (ret < 0)
-		goto disable_irq;
+		goto free_slots;
 
 	schedule_delayed_work(&pcr->idle_work, msecs_to_jiffies(200));
 
 	return 0;
 
+free_slots:
+	kfree(pcr->slots);
 disable_irq:
 	free_irq(pcr->irq, (void *)pcr);
 disable_msi:

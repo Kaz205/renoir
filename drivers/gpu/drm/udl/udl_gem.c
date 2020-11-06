@@ -52,7 +52,7 @@ udl_gem_create(struct drm_file *file,
 		return ret;
 	}
 
-	drm_gem_object_put_unlocked(&obj->base);
+	drm_gem_object_put(&obj->base);
 	*handle_p = handle;
 	return 0;
 }
@@ -227,7 +227,7 @@ int udl_gem_mmap(struct drm_file *file, struct drm_device *dev,
 	*offset = drm_vma_node_offset_addr(&gobj->base.vma_node);
 
 out:
-	drm_gem_object_put_unlocked(&gobj->base);
+	drm_gem_object_put(&gobj->base);
 unlock:
 	mutex_unlock(&udl->gem_lock);
 	return ret;

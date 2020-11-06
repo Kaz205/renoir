@@ -85,30 +85,17 @@ static int _dpu_danger_signal_status(struct seq_file *s,
 	return 0;
 }
 
-#define DEFINE_DPU_DEBUGFS_SEQ_FOPS(__prefix)				\
-static int __prefix ## _open(struct inode *inode, struct file *file)	\
-{									\
-	return single_open(file, __prefix ## _show, inode->i_private);	\
-}									\
-static const struct file_operations __prefix ## _fops = {		\
-	.owner = THIS_MODULE,						\
-	.open = __prefix ## _open,					\
-	.release = single_release,					\
-	.read = seq_read,						\
-	.llseek = seq_lseek,						\
-}
-
 static int dpu_debugfs_danger_stats_show(struct seq_file *s, void *v)
 {
 	return _dpu_danger_signal_status(s, true);
 }
-DEFINE_DPU_DEBUGFS_SEQ_FOPS(dpu_debugfs_danger_stats);
+DEFINE_SHOW_ATTRIBUTE(dpu_debugfs_danger_stats);
 
 static int dpu_debugfs_safe_stats_show(struct seq_file *s, void *v)
 {
 	return _dpu_danger_signal_status(s, false);
 }
-DEFINE_DPU_DEBUGFS_SEQ_FOPS(dpu_debugfs_safe_stats);
+DEFINE_SHOW_ATTRIBUTE(dpu_debugfs_safe_stats);
 
 static void dpu_debugfs_danger_init(struct dpu_kms *dpu_kms,
 		struct dentry *parent)
@@ -587,6 +574,8 @@ static int _dpu_kms_drm_obj_init(struct dpu_kms *dpu_kms)
 	struct drm_plane *primary_planes[MAX_PLANES], *plane;
 	struct drm_plane *cursor_planes[MAX_PLANES] = { NULL };
 	struct drm_crtc *crtc;
+	unsigned cursor_idx = 0;
+	unsigned primary_idx = 0;
 
 	struct msm_drm_private *priv;
 	struct dpu_mdss_cfg *catalog;
@@ -610,21 +599,28 @@ static int _dpu_kms_drm_obj_init(struct dpu_kms *dpu_kms)
 	/* Create the planes, keeping track of one primary/cursor per crtc */
 	for (i = 0; i < catalog->sspp_count; i++) {
 		enum drm_plane_type type;
+		unsigned possible_crtcs;
 
 		if ((catalog->sspp[i].features & BIT(DPU_SSPP_CURSOR))
-			&& cursor_planes_idx < max_crtc_count)
+			&& cursor_planes_idx < max_crtc_count) {
 			type = DRM_PLANE_TYPE_CURSOR;
-		else if (primary_planes_idx < max_crtc_count)
+			possible_crtcs = BIT(cursor_idx);
+			cursor_idx++;
+		} else if (primary_planes_idx < max_crtc_count) {
 			type = DRM_PLANE_TYPE_PRIMARY;
-		else
+			possible_crtcs = BIT(primary_idx);
+			primary_idx++;
+		} else {
 			type = DRM_PLANE_TYPE_OVERLAY;
+			possible_crtcs = (1UL << max_crtc_count) - 1;
+		}
 
 		DPU_DEBUG("Create plane type %d with features %lx (cur %lx)\n",
 			  type, catalog->sspp[i].features,
 			  catalog->sspp[i].features & BIT(DPU_SSPP_CURSOR));
 
 		plane = dpu_plane_init(dev, catalog->sspp[i].id, type,
-				       (1UL << max_crtc_count) - 1, 0);
+				       possible_crtcs, 0);
 		if (IS_ERR(plane)) {
 			DPU_ERROR("dpu_plane_init failed\n");
 			ret = PTR_ERR(plane);
@@ -723,6 +719,8 @@ static void dpu_kms_destroy(struct msm_kms *kms)
 	dpu_kms = to_dpu_kms(kms);
 
 	_dpu_kms_hw_destroy(dpu_kms);
+
+	msm_kms_destroy(&dpu_kms->base);
 }
 
 static void _dpu_kms_set_encoder_mode(struct msm_kms *kms,
@@ -1096,12 +1094,9 @@ static int dpu_bind(struct device *dev, struct device *master, void *data)
 		return PTR_ERR(dpu_kms->opp_table);
 	/* OPP table is optional */
 	ret = dev_pm_opp_of_add_table(dev);
-	if (!ret) {
-		dpu_kms->has_opp_table = true;
-	} else if (ret != -ENODEV) {
+	if (ret && ret != -ENODEV) {
 		dev_err(dev, "invalid OPP table in device tree\n");
-		dev_pm_opp_put_clkname(dpu_kms->opp_table);
-		return ret;
+		goto put_clkname;
 	}
 
 	mp = &dpu_kms->mp;
@@ -1113,7 +1108,11 @@ static int dpu_bind(struct device *dev, struct device *master, void *data)
 
 	platform_set_drvdata(pdev, dpu_kms);
 
-	msm_kms_init(&dpu_kms->base, &kms_funcs);
+	ret = msm_kms_init(&dpu_kms->base, &kms_funcs);
+	if (ret) {
+		DPU_ERROR("failed to init kms, ret=%d\n", ret);
+		goto err;
+	}
 	dpu_kms->dev = ddev;
 	dpu_kms->pdev = pdev;
 
@@ -1123,8 +1122,8 @@ static int dpu_bind(struct device *dev, struct device *master, void *data)
 	priv->kms = &dpu_kms->base;
 	return ret;
 err:
-	if (dpu_kms->has_opp_table)
-		dev_pm_opp_of_remove_table(dev);
+	dev_pm_opp_of_remove_table(dev);
+put_clkname:
 	dev_pm_opp_put_clkname(dpu_kms->opp_table);
 	return ret;
 }
@@ -1142,8 +1141,7 @@ static void dpu_unbind(struct device *dev, struct device *master, void *data)
 	if (dpu_kms->rpm_enabled)
 		pm_runtime_disable(&pdev->dev);
 
-	if (dpu_kms->has_opp_table)
-		dev_pm_opp_of_remove_table(dev);
+	dev_pm_opp_of_remove_table(dev);
 	dev_pm_opp_put_clkname(dpu_kms->opp_table);
 }
 

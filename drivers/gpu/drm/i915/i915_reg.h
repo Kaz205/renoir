@@ -3745,8 +3745,6 @@ static inline bool i915_mmio_reg_valid(i915_reg_t reg)
 #define   MCH_SSKPD_WM0_MASK		0x3f
 #define   MCH_SSKPD_WM0_VAL		0xc
 
-#define MCH_SECP_NRG_STTS		_MMIO(MCHBAR_MIRROR_BASE_SNB + 0x592c)
-
 /* Clocking configuration register */
 #define CLKCFG			_MMIO(MCHBAR_MIRROR_BASE + 0xc00)
 #define CLKCFG_FSB_400					(5 << 0)	/* hrawclk 100 */
@@ -4005,31 +4003,7 @@ static inline bool i915_mmio_reg_valid(i915_reg_t reg)
 #define GEN6_RP_STATE_LIMITS	_MMIO(MCHBAR_MIRROR_BASE_SNB + 0x5994)
 #define GEN6_RP_STATE_CAP	_MMIO(MCHBAR_MIRROR_BASE_SNB + 0x5998)
 #define BXT_RP_STATE_CAP        _MMIO(0x138170)
-
-/*
- * Make these a multiple of magic 25 to avoid SNB (eg. Dell XPS
- * 8300) freezing up around GPU hangs. Looks as if even
- * scheduling/timer interrupts start misbehaving if the RPS
- * EI/thresholds are "bad", leading to a very sluggish or even
- * frozen machine.
- */
-#define INTERVAL_1_28_US(us)	roundup(((us) * 100) >> 7, 25)
-#define INTERVAL_1_33_US(us)	(((us) * 3)   >> 2)
-#define INTERVAL_0_833_US(us)	(((us) * 6) / 5)
-#define GT_INTERVAL_FROM_US(dev_priv, us) (INTEL_GEN(dev_priv) >= 9 ? \
-				(IS_GEN9_LP(dev_priv) ? \
-				INTERVAL_0_833_US(us) : \
-				INTERVAL_1_33_US(us)) : \
-				INTERVAL_1_28_US(us))
-
-#define INTERVAL_1_28_TO_US(interval)  (((interval) << 7) / 100)
-#define INTERVAL_1_33_TO_US(interval)  (((interval) << 2) / 3)
-#define INTERVAL_0_833_TO_US(interval) (((interval) * 5)  / 6)
-#define GT_PM_INTERVAL_TO_US(dev_priv, interval) (INTEL_GEN(dev_priv) >= 9 ? \
-                           (IS_GEN9_LP(dev_priv) ? \
-                           INTERVAL_0_833_TO_US(interval) : \
-                           INTERVAL_1_33_TO_US(interval)) : \
-                           INTERVAL_1_28_TO_US(interval))
+#define GEN9_RP_STATE_LIMITS	_MMIO(0x138148)
 
 /*
  * Logical Context regs
@@ -4427,25 +4401,39 @@ enum {
 #define   EDP_PSR_DEBUG_MASK_DISP_REG_WRITE    (1 << 16) /* Reserved in ICL+ */
 #define   EDP_PSR_DEBUG_EXIT_ON_PIXEL_UNDERRUN (1 << 15) /* SKL+ */
 
-#define _PSR2_CTL_A			0x60900
-#define _PSR2_CTL_EDP			0x6f900
-#define EDP_PSR2_CTL(tran)		_MMIO_TRANS2(tran, _PSR2_CTL_A)
-#define   EDP_PSR2_ENABLE		(1 << 31)
-#define   EDP_SU_TRACK_ENABLE		(1 << 30)
-#define   EDP_Y_COORDINATE_VALID	(1 << 26) /* GLK and CNL+ */
-#define   EDP_Y_COORDINATE_ENABLE	(1 << 25) /* GLK and CNL+ */
-#define   EDP_MAX_SU_DISABLE_TIME(t)	((t) << 20)
-#define   EDP_MAX_SU_DISABLE_TIME_MASK	(0x1f << 20)
-#define   EDP_PSR2_TP2_TIME_500us	(0 << 8)
-#define   EDP_PSR2_TP2_TIME_100us	(1 << 8)
-#define   EDP_PSR2_TP2_TIME_2500us	(2 << 8)
-#define   EDP_PSR2_TP2_TIME_50us	(3 << 8)
-#define   EDP_PSR2_TP2_TIME_MASK	(3 << 8)
-#define   EDP_PSR2_FRAME_BEFORE_SU_SHIFT 4
-#define   EDP_PSR2_FRAME_BEFORE_SU_MASK	(0xf << 4)
-#define   EDP_PSR2_FRAME_BEFORE_SU(a)	((a) << 4)
-#define   EDP_PSR2_IDLE_FRAME_MASK	0xf
-#define   EDP_PSR2_IDLE_FRAME_SHIFT	0
+#define _PSR2_CTL_A				0x60900
+#define _PSR2_CTL_EDP				0x6f900
+#define EDP_PSR2_CTL(tran)			_MMIO_TRANS2(tran, _PSR2_CTL_A)
+#define   EDP_PSR2_ENABLE			(1 << 31)
+#define   EDP_SU_TRACK_ENABLE			(1 << 30)
+#define   TGL_EDP_PSR2_BLOCK_COUNT_NUM_2	(0 << 28)
+#define   TGL_EDP_PSR2_BLOCK_COUNT_NUM_3	(1 << 28)
+#define   EDP_Y_COORDINATE_VALID		(1 << 26) /* GLK and CNL+ */
+#define   EDP_Y_COORDINATE_ENABLE		(1 << 25) /* GLK and CNL+ */
+#define   EDP_MAX_SU_DISABLE_TIME(t)		((t) << 20)
+#define   EDP_MAX_SU_DISABLE_TIME_MASK		(0x1f << 20)
+#define   EDP_PSR2_IO_BUFFER_WAKE_MAX_LINES	8
+#define   EDP_PSR2_IO_BUFFER_WAKE(lines)	((EDP_PSR2_IO_BUFFER_WAKE_MAX_LINES - (lines)) << 13)
+#define   EDP_PSR2_IO_BUFFER_WAKE_MASK		(3 << 13)
+#define   TGL_EDP_PSR2_IO_BUFFER_WAKE_MIN_LINES	5
+#define   TGL_EDP_PSR2_IO_BUFFER_WAKE(lines)	(((lines) - TGL_EDP_PSR2_IO_BUFFER_WAKE_MIN_LINES) << 13)
+#define   TGL_EDP_PSR2_IO_BUFFER_WAKE_MASK	(7 << 13)
+#define   EDP_PSR2_FAST_WAKE_MAX_LINES		8
+#define   EDP_PSR2_FAST_WAKE(lines)		((EDP_PSR2_FAST_WAKE_MAX_LINES - (lines)) << 11)
+#define   EDP_PSR2_FAST_WAKE_MASK		(3 << 11)
+#define   TGL_EDP_PSR2_FAST_WAKE_MIN_LINES	5
+#define   TGL_EDP_PSR2_FAST_WAKE(lines)		(((lines) - TGL_EDP_PSR2_FAST_WAKE_MIN_LINES) << 10)
+#define   TGL_EDP_PSR2_FAST_WAKE_MASK		(7 << 10)
+#define   EDP_PSR2_TP2_TIME_500us		(0 << 8)
+#define   EDP_PSR2_TP2_TIME_100us		(1 << 8)
+#define   EDP_PSR2_TP2_TIME_2500us		(2 << 8)
+#define   EDP_PSR2_TP2_TIME_50us		(3 << 8)
+#define   EDP_PSR2_TP2_TIME_MASK		(3 << 8)
+#define   EDP_PSR2_FRAME_BEFORE_SU_SHIFT	4
+#define   EDP_PSR2_FRAME_BEFORE_SU_MASK		(0xf << 4)
+#define   EDP_PSR2_FRAME_BEFORE_SU(a)		((a) << 4)
+#define   EDP_PSR2_IDLE_FRAME_MASK		0xf
+#define   EDP_PSR2_IDLE_FRAME_SHIFT		0
 
 #define _PSR_EVENT_TRANS_A			0x60848
 #define _PSR_EVENT_TRANS_B			0x61848
@@ -7750,9 +7738,9 @@ enum {
 #define DISP_ARB_CTL2	_MMIO(0x45004)
 #define  DISP_DATA_PARTITION_5_6	(1 << 6)
 #define  DISP_IPC_ENABLE		(1 << 3)
-#define DBUF_CTL	_MMIO(0x45008)
-#define DBUF_CTL_S1	_MMIO(0x45008)
-#define DBUF_CTL_S2	_MMIO(0x44FE8)
+#define _DBUF_CTL_S1			0x45008
+#define _DBUF_CTL_S2			0x44FE8
+#define DBUF_CTL_S(slice)		_MMIO(_PICK_EVEN(slice, _DBUF_CTL_S1, _DBUF_CTL_S2))
 #define  DBUF_POWER_REQUEST		(1 << 31)
 #define  DBUF_POWER_STATE		(1 << 30)
 #define GEN7_MSG_CTL	_MMIO(0x45010)
@@ -8996,6 +8984,7 @@ enum {
 #define     GEN7_PCODE_ILLEGAL_DATA		0x3
 #define     GEN11_PCODE_ILLEGAL_SUBCOMMAND	0x4
 #define     GEN11_PCODE_LOCKED			0x6
+#define     GEN11_PCODE_REJECTED		0x11
 #define     GEN7_PCODE_MIN_FREQ_TABLE_GT_RATIO_OUT_OF_RANGE 0x10
 #define   GEN6_PCODE_WRITE_RC6VIDS		0x4
 #define   GEN6_PCODE_READ_RC6VIDS		0x5
@@ -9017,6 +9006,9 @@ enum {
 #define   ICL_PCODE_MEM_SUBSYSYSTEM_INFO	0xd
 #define     ICL_PCODE_MEM_SS_READ_GLOBAL_INFO	(0x0 << 8)
 #define     ICL_PCODE_MEM_SS_READ_QGV_POINT_INFO(point)	(((point) << 16) | (0x1 << 8))
+#define   ICL_PCODE_SAGV_DE_MEM_SS_CONFIG	0xe
+#define     ICL_PCODE_POINTS_RESTRICTED		0x0
+#define     ICL_PCODE_POINTS_RESTRICTED_MASK	0x1
 #define   GEN6_PCODE_READ_D_COMP		0x10
 #define   GEN6_PCODE_WRITE_D_COMP		0x11
 #define   ICL_PCODE_EXIT_TCCOLD			0x12
@@ -9702,8 +9694,11 @@ enum skl_power_gate {
 #define  TRANS_DDI_BPC_10		(1 << 20)
 #define  TRANS_DDI_BPC_6		(2 << 20)
 #define  TRANS_DDI_BPC_12		(3 << 20)
+#define  TRANS_DDI_PORT_SYNC_MASTER_SELECT_MASK	REG_GENMASK(19, 18) /* bdw-cnl */
+#define  TRANS_DDI_PORT_SYNC_MASTER_SELECT(x)	REG_FIELD_PREP(TRANS_DDI_PORT_SYNC_MASTER_SELECT_MASK, (x))
 #define  TRANS_DDI_PVSYNC		(1 << 17)
 #define  TRANS_DDI_PHSYNC		(1 << 16)
+#define  TRANS_DDI_PORT_SYNC_ENABLE	REG_BIT(15) /* bdw-cnl */
 #define  TRANS_DDI_EDP_INPUT_MASK	(7 << 12)
 #define  TRANS_DDI_EDP_INPUT_A_ON	(0 << 12)
 #define  TRANS_DDI_EDP_INPUT_A_ONOFF	(4 << 12)
@@ -9730,12 +9725,10 @@ enum skl_power_gate {
 #define _TRANS_DDI_FUNC_CTL2_EDP	0x6f404
 #define _TRANS_DDI_FUNC_CTL2_DSI0	0x6b404
 #define _TRANS_DDI_FUNC_CTL2_DSI1	0x6bc04
-#define TRANS_DDI_FUNC_CTL2(tran)	_MMIO_TRANS2(tran, \
-						     _TRANS_DDI_FUNC_CTL2_A)
-#define  PORT_SYNC_MODE_ENABLE			(1 << 4)
-#define  PORT_SYNC_MODE_MASTER_SELECT(x)	((x) << 0)
-#define  PORT_SYNC_MODE_MASTER_SELECT_MASK	(0x7 << 0)
-#define  PORT_SYNC_MODE_MASTER_SELECT_SHIFT	0
+#define TRANS_DDI_FUNC_CTL2(tran)	_MMIO_TRANS2(tran, _TRANS_DDI_FUNC_CTL2_A)
+#define  PORT_SYNC_MODE_ENABLE			REG_BIT(4)
+#define  PORT_SYNC_MODE_MASTER_SELECT_MASK	REG_GENMASK(2, 0)
+#define  PORT_SYNC_MODE_MASTER_SELECT(x)	REG_FIELD_PREP(PORT_SYNC_MODE_MASTER_SELECT_MASK, (x))
 
 /* DisplayPort Transport Control */
 #define _DP_TP_CTL_A			0x64040
@@ -9795,6 +9788,24 @@ enum skl_power_gate {
 #define DDI_BUF_TRANS_LO(port, i)	_MMIO(_PORT(port, _DDI_BUF_TRANS_A, _DDI_BUF_TRANS_B) + (i) * 8)
 #define  DDI_BUF_BALANCE_LEG_ENABLE	(1 << 31)
 #define DDI_BUF_TRANS_HI(port, i)	_MMIO(_PORT(port, _DDI_BUF_TRANS_A, _DDI_BUF_TRANS_B) + (i) * 8 + 4)
+
+/* DDI DP Compliance Control */
+#define _DDI_DP_COMP_CTL_A			0x605F0
+#define _DDI_DP_COMP_CTL_B			0x615F0
+#define DDI_DP_COMP_CTL(pipe)			_MMIO_PIPE(pipe, _DDI_DP_COMP_CTL_A, _DDI_DP_COMP_CTL_B)
+#define   DDI_DP_COMP_CTL_ENABLE		(1 << 31)
+#define   DDI_DP_COMP_CTL_D10_2			(0 << 28)
+#define   DDI_DP_COMP_CTL_SCRAMBLED_0		(1 << 28)
+#define   DDI_DP_COMP_CTL_PRBS7			(2 << 28)
+#define   DDI_DP_COMP_CTL_CUSTOM80		(3 << 28)
+#define   DDI_DP_COMP_CTL_HBR2			(4 << 28)
+#define   DDI_DP_COMP_CTL_SCRAMBLED_1		(5 << 28)
+#define   DDI_DP_COMP_CTL_HBR2_RESET		(0xFC << 0)
+
+/* DDI DP Compliance Pattern */
+#define _DDI_DP_COMP_PAT_A			0x605F4
+#define _DDI_DP_COMP_PAT_B			0x615F4
+#define DDI_DP_COMP_PAT(pipe, i)		_MMIO(_PIPE(pipe, _DDI_DP_COMP_PAT_A, _DDI_DP_COMP_PAT_B) + (i) * 4)
 
 /* Sideband Interface (SBI) is programmed indirectly, via
  * SBI_ADDR, which contains the register offset; and SBI_DATA,
@@ -10552,13 +10563,13 @@ enum skl_power_gate {
 #define  D_COMP_COMP_DISABLE		(1 << 0)
 
 /* Pipe WM_LINETIME - watermark line time */
-#define _PIPE_WM_LINETIME_A		0x45270
-#define _PIPE_WM_LINETIME_B		0x45274
-#define PIPE_WM_LINETIME(pipe) _MMIO_PIPE(pipe, _PIPE_WM_LINETIME_A, _PIPE_WM_LINETIME_B)
-#define   PIPE_WM_LINETIME_MASK			(0x1ff)
-#define   PIPE_WM_LINETIME_TIME(x)		((x))
-#define   PIPE_WM_LINETIME_IPS_LINETIME_MASK	(0x1ff << 16)
-#define   PIPE_WM_LINETIME_IPS_LINETIME(x)	((x) << 16)
+#define _WM_LINETIME_A		0x45270
+#define _WM_LINETIME_B		0x45274
+#define WM_LINETIME(pipe) _MMIO_PIPE(pipe, _WM_LINETIME_A, _WM_LINETIME_B)
+#define  HSW_LINETIME_MASK	REG_GENMASK(8, 0)
+#define  HSW_LINETIME(x)	REG_FIELD_PREP(HSW_LINETIME_MASK, (x))
+#define  HSW_IPS_LINETIME_MASK	REG_GENMASK(24, 16)
+#define  HSW_IPS_LINETIME(x)	REG_FIELD_PREP(HSW_IPS_LINETIME_MASK, (x))
 
 /* SFUSE_STRAP */
 #define SFUSE_STRAP			_MMIO(0xc2014)
@@ -12096,5 +12107,11 @@ enum skl_power_gate {
 #define DSB_CTRL(pipe, id)		_MMIO(DSBSL_INSTANCE(pipe, id) + 0x8)
 #define   DSB_ENABLE			(1 << 31)
 #define   DSB_STATUS			(1 << 0)
+
+#define TGL_ROOT_DEVICE_ID		0x9A00
+#define TGL_ROOT_DEVICE_MASK		0xFF00
+#define TGL_ROOT_DEVICE_SKU_MASK	0xF
+#define TGL_ROOT_DEVICE_SKU_ULX		0x2
+#define TGL_ROOT_DEVICE_SKU_ULT		0x4
 
 #endif /* _I915_REG_H_ */

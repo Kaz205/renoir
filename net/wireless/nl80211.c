@@ -321,6 +321,19 @@ he_obss_pd_policy[NL80211_HE_OBSS_PD_ATTR_MAX + 1] = {
 		NLA_POLICY_RANGE(NLA_U8, 1, 20),
 };
 
+static const struct nla_policy
+sar_specs_policy[NL80211_SAR_ATTR_SPECS_MAX + 1] = {
+	[NL80211_SAR_ATTR_SPECS_POWER] = { .type = NLA_U8 },
+	[NL80211_SAR_ATTR_SPECS_FREQ_RANGE_INDEX] =
+		NLA_POLICY_MAX(NLA_U8, NUM_MAX_NL80211_SAR_FREQ_RANGES),
+};
+
+static const struct nla_policy
+sar_policy[NL80211_SAR_ATTR_MAX + 1] = {
+	[NL80211_SAR_ATTR_TYPE] = NLA_POLICY_MAX(NLA_U32, NUM_NL80211_SAR_TYPE),
+	[NL80211_SAR_ATTR_SPECS] = NLA_POLICY_NESTED_ARRAY(sar_specs_policy),
+};
+
 const struct nla_policy nl80211_policy[NUM_NL80211_ATTR] = {
 	[0] = { .strict_start_type = NL80211_ATTR_HE_OBSS_PD },
 	[NL80211_ATTR_WIPHY] = { .type = NLA_U32 },
@@ -628,6 +641,7 @@ const struct nla_policy nl80211_policy[NUM_NL80211_ATTR] = {
 					.len = SAE_PASSWORD_MAX_LEN },
 	[NL80211_ATTR_TWT_RESPONDER] = { .type = NLA_FLAG },
 	[NL80211_ATTR_HE_OBSS_PD] = NLA_POLICY_NESTED(he_obss_pd_policy),
+	[NL80211_ATTR_SAR_SPEC] = NLA_POLICY_NESTED(sar_policy),
 };
 
 /* policy for the key attributes */
@@ -1891,6 +1905,55 @@ static int nl80211_send_pmsr_capa(struct cfg80211_registered_device *rdev,
 	return 0;
 }
 
+static int
+nl80211_put_sar_specs(struct cfg80211_registered_device *rdev,
+		      struct sk_buff *msg)
+{
+	struct nlattr *sar_capa, *specs, *sub_freq_range;
+	u8  num_freq_ranges;
+	int i;
+
+	if (!rdev->wiphy.sar_capa)
+		return 0;
+
+	num_freq_ranges = rdev->wiphy.sar_capa->num_freq_ranges;
+
+	sar_capa = nla_nest_start(msg, NL80211_ATTR_SAR_SPEC);
+	if (!sar_capa)
+		return -ENOSPC;
+
+	if (nla_put_u16(msg, NL80211_SAR_ATTR_TYPE, rdev->wiphy.sar_capa->type))
+		goto fail;
+
+	specs = nla_nest_start_noflag(msg, NL80211_SAR_ATTR_SPECS);
+	if (!specs)
+		goto fail;
+
+	/* report supported freq_ranges */
+	for (i = 0; i < num_freq_ranges; i++) {
+		sub_freq_range = nla_nest_start_noflag(msg, i + 1);
+
+		nla_put_u32(msg, NL80211_SAR_ATTR_SPECS_START_FREQ,
+			    rdev->wiphy.sar_capa->freq_ranges[i].start_freq);
+
+		nla_put_u32(msg, NL80211_SAR_ATTR_SPECS_END_FREQ,
+			    rdev->wiphy.sar_capa->freq_ranges[i].end_freq);
+
+		nla_put_u8(msg, NL80211_SAR_ATTR_SPECS_FREQ_RANGE_INDEX,
+			   rdev->wiphy.sar_capa->freq_ranges[i].index);
+
+		nla_nest_end(msg, sub_freq_range);
+	}
+
+	nla_nest_end(msg, specs);
+	nla_nest_end(msg, sar_capa);
+
+	return 0;
+fail:
+	nla_nest_cancel(msg, sar_capa);
+	return -ENOBUFS;
+}
+
 struct nl80211_dump_wiphy_state {
 	s64 filter_wiphy;
 	long start;
@@ -2141,6 +2204,7 @@ static int nl80211_send_wiphy(struct cfg80211_registered_device *rdev,
 			CMD(set_multicast_to_unicast, SET_MULTICAST_TO_UNICAST);
 			CMD(update_connect_params, UPDATE_CONNECT_PARAMS);
 			CMD(update_ft_ies, UPDATE_FT_IES);
+                        CMD(set_sar_specs, SET_SAR_SPECS);
 		}
 #undef CMD
 
@@ -2230,7 +2294,10 @@ static int nl80211_send_wiphy(struct cfg80211_registered_device *rdev,
 		 * case we'll continue with more data in the next round,
 		 * but break unconditionally so unsplit data stops here.
 		 */
-		state->split_start++;
+		if (state->split)
+			state->split_start++;
+		else
+			state->split_start = 0;
 		break;
 	case 9:
 		if (rdev->wiphy.extended_capabilities &&
@@ -2447,6 +2514,9 @@ static int nl80211_send_wiphy(struct cfg80211_registered_device *rdev,
 		    nla_put(msg, NL80211_ATTR_AKM_SUITES,
 			    sizeof(u32) * rdev->wiphy.n_akm_suites,
 			    rdev->wiphy.akm_suites))
+			goto nla_put_failure;
+
+		if (nl80211_put_sar_specs(rdev, msg))
 			goto nla_put_failure;
 
 		/* done */
@@ -3978,6 +4048,9 @@ static int nl80211_del_key(struct sk_buff *skb, struct genl_info *info)
 	if (err)
 		return err;
 
+	if (key.idx < 0)
+		return -EINVAL;
+
 	if (info->attrs[NL80211_ATTR_MAC])
 		mac_addr = nla_data(info->attrs[NL80211_ATTR_MAC]);
 
@@ -4496,16 +4569,14 @@ static int nl80211_parse_he_obss_pd(struct nlattr *attrs,
 	if (err)
 		return err;
 
-	if (!tb[NL80211_HE_OBSS_PD_ATTR_MIN_OFFSET] ||
-	    !tb[NL80211_HE_OBSS_PD_ATTR_MAX_OFFSET])
-		return -EINVAL;
+	if (tb[NL80211_HE_OBSS_PD_ATTR_MIN_OFFSET])
+		he_obss_pd->min_offset =
+			nla_get_u8(tb[NL80211_HE_OBSS_PD_ATTR_MIN_OFFSET]);
+	if (tb[NL80211_HE_OBSS_PD_ATTR_MAX_OFFSET])
+		he_obss_pd->max_offset =
+			nla_get_u8(tb[NL80211_HE_OBSS_PD_ATTR_MAX_OFFSET]);
 
-	he_obss_pd->min_offset =
-		nla_get_u32(tb[NL80211_HE_OBSS_PD_ATTR_MIN_OFFSET]);
-	he_obss_pd->max_offset =
-		nla_get_u32(tb[NL80211_HE_OBSS_PD_ATTR_MAX_OFFSET]);
-
-	if (he_obss_pd->min_offset >= he_obss_pd->max_offset)
+	if (he_obss_pd->min_offset > he_obss_pd->max_offset)
 		return -EINVAL;
 
 	he_obss_pd->enable = true;
@@ -13904,6 +13975,103 @@ static void nl80211_post_doit(const struct genl_ops *ops, struct sk_buff *skb,
 	}
 }
 
+static int nl80211_set_sar_specs(struct sk_buff *skb, struct genl_info *info)
+{
+	struct cfg80211_registered_device *rdev = info->user_ptr[0];
+	struct nlattr *spec[NL80211_SAR_ATTR_SPECS_MAX + 1];
+	struct nlattr *tb[NL80211_SAR_ATTR_MAX + 1];
+	struct cfg80211_sar_specs *sar_spec;
+	u8 type, power, index, specs;
+	struct nlattr *spec_list;
+	int rem, err;
+
+	if (!rdev->wiphy.sar_capa)
+		return -EOPNOTSUPP;
+
+	if (!info->attrs[NL80211_ATTR_SAR_SPEC])
+		return -EINVAL;
+
+	nla_parse_nested(tb, NL80211_SAR_ATTR_MAX, info->attrs[NL80211_ATTR_SAR_SPEC],
+			 sar_policy, info->extack);
+
+	if (!tb[NL80211_SAR_ATTR_TYPE])
+		return -EINVAL;
+
+	type = nla_get_u32(tb[NL80211_SAR_ATTR_TYPE]);
+
+	if (!tb[NL80211_SAR_ATTR_SPECS])
+		return -EINVAL;
+
+	specs = 0;
+	nla_for_each_nested(spec_list, tb[NL80211_SAR_ATTR_SPECS], rem)
+		specs++;
+
+	sar_spec = kzalloc(sizeof(*sar_spec) +
+			   specs * sizeof(struct cfg80211_sar_sub_specs),
+			   GFP_KERNEL);
+	if (!sar_spec)
+		return -ENOMEM;
+
+	sar_spec->sub_specs = (struct cfg80211_sar_sub_specs *)
+			((char *)sar_spec + sizeof(*sar_spec));
+	specs = 0;
+	sar_spec->type = type;
+
+	nla_for_each_nested(spec_list, tb[NL80211_SAR_ATTR_SPECS], rem) {
+		if (nla_parse(spec,
+			      NL80211_SAR_ATTR_SPECS_MAX,
+			      nla_data(spec_list),
+			      nla_len(spec_list),
+			      sar_specs_policy,
+			      NULL)) {
+			err = -EINVAL;
+			goto error;
+		}
+
+		/* for power type, power value must be presented */
+		if (!spec[NL80211_SAR_ATTR_SPECS_POWER] &&
+		    type == NL80211_SAR_TYPE_POWER) {
+			err = -EINVAL;
+			goto error;
+		}
+
+		power = nla_get_u8(spec[NL80211_SAR_ATTR_SPECS_POWER]);
+		sar_spec->sub_specs[specs].power = power;
+
+		/* if NL80211_SAR_ATTR_SPECS_FREQ_RANGE_INDEX isn't present,
+		 * then the power applies to all bands. But it's only valid
+		 * for the first entry.
+		 */
+		if (!spec[NL80211_SAR_ATTR_SPECS_FREQ_RANGE_INDEX]) {
+			if (specs) {
+				err = -EINVAL;
+				goto error;
+			} else {
+				sar_spec->sub_specs[specs].freq_range_index =
+					NL80211_SAR_ALL_FREQ_RANGES;
+				specs++;
+				break;
+			}
+		}
+
+		index = nla_get_u8(spec[NL80211_SAR_ATTR_SPECS_FREQ_RANGE_INDEX]);
+		sar_spec->sub_specs[specs].freq_range_index = index;
+		specs++;
+	}
+
+	sar_spec->num_sub_specs = specs;
+
+	rdev->cur_cmd_info = info;
+	if (rdev->ops->set_sar_specs)
+		err = rdev_set_sar_specs(rdev, sar_spec);
+	else
+		err = -EOPNOTSUPP;
+	rdev->cur_cmd_info = NULL;
+error:
+	kfree(sar_spec);
+	return err;
+}
+
 static const struct genl_ops nl80211_ops[] = {
 	{
 		.cmd = NL80211_CMD_GET_WIPHY,
@@ -14751,6 +14919,14 @@ static const struct genl_ops nl80211_ops[] = {
 	{
 		.cmd = NL80211_CMD_PROBE_MESH_LINK,
 		.doit = nl80211_probe_mesh_link,
+		.flags = GENL_UNS_ADMIN_PERM,
+		.internal_flags = NL80211_FLAG_NEED_NETDEV_UP |
+				  NL80211_FLAG_NEED_RTNL,
+	},
+	{
+		.cmd = NL80211_CMD_SET_SAR_SPECS,
+		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
+		.doit = nl80211_set_sar_specs,
 		.flags = GENL_UNS_ADMIN_PERM,
 		.internal_flags = NL80211_FLAG_NEED_NETDEV_UP |
 				  NL80211_FLAG_NEED_RTNL,

@@ -33,6 +33,8 @@
 #include <uapi/drm/i915_drm.h>
 #include <uapi/drm/drm_fourcc.h>
 
+#include <asm/hypervisor.h>
+
 #include <linux/io-mapping.h>
 #include <linux/i2c.h>
 #include <linux/i2c-algo-bit.h>
@@ -70,6 +72,7 @@
 #include "display/intel_dpll_mgr.h"
 #include "display/intel_dsb.h"
 #include "display/intel_frontbuffer.h"
+#include "display/intel_global_state.h"
 #include "display/intel_gmbus.h"
 #include "display/intel_opregion.h"
 
@@ -143,6 +146,8 @@ enum hpd_pin {
 
 struct i915_hotplug {
 	struct delayed_work hotplug_work;
+
+	const u32 *hpd, *pch_hpd;
 
 	struct {
 		unsigned long last_jiffies;
@@ -255,18 +260,19 @@ struct sdvo_device_mapping {
 struct intel_connector;
 struct intel_encoder;
 struct intel_atomic_state;
-struct intel_crtc_state;
+struct intel_cdclk_config;
+struct intel_cdclk_state;
+struct intel_cdclk_vals;
 struct intel_initial_plane_config;
 struct intel_crtc;
 struct intel_limit;
 struct dpll;
-struct intel_cdclk_state;
 
 struct drm_i915_display_funcs {
 	void (*get_cdclk)(struct drm_i915_private *dev_priv,
-			  struct intel_cdclk_state *cdclk_state);
+			  struct intel_cdclk_config *cdclk_config);
 	void (*set_cdclk)(struct drm_i915_private *dev_priv,
-			  const struct intel_cdclk_state *cdclk_state,
+			  const struct intel_cdclk_config *cdclk_config,
 			  enum pipe pipe);
 	int (*get_fifo_size)(struct drm_i915_private *dev_priv,
 			     enum i9xx_plane_id i9xx_plane);
@@ -280,7 +286,7 @@ struct drm_i915_display_funcs {
 				    struct intel_crtc *crtc);
 	int (*compute_global_watermarks)(struct intel_atomic_state *state);
 	void (*update_wm)(struct intel_crtc *crtc);
-	int (*modeset_calc_cdclk)(struct intel_atomic_state *state);
+	int (*modeset_calc_cdclk)(struct intel_cdclk_state *state);
 	u8 (*calc_voltage_level)(int cdclk);
 	/* Returns the active state of the crtc, and if the crtc is active,
 	 * fills out the pipe-config with the hw state. */
@@ -506,6 +512,7 @@ struct i915_psr {
 	u32 dc3co_exit_delay;
 	struct delayed_work idle_work;
 	bool force_mode_changed;
+	struct drm_dp_vsc_sdp vsc;
 };
 
 #define QUIRK_LVDS_SSC_DISABLE (1<<1)
@@ -514,6 +521,7 @@ struct i915_psr {
 #define QUIRK_PIN_SWIZZLED_PAGES (1<<5)
 #define QUIRK_INCREASE_T12_DELAY (1<<6)
 #define QUIRK_INCREASE_DDI_DISABLED_TIME (1<<7)
+#define QUIRK_SHIFT_EDP_BACKLIGHT_BRIGHTNESS (1<<8)
 
 struct intel_fbdev;
 struct intel_fbc_work;
@@ -744,7 +752,6 @@ struct ilk_wm_values {
 	u32 wm_pipe[3];
 	u32 wm_lp[3];
 	u32 wm_lp_spr[3];
-	u32 wm_linetime[3];
 	bool enable_fbc_wm;
 	enum intel_ddb_partitioning partitioning;
 };
@@ -798,15 +805,6 @@ static inline bool skl_ddb_entry_equal(const struct skl_ddb_entry *e1,
 
 	return false;
 }
-
-struct skl_ddb_allocation {
-	u8 enabled_slices; /* GEN11 has configurable 2 slices */
-};
-
-struct skl_ddb_values {
-	unsigned dirty_pipes;
-	struct skl_ddb_allocation ddb;
-};
 
 struct skl_wm_level {
 	u16 min_ddb_alloc;
@@ -882,7 +880,7 @@ struct intel_wm_config {
 	bool sprites_scaled;
 };
 
-struct intel_cdclk_state {
+struct intel_cdclk_config {
 	unsigned int cdclk, vco, ref, bypass;
 	u8 voltage_level;
 };
@@ -1002,33 +1000,18 @@ struct drm_i915_private {
 	unsigned int max_cdclk_freq;
 
 	unsigned int max_dotclk_freq;
-	unsigned int rawclk_freq;
 	unsigned int hpll_freq;
 	unsigned int fdi_pll_freq;
 	unsigned int czclk_freq;
 
-	/*
-	 * For reading holding any crtc lock is sufficient,
-	 * for writing must hold all of them.
-	 */
 	struct {
-		/*
-		 * The current logical cdclk state.
-		 * See intel_atomic_state.cdclk.logical
-		 */
-		struct intel_cdclk_state logical;
-		/*
-		 * The current actual cdclk state.
-		 * See intel_atomic_state.cdclk.actual
-		 */
-		struct intel_cdclk_state actual;
-		/* The current hardware cdclk state */
-		struct intel_cdclk_state hw;
+		/* The current hardware cdclk configuration */
+		struct intel_cdclk_config hw;
 
 		/* cdclk, divider, and ratio table from bspec */
 		const struct intel_cdclk_vals *table;
 
-		int force_min_cdclk;
+		struct intel_global_obj obj;
 	} cdclk;
 
 	/**
@@ -1084,15 +1067,13 @@ struct drm_i915_private {
 	 */
 	struct mutex dpll_lock;
 
+	struct list_head global_obj_list;
+
 	/*
-	 * For reading active_pipes, min_cdclk, min_voltage_level holding
-	 * any crtc lock is sufficient, for writing must hold all of them.
+	 * For reading active_pipes holding any crtc lock is
+	 * sufficient, for writing must hold all of them.
 	 */
 	u8 active_pipes;
-	/* minimum acceptable cdclk for each pipe */
-	int min_cdclk[I915_MAX_PIPES];
-	/* minimum acceptable voltage level for each pipe */
-	u8 min_voltage_level[I915_MAX_PIPES];
 
 	int dpio_phy_iosf_port[I915_NUM_PHYS_VLV];
 
@@ -1191,7 +1172,6 @@ struct drm_i915_private {
 		/* current hardware state */
 		union {
 			struct ilk_wm_values hw;
-			struct skl_ddb_values skl_hw;
 			struct vlv_wm_values vlv;
 			struct g4x_wm_values g4x;
 		};
@@ -1212,6 +1192,8 @@ struct drm_i915_private {
 		 */
 		bool distrust_bios_wm;
 	} wm;
+
+	u8 enabled_dbuf_slices_mask; /* GEN11 has configurable 2 slices */
 
 	struct dram_info {
 		bool valid;
@@ -1236,7 +1218,7 @@ struct drm_i915_private {
 		u8 num_planes;
 	} max_bw[6];
 
-	struct drm_private_obj bw_obj;
+	struct intel_global_obj bw_obj;
 
 	struct intel_runtime_pm runtime_pm;
 
@@ -1549,6 +1531,12 @@ IS_SUBPLATFORM(const struct drm_i915_private *i915,
 #define IS_ICL_WITH_PORT_F(dev_priv) \
 	IS_SUBPLATFORM(dev_priv, INTEL_ICELAKE, INTEL_SUBPLATFORM_PORTF)
 
+#define IS_TGL_U(dev_priv) \
+	IS_SUBPLATFORM(dev_priv, INTEL_TIGERLAKE, INTEL_SUBPLATFORM_ULT)
+
+#define IS_TGL_Y(dev_priv) \
+	IS_SUBPLATFORM(dev_priv, INTEL_TIGERLAKE, INTEL_SUBPLATFORM_ULX)
+
 #define SKL_REVID_A0		0x0
 #define SKL_REVID_B0		0x1
 #define SKL_REVID_C0		0x2
@@ -1700,7 +1688,7 @@ IS_SUBPLATFORM(const struct drm_i915_private *i915,
 #define HAS_DDI(dev_priv)		 (INTEL_INFO(dev_priv)->display.has_ddi)
 #define HAS_FPGA_DBG_UNCLAIMED(dev_priv) (INTEL_INFO(dev_priv)->has_fpga_dbg)
 #define HAS_PSR(dev_priv)		 (INTEL_INFO(dev_priv)->display.has_psr)
-#define HAS_TRANSCODER_EDP(dev_priv)	 (INTEL_INFO(dev_priv)->trans_offsets[TRANSCODER_EDP] != 0)
+#define HAS_TRANSCODER(dev_priv, trans)	 ((INTEL_INFO(dev_priv)->cpu_transcoder_mask & BIT(trans)) != 0)
 
 #define HAS_RC6(dev_priv)		 (INTEL_INFO(dev_priv)->has_rc6)
 #define HAS_RC6p(dev_priv)		 (INTEL_INFO(dev_priv)->has_rc6p)
@@ -1746,7 +1734,8 @@ IS_SUBPLATFORM(const struct drm_i915_private *i915,
 #define HAS_DISPLAY(dev_priv) (INTEL_INFO(dev_priv)->pipe_mask != 0)
 
 /* Only valid when HAS_DISPLAY() is true */
-#define INTEL_DISPLAY_ENABLED(dev_priv) (WARN_ON(!HAS_DISPLAY(dev_priv)), !i915_modparams.disable_display)
+#define INTEL_DISPLAY_ENABLED(dev_priv) \
+		(drm_WARN_ON(&(dev_priv)->drm, !HAS_DISPLAY(dev_priv)), !i915_modparams.disable_display)
 
 static inline bool intel_vtd_active(void)
 {
@@ -1754,7 +1743,9 @@ static inline bool intel_vtd_active(void)
 	if (intel_iommu_gfx_mapped)
 		return true;
 #endif
-	return false;
+
+	/* Running as a guest, we assume the host is enforcing VT'd */
+	return !hypervisor_is_type(X86_HYPER_NATIVE);
 }
 
 static inline bool intel_scanout_needs_vtd_wa(struct drm_i915_private *dev_priv)
@@ -2011,20 +2002,6 @@ int i915_reg_read_ioctl(struct drm_device *dev, void *data,
  */
 #define I915_READ_FW(reg__) __I915_REG_OP(read_fw, dev_priv, (reg__))
 #define I915_WRITE_FW(reg__, val__) __I915_REG_OP(write_fw, dev_priv, (reg__), (val__))
-
-/* register wait wrappers for display regs */
-#define intel_de_wait_for_register(dev_priv_, reg_, mask_, value_, timeout_) \
-	intel_wait_for_register(&(dev_priv_)->uncore, \
-				(reg_), (mask_), (value_), (timeout_))
-
-#define intel_de_wait_for_set(dev_priv_, reg_, mask_, timeout_) ({	\
-	u32 mask__ = (mask_);						\
-	intel_de_wait_for_register((dev_priv_), (reg_),			\
-				   mask__, mask__, (timeout_)); \
-})
-
-#define intel_de_wait_for_clear(dev_priv_, reg_, mask_, timeout_) \
-	intel_de_wait_for_register((dev_priv_), (reg_), (mask_), 0, (timeout_))
 
 /* i915_mm.c */
 int remap_io_mapping(struct vm_area_struct *vma,

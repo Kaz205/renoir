@@ -3656,8 +3656,7 @@ static int live_lrc_layout(void *arg)
 		if (!engine->default_state)
 			continue;
 
-		hw = i915_gem_object_pin_map(engine->default_state,
-					     I915_MAP_WB);
+		hw = shmem_pin_map(engine->default_state);
 		if (IS_ERR(hw)) {
 			err = PTR_ERR(hw);
 			break;
@@ -3729,7 +3728,7 @@ static int live_lrc_layout(void *arg)
 			hexdump(lrc, PAGE_SIZE);
 		}
 
-		i915_gem_object_unpin_map(engine->default_state);
+		shmem_unpin_map(engine->default_state, hw);
 		if (err)
 			break;
 	}
@@ -3797,6 +3796,11 @@ static int live_lrc_fixed(void *arg)
 				CTX_BB_STATE - 1,
 				"BB_STATE"
 			},
+			{
+				i915_mmio_reg_offset(RING_CTX_TIMESTAMP(engine->mmio_base)),
+				CTX_TIMESTAMP - 1,
+				"RING_CTX_TIMESTAMP"
+			},
 			{ },
 		}, *t;
 		u32 *hw;
@@ -3804,8 +3808,7 @@ static int live_lrc_fixed(void *arg)
 		if (!engine->default_state)
 			continue;
 
-		hw = i915_gem_object_pin_map(engine->default_state,
-					     I915_MAP_WB);
+		hw = shmem_pin_map(engine->default_state);
 		if (IS_ERR(hw)) {
 			err = PTR_ERR(hw);
 			break;
@@ -3826,7 +3829,7 @@ static int live_lrc_fixed(void *arg)
 			}
 		}
 
-		i915_gem_object_unpin_map(engine->default_state);
+		shmem_unpin_map(engine->default_state, hw);
 	}
 
 	return err;
@@ -4080,6 +4083,96 @@ static int live_gpr_clear(void *arg)
 	return err;
 }
 
+static int __live_pphwsp_runtime(struct intel_engine_cs *engine)
+{
+	struct intel_context *ce;
+	struct i915_request *rq;
+	IGT_TIMEOUT(end_time);
+	int err;
+
+	ce = intel_context_create(engine);
+	if (IS_ERR(ce))
+		return PTR_ERR(ce);
+
+	ce->runtime.num_underflow = 0;
+	ce->runtime.max_underflow = 0;
+
+	do {
+		unsigned int loop = 1024;
+
+		while (loop) {
+			rq = intel_context_create_request(ce);
+			if (IS_ERR(rq)) {
+				err = PTR_ERR(rq);
+				goto err_rq;
+			}
+
+			if (--loop == 0)
+				i915_request_get(rq);
+
+			i915_request_add(rq);
+		}
+
+		if (__igt_timeout(end_time, NULL))
+			break;
+
+		i915_request_put(rq);
+	} while (1);
+
+	err = i915_request_wait(rq, 0, HZ / 5);
+	if (err < 0) {
+		pr_err("%s: request not completed!\n", engine->name);
+		goto err_wait;
+	}
+
+	igt_flush_test(engine->i915);
+
+	pr_info("%s: pphwsp runtime %lluns, average %lluns\n",
+		engine->name,
+		intel_context_get_total_runtime_ns(ce),
+		intel_context_get_avg_runtime_ns(ce));
+
+	err = 0;
+	if (ce->runtime.num_underflow) {
+		pr_err("%s: pphwsp underflow %u time(s), max %u cycles!\n",
+		       engine->name,
+		       ce->runtime.num_underflow,
+		       ce->runtime.max_underflow);
+		GEM_TRACE_DUMP();
+		err = -EOVERFLOW;
+	}
+
+err_wait:
+	i915_request_put(rq);
+err_rq:
+	intel_context_put(ce);
+	return err;
+}
+
+static int live_pphwsp_runtime(void *arg)
+{
+	struct intel_gt *gt = arg;
+	struct intel_engine_cs *engine;
+	enum intel_engine_id id;
+	int err = 0;
+
+	/*
+	 * Check that cumulative context runtime as stored in the pphwsp[16]
+	 * is monotonic.
+	 */
+
+	for_each_engine(engine, gt, id) {
+		err = __live_pphwsp_runtime(engine);
+		if (err)
+			break;
+	}
+
+	if (igt_flush_test(gt->i915))
+		err = -EIO;
+
+	return err;
+}
+
 int intel_lrc_live_selftests(struct drm_i915_private *i915)
 {
 	static const struct i915_subtest tests[] = {
@@ -4087,6 +4180,7 @@ int intel_lrc_live_selftests(struct drm_i915_private *i915)
 		SUBTEST(live_lrc_fixed),
 		SUBTEST(live_lrc_state),
 		SUBTEST(live_gpr_clear),
+		SUBTEST(live_pphwsp_runtime),
 	};
 
 	if (!HAS_LOGICAL_RING_CONTEXTS(i915))

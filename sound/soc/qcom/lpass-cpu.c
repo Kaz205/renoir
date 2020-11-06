@@ -80,14 +80,6 @@ static int lpass_cpu_daiops_startup(struct snd_pcm_substream *substream,
 		dev_err(dai->dev, "error in enabling mi2s osr clk: %d\n", ret);
 		return ret;
 	}
-
-	ret = clk_prepare_enable(drvdata->mi2s_bit_clk[dai->driver->id]);
-	if (ret) {
-		dev_err(dai->dev, "error in enabling mi2s bit clk: %d\n", ret);
-		clk_disable_unprepare(drvdata->mi2s_osr_clk[dai->driver->id]);
-		return ret;
-	}
-
 	return 0;
 }
 
@@ -95,8 +87,6 @@ static void lpass_cpu_daiops_shutdown(struct snd_pcm_substream *substream,
 		struct snd_soc_dai *dai)
 {
 	struct lpass_data *drvdata = snd_soc_dai_get_drvdata(dai);
-
-	clk_disable_unprepare(drvdata->mi2s_bit_clk[dai->driver->id]);
 
 	clk_disable_unprepare(drvdata->mi2s_osr_clk[dai->driver->id]);
 }
@@ -111,7 +101,8 @@ static int lpass_cpu_daiops_hw_params(struct snd_pcm_substream *substream,
 	unsigned int channels = params_channels(params);
 	unsigned int rate = params_rate(params);
 	unsigned int mode;
-	int bitwidth, ret, regval;
+	unsigned int regval;
+	int bitwidth, ret;
 
 	bitwidth = snd_pcm_format_width(format);
 	if (bitwidth < 0) {
@@ -221,7 +212,11 @@ static int lpass_cpu_daiops_hw_params(struct snd_pcm_substream *substream,
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		ret = regmap_fields_write(i2sctl->spkmode, id,
 					 LPAIF_I2SCTL_SPKMODE(mode));
-
+		if (ret) {
+			dev_err(dai->dev, "error writing to i2sctl spkr mode: %d\n",
+				ret);
+			return ret;
+		}
 		if (channels >= 2)
 			ret = regmap_fields_write(i2sctl->spkmono, id,
 						 LPAIF_I2SCTL_SPKMONO_STEREO);
@@ -231,7 +226,11 @@ static int lpass_cpu_daiops_hw_params(struct snd_pcm_substream *substream,
 	} else {
 		ret = regmap_fields_write(i2sctl->micmode, id,
 					 LPAIF_I2SCTL_MICMODE(mode));
-
+		if (ret) {
+			dev_err(dai->dev, "error writing to i2sctl mic mode: %d\n",
+				ret);
+			return ret;
+		}
 		if (channels >= 2)
 			ret = regmap_fields_write(i2sctl->micmono, id,
 						 LPAIF_I2SCTL_MICMONO_STEREO);
@@ -301,6 +300,14 @@ static int lpass_cpu_daiops_trigger(struct snd_pcm_substream *substream,
 		if (ret)
 			dev_err(dai->dev, "error writing to i2sctl reg: %d\n",
 				ret);
+
+		ret = clk_prepare_enable(drvdata->mi2s_bit_clk[id]);
+		if (ret) {
+			dev_err(dai->dev, "error in enabling mi2s bit clk: %d\n", ret);
+			clk_disable_unprepare(drvdata->mi2s_osr_clk[id]);
+			return ret;
+		}
+
 		break;
 	case SNDRV_PCM_TRIGGER_STOP:
 	case SNDRV_PCM_TRIGGER_SUSPEND:
@@ -315,6 +322,7 @@ static int lpass_cpu_daiops_trigger(struct snd_pcm_substream *substream,
 		if (ret)
 			dev_err(dai->dev, "error writing to i2sctl reg: %d\n",
 				ret);
+		clk_disable_unprepare(drvdata->mi2s_bit_clk[dai->driver->id]);
 		break;
 	}
 
@@ -469,6 +477,208 @@ static struct regmap_config lpass_cpu_regmap_config = {
 	.cache_type = REGCACHE_FLAT,
 };
 
+static int lpass_hdmi_init_bitfields(struct device *dev, struct regmap *map)
+{
+	struct lpass_data *drvdata = dev_get_drvdata(dev);
+	struct lpass_variant *v = drvdata->variant;
+	unsigned int i;
+	struct lpass_hdmi_tx_ctl *tx_ctl;
+	struct regmap_field *legacy_en;
+	struct lpass_vbit_ctrl *vbit_ctl;
+	struct regmap_field *tx_parity;
+	struct lpass_dp_metadata_ctl *meta_ctl;
+	struct lpass_sstream_ctl *sstream_ctl;
+	struct regmap_field *ch_msb;
+	struct regmap_field *ch_lsb;
+	struct lpass_hdmitx_dmactl *tx_dmactl;
+	int rval;
+
+	tx_ctl = devm_kzalloc(dev, sizeof(*tx_ctl), GFP_KERNEL);
+	if (!tx_ctl)
+		return -ENOMEM;
+
+	QCOM_REGMAP_FIELD_ALLOC(dev, map, v->soft_reset, tx_ctl->soft_reset);
+	QCOM_REGMAP_FIELD_ALLOC(dev, map, v->force_reset, tx_ctl->force_reset);
+	drvdata->tx_ctl = tx_ctl;
+
+	QCOM_REGMAP_FIELD_ALLOC(dev, map, v->legacy_en, legacy_en);
+	drvdata->hdmitx_legacy_en = legacy_en;
+
+	vbit_ctl = devm_kzalloc(dev, sizeof(*vbit_ctl), GFP_KERNEL);
+	if (!vbit_ctl)
+		return -ENOMEM;
+
+	QCOM_REGMAP_FIELD_ALLOC(dev, map, v->replace_vbit, vbit_ctl->replace_vbit);
+	QCOM_REGMAP_FIELD_ALLOC(dev, map, v->vbit_stream, vbit_ctl->vbit_stream);
+	drvdata->vbit_ctl = vbit_ctl;
+
+
+	QCOM_REGMAP_FIELD_ALLOC(dev, map, v->calc_en, tx_parity);
+	drvdata->hdmitx_parity_calc_en = tx_parity;
+
+	meta_ctl = devm_kzalloc(dev, sizeof(*meta_ctl), GFP_KERNEL);
+	if (!meta_ctl)
+		return -ENOMEM;
+
+	rval = devm_regmap_field_bulk_alloc(dev, map, &meta_ctl->mute, &v->mute, 7);
+	if (rval)
+		return rval;
+	drvdata->meta_ctl = meta_ctl;
+
+	sstream_ctl = devm_kzalloc(dev, sizeof(*sstream_ctl), GFP_KERNEL);
+	if (!sstream_ctl)
+		return -ENOMEM;
+
+	rval = devm_regmap_field_bulk_alloc(dev, map, &sstream_ctl->sstream_en, &v->sstream_en, 9);
+	if (rval)
+		return rval;
+
+	drvdata->sstream_ctl = sstream_ctl;
+
+	for (i = 0; i < LPASS_MAX_HDMI_DMA_CHANNELS; i++) {
+		QCOM_REGMAP_FIELD_ALLOC(dev, map, v->msb_bits, ch_msb);
+		drvdata->hdmitx_ch_msb[i] = ch_msb;
+
+		QCOM_REGMAP_FIELD_ALLOC(dev, map, v->lsb_bits, ch_lsb);
+		drvdata->hdmitx_ch_lsb[i] = ch_lsb;
+
+		tx_dmactl = devm_kzalloc(dev, sizeof(*tx_dmactl), GFP_KERNEL);
+		if (!tx_dmactl)
+			return -ENOMEM;
+
+		QCOM_REGMAP_FIELD_ALLOC(dev, map, v->use_hw_chs, tx_dmactl->use_hw_chs);
+		QCOM_REGMAP_FIELD_ALLOC(dev, map, v->use_hw_usr, tx_dmactl->use_hw_usr);
+		QCOM_REGMAP_FIELD_ALLOC(dev, map, v->hw_chs_sel, tx_dmactl->hw_chs_sel);
+		QCOM_REGMAP_FIELD_ALLOC(dev, map, v->hw_usr_sel, tx_dmactl->hw_usr_sel);
+		drvdata->hdmi_tx_dmactl[i] = tx_dmactl;
+	}
+	return 0;
+}
+
+static bool lpass_hdmi_regmap_writeable(struct device *dev, unsigned int reg)
+{
+	struct lpass_data *drvdata = dev_get_drvdata(dev);
+	struct lpass_variant *v = drvdata->variant;
+	int i;
+
+	if (reg == LPASS_HDMI_TX_CTL_ADDR(v))
+		return true;
+	if (reg == LPASS_HDMI_TX_LEGACY_ADDR(v))
+		return true;
+	if (reg == LPASS_HDMI_TX_VBIT_CTL_ADDR(v))
+		return true;
+	if (reg == LPASS_HDMI_TX_PARITY_ADDR(v))
+		return true;
+	if (reg == LPASS_HDMI_TX_DP_ADDR(v))
+		return true;
+	if (reg == LPASS_HDMI_TX_SSTREAM_ADDR(v))
+		return true;
+	if (reg == LPASS_HDMITX_APP_IRQEN_REG(v))
+		return true;
+	if (reg == LPASS_HDMITX_APP_IRQCLEAR_REG(v))
+		return true;
+
+	for (i = 0; i < v->hdmi_rdma_channels; i++) {
+		if (reg == LPASS_HDMI_TX_CH_LSB_ADDR(v, i))
+			return true;
+		if (reg == LPASS_HDMI_TX_CH_MSB_ADDR(v, i))
+			return true;
+		if (reg == LPASS_HDMI_TX_DMA_ADDR(v, i))
+			return true;
+	}
+
+	for (i = 0; i < v->rdma_channels; ++i) {
+		if (reg == LPAIF_HDMI_RDMACTL_REG(v, i))
+			return true;
+		if (reg == LPAIF_HDMI_RDMABASE_REG(v, i))
+			return true;
+		if (reg == LPAIF_HDMI_RDMABUFF_REG(v, i))
+			return true;
+		if (reg == LPAIF_HDMI_RDMAPER_REG(v, i))
+			return true;
+	}
+	return false;
+}
+
+static bool lpass_hdmi_regmap_readable(struct device *dev, unsigned int reg)
+{
+	struct lpass_data *drvdata = dev_get_drvdata(dev);
+	struct lpass_variant *v = drvdata->variant;
+	int i;
+
+	if (reg == LPASS_HDMI_TX_CTL_ADDR(v))
+		return true;
+	if (reg == LPASS_HDMI_TX_LEGACY_ADDR(v))
+		return true;
+	if (reg == LPASS_HDMI_TX_VBIT_CTL_ADDR(v))
+		return true;
+
+	for (i = 0; i < v->hdmi_rdma_channels; i++) {
+		if (reg == LPASS_HDMI_TX_CH_LSB_ADDR(v, i))
+			return true;
+		if (reg == LPASS_HDMI_TX_CH_MSB_ADDR(v, i))
+			return true;
+		if (reg == LPASS_HDMI_TX_DMA_ADDR(v, i))
+			return true;
+	}
+
+	if (reg == LPASS_HDMI_TX_PARITY_ADDR(v))
+		return true;
+	if (reg == LPASS_HDMI_TX_DP_ADDR(v))
+		return true;
+	if (reg == LPASS_HDMI_TX_SSTREAM_ADDR(v))
+		return true;
+	if (reg == LPASS_HDMITX_APP_IRQEN_REG(v))
+		return true;
+	if (reg == LPASS_HDMITX_APP_IRQSTAT_REG(v))
+		return true;
+
+	for (i = 0; i < v->rdma_channels; ++i) {
+		if (reg == LPAIF_HDMI_RDMACTL_REG(v, i))
+			return true;
+		if (reg == LPAIF_HDMI_RDMABASE_REG(v, i))
+			return true;
+		if (reg == LPAIF_HDMI_RDMABUFF_REG(v, i))
+			return true;
+		if (reg == LPAIF_HDMI_RDMAPER_REG(v, i))
+			return true;
+		if (reg == LPAIF_HDMI_RDMACURR_REG(v, i))
+			return true;
+	}
+
+	return false;
+}
+
+static bool lpass_hdmi_regmap_volatile(struct device *dev, unsigned int reg)
+{
+	struct lpass_data *drvdata = dev_get_drvdata(dev);
+	struct lpass_variant *v = drvdata->variant;
+	int i;
+
+	if (reg == LPASS_HDMITX_APP_IRQSTAT_REG(v))
+		return true;
+	if (reg == LPASS_HDMI_TX_LEGACY_ADDR(v))
+		return true;
+	if (reg == LPASS_HDMI_TX_PARITY_ADDR(v))
+		return true;
+
+	for (i = 0; i < v->rdma_channels; ++i) {
+		if (reg == LPAIF_HDMI_RDMACURR_REG(v, i))
+			return true;
+	}
+	return false;
+}
+
+struct regmap_config lpass_hdmi_regmap_config = {
+	.reg_bits = 32,
+	.reg_stride = 4,
+	.val_bits = 32,
+	.writeable_reg = lpass_hdmi_regmap_writeable,
+	.readable_reg = lpass_hdmi_regmap_readable,
+	.volatile_reg = lpass_hdmi_regmap_volatile,
+	.cache_type = REGCACHE_FLAT,
+};
+
 static unsigned int of_lpass_cpu_parse_sd_lines(struct device *dev,
 						struct device_node *node,
 						const char *name)
@@ -526,13 +736,17 @@ static void of_lpass_cpu_parse_dai_data(struct device *dev,
 			dev_err(dev, "valid dai id not found: %d\n", ret);
 			continue;
 		}
-
-		data->mi2s_playback_sd_mode[id] =
-			of_lpass_cpu_parse_sd_lines(dev, node,
-						    "qcom,playback-sd-lines");
-		data->mi2s_capture_sd_mode[id] =
-			of_lpass_cpu_parse_sd_lines(dev, node,
+		if (id == LPASS_DP_RX) {
+			data->hdmi_port_enable = 1;
+			dev_err(dev, "HDMI Port is enabled: %d\n", id);
+		} else {
+			data->mi2s_playback_sd_mode[id] =
+				of_lpass_cpu_parse_sd_lines(dev, node,
+							    "qcom,playback-sd-lines");
+			data->mi2s_capture_sd_mode[id] =
+				of_lpass_cpu_parse_sd_lines(dev, node,
 						    "qcom,capture-sd-lines");
+		}
 	}
 }
 
@@ -587,6 +801,27 @@ int asoc_qcom_lpass_cpu_platform_probe(struct platform_device *pdev)
 		return PTR_ERR(drvdata->lpaif_map);
 	}
 
+	if (drvdata->hdmi_port_enable) {
+		res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "lpass-hdmiif");
+
+		drvdata->hdmiif = devm_ioremap_resource(dev, res);
+		if (IS_ERR((void const __force *)drvdata->hdmiif)) {
+			dev_err(dev, "error mapping reg resource: %ld\n",
+					PTR_ERR((void const __force *)drvdata->hdmiif));
+			return PTR_ERR((void const __force *)drvdata->hdmiif);
+		}
+
+		lpass_hdmi_regmap_config.max_register = LPAIF_HDMI_RDMAPER_REG(variant,
+					variant->hdmi_rdma_channels);
+		drvdata->hdmiif_map = devm_regmap_init_mmio(dev, drvdata->hdmiif,
+					&lpass_hdmi_regmap_config);
+		if (IS_ERR(drvdata->hdmiif_map)) {
+			dev_err(dev, "error initializing regmap: %ld\n",
+			PTR_ERR(drvdata->hdmiif_map));
+			return PTR_ERR(drvdata->hdmiif_map);
+		}
+	}
+
 	if (variant->init) {
 		ret = variant->init(pdev);
 		if (ret) {
@@ -597,6 +832,9 @@ int asoc_qcom_lpass_cpu_platform_probe(struct platform_device *pdev)
 
 	for (i = 0; i < variant->num_dai; i++) {
 		dai_id = variant->dai_driver[i].id;
+		if (dai_id == LPASS_DP_RX)
+			continue;
+
 		drvdata->mi2s_osr_clk[dai_id] = devm_clk_get(dev,
 					     variant->dai_osr_clk_names[i]);
 		if (IS_ERR(drvdata->mi2s_osr_clk[dai_id])) {
@@ -632,6 +870,13 @@ int asoc_qcom_lpass_cpu_platform_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	if (drvdata->hdmi_port_enable) {
+		ret = lpass_hdmi_init_bitfields(dev, drvdata->hdmiif_map);
+		if (ret) {
+			dev_err(dev, "%s error  hdmi init failed\n", __func__);
+			return ret;
+		}
+	}
 	ret = devm_snd_soc_register_component(dev,
 					      &lpass_cpu_comp_driver,
 					      variant->dai_driver,

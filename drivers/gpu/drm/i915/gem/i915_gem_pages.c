@@ -83,10 +83,12 @@ void __i915_gem_object_set_pages(struct drm_i915_gem_object *obj,
 
 int ____i915_gem_object_get_pages(struct drm_i915_gem_object *obj)
 {
+	struct drm_i915_private *i915 = to_i915(obj->base.dev);
 	int err;
 
 	if (unlikely(obj->mm.madv != I915_MADV_WILLNEED)) {
-		DRM_DEBUG("Attempting to obtain a purgeable object\n");
+		drm_dbg(&i915->drm,
+			"Attempting to obtain a purgeable object\n");
 		return -EFAULT;
 	}
 
@@ -252,6 +254,10 @@ static void *i915_gem_object_map(struct drm_i915_gem_object *obj,
 	pgprot_t pgprot;
 
 	if (!i915_gem_object_has_struct_page(obj) && type != I915_MAP_WC)
+		return NULL;
+
+	if (GEM_WARN_ON(type == I915_MAP_WC &&
+			!static_cpu_has(X86_FEATURE_PAT)))
 		return NULL;
 
 	/* A single page can always be kmapped */

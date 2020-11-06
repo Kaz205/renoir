@@ -8,6 +8,7 @@ snd-soc-sst-broadwell-objs := broadwell.o
 snd-soc-sst-bxt-da7219_max98357a-objs := bxt_da7219_max98357a.o hda_dsp_common.o
 snd-soc-sst-bxt-rt298-objs := bxt_rt298.o hda_dsp_common.o
 snd-soc-sst-sof-pcm512x-objs := sof_pcm512x.o hda_dsp_common.o
+snd-soc-sst-sof-wm8804-objs := sof_wm8804.o
 snd-soc-sst-glk-rt5682_max98357a-objs := glk_rt5682_max98357a.o hda_dsp_common.o
 snd-soc-sst-bytcr-rt5640-objs := bytcr_rt5640.o
 snd-soc-sst-bytcr-rt5651-objs := bytcr_rt5651.o
@@ -34,9 +35,11 @@ snd-soc-sof_da7219_max98373-objs := sof_da7219_max98373.o hda_dsp_common.o
 snd-soc-ehl-rt5660-objs := ehl_rt5660.o hda_dsp_common.o
 snd-soc-sof-sdw-objs += sof_sdw.o				\
 			sof_sdw_max98373.o			\
-			sof_sdw_rt711.o sof_sdw_rt700.o		\
-			sof_sdw_rt1308.o sof_sdw_rt715.o	\
-			sof_sdw_rt5682.o			\
+			sof_sdw_rt1308.o sof_sdw_rt1316.o	\
+			sof_sdw_rt5682.o sof_sdw_rt700.o	\
+			sof_sdw_rt711.o sof_sdw_rt711_sdca.o 	\
+			sof_sdw_rt715.o	sof_sdw_rt715_sdca.o 	\
+			sof_maxim_common.o                      \
 			sof_sdw_dmic.o sof_sdw_hdmi.o hda_dsp_common.o
 obj-$(CONFIG_SND_SOC_INTEL_SOF_RT5682_MACH) += snd-soc-sof_rt5682.o
 obj-$(CONFIG_SND_SOC_INTEL_HASWELL_MACH) += snd-soc-sst-haswell.o
@@ -45,6 +48,7 @@ obj-$(CONFIG_SND_SOC_INTEL_BYT_MAX98090_MACH) += snd-soc-sst-byt-max98090-mach.o
 obj-$(CONFIG_SND_SOC_INTEL_BXT_DA7219_MAX98357A_COMMON) += snd-soc-sst-bxt-da7219_max98357a.o
 obj-$(CONFIG_SND_SOC_INTEL_BXT_RT298_MACH) += snd-soc-sst-bxt-rt298.o
 obj-$(CONFIG_SND_SOC_INTEL_SOF_PCM512x_MACH) += snd-soc-sst-sof-pcm512x.o
+obj-$(CONFIG_SND_SOC_INTEL_SOF_WM8804_MACH) += snd-soc-sst-sof-wm8804.o
 obj-$(CONFIG_SND_SOC_INTEL_GLK_RT5682_MAX98357A_MACH) += snd-soc-sst-glk-rt5682_max98357a.o
 obj-$(CONFIG_SND_SOC_INTEL_BROADWELL_MACH) += snd-soc-sst-broadwell.o
 obj-$(CONFIG_SND_SOC_INTEL_BDW_RT5650_MACH) += snd-soc-sst-bdw-rt5650-mach.o

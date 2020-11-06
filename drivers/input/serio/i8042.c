@@ -137,8 +137,7 @@ static DEFINE_SPINLOCK(i8042_lock);
 
 /*
  * Writers to AUX and KBD ports as well as users issuing i8042_command
- * directly should acquire i8042_mutex (by means of calling
- * i8042_lock_chip() and i8042_unlock_ship() helpers) to ensure that
+ * directly should acquire i8042_mutex to ensure that
  * they do not disturb each other (unfortunately in many i8042
  * implementations write to one of the ports will immediately abort
  * command that is being processed by another port).
@@ -172,18 +171,6 @@ static struct notifier_block i8042_kbd_bind_notifier_block;
 static irqreturn_t i8042_interrupt(int irq, void *dev_id);
 static bool (*i8042_platform_filter)(unsigned char data, unsigned char str,
 				     struct serio *serio);
-
-void i8042_lock_chip(void)
-{
-	mutex_lock(&i8042_mutex);
-}
-EXPORT_SYMBOL(i8042_lock_chip);
-
-void i8042_unlock_chip(void)
-{
-	mutex_unlock(&i8042_mutex);
-}
-EXPORT_SYMBOL(i8042_unlock_chip);
 
 int i8042_install_filter(bool (*filter)(unsigned char data, unsigned char str,
 					struct serio *serio))
@@ -267,6 +254,8 @@ static int i8042_flush(void)
 	int count = 0;
 	int retval = 0;
 
+	mutex_lock(&i8042_mutex);
+
 	spin_lock_irqsave(&i8042_lock, flags);
 
 	while ((str = i8042_read_status()) & I8042_STR_OBF) {
@@ -282,6 +271,8 @@ static int i8042_flush(void)
 	}
 
 	spin_unlock_irqrestore(&i8042_lock, flags);
+
+	mutex_unlock(&i8042_mutex);
 
 	return retval;
 }
@@ -343,9 +334,13 @@ int i8042_command(unsigned char *param, int command)
 	unsigned long flags;
 	int retval;
 
+	mutex_lock(&i8042_mutex);
+
 	spin_lock_irqsave(&i8042_lock, flags);
 	retval = __i8042_command(param, command);
 	spin_unlock_irqrestore(&i8042_lock, flags);
+
+	mutex_unlock(&i8042_mutex);
 
 	return retval;
 }
@@ -379,10 +374,18 @@ static int i8042_kbd_write(struct serio *port, unsigned char c)
 static int i8042_aux_write(struct serio *serio, unsigned char c)
 {
 	struct i8042_port *port = serio->port_data;
+	unsigned long flags;
+	int retval = 0;
 
-	return i8042_command(&c, port->mux == -1 ?
+	spin_lock_irqsave(&i8042_lock, flags);
+
+	retval = __i8042_command(&c, port->mux == -1 ?
 					I8042_CMD_AUX_SEND :
 					I8042_CMD_MUX_SEND + port->mux);
+
+	spin_unlock_irqrestore(&i8042_lock, flags);
+
+	return retval;
 }
 
 
