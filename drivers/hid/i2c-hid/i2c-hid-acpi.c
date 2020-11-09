@@ -106,6 +106,7 @@ int i2c_hid_acpi_probe(struct i2c_client *client,
 	if (!ihid_acpi)
 		return -ENOMEM;
 
+	ihid_acpi->client = client;
 	ihid_acpi->subclass.power_up_device = i2c_hid_acpi_power_up_device;
 
 	ret = i2c_hid_acpi_get_descriptor(client);
