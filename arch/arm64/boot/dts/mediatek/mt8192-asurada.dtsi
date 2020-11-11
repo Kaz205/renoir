@@ -141,7 +141,7 @@
 		pinctrl-0 = <&pp1000_dpbrdg_en>;
 
 		enable-active-high;
-		regulator-always-on;
+		regulator-boot-on;
 
 		gpio = <&pio 19 GPIO_ACTIVE_HIGH>;
 	};
@@ -153,7 +153,7 @@
 		pinctrl-0 = <&pp1000_mipibrdg_en>;
 
 		enable-active-high;
-		regulator-always-on;
+		regulator-boot-on;
 
 		gpio = <&pio 129 GPIO_ACTIVE_HIGH>;
 	};
@@ -165,7 +165,7 @@
 		pinctrl-0 = <&pp1800_dpbrdg_en>;
 
 		enable-active-high;
-		regulator-always-on;
+		regulator-boot-on;
 
 		gpio = <&pio 126 GPIO_ACTIVE_HIGH>;
 	};
@@ -177,7 +177,7 @@
 		pinctrl-0 = <&pp1800_mipibrdg_en>;
 
 		enable-active-high;
-		regulator-always-on;
+		regulator-boot-on;
 
 		gpio = <&pio 128 GPIO_ACTIVE_HIGH>;
 	};
@@ -189,7 +189,7 @@
 		pinctrl-0 = <&pp3300_dpbrdg_en>;
 
 		enable-active-high;
-		regulator-always-on;
+		regulator-boot-on;
 
 		gpio = <&pio 26 GPIO_ACTIVE_HIGH>;
 	};
@@ -201,7 +201,7 @@
 		pinctrl-0 = <&pp3300_mipibrdg_en>;
 
 		enable-active-high;
-		regulator-always-on;
+		regulator-boot-on;
 
 		gpio = <&pio 127 GPIO_ACTIVE_HIGH>;
 	};
@@ -216,7 +216,7 @@
 		pinctrl-0 = <&pp3300_panel_pins>;
 
 		enable-active-high;
-		regulator-always-on;
+		regulator-boot-on;
 
 		gpio = <&pio 136 GPIO_ACTIVE_HIGH>;
 	};
