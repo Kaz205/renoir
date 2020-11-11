@@ -5,7 +5,6 @@
  * Copyright (c) 2019, The Linux Foundation. All rights reserved.
  */
 
-#include <dt-bindings/clock/qcom,camcc-sc7180.h>
 #include <dt-bindings/clock/qcom,dispcc-sc7180.h>
 #include <dt-bindings/clock/qcom,gcc-sc7180.h>
 #include <dt-bindings/clock/qcom,gpucc-sc7180.h>
@@ -2963,18 +2962,6 @@
 			reg = <0 0x0ac00000 0 0x1000>;
 			#interconnect-cells = <2>;
 			qcom,bcm-voters = <&apps_bcm_voter>;
-		};
-
-		camcc: clock-controller@ad00000 {
-			compatible = "qcom,sc7180-camcc";
-			reg = <0 0x0ad00000 0 0x10000>;
-			clocks = <&rpmhcc RPMH_CXO_CLK>,
-			       <&gcc GCC_CAMERA_AHB_CLK>,
-			       <&gcc GCC_CAMERA_XO_CLK>;
-			clock-names = "bi_tcxo", "iface", "xo";
-			#clock-cells = <1>;
-			#reset-cells = <1>;
-			#power-domain-cells = <1>;
 		};
 
 		mdss: mdss@ae00000 {
