@@ -14,6 +14,9 @@
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 #include <linux/types.h>
+#include <linux/usb/typec.h>
+#include <linux/usb/typec_dp.h>
+#include <linux/usb/typec_mux.h>
 #include <linux/workqueue.h>
 
 #include <linux/of_gpio.h>
@@ -1419,6 +1422,104 @@ static int anx7625_get_swing_setting(struct device *dev,
 	return 0;
 }
 
+#if IS_ENABLED(CONFIG_TYPEC)
+
+static void anx7625_set_crosspoint_switch(struct anx7625_data *ctx,
+					  enum typec_orientation orientation)
+{
+	if (orientation == TYPEC_ORIENTATION_NORMAL) {
+		anx7625_reg_write(ctx, ctx->i2c.tcpc_client, TCPC_SWITCH_0,
+				  SW_SEL1_SSRX_B10_B11 | SW_SEL1_ML0_A10_A11);
+		anx7625_reg_write(ctx, ctx->i2c.tcpc_client, TCPC_SWITCH_1,
+				  SW_SEL2_SSTX_A2_A3 | SW_SEL2_ML1_B2_B3);
+	} else if (orientation == TYPEC_ORIENTATION_REVERSE) {
+		anx7625_reg_write(ctx, ctx->i2c.tcpc_client, TCPC_SWITCH_0,
+				  SW_SEL1_SSRX_A10_A11 | SW_SEL1_ML0_B10_B11);
+		anx7625_reg_write(ctx, ctx->i2c.tcpc_client, TCPC_SWITCH_1,
+				  SW_SEL2_SSTX_B2_B3 | SW_SEL2_ML1_A2_A3);
+	}
+}
+
+static void anx7625_usb_two_ports_update(struct anx7625_data *ctx)
+{
+	if (ctx->typec_ports[0].has_dp && ctx->typec_ports[1].has_dp)
+		/* Both port available, do nothing to retain the current one. */
+		return;
+	else if (ctx->typec_ports[0].has_dp)
+		anx7625_set_crosspoint_switch(ctx, TYPEC_ORIENTATION_NORMAL);
+	else if (ctx->typec_ports[1].has_dp)
+		anx7625_set_crosspoint_switch(ctx, TYPEC_ORIENTATION_REVERSE);
+}
+
+static int anx7625_usb_mux_set(struct typec_mux *mux,
+			       struct typec_mux_state *state)
+{
+	struct anx7625_port_data *data = typec_mux_get_drvdata(mux);
+
+	data->has_dp = (state->alt && state->alt->svid == USB_TYPEC_DP_SID &&
+			state->alt->mode == USB_TYPEC_DP_MODE);
+
+	anx7625_usb_two_ports_update(data->ctx);
+	return 0;
+}
+
+static int anx7625_register_usb_two_ports(struct device *device,
+					  struct anx7625_data *ctx)
+{
+	struct typec_mux_desc mux_desc = { };
+	struct fwnode_handle *fwnode;
+	struct anx7625_port_data *port_data;
+	u32 port_num;
+	int ret;
+
+	device_for_each_child_node(device, fwnode) {
+		if (fwnode_property_read_u32(fwnode, "reg", &port_num)) {
+			continue;
+		}
+
+		if (port_num >= 2) {
+			DRM_DEV_ERROR(device, "reg too large for ports.");
+			continue;
+		}
+
+		port_data = &ctx->typec_ports[port_num];
+
+		port_data->ctx = ctx;
+		mux_desc.fwnode = fwnode;
+		mux_desc.drvdata = port_data;
+		mux_desc.name = fwnode_get_name(fwnode);
+		mux_desc.set = anx7625_usb_mux_set;
+
+		port_data->typec_mux =
+			typec_mux_register(device, &mux_desc);
+		if (IS_ERR(port_data->typec_mux)) {
+			ret = PTR_ERR(port_data->typec_mux);
+			DRM_DEV_ERROR(device,
+				      "mux register for port %d failed: %d",
+				      port_num, ret);
+			goto err;
+		}
+	}
+
+	return 0;
+
+err:
+	for (port_num = 0; port_num < 2; port_num++) {
+		typec_mux_unregister(ctx->typec_ports[port_num].typec_mux);
+		ctx->typec_ports[port_num].typec_mux = NULL;
+	}
+	return ret;
+}
+
+static void anx7625_unregister_usb_two_ports(struct anx7625_data *ctx) {
+	int i;
+
+	for (i = 0; i < 2; i++)
+		typec_mux_unregister(ctx->typec_ports[i].typec_mux);
+}
+
+#endif  /* IS_ENABLED(CONFIG_TYPEC) */
+
 static int anx7625_parse_dt(struct device *dev,
 			    struct anx7625_platform_data *pdata)
 {
@@ -1455,6 +1556,9 @@ static int anx7625_parse_dt(struct device *dev,
 
 	if (of_property_read_bool(np, "analogix,hdcp-support"))
 		pdata->hdcp_support = 1;
+
+	pdata->tx_rx_to_two_ports =
+		of_property_read_bool(dev->of_node, "anx,tx-rx-to-two-ports");
 
 	ret = drm_of_find_panel_or_bridge(np, 1, 0, &panel, NULL);
 	if (ret < 0) {
@@ -2019,6 +2123,11 @@ static int anx7625_i2c_probe(struct i2c_client *client,
 	if (platform->pdata.intp_irq)
 		queue_work(platform->workqueue, &platform->work);
 
+#if IS_ENABLED(CONFIG_TYPEC)
+	if (!platform->pdata.panel_bridge && platform->pdata.tx_rx_to_two_ports)
+		anx7625_register_usb_two_ports(dev, platform);
+#endif  /* IS_ENABLED(CONFIG_TYPEC) */
+
 	platform->bridge.funcs = &anx7625_bridge_funcs;
 	platform->bridge.of_node = client->dev.of_node;
 	platform->bridge.ops = DRM_BRIDGE_OP_EDID;
@@ -2049,6 +2158,11 @@ static int anx7625_i2c_remove(struct i2c_client *client)
 	struct anx7625_data *platform = i2c_get_clientdata(client);
 
 	drm_bridge_remove(&platform->bridge);
+
+#if IS_ENABLED(CONFIG_TYPEC)
+	if (!platform->pdata.panel_bridge && platform->pdata.tx_rx_to_two_ports)
+		anx7625_unregister_usb_two_ports(platform);
+#endif /* IS_ENABLED(CONFIG_TYPEC) */
 
 	if (platform->pdata.intp_irq)
 		destroy_workqueue(platform->workqueue);

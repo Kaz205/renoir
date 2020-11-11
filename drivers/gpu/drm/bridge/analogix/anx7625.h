@@ -55,6 +55,18 @@
 #define HPD_STATUS_CHANGE 0x80
 #define HPD_STATUS 0x80
 
+#define TCPC_SWITCH_0 0xB4
+#define SW_SEL1_ML0_A10_A11 BIT(0)
+#define SW_SEL1_ML0_B10_B11 BIT(1)
+#define SW_SEL1_SSRX_A10_A11 BIT(4)
+#define SW_SEL1_SSRX_B10_B11 BIT(5)
+
+#define TCPC_SWITCH_1 0xB5
+#define SW_SEL2_ML1_B2_B3 BIT(0)
+#define SW_SEL2_ML1_A2_A3 BIT(1)
+#define SW_SEL2_SSTX_B2_B3 BIT(4)
+#define SW_SEL2_SSTX_A2_A3 BIT(5)
+
 /******** END of I2C Address 0x58 ********/
 
 /***************************************************************/
@@ -372,6 +384,7 @@ struct anx7625_platform_data {
 	int lane1_reg_data[DP_TX_SWING_REG_CNT];
 	u32 low_power_mode;
 	struct device_node *mipi_host_node;
+	bool tx_rx_to_two_ports;
 };
 
 struct anx7625_i2c_client {
@@ -382,6 +395,14 @@ struct anx7625_i2c_client {
 	struct i2c_client *rx_p1_client;
 	struct i2c_client *rx_p2_client;
 	struct i2c_client *tcpc_client;
+};
+
+struct anx7625_data;
+
+struct anx7625_port_data {
+	bool has_dp;
+	struct typec_mux *typec_mux;
+	struct anx7625_data *ctx;
 };
 
 struct anx7625_data {
@@ -404,6 +425,8 @@ struct anx7625_data {
 	struct drm_bridge bridge;
 	u8 bridge_attached;
 	struct mipi_dsi_device *dsi;
+
+	struct anx7625_port_data typec_ports[2];
 };
 
 #endif  /* __ANX7625_H__ */
