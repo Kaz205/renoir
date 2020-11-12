@@ -343,14 +343,6 @@ static int pwm_backlight_parse_dt(struct device *dev,
 			table[x2] = y2;
 
 			/*
-			 * If we don't start at 0 yet we're increasing, assume
-			 * the dts wanted to crop the low end of the range, so
-			 * insert a 0 to provide a display off mode.
-			 */
-			if (table[0] > 0 && table[0] < table[num_levels - 1])
-				table[0] = 0;
-
-			/*
 			 * As we use interpolation lets remove current
 			 * brightness levels table and replace for the
 			 * new interpolated table.
