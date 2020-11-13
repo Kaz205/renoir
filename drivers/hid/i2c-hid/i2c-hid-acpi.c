@@ -94,8 +94,8 @@ static int i2c_hid_acpi_power_up_device(struct i2chid_subclass_data *subclass)
 	return 0;
 }
 
-int i2c_hid_acpi_probe(struct i2c_client *client,
-		       const struct i2c_device_id *dev_id)
+static int i2c_hid_acpi_probe(struct i2c_client *client,
+			      const struct i2c_device_id *dev_id)
 {
 	struct device *dev = &client->dev;
 	struct i2c_hid_acpi *ihid_acpi;
