@@ -486,6 +486,12 @@
 	no-sdio;
 };
 
+&mt6359_vgpu11_sshub_buck_reg {
+	regulator-always-on;
+	regulator-min-microvolt = <575000>;
+	regulator-max-microvolt = <575000>;
+};
+
 &mt6359codec {
 	mediatek,dmic-mode = <1>; /* one-wire */
 	mediatek,mic-type-0 = <2>; /* DMIC */
