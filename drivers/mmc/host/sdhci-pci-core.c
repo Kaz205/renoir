@@ -669,7 +669,7 @@ static void sdhci_intel_set_power(struct sdhci_host *host, unsigned char mode,
 	}
 }
 
-void sdhci_intel_set_uhs_signaling(struct sdhci_host *host, unsigned timing)
+static void sdhci_intel_set_uhs_signaling(struct sdhci_host *host, unsigned timing)
 {
 	/* Set UHS timing to SDR25 for High Speed mode */
 	if (timing == MMC_TIMING_MMC_HS || timing == MMC_TIMING_SD_HS)
