@@ -2326,6 +2326,9 @@ static void process_csb(struct intel_engine_cs *engine)
 					  execlists_num_ports(execlists) *
 					  sizeof(*execlists->pending)));
 
+			/* XXX Magic delay for tgl */
+			ENGINE_POSTING_READ(engine, RING_CONTEXT_STATUS_PTR);
+
 			WRITE_ONCE(execlists->pending[0], NULL);
 		} else {
 			GEM_BUG_ON(!*execlists->active);
