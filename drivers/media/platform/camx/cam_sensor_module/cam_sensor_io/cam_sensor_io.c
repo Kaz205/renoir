@@ -39,6 +39,8 @@ int32_t camera_io_dev_poll(struct camera_io_master *io_master_info,
 			io_master_info->master_type);
 		return -EINVAL;
 	}
+
+	return 0;
 }
 
 int32_t camera_io_dev_read(struct camera_io_master *io_master_info,
@@ -65,6 +67,7 @@ int32_t camera_io_dev_read(struct camera_io_master *io_master_info,
 			io_master_info->master_type);
 		return -EINVAL;
 	}
+
 	return 0;
 }
 
@@ -73,6 +76,7 @@ int32_t camera_io_dev_read_seq(struct camera_io_master *io_master_info,
 	enum camera_sensor_i2c_type addr_type,
 	enum camera_sensor_i2c_type data_type, int32_t num_bytes)
 {
+
 	if (io_master_info->master_type == CCI_MASTER) {
 		return cam_camera_cci_i2c_read_seq(io_master_info->cci_client,
 			addr, data, addr_type, data_type, num_bytes);
@@ -87,6 +91,7 @@ int32_t camera_io_dev_read_seq(struct camera_io_master *io_master_info,
 			io_master_info->master_type);
 		return -EINVAL;
 	}
+
 	return 0;
 }
 
@@ -119,6 +124,8 @@ int32_t camera_io_dev_write(struct camera_io_master *io_master_info,
 			io_master_info->master_type);
 		return -EINVAL;
 	}
+
+	return 0;
 }
 
 int32_t camera_io_dev_write_continuous(struct camera_io_master *io_master_info,
@@ -151,6 +158,8 @@ int32_t camera_io_dev_write_continuous(struct camera_io_master *io_master_info,
 			io_master_info->master_type);
 		return -EINVAL;
 	}
+
+	return 0;
 }
 
 int32_t camera_io_init(struct camera_io_master *io_master_info)

@@ -700,6 +700,8 @@ static int cam_res_mgr_probe(struct platform_device *pdev)
 	INIT_LIST_HEAD(&cam_res->gpio_res_list);
 	INIT_LIST_HEAD(&cam_res->flash_res_list);
 
+	pr_info("%s driver probed successfully\n", KBUILD_MODNAME);
+
 	return 0;
 }
 

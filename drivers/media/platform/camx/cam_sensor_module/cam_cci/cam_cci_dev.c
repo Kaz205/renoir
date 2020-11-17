@@ -377,6 +377,7 @@ static int cam_cci_platform_probe(struct platform_device *pdev)
 	struct cam_hw_soc_info *soc_info = NULL;
 	struct device_node *cpas_intf;
 	struct platform_device *cpas_pdev;
+	struct v4l2_subdev *sd;
 	int rc = 0;
 
 	/* Check, that the CDM interface is available */
@@ -401,28 +402,25 @@ static int cam_cci_platform_probe(struct platform_device *pdev)
 	soc_info->dev = &pdev->dev;
 	soc_info->dev_name = pdev->name;
 
+	CAM_INFO(CAM_CCI, "soc_info->dev_name: '%s'", soc_info->dev_name);
+
 	rc = cam_cci_parse_dt_info(pdev, new_cci_dev);
 	if (rc < 0) {
 		CAM_ERR(CAM_CCI, "Resource get Failed: %d", rc);
 		goto cci_no_resource;
 	}
 
-	new_cci_dev->v4l2_dev_str.internal_ops =
-		&cci_subdev_intern_ops;
-	new_cci_dev->v4l2_dev_str.ops =
-		&cci_subdev_ops;
+	new_cci_dev->v4l2_dev_str.internal_ops = &cci_subdev_intern_ops;
+	new_cci_dev->v4l2_dev_str.ops = &cci_subdev_ops;
 	strlcpy(new_cci_dev->device_name, CAMX_CCI_DEV_NAME,
 		sizeof(new_cci_dev->device_name));
-	new_cci_dev->v4l2_dev_str.name =
-		new_cci_dev->device_name;
-	new_cci_dev->v4l2_dev_str.sd_flags =
-		V4L2_SUBDEV_FL_HAS_EVENTS;
-	new_cci_dev->v4l2_dev_str.ent_function =
-		CAM_CCI_DEVICE_TYPE;
-	new_cci_dev->v4l2_dev_str.token =
-		new_cci_dev;
+	new_cci_dev->v4l2_dev_str.name = new_cci_dev->device_name;
+	new_cci_dev->v4l2_dev_str.sd_flags = V4L2_SUBDEV_FL_HAS_EVENTS |
+					     V4L2_SUBDEV_FL_HAS_DEVNODE;
+	new_cci_dev->v4l2_dev_str.ent_function = CAM_CCI_DEVICE_TYPE;
+	new_cci_dev->v4l2_dev_str.token = new_cci_dev;
 
-	rc = cam_register_subdev(&(new_cci_dev->v4l2_dev_str));
+	rc = cam_register_subdev(&new_cci_dev->v4l2_dev_str);
 	if (rc < 0) {
 		CAM_ERR(CAM_CCI, "Fail with cam_register_subdev");
 		goto cci_no_resource;
@@ -436,16 +434,27 @@ static int cam_cci_platform_probe(struct platform_device *pdev)
 		goto cci_no_resource;
 	}
 
-	g_cci_subdev[soc_info->index] = &new_cci_dev->v4l2_dev_str.sd;
+	sd = &new_cci_dev->v4l2_dev_str.sd;
+	g_cci_subdev[soc_info->index] = sd;
 	mutex_init(&(new_cci_dev->init_mutex));
 	CAM_INFO(CAM_CCI, "Device Type :%d", soc_info->index);
 
 	cam_register_subdev_fops(&cci_v4l2_subdev_fops);
+
 	cci_v4l2_subdev_fops.unlocked_ioctl = cam_cci_subdev_fops_ioctl;
 #ifdef CONFIG_COMPAT
 	cci_v4l2_subdev_fops.compat_ioctl32 =
 		cam_cci_subdev_fops_compat_ioctl;
 #endif
+
+	if (!sd || !sd->devnode) {
+		CAM_ERR(CAM_CCI, "Invalid sub-device node");
+		goto cci_no_resource;
+	}
+
+	sd->devnode->fops = &cci_v4l2_subdev_fops;
+	CAM_DBG(CAM_CCI, "Node: %s, offset: %d", sd->devnode->name,
+		soc_info->index);
 
 	cpas_parms.cam_cpas_client_cb = NULL;
 	cpas_parms.cell_index = soc_info->index;
@@ -476,6 +485,7 @@ static int cam_cci_device_remove(struct platform_device *pdev)
 	struct cci_device *cci_dev =
 		v4l2_get_subdevdata(subdev);
 
+	cam_unregister_subdev(&cci_dev->v4l2_dev_str);
 	cam_cpas_unregister_client(cci_dev->cpas_handle);
 	cam_cci_soc_remove(pdev, cci_dev);
 	devm_kfree(&pdev->dev, cci_dev);
@@ -500,32 +510,6 @@ static struct platform_driver cci_driver = {
 	},
 };
 
-static int cam_cci_assign_fops(void)
-{
-	struct v4l2_subdev *sd;
-	int i = 0;
-
-	for (; i < MAX_CCI; i++) {
-		sd = g_cci_subdev[i];
-		if (!sd)
-			return 0;
-		if (!(sd->devnode)) {
-			CAM_ERR(CAM_CCI,
-			"Invalid dev node:%pK offset: %d",
-			sd->devnode, i);
-			return -EINVAL;
-		}
-		sd->devnode->fops = &cci_v4l2_subdev_fops;
-	}
-
-	return 0;
-}
-
-static int __init cam_cci_late_init(void)
-{
-	return cam_cci_assign_fops();
-}
-
 static int __init cam_cci_init_module(void)
 {
 	return platform_driver_register(&cci_driver);
@@ -537,7 +521,6 @@ static void __exit cam_cci_exit_module(void)
 }
 
 module_init(cam_cci_init_module);
-late_initcall(cam_cci_late_init);
 module_exit(cam_cci_exit_module);
 MODULE_DESCRIPTION("MSM CCI driver");
 MODULE_LICENSE("GPL v2");

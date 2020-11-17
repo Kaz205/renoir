@@ -20,7 +20,6 @@
 #include "cam_common_util.h"
 #include "cam_packet_util.h"
 
-
 static void cam_sensor_update_req_mgr(
 	struct cam_sensor_ctrl_t *s_ctrl,
 	struct cam_packet *csl_packet)
@@ -637,8 +636,9 @@ int cam_sensor_match_id(struct cam_sensor_ctrl_t *s_ctrl)
 		&chipid, CAMERA_SENSOR_I2C_TYPE_WORD,
 		CAMERA_SENSOR_I2C_TYPE_WORD);
 
-	CAM_DBG(CAM_SENSOR, "read id: 0x%x expected id 0x%x:",
-			 chipid, slave_info->sensor_id);
+	CAM_DBG(CAM_SENSOR, "read id: 0x%x expected id 0x%x", chipid,
+		slave_info->sensor_id);
+
 	if (cam_sensor_id_by_mask(s_ctrl, chipid) != slave_info->sensor_id) {
 		CAM_ERR(CAM_SENSOR, "chip id %x does not match %x",
 				chipid, slave_info->sensor_id);
@@ -667,6 +667,9 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			return -EINVAL;
 		}
 	}
+
+	CAM_DBG(CAM_SENSOR, "%s[%d] op_code:0x%x", __func__, __LINE__,
+		cmd->op_code);
 
 	mutex_lock(&(s_ctrl->cam_sensor_mutex));
 	switch (cmd->op_code) {
@@ -730,7 +733,7 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 		}
 
 		CAM_INFO(CAM_SENSOR,
-			"Probe success,slot:%d,slave_addr:0x%x,sensor_id:0x%x",
+			"Probe done, slot:%d, slave_addr:0x%x, sensor_id:0x%x",
 			s_ctrl->soc_info.index,
 			s_ctrl->sensordata->slave_info.sensor_slave_addr,
 			s_ctrl->sensordata->slave_info.sensor_id);
@@ -803,8 +806,8 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 
 		s_ctrl->sensor_state = CAM_SENSOR_ACQUIRE;
 		s_ctrl->last_flush_req = 0;
-		CAM_INFO(CAM_SENSOR,
-			"CAM_ACQUIRE_DEV Success, sensor_id:0x%x,sensor_slave_addr:0x%x",
+		CAM_DBG(CAM_SENSOR,
+			"Success, sensor_id:0x%x,sensor_slave_addr:0x%x",
 			s_ctrl->sensordata->slave_info.sensor_id,
 			s_ctrl->sensordata->slave_info.sensor_slave_addr);
 	}
@@ -853,8 +856,8 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 		s_ctrl->bridge_intf.session_hdl = -1;
 
 		s_ctrl->sensor_state = CAM_SENSOR_INIT;
-		CAM_INFO(CAM_SENSOR,
-			"CAM_RELEASE_DEV Success, sensor_id:0x%x,sensor_slave_addr:0x%x",
+		CAM_DBG(CAM_SENSOR,
+			"Success, sensor_id:0x%x,sensor_slave_addr:0x%x",
 			s_ctrl->sensordata->slave_info.sensor_id,
 			s_ctrl->sensordata->slave_info.sensor_slave_addr);
 		s_ctrl->streamon_count = 0;
@@ -864,8 +867,12 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 		break;
 	case CAM_QUERY_CAP: {
 		struct  cam_sensor_query_cap sensor_cap;
+		memset(&sensor_cap, 0, sizeof(sensor_cap));
 
 		cam_sensor_query_cap(s_ctrl, &sensor_cap);
+		CAM_DBG(CAM_SENSOR, "slot:%d, csiphy_id:%d, index:%d",
+			sensor_cap.slot_info, sensor_cap.csiphy_slot_id,
+			s_ctrl->soc_info.index);
 		if (copy_to_user(u64_to_user_ptr(cmd->handle),
 			&sensor_cap, sizeof(struct  cam_sensor_query_cap))) {
 			CAM_ERR(CAM_SENSOR, "Failed Copy to User");
