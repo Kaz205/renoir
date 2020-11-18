@@ -581,11 +581,17 @@ static int isys_notifier_init(struct ipu_isys *isys)
 							 asd_struct_size,
 							 isys_fwnode_parse);
 
-	if (ret < 0)
+	if (ret < 0) {
+		dev_err(&isys->adev->dev,
+			"v4l2 parse_fwnode_endpoints() failed: %d\n", ret);
 		return ret;
+	}
 
-	if (list_empty(&isys->notifier.asd_list))
-		return -ENODEV;	/* no endpoint */
+	if (list_empty(&isys->notifier.asd_list)) {
+		/* isys probe could continue with async subdevs missing */
+		dev_warn(&isys->adev->dev, "no subdev found in graph\n");
+		return 0;
+	}
 
 	isys->notifier.ops = &isys_async_ops;
 	ret = v4l2_async_notifier_register(&isys->v4l2_dev, &isys->notifier);
@@ -596,6 +602,12 @@ static int isys_notifier_init(struct ipu_isys *isys)
 	}
 
 	return ret;
+}
+
+static void isys_notifier_cleanup(struct ipu_isys *isys)
+{
+	v4l2_async_notifier_unregister(&isys->notifier);
+	v4l2_async_notifier_cleanup(&isys->notifier);
 }
 
 static struct media_device_ops isys_mdev_ops = {
@@ -634,14 +646,18 @@ static int isys_register_devices(struct ipu_isys *isys)
 	rval = isys_register_subdevices(isys);
 	if (rval)
 		goto out_v4l2_device_unregister;
+
 	rval = isys_notifier_init(isys);
 	if (rval)
 		goto out_isys_unregister_subdevices;
 	rval = v4l2_device_register_subdev_nodes(&isys->v4l2_dev);
 	if (rval)
-		goto out_isys_unregister_subdevices;
+		goto out_isys_notifier_cleanup;
 
 	return 0;
+
+out_isys_notifier_cleanup:
+	isys_notifier_cleanup(isys);
 
 out_isys_unregister_subdevices:
 	isys_unregister_subdevices(isys);
@@ -786,7 +802,7 @@ static void isys_remove(struct ipu_bus_device *adev)
 	isys_iwake_watermark_cleanup(isys);
 
 	ipu_trace_uninit(&adev->dev);
-	v4l2_async_notifier_cleanup(&isys->notifier);
+	isys_notifier_cleanup(isys);
 	isys_unregister_devices(isys);
 	pm_qos_remove_request(&isys->pm_qos);
 
