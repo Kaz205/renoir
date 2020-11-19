@@ -642,6 +642,23 @@ TRACE_EVENT(sched_ravg_window_change,
 		__entry->change_time)
 );
 
+TRACE_EVENT(walt_window_rollover,
+
+	TP_PROTO(u64 window_start),
+
+	TP_ARGS(window_start),
+
+	TP_STRUCT__entry(
+		__field(u64, window_start)
+	),
+
+	TP_fast_assign(
+		__entry->window_start = window_start;
+	),
+
+	TP_printk("window_start=%llu", __entry->window_start)
+);
+
 #endif /* CONFIG_SCHED_WALT */
 #endif /* _TRACE_WALT_H */
 
