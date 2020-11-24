@@ -3130,7 +3130,6 @@ static DEFINE_SPINLOCK(cpu_freq_min_max_lock);
 void sched_update_cpu_freq_min_max(const cpumask_t *cpus, u32 fmin, u32 fmax)
 {
 	struct cpumask cpumask;
-	struct walt_sched_cluster *cluster;
 	int i;
 	unsigned long flags;
 
@@ -3139,11 +3138,6 @@ void sched_update_cpu_freq_min_max(const cpumask_t *cpus, u32 fmin, u32 fmax)
 
 	for_each_cpu(i, &cpumask)
 		thermal_cap_cpu[i] = do_thermal_cap(i, fmax);
-
-	for_each_cpu(i, &cpumask) {
-		cluster = cpu_rq(i)->wrq.cluster;
-		cpumask_andnot(&cpumask, &cpumask, &cluster->cpus);
-	}
 
 	spin_unlock_irqrestore(&cpu_freq_min_max_lock, flags);
 }
