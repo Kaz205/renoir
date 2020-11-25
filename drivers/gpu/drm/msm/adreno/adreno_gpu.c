@@ -192,6 +192,7 @@ adreno_iommu_create_address_space(struct msm_gpu *gpu,
 {
 	struct adreno_gpu *adreno_gpu = to_adreno_gpu(gpu);
 	struct a6xx_gpu *a6xx_gpu = to_a6xx_gpu(adreno_gpu);
+	struct io_pgtable_domain_attr pgtbl_cfg;
 	struct iommu_domain *iommu;
 	struct msm_mmu *mmu;
 	struct msm_gem_address_space *aspace;
@@ -206,9 +207,8 @@ adreno_iommu_create_address_space(struct msm_gpu *gpu,
 	 * cache on behalf of the iommu page table walker.
 	 */
 	if (!IS_ERR(a6xx_gpu->htw_llc_slice)) {
-		int gpu_htw_llc = 1;
-
-		iommu_domain_set_attr(iommu, DOMAIN_ATTR_SYS_CACHE, &gpu_htw_llc);
+		pgtbl_cfg.quirks = IO_PGTABLE_QUIRK_ARM_OUTER_WBWA;
+		iommu_domain_set_attr(iommu, DOMAIN_ATTR_IO_PGTABLE_CFG, &pgtbl_cfg);
 	}
 
 	mmu = msm_iommu_new(&pdev->dev, iommu);
