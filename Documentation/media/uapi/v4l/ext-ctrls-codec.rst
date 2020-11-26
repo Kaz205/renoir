@@ -7,7 +7,7 @@
 ..
 .. TODO: replace it to GFDL-1.1-or-later WITH no-invariant-sections
 
-.. _mpeg-controls:
+.. _codec-controls:
 
 ***********************
 Codec Control Reference
@@ -33,7 +33,7 @@ Generic Codec Controls
 Codec Control IDs
 -----------------
 
-``V4L2_CID_MPEG_CLASS (class)``
+``V4L2_CID_CODEC_CLASS (class)``
     The Codec class descriptor. Calling
     :ref:`VIDIOC_QUERYCTRL` for this control will
     return a description of this control class. This description can be
