@@ -1024,7 +1024,7 @@ static const struct h5_device_data h5_data_rtl8822cs = {
 	.vnd = &rtl_vnd,
 };
 
-static const struct h5_device_data h5_data_rtl8723bs = {
+static const struct h5_device_data __maybe_unused h5_data_rtl8723bs = {
 	.vnd = &rtl_vnd,
 };
 #endif
