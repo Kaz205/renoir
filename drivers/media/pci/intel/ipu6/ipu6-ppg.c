@@ -121,11 +121,8 @@ int ipu_psys_ppg_get_bufset(struct ipu_psys_kcmd *kcmd,
 {
 	struct ipu_psys *psys = kppg->fh->psys;
 	struct ipu_psys_buffer_set *kbuf_set;
-	size_t buf_set_size;
 	unsigned int i;
 	int ret;
-
-	buf_set_size = ipu_fw_psys_ppg_get_buffer_set_size(kcmd);
 
 	kbuf_set = ipu_psys_create_buffer_set(kcmd, kppg);
 	if (!kbuf_set) {

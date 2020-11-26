@@ -184,7 +184,7 @@ not_found:
  * Called to free up all resources associated with a kcmd.
  * After this the kcmd doesn't anymore exist in the driver.
  */
-void ipu_psys_kcmd_free(struct ipu_psys_kcmd *kcmd)
+static void ipu_psys_kcmd_free(struct ipu_psys_kcmd *kcmd)
 {
 	struct ipu_psys_ppg *kppg;
 	struct ipu_psys_scheduler *sched;
