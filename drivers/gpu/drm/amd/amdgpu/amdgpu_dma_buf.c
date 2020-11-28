@@ -328,7 +328,6 @@ int amdgpu_try_dma_buf_mmap(struct file *filp, struct vm_area_struct *vma)
        struct amdgpu_device *adev = dev->dev_private;
        struct ttm_bo_device *bdev = &adev->mman.bdev;
        struct ttm_buffer_object *tbo = NULL;
-       struct amdgpu_bo *bo;
        struct drm_gem_object *obj;
        struct drm_vma_offset_node *node;
        int ret;
@@ -350,7 +349,6 @@ int amdgpu_try_dma_buf_mmap(struct file *filp, struct vm_area_struct *vma)
        if (!tbo)
                return -EINVAL;
 
-       bo = ttm_to_amdgpu_bo(tbo);
        obj = &tbo->base;
 
        if (!obj->import_attach) {
