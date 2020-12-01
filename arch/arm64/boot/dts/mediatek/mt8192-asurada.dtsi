@@ -42,7 +42,6 @@
 	};
 
 	sound: mt8192-sound {
-		compatible = "mediatek,mt8192_mt6359_rt1015_rt5682";
 		mediatek,platform = <&afe>;
 		pinctrl-names = "aud_clk_mosi_off",
 				"aud_clk_mosi_on",
@@ -335,16 +334,6 @@
 		interrupts = <18 IRQ_TYPE_LEVEL_LOW>;
 		realtek,jd-src = <1>;
 		realtek,btndet-delay = <16>;
-	};
-
-	rt1015@28 {
-		compatible = "realtek,rt1015";
-		reg = <0x28>;
-	};
-
-	rt1015@29 {
-		compatible = "realtek,rt1015";
-		reg = <0x29>;
 	};
 };
 
