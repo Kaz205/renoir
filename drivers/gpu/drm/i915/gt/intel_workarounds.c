@@ -633,7 +633,6 @@ static void tgl_ctx_workarounds_init(struct intel_engine_cs *engine,
 	WA_SET_FIELD_MASKED(GEN8_CS_CHICKEN1,
 			    GEN9_PREEMPT_GPGPU_LEVEL_MASK,
 			    GEN9_PREEMPT_GPGPU_THREAD_GROUP_LEVEL);
-
 }
 
 static void
