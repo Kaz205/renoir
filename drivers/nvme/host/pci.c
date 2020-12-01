@@ -3221,6 +3221,9 @@ static const struct pci_device_id nvme_id_table[] = {
 		.driver_data = NVME_QUIRK_SINGLE_VECTOR |
 				NVME_QUIRK_128_BYTES_SQES |
 				NVME_QUIRK_SHARED_TAGS },
+	{ PCI_DEVICE(PCI_VENDOR_ID_SAMSUNG,
+			  0xa806),   /* Samsung KUS040205M-B001 */
+		.driver_data = NVME_QUIRK_DISABLE_WRITE_ZEROES, },
 	{ 0, }
 };
 MODULE_DEVICE_TABLE(pci, nvme_id_table);
