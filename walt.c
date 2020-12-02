@@ -2125,8 +2125,10 @@ static inline void run_walt_irq_work(u64 old_window_start, struct rq *rq)
 
 	result = atomic64_cmpxchg(&walt_irq_work_lastq_ws, old_window_start,
 				   rq->wrq.window_start);
-	if (result == old_window_start)
+	if (result == old_window_start) {
 		walt_irq_work_queue(&walt_cpufreq_irq_work);
+		trace_walt_window_rollover(rq->wrq.window_start);
+	}
 }
 
 /* Reflect task activity on its demand and cpu's busy time statistics */
@@ -3128,7 +3130,6 @@ static DEFINE_SPINLOCK(cpu_freq_min_max_lock);
 void sched_update_cpu_freq_min_max(const cpumask_t *cpus, u32 fmin, u32 fmax)
 {
 	struct cpumask cpumask;
-	struct walt_sched_cluster *cluster;
 	int i;
 	unsigned long flags;
 
@@ -3137,11 +3138,6 @@ void sched_update_cpu_freq_min_max(const cpumask_t *cpus, u32 fmin, u32 fmax)
 
 	for_each_cpu(i, &cpumask)
 		thermal_cap_cpu[i] = do_thermal_cap(i, fmax);
-
-	for_each_cpu(i, &cpumask) {
-		cluster = cpu_rq(i)->wrq.cluster;
-		cpumask_andnot(&cpumask, &cpumask, &cluster->cpus);
-	}
 
 	spin_unlock_irqrestore(&cpu_freq_min_max_lock, flags);
 }
