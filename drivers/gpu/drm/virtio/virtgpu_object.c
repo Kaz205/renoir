@@ -188,14 +188,21 @@ int virtio_gpu_object_create(struct virtio_gpu_device *vgdev,
 		if (ret == 0) {
 			spin_lock_irqsave(&drv->lock, irq_flags);
 			signaled = virtio_fence_signaled(&fence->f);
-			if (!signaled)
-				/* virtio create command still in flight */
-				ttm_eu_fence_buffer_objects(&ticket, &validate_list,
-							    &fence->f);
 			spin_unlock_irqrestore(&drv->lock, irq_flags);
-			if (signaled)
+			if (!signaled) {
+				/*
+				 * The virtio create command is (probably) still
+				 * in flight. This races with the command
+				 * completing, but using a fired fence is okay.
+				 */
+				ttm_eu_fence_buffer_objects(&ticket,
+							    &validate_list,
+							    &fence->f);
+			} else {
 				/* virtio create command finished */
-				ttm_eu_backoff_reservation(&ticket, &validate_list);
+				ttm_eu_backoff_reservation(&ticket,
+							   &validate_list);
+			}
 		}
 		virtio_gpu_unref_list(&validate_list);
 	}
