@@ -247,7 +247,7 @@ static int cros_ec_light_prox_write(struct iio_dev *indio_dev,
 		break;
 	case IIO_CHAN_INFO_CALIBSCALE:
 		if (indio_dev->num_channels >
-				CROS_EC_LIGHT_PROX_MIN_CHANNELS) {
+		    CROS_EC_LIGHT_PROX_MIN_CHANNELS) {
 			st->core.param.cmd = MOTIONSENSE_CMD_SENSOR_SCALE;
 			st->core.param.sensor_offset.flags =
 				MOTION_SENSE_SET_OFFSET;
@@ -282,6 +282,16 @@ static int cros_ec_light_prox_write(struct iio_dev *indio_dev,
 		ret = cros_ec_motion_send_host_cmd(&st->core, 0);
 		if (ret == 0)
 			st->core.range_updated = true;
+		break;
+	case IIO_CHAN_INFO_SAMP_FREQ:
+		ret = cros_ec_sensors_core_write(&st->core, chan, val, val2,
+						 mask);
+		/* Repeat the same command to the RGB sensor. */
+		if (!ret && indio_dev->num_channels >
+		    CROS_EC_LIGHT_PROX_MIN_CHANNELS)
+			ret = cros_ec_light_extra_send_host_cmd(
+					&st->core, 1, 0);
+
 		break;
 	default:
 		ret = cros_ec_sensors_core_write(&st->core, chan, val, val2,
@@ -484,14 +494,19 @@ static int cros_ec_light_prox_probe(struct platform_device *pdev)
 			channel->channel2 = IIO_MOD_LIGHT_RED + i;
 			channel->type = IIO_LIGHT;
 		}
-		cros_ec_sensorhub_register_push_data(
+		cros_ec_sensorhub_unregister_push_data(sensor_hub, sensor_num);
+		if (cros_ec_sensorhub_register_push_data(
 				sensor_hub, sensor_num, false,
 				indio_dev,
-				cros_ec_light_push_data);
-		cros_ec_sensorhub_register_push_data(
+				cros_ec_light_push_data))
+			dev_warn(dev, "cros_ec_light_push_data reg failed: %d - %d\n",
+				 sensor_num, sensor_hub->sensor_num);
+		if (cros_ec_sensorhub_register_push_data(
 				sensor_hub, sensor_num + 1, false,
 				indio_dev,
-				cros_ec_light_push_data_rgb);
+				cros_ec_light_push_data_rgb))
+			dev_warn(dev, "cros_ec_light_push_data_rgb reg failed: %d - %d\n",
+				 sensor_num + 1, sensor_hub->sensor_num);
 	}
 
 	/* Timestamp */
