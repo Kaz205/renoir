@@ -434,6 +434,8 @@ static int ipu_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		return rval;
 	}
 
+	dma_set_max_seg_size(&pdev->dev, UINT_MAX);
+
 	rval = ipu_pci_config_setup(pdev);
 	if (rval)
 		return rval;
