@@ -28,3 +28,5 @@ config VIDEO_INTEL_IPU_TPG
 
 	  If you want to the TPG devices exposed to user as media entity,
 	  you must select this option, otherwise no.
+
+source "drivers/media/pci/intel/ipu3/Kconfig"
