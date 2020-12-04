@@ -175,7 +175,6 @@ static int wait_session_msg(struct venus_inst *inst)
 int hfi_session_create(struct venus_inst *inst, const struct hfi_inst_ops *ops)
 {
 	struct venus_core *core = inst->core;
-	int ret;
 
 	if (!ops)
 		return -EINVAL;
@@ -184,22 +183,12 @@ int hfi_session_create(struct venus_inst *inst, const struct hfi_inst_ops *ops)
 	init_completion(&inst->done);
 	inst->ops = ops;
 
-	ret = mutex_lock_interruptible(&core->lock);
-	if (ret)
-		return ret;
-
-	ret = atomic_read(&core->insts_count);
-	if (ret + 1 > core->max_sessions_supported) {
-		ret = -EAGAIN;
-	} else {
-		atomic_inc(&core->insts_count);
-		list_add_tail(&inst->list, &core->instances);
-		ret = 0;
-	}
-
+	mutex_lock(&core->lock);
+	list_add_tail(&inst->list, &core->instances);
+	atomic_inc(&core->insts_count);
 	mutex_unlock(&core->lock);
 
-	return ret;
+	return 0;
 }
 EXPORT_SYMBOL_GPL(hfi_session_create);
 
