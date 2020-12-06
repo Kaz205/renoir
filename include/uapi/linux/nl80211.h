@@ -2386,6 +2386,10 @@ enum nl80211_commands {
  *
  * @NL80211_ATTR_HE_BSS_COLOR: nested attribute for BSS Color Settings.
  *
+ * @NL80211_ATTR_RECONNECT_REQUESTED: flag attribute, used with deauth and
+ *	disassoc events to indicate that an immediate reconnect to the AP
+ *	is desired.
+ *
  * @NUM_NL80211_ATTR: total number of nl80211_attrs available
  * @NL80211_ATTR_MAX: highest attribute number currently defined
  * @__NL80211_ATTR_AFTER_LAST: internal use
@@ -2851,6 +2855,8 @@ enum nl80211_attrs {
 	NL80211_ATTR_SAR_SPEC = 300,
 
 	NL80211_ATTR_HE_BSS_COLOR,
+
+	NL80211_ATTR_RECONNECT_REQUESTED,
 
 	/* add attributes here, update the policy in nl80211.c */
 
