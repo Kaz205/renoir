@@ -181,6 +181,13 @@ struct spi_geni_master {
 	bool use_fixed_timeout;
 };
 
+int geni_spi_get_master_irq(struct spi_device *spi_slv)
+{
+	struct spi_geni_master *mas = spi_master_get_devdata(spi_slv->master);
+
+	return mas->irq;
+}
+
 static void spi_slv_setup(struct spi_geni_master *mas);
 
 static ssize_t spi_slave_state_show(struct device *dev,
