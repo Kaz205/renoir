@@ -8,6 +8,7 @@
 
 #include <asm/local.h>
 #include <linux/spinlock.h>
+#include <linux/types.h>
 #include "coresight-priv.h"
 
 /*
@@ -575,6 +576,11 @@
 /* Interpretation of resource numbers change at ETM v4.3 architecture */
 #define ETM4X_ARCH_4V3	0x43
 
+enum etm_impdef_type {
+	ETM4_IMPDEF_HISI_CORE_COMMIT,
+	ETM4_IMPDEF_FEATURE_MAX,
+};
+
 /**
  * struct etmv4_config - configuration information related to an ETMv4
  * @mode:	Controls various modes supported by this ETM.
@@ -787,6 +793,7 @@ struct etmv4_save_state {
  * @state_needs_restore: True when there is context to restore after PM exit
  * @skip_power_up: Indicates if an implementation can skip powering up
  *		   the trace unit.
+ * @arch_features: Bitmap of arch features of etmv4 devices.
  */
 struct etmv4_drvdata {
 	void __iomem			*base;
@@ -835,6 +842,7 @@ struct etmv4_drvdata {
 	struct etmv4_save_state		*save_state;
 	bool				state_needs_restore;
 	bool				skip_power_up;
+	DECLARE_BITMAP(arch_features, ETM4_IMPDEF_FEATURE_MAX);
 };
 
 /* Address comparator access types */
