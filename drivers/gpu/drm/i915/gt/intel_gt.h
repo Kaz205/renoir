@@ -11,6 +11,7 @@
 #include "intel_reset.h"
 
 struct drm_i915_private;
+struct drm_printer;
 
 #define GT_TRACE(gt, fmt, ...) do {					\
 	const struct intel_gt *gt__ __maybe_unused = (gt);		\
@@ -67,5 +68,8 @@ static inline bool intel_gt_has_init_error(const struct intel_gt *gt)
 {
 	return test_bit(I915_WEDGED_ON_INIT, &gt->reset.flags);
 }
+
+void intel_gt_info_print(const struct intel_gt_info *info,
+			 struct drm_printer *p);
 
 #endif /* __INTEL_GT_H__ */
