@@ -997,8 +997,6 @@ static void process_init_reply(struct fuse_conn *fc, struct fuse_args *args,
 					min_t(unsigned int, FUSE_MAX_MAX_PAGES,
 					max_t(unsigned int, arg->max_pages, 1));
 			}
-			if (arg->flags & FUSE_SECURITY_CTX)
-				fc->init_security = 1;
 			if (IS_ENABLED(CONFIG_FUSE_DAX) &&
 			    arg->flags & FUSE_MAP_ALIGNMENT &&
 			    !fuse_dax_check_alignment(fc, arg->map_alignment)) {
@@ -1046,8 +1044,7 @@ void fuse_send_init(struct fuse_conn *fc)
 		FUSE_WRITEBACK_CACHE | FUSE_NO_OPEN_SUPPORT |
 		FUSE_PARALLEL_DIROPS | FUSE_HANDLE_KILLPRIV | FUSE_POSIX_ACL |
 		FUSE_ABORT_ERROR | FUSE_MAX_PAGES | FUSE_CACHE_SYMLINKS |
-		FUSE_NO_OPENDIR_SUPPORT | FUSE_EXPLICIT_INVAL_DATA |
-		FUSE_SECURITY_CTX;
+		FUSE_NO_OPENDIR_SUPPORT | FUSE_EXPLICIT_INVAL_DATA;
 #ifdef CONFIG_FUSE_DAX
 	if (fc->dax)
 		ia->in.flags |= FUSE_MAP_ALIGNMENT;

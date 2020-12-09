@@ -738,9 +738,6 @@ struct fuse_conn {
 	/** Do not allow MNT_FORCE umount */
 	unsigned int no_force_umount:1;
 
-	/* Initialize security xattrs when creating a new inode */
-	unsigned int init_security : 1;
-
 	/** The number of requests waiting for completion */
 	atomic_t num_waiting;
 
