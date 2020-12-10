@@ -8,6 +8,8 @@
 #include <asm/set_memory.h>
 #include <asm/smp.h>
 
+#include <drm/i915_drm.h>
+
 #include "intel_gt.h"
 #include "i915_drv.h"
 #include "i915_scatterlist.h"
@@ -104,27 +106,17 @@ static bool needs_idle_maps(struct drm_i915_private *i915)
 	return IS_GEN(i915, 5) && IS_MOBILE(i915) && intel_vtd_active();
 }
 
-static void ggtt_suspend_mappings(struct i915_ggtt *ggtt)
+void i915_ggtt_suspend(struct i915_ggtt *ggtt)
 {
-	struct drm_i915_private *i915 = ggtt->vm.i915;
+	struct i915_vma *vma;
 
-	/*
-	 * Don't bother messing with faults pre GEN6 as we have little
-	 * documentation supporting that it's a good idea.
-	 */
-	if (INTEL_GEN(i915) < 6)
-		return;
-
-	intel_gt_check_and_clear_faults(ggtt->vm.gt);
+	list_for_each_entry(vma, &ggtt->vm.bound_list, vm_link)
+		i915_vma_wait_for_bind(vma);
 
 	ggtt->vm.clear_range(&ggtt->vm, 0, ggtt->vm.total);
-
 	ggtt->invalidate(ggtt);
-}
 
-void i915_gem_suspend_gtt_mappings(struct drm_i915_private *i915)
-{
-	ggtt_suspend_mappings(&i915->ggtt);
+	intel_gt_check_and_clear_faults(ggtt->vm.gt);
 }
 
 void gen6_ggtt_invalidate(struct i915_ggtt *ggtt)
@@ -357,31 +349,6 @@ static void bxt_vtd_ggtt_insert_entries__BKL(struct i915_address_space *vm,
 	stop_machine(bxt_vtd_ggtt_insert_entries__cb, &arg, NULL);
 }
 
-struct clear_range {
-	struct i915_address_space *vm;
-	u64 start;
-	u64 length;
-};
-
-static int bxt_vtd_ggtt_clear_range__cb(void *_arg)
-{
-	struct clear_range *arg = _arg;
-
-	gen8_ggtt_clear_range(arg->vm, arg->start, arg->length);
-	bxt_vtd_ggtt_wa(arg->vm);
-
-	return 0;
-}
-
-static void bxt_vtd_ggtt_clear_range__BKL(struct i915_address_space *vm,
-					  u64 start,
-					  u64 length)
-{
-	struct clear_range arg = { vm, start, length };
-
-	stop_machine(bxt_vtd_ggtt_clear_range__cb, &arg, NULL);
-}
-
 static void gen6_ggtt_clear_range(struct i915_address_space *vm,
 				  u64 start, u64 length)
 {
@@ -469,7 +436,7 @@ static int ggtt_reserve_guc_top(struct i915_ggtt *ggtt)
 	u64 size;
 	int ret;
 
-	if (!USES_GUC(ggtt->vm.i915))
+	if (!intel_uc_uses_guc(&ggtt->vm.gt->uc))
 		return 0;
 
 	GEM_BUG_ON(ggtt->vm.total <= GUC_GGTT_TOP);
@@ -852,20 +819,12 @@ static int gen8_gmch_probe(struct i915_ggtt *ggtt)
 	struct pci_dev *pdev = i915->drm.pdev;
 	unsigned int size;
 	u16 snb_gmch_ctl;
-	int err;
 
 	/* TODO: We're not aware of mappable constraints on gen8 yet */
 	if (!IS_DGFX(i915)) {
 		ggtt->gmadr = pci_resource(pdev, 2);
 		ggtt->mappable_end = resource_size(&ggtt->gmadr);
 	}
-
-	err = pci_set_dma_mask(pdev, DMA_BIT_MASK(39));
-	if (!err)
-		err = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(39));
-	if (err)
-		drm_err(&i915->drm,
-			"Can't set DMA mask/consistent mask (%d)\n", err);
 
 	pci_read_config_word(pdev, SNB_GMCH_CTRL, &snb_gmch_ctl);
 	if (IS_CHERRYVIEW(i915))
@@ -887,8 +846,7 @@ static int gen8_gmch_probe(struct i915_ggtt *ggtt)
 	    IS_CHERRYVIEW(i915) /* fails with concurrent use/update */) {
 		ggtt->vm.insert_entries = bxt_vtd_ggtt_insert_entries__BKL;
 		ggtt->vm.insert_page    = bxt_vtd_ggtt_insert_page__BKL;
-		if (ggtt->vm.clear_range != nop_clear_range)
-			ggtt->vm.clear_range = bxt_vtd_ggtt_clear_range__BKL;
+		ggtt->vm.bind_async_flags = I915_VMA_GLOBAL_BIND;
 	}
 
 	ggtt->invalidate = gen8_ggtt_invalidate;
@@ -1002,7 +960,6 @@ static int gen6_gmch_probe(struct i915_ggtt *ggtt)
 	struct pci_dev *pdev = i915->drm.pdev;
 	unsigned int size;
 	u16 snb_gmch_ctl;
-	int err;
 
 	ggtt->gmadr = pci_resource(pdev, 2);
 	ggtt->mappable_end = resource_size(&ggtt->gmadr);
@@ -1017,12 +974,6 @@ static int gen6_gmch_probe(struct i915_ggtt *ggtt)
 		return -ENXIO;
 	}
 
-	err = pci_set_dma_mask(pdev, DMA_BIT_MASK(40));
-	if (!err)
-		err = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(40));
-	if (err)
-		drm_err(&i915->drm,
-			"Can't set DMA mask/consistent mask (%d)\n", err);
 	pci_read_config_word(pdev, SNB_GMCH_CTRL, &snb_gmch_ctl);
 
 	size = gen6_get_total_gtt_size(snb_gmch_ctl);
@@ -1092,7 +1043,7 @@ static int i915_gmch_probe(struct i915_ggtt *ggtt)
 	ggtt->vm.vma_ops.clear_pages = clear_pages;
 
 	if (unlikely(ggtt->do_idle_maps))
-		dev_notice(i915->drm.dev,
+		drm_notice(&i915->drm,
 			   "Applying Ironlake quirks for intel_iommu\n");
 
 	return 0;
@@ -1157,7 +1108,7 @@ int i915_ggtt_probe_hw(struct drm_i915_private *i915)
 		return ret;
 
 	if (intel_vtd_active())
-		dev_info(i915->drm.dev, "VT-d active for gfx access\n");
+		drm_info(&i915->drm, "VT-d active for gfx access\n");
 
 	return 0;
 }
@@ -1193,15 +1144,13 @@ void i915_ggtt_disable_guc(struct i915_ggtt *ggtt)
 	ggtt->invalidate(ggtt);
 }
 
-static void ggtt_restore_mappings(struct i915_ggtt *ggtt)
+void i915_ggtt_resume(struct i915_ggtt *ggtt)
 {
 	struct i915_vma *vma;
 	bool flush = false;
 	int open;
 
 	intel_gt_check_and_clear_faults(ggtt->vm.gt);
-
-	mutex_lock(&ggtt->vm.mutex);
 
 	/* First fill our portion of the GTT with scratch pages */
 	ggtt->vm.clear_range(&ggtt->vm, 0, ggtt->vm.total);
@@ -1229,19 +1178,10 @@ static void ggtt_restore_mappings(struct i915_ggtt *ggtt)
 	atomic_set(&ggtt->vm.open, open);
 	ggtt->invalidate(ggtt);
 
-	mutex_unlock(&ggtt->vm.mutex);
-
 	if (flush)
 		wbinvd_on_all_cpus();
-}
 
-void i915_gem_restore_gtt_mappings(struct drm_i915_private *i915)
-{
-	struct i915_ggtt *ggtt = &i915->ggtt;
-
-	ggtt_restore_mappings(ggtt);
-
-	if (INTEL_GEN(i915) >= 8)
+	if (INTEL_GEN(ggtt->vm.i915) >= 8)
 		setup_private_pat(ggtt->vm.gt->uncore);
 }
 

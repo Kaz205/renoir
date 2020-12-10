@@ -15,6 +15,7 @@
 #include <drm/drm_mm.h>
 
 #include "gt/intel_engine.h"
+#include "gt/intel_gt_types.h"
 #include "gt/uc/intel_uc_fw.h"
 
 #include "intel_device_info.h"
@@ -42,7 +43,7 @@ struct i915_vma_coredump {
 	int num_pages;
 	int page_count;
 	int unused;
-	u32 *pages[0];
+	u32 *pages[];
 };
 
 struct i915_request_coredump {
@@ -75,6 +76,7 @@ struct intel_engine_coredump {
 	u32 hws;
 	u32 ipeir;
 	u32 ipehr;
+	u32 esr;
 	u32 bbstate;
 	u32 instpm;
 	u32 instps;
@@ -117,6 +119,8 @@ struct intel_gt_coredump {
 	const struct intel_gt *_gt;
 	bool awake;
 	bool simulated;
+
+	struct intel_gt_info info;
 
 	/* Generic register state */
 	u32 eir;

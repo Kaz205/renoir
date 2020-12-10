@@ -119,6 +119,15 @@ static void __idle_hwsp_free(struct intel_timeline_hwsp *hwsp, int cacheline)
 	spin_unlock_irqrestore(&gt->hwsp_lock, flags);
 }
 
+static void __rcu_cacheline_free(struct rcu_head *rcu)
+{
+	struct intel_timeline_cacheline *cl =
+		container_of(rcu, typeof(*cl), rcu);
+
+	i915_active_fini(&cl->active);
+	kfree(cl);
+}
+
 static void __idle_cacheline_free(struct intel_timeline_cacheline *cl)
 {
 	GEM_BUG_ON(!i915_active_is_idle(&cl->active));
@@ -127,8 +136,7 @@ static void __idle_cacheline_free(struct intel_timeline_cacheline *cl)
 	i915_vma_put(cl->hwsp->vma);
 	__idle_hwsp_free(cl->hwsp, ptr_unmask_bits(cl->vaddr, CACHELINE_BITS));
 
-	i915_active_fini(&cl->active);
-	kfree_rcu(cl, rcu);
+	call_rcu(&cl->rcu, __rcu_cacheline_free);
 }
 
 __i915_active_call
@@ -312,7 +320,7 @@ int intel_timeline_pin(struct intel_timeline *tl)
 	if (atomic_add_unless(&tl->pin_count, 1, 0))
 		return 0;
 
-	err = i915_vma_pin(tl->hwsp_ggtt, 0, 0, PIN_GLOBAL | PIN_HIGH);
+	err = i915_ggtt_pin(tl->hwsp_ggtt, 0, PIN_HIGH);
 	if (err)
 		return err;
 
@@ -410,6 +418,8 @@ __intel_timeline_get_seqno(struct intel_timeline *tl,
 	void *vaddr;
 	int err;
 
+	might_lock(&tl->gt->ggtt->vm.mutex);
+
 	/*
 	 * If there is an outstanding GPU reference to this cacheline,
 	 * such as it being sampled by a HW semaphore on another timeline,
@@ -435,7 +445,7 @@ __intel_timeline_get_seqno(struct intel_timeline *tl,
 		goto err_rollback;
 	}
 
-	err = i915_vma_pin(vma, 0, 0, PIN_GLOBAL | PIN_HIGH);
+	err = i915_ggtt_pin(vma, 0, PIN_HIGH);
 	if (err) {
 		__idle_hwsp_free(vma->private, cacheline);
 		goto err_rollback;
@@ -454,7 +464,9 @@ __intel_timeline_get_seqno(struct intel_timeline *tl,
 	 * free it after the current request is retired, which ensures that
 	 * all writes into the cacheline from previous requests are complete.
 	 */
-	err = i915_active_ref(&tl->hwsp_cacheline->active, tl, &rq->fence);
+	err = i915_active_ref(&tl->hwsp_cacheline->active,
+			      tl->fence_context,
+			      &rq->fence);
 	if (err)
 		goto err_cacheline;
 

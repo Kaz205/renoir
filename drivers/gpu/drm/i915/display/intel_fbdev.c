@@ -40,7 +40,6 @@
 #include <drm/drm_crtc.h>
 #include <drm/drm_fb_helper.h>
 #include <drm/drm_fourcc.h>
-#include <drm/i915_drm.h>
 
 #include "i915_drv.h"
 #include "intel_display_types.h"
@@ -452,8 +451,7 @@ int intel_fbdev_init(struct drm_device *dev)
 	struct intel_fbdev *ifbdev;
 	int ret;
 
-	if (drm_WARN_ON(dev, !HAS_DISPLAY(dev_priv) ||
-			!INTEL_DISPLAY_ENABLED(dev_priv)))
+	if (drm_WARN_ON(dev, !HAS_DISPLAY(dev_priv)))
 		return -ENODEV;
 
 	ifbdev = kzalloc(sizeof(struct intel_fbdev), GFP_KERNEL);

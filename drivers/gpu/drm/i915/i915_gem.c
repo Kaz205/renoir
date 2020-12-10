@@ -26,7 +26,6 @@
  */
 
 #include <drm/drm_vma_manager.h>
-#include <drm/i915_drm.h>
 #include <linux/dma-fence-array.h>
 #include <linux/kthread.h>
 #include <linux/dma-resv.h>
@@ -1009,6 +1008,12 @@ i915_gem_object_ggtt_pin(struct drm_i915_gem_object *obj,
 	if (ret)
 		return ERR_PTR(ret);
 
+	ret = i915_vma_wait_for_bind(vma);
+	if (ret) {
+		i915_vma_unpin(vma);
+		return ERR_PTR(ret);
+	}
+
 	return vma;
 }
 
@@ -1153,7 +1158,7 @@ err_unlock:
 
 		/* Minimal basic recovery for KMS */
 		ret = i915_ggtt_enable_hw(dev_priv);
-		i915_gem_restore_gtt_mappings(dev_priv);
+		i915_ggtt_resume(&dev_priv->ggtt);
 		i915_gem_restore_fences(&dev_priv->ggtt);
 		intel_init_clock_gating(dev_priv);
 	}

@@ -294,7 +294,8 @@ void bxt_ddi_phy_set_signal_level(struct drm_i915_private *dev_priv,
 		val |= SCALE_DCOMP_METHOD;
 
 	if ((val & UNIQUE_TRANGE_EN_METHOD) && !(val & SCALE_DCOMP_METHOD))
-		DRM_ERROR("Disabled scaling while ouniqetrangenmethod was set");
+		drm_err(&dev_priv->drm,
+			"Disabled scaling while ouniqetrangenmethod was set");
 
 	intel_de_write(dev_priv, BXT_PORT_TX_DW3_GRP(phy, ch), val);
 
@@ -320,15 +321,15 @@ bool bxt_ddi_phy_is_enabled(struct drm_i915_private *dev_priv,
 
 	if ((intel_de_read(dev_priv, BXT_PORT_CL1CM_DW0(phy)) &
 	     (PHY_POWER_GOOD | PHY_RESERVED)) != PHY_POWER_GOOD) {
-		DRM_DEBUG_DRIVER("DDI PHY %d powered, but power hasn't settled\n",
-				 phy);
+		drm_dbg(&dev_priv->drm,
+			"DDI PHY %d powered, but power hasn't settled\n", phy);
 
 		return false;
 	}
 
 	if (!(intel_de_read(dev_priv, BXT_PHY_CTL_FAMILY(phy)) & COMMON_RESET_DIS)) {
-		DRM_DEBUG_DRIVER("DDI PHY %d powered, but still in reset\n",
-				 phy);
+		drm_dbg(&dev_priv->drm,
+			"DDI PHY %d powered, but still in reset\n", phy);
 
 		return false;
 	}
@@ -348,7 +349,8 @@ static void bxt_phy_wait_grc_done(struct drm_i915_private *dev_priv,
 {
 	if (intel_de_wait_for_set(dev_priv, BXT_PORT_REF_DW3(phy),
 				  GRC_DONE, 10))
-		DRM_ERROR("timeout waiting for PHY%d GRC\n", phy);
+		drm_err(&dev_priv->drm, "timeout waiting for PHY%d GRC\n",
+			phy);
 }
 
 static void _bxt_ddi_phy_init(struct drm_i915_private *dev_priv,
@@ -365,13 +367,14 @@ static void _bxt_ddi_phy_init(struct drm_i915_private *dev_priv,
 			dev_priv->bxt_phy_grc = bxt_get_grc(dev_priv, phy);
 
 		if (bxt_ddi_phy_verify_state(dev_priv, phy)) {
-			DRM_DEBUG_DRIVER("DDI PHY %d already enabled, "
-					 "won't reprogram it\n", phy);
+			drm_dbg(&dev_priv->drm, "DDI PHY %d already enabled, "
+				"won't reprogram it\n", phy);
 			return;
 		}
 
-		DRM_DEBUG_DRIVER("DDI PHY %d enabled with invalid state, "
-				 "force reprogramming it\n", phy);
+		drm_dbg(&dev_priv->drm,
+			"DDI PHY %d enabled with invalid state, "
+			"force reprogramming it\n", phy);
 	}
 
 	val = intel_de_read(dev_priv, BXT_P_CR_GT_DISP_PWRON);
@@ -391,7 +394,8 @@ static void _bxt_ddi_phy_init(struct drm_i915_private *dev_priv,
 				       PHY_RESERVED | PHY_POWER_GOOD,
 				       PHY_POWER_GOOD,
 				       1))
-		DRM_ERROR("timeout during PHY%d power on\n", phy);
+		drm_err(&dev_priv->drm, "timeout during PHY%d power on\n",
+			phy);
 
 	/* Program PLL Rcomp code offset */
 	val = intel_de_read(dev_priv, BXT_PORT_CL1CM_DW9(phy));
@@ -505,7 +509,7 @@ __phy_reg_verify_state(struct drm_i915_private *dev_priv, enum dpio_phy phy,
 	vaf.fmt = reg_fmt;
 	vaf.va = &args;
 
-	DRM_DEBUG_DRIVER("DDI PHY %d reg %pV [%08x] state mismatch: "
+	drm_dbg(&dev_priv->drm, "DDI PHY %d reg %pV [%08x] state mismatch: "
 			 "current %08x, expected %08x (mask %08x)\n",
 			 phy, &vaf, reg.reg, val, (val & ~mask) | expected,
 			 mask);
@@ -640,16 +644,16 @@ bxt_ddi_phy_get_lane_lat_optim_mask(struct intel_encoder *encoder)
 	return mask;
 }
 
-
 void chv_set_phy_signal_level(struct intel_encoder *encoder,
+			      const struct intel_crtc_state *crtc_state,
 			      u32 deemph_reg_value, u32 margin_reg_value,
 			      bool uniq_trans_scale)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
 	struct intel_digital_port *dig_port = enc_to_dig_port(encoder);
-	struct intel_crtc *intel_crtc = to_intel_crtc(encoder->base.crtc);
+	struct intel_crtc *crtc = to_intel_crtc(crtc_state->uapi.crtc);
 	enum dpio_channel ch = vlv_dig_port_to_channel(dig_port);
-	enum pipe pipe = intel_crtc->pipe;
+	enum pipe pipe = crtc->pipe;
 	u32 val;
 	int i;
 
@@ -662,7 +666,7 @@ void chv_set_phy_signal_level(struct intel_encoder *encoder,
 	val |= DPIO_PCS_TX1DEEMP_9P5 | DPIO_PCS_TX2DEEMP_9P5;
 	vlv_dpio_write(dev_priv, pipe, VLV_PCS01_DW10(ch), val);
 
-	if (intel_crtc->config->lane_count > 2) {
+	if (crtc_state->lane_count > 2) {
 		val = vlv_dpio_read(dev_priv, pipe, VLV_PCS23_DW10(ch));
 		val &= ~(DPIO_PCS_SWING_CALC_TX0_TX2 | DPIO_PCS_SWING_CALC_TX1_TX3);
 		val &= ~(DPIO_PCS_TX1DEEMP_MASK | DPIO_PCS_TX2DEEMP_MASK);
@@ -675,7 +679,7 @@ void chv_set_phy_signal_level(struct intel_encoder *encoder,
 	val |= DPIO_PCS_TX1MARGIN_000 | DPIO_PCS_TX2MARGIN_000;
 	vlv_dpio_write(dev_priv, pipe, VLV_PCS01_DW9(ch), val);
 
-	if (intel_crtc->config->lane_count > 2) {
+	if (crtc_state->lane_count > 2) {
 		val = vlv_dpio_read(dev_priv, pipe, VLV_PCS23_DW9(ch));
 		val &= ~(DPIO_PCS_TX1MARGIN_MASK | DPIO_PCS_TX2MARGIN_MASK);
 		val |= DPIO_PCS_TX1MARGIN_000 | DPIO_PCS_TX2MARGIN_000;
@@ -683,7 +687,7 @@ void chv_set_phy_signal_level(struct intel_encoder *encoder,
 	}
 
 	/* Program swing deemph */
-	for (i = 0; i < intel_crtc->config->lane_count; i++) {
+	for (i = 0; i < crtc_state->lane_count; i++) {
 		val = vlv_dpio_read(dev_priv, pipe, CHV_TX_DW4(ch, i));
 		val &= ~DPIO_SWING_DEEMPH9P5_MASK;
 		val |= deemph_reg_value << DPIO_SWING_DEEMPH9P5_SHIFT;
@@ -691,7 +695,7 @@ void chv_set_phy_signal_level(struct intel_encoder *encoder,
 	}
 
 	/* Program swing margin */
-	for (i = 0; i < intel_crtc->config->lane_count; i++) {
+	for (i = 0; i < crtc_state->lane_count; i++) {
 		val = vlv_dpio_read(dev_priv, pipe, CHV_TX_DW2(ch, i));
 
 		val &= ~DPIO_SWING_MARGIN000_MASK;
@@ -714,7 +718,7 @@ void chv_set_phy_signal_level(struct intel_encoder *encoder,
 	 * For now, for this unique transition scale selection, set bit
 	 * 27 for ch0 and ch1.
 	 */
-	for (i = 0; i < intel_crtc->config->lane_count; i++) {
+	for (i = 0; i < crtc_state->lane_count; i++) {
 		val = vlv_dpio_read(dev_priv, pipe, CHV_TX_DW3(ch, i));
 		if (uniq_trans_scale)
 			val |= DPIO_TX_UNIQ_TRANS_SCALE_EN;
@@ -728,7 +732,7 @@ void chv_set_phy_signal_level(struct intel_encoder *encoder,
 	val |= DPIO_PCS_SWING_CALC_TX0_TX2 | DPIO_PCS_SWING_CALC_TX1_TX3;
 	vlv_dpio_write(dev_priv, pipe, VLV_PCS01_DW10(ch), val);
 
-	if (intel_crtc->config->lane_count > 2) {
+	if (crtc_state->lane_count > 2) {
 		val = vlv_dpio_read(dev_priv, pipe, VLV_PCS23_DW10(ch));
 		val |= DPIO_PCS_SWING_CALC_TX0_TX2 | DPIO_PCS_SWING_CALC_TX1_TX3;
 		vlv_dpio_write(dev_priv, pipe, VLV_PCS23_DW10(ch), val);
@@ -988,14 +992,15 @@ void chv_phy_post_pll_disable(struct intel_encoder *encoder,
 }
 
 void vlv_set_phy_signal_level(struct intel_encoder *encoder,
+			      const struct intel_crtc_state *crtc_state,
 			      u32 demph_reg_value, u32 preemph_reg_value,
 			      u32 uniqtranscale_reg_value, u32 tx3_demph)
 {
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	struct intel_crtc *intel_crtc = to_intel_crtc(encoder->base.crtc);
 	struct intel_digital_port *dig_port = enc_to_dig_port(encoder);
+	struct intel_crtc *crtc = to_intel_crtc(crtc_state->uapi.crtc);
 	enum dpio_channel port = vlv_dig_port_to_channel(dig_port);
-	enum pipe pipe = intel_crtc->pipe;
+	enum pipe pipe = crtc->pipe;
 
 	vlv_dpio_get(dev_priv);
 

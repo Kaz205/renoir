@@ -8,8 +8,6 @@
 
 #include <linux/types.h>
 
-#include <drm/i915_drm.h>
-
 #include "i915_reg.h"
 
 enum pipe;
@@ -46,13 +44,13 @@ bool intel_dp_init(struct drm_i915_private *dev_priv, i915_reg_t output_reg,
 bool intel_dp_init_connector(struct intel_digital_port *dig_port,
 			     struct intel_connector *intel_connector);
 void intel_dp_set_link_params(struct intel_dp *intel_dp,
-			      int link_rate, u8 lane_count,
-			      bool link_mst);
+			      int link_rate, int lane_count);
 int intel_dp_get_link_train_fallback_values(struct intel_dp *intel_dp,
 					    int link_rate, u8 lane_count);
 int intel_dp_retrain_link(struct intel_encoder *encoder,
 			  struct drm_modeset_acquire_ctx *ctx);
 void intel_dp_sink_dpms(struct intel_dp *intel_dp, int mode);
+void intel_dp_configure_protocol_converter(struct intel_dp *intel_dp);
 void intel_dp_sink_set_decompression_state(struct intel_dp *intel_dp,
 					   const struct intel_crtc_state *crtc_state,
 					   bool enable);
@@ -91,10 +89,13 @@ void intel_edp_drrs_flush(struct drm_i915_private *dev_priv,
 
 void
 intel_dp_program_link_training_pattern(struct intel_dp *intel_dp,
+				       const struct intel_crtc_state *crtc_state,
 				       u8 dp_train_pat);
 void
-intel_dp_set_signal_levels(struct intel_dp *intel_dp);
-void intel_dp_set_idle_link_train(struct intel_dp *intel_dp);
+intel_dp_set_signal_levels(struct intel_dp *intel_dp,
+			   const struct intel_crtc_state *crtc_state);
+void intel_dp_set_idle_link_train(struct intel_dp *intel_dp,
+				  const struct intel_crtc_state *crtc_state);
 void intel_dp_compute_rate(struct intel_dp *intel_dp, int port_clock,
 			   u8 *link_bw, u8 *rate_select);
 bool intel_dp_source_supports_hbr2(struct intel_dp *intel_dp);
@@ -102,7 +103,6 @@ bool intel_dp_source_supports_hbr3(struct intel_dp *intel_dp);
 bool
 intel_dp_get_link_status(struct intel_dp *intel_dp, u8 *link_status);
 
-bool intel_dp_read_dpcd(struct intel_dp *intel_dp);
 bool intel_dp_get_colorimetry_status(struct intel_dp *intel_dp);
 int intel_dp_link_required(int pixel_clock, int bpp);
 int intel_dp_max_data_rate(int max_link_clock, int max_lanes);
@@ -122,7 +122,6 @@ void intel_read_dp_sdp(struct intel_encoder *encoder,
 		       struct intel_crtc_state *crtc_state,
 		       unsigned int type);
 bool intel_digital_port_connected(struct intel_encoder *encoder);
-void intel_dp_process_phy_request(struct intel_dp *intel_dp);
 
 static inline unsigned int intel_dp_unused_lane_mask(int lane_count)
 {

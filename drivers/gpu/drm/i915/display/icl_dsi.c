@@ -429,7 +429,7 @@ static void gen11_dsi_config_phy_lanes_sequence(struct intel_encoder *encoder)
 		intel_de_write(dev_priv, ICL_PORT_TX_DW2_GRP(phy), tmp);
 
 		/* For EHL, TGL, set latency optimization for PCS_DW1 lanes */
-		if (IS_ELKHARTLAKE(dev_priv) || (INTEL_GEN(dev_priv) >= 12)) {
+		if (IS_JSL_EHL(dev_priv) || (INTEL_GEN(dev_priv) >= 12)) {
 			tmp = intel_de_read(dev_priv,
 					    ICL_PORT_PCS_DW1_AUX(phy));
 			tmp &= ~LATENCY_OPTIM_MASK;
@@ -586,7 +586,7 @@ gen11_dsi_setup_dphy_timings(struct intel_encoder *encoder,
 		}
 	}
 
-	if (IS_ELKHARTLAKE(dev_priv)) {
+	if (IS_JSL_EHL(dev_priv)) {
 		for_each_dsi_phy(phy, intel_dsi->phys) {
 			tmp = intel_de_read(dev_priv, ICL_DPHY_CHKN(phy));
 			tmp |= ICL_DPHY_CHKN_AFE_OVER_PPI_STRAP;
@@ -602,13 +602,13 @@ static void gen11_dsi_gate_clocks(struct intel_encoder *encoder)
 	u32 tmp;
 	enum phy phy;
 
-	mutex_lock(&dev_priv->dpll_lock);
+	mutex_lock(&dev_priv->dpll.lock);
 	tmp = intel_de_read(dev_priv, ICL_DPCLKA_CFGCR0);
 	for_each_dsi_phy(phy, intel_dsi->phys)
 		tmp |= ICL_DPCLKA_CFGCR0_DDI_CLK_OFF(phy);
 
 	intel_de_write(dev_priv, ICL_DPCLKA_CFGCR0, tmp);
-	mutex_unlock(&dev_priv->dpll_lock);
+	mutex_unlock(&dev_priv->dpll.lock);
 }
 
 static void gen11_dsi_ungate_clocks(struct intel_encoder *encoder)
@@ -618,13 +618,13 @@ static void gen11_dsi_ungate_clocks(struct intel_encoder *encoder)
 	u32 tmp;
 	enum phy phy;
 
-	mutex_lock(&dev_priv->dpll_lock);
+	mutex_lock(&dev_priv->dpll.lock);
 	tmp = intel_de_read(dev_priv, ICL_DPCLKA_CFGCR0);
 	for_each_dsi_phy(phy, intel_dsi->phys)
 		tmp &= ~ICL_DPCLKA_CFGCR0_DDI_CLK_OFF(phy);
 
 	intel_de_write(dev_priv, ICL_DPCLKA_CFGCR0, tmp);
-	mutex_unlock(&dev_priv->dpll_lock);
+	mutex_unlock(&dev_priv->dpll.lock);
 }
 
 static void gen11_dsi_map_pll(struct intel_encoder *encoder,
@@ -636,7 +636,7 @@ static void gen11_dsi_map_pll(struct intel_encoder *encoder,
 	enum phy phy;
 	u32 val;
 
-	mutex_lock(&dev_priv->dpll_lock);
+	mutex_lock(&dev_priv->dpll.lock);
 
 	val = intel_de_read(dev_priv, ICL_DPCLKA_CFGCR0);
 	for_each_dsi_phy(phy, intel_dsi->phys) {
@@ -655,7 +655,7 @@ static void gen11_dsi_map_pll(struct intel_encoder *encoder,
 
 	intel_de_posting_read(dev_priv, ICL_DPCLKA_CFGCR0);
 
-	mutex_unlock(&dev_priv->dpll_lock);
+	mutex_unlock(&dev_priv->dpll.lock);
 }
 
 static void
@@ -1130,7 +1130,7 @@ static void gen11_dsi_enable(struct intel_atomic_state *state,
 {
 	struct intel_dsi *intel_dsi = enc_to_intel_dsi(encoder);
 
-	WARN_ON(crtc_state->has_pch_encoder);
+	drm_WARN_ON(state->base.dev, crtc_state->has_pch_encoder);
 
 	/* step6d: enable dsi transcoder */
 	gen11_dsi_enable_transcoder(encoder);
@@ -1358,15 +1358,15 @@ static void gen11_dsi_get_timings(struct intel_encoder *encoder,
 static void gen11_dsi_get_config(struct intel_encoder *encoder,
 				 struct intel_crtc_state *pipe_config)
 {
-	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
+	struct drm_i915_private *i915 = to_i915(encoder->base.dev);
 	struct intel_crtc *crtc = to_intel_crtc(pipe_config->uapi.crtc);
 	struct intel_dsi *intel_dsi = enc_to_intel_dsi(encoder);
 
 	intel_dsc_get_config(encoder, pipe_config);
 
 	/* FIXME: adapt icl_ddi_clock_get() for DSI and use that? */
-	pipe_config->port_clock =
-		cnl_calc_wrpll_link(dev_priv, &pipe_config->dpll_hw_state);
+	pipe_config->port_clock = intel_dpll_get_freq(i915,
+						      pipe_config->shared_dpll);
 
 	pipe_config->hw.adjusted_mode.crtc_clock = intel_dsi->pclk;
 	if (intel_dsi->dual_link)
@@ -1530,6 +1530,7 @@ static const struct drm_encoder_funcs gen11_dsi_encoder_funcs = {
 };
 
 static const struct drm_connector_funcs gen11_dsi_connector_funcs = {
+	.detect = intel_panel_detect,
 	.late_register = intel_connector_register,
 	.early_unregister = intel_connector_unregister,
 	.destroy = intel_connector_destroy,

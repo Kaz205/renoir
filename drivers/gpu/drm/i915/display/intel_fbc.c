@@ -320,7 +320,7 @@ static void gen7_fbc_activate(struct drm_i915_private *dev_priv)
 			       SNB_CPU_FENCE_ENABLE | params->fence_id);
 		intel_de_write(dev_priv, DPFC_CPU_FENCE_OFFSET,
 			       params->crtc.fence_y_offset);
-	} else {
+	} else if (dev_priv->ggtt.num_fences) {
 		intel_de_write(dev_priv, SNB_DPFC_CTL_SA, 0);
 		intel_de_write(dev_priv, DPFC_CPU_FENCE_OFFSET, 0);
 	}
@@ -691,11 +691,36 @@ static bool intel_fbc_cfb_size_changed(struct drm_i915_private *dev_priv)
 		fbc->compressed_fb.size * fbc->threshold;
 }
 
+static bool intel_fbc_can_enable(struct drm_i915_private *dev_priv)
+{
+	struct intel_fbc *fbc = &dev_priv->fbc;
+
+	if (intel_vgpu_active(dev_priv)) {
+		fbc->no_fbc_reason = "VGPU is active";
+		return false;
+	}
+
+	if (!dev_priv->params.enable_fbc) {
+		fbc->no_fbc_reason = "disabled per module param or by default";
+		return false;
+	}
+
+	if (fbc->underrun_detected) {
+		fbc->no_fbc_reason = "underrun detected";
+		return false;
+	}
+
+	return true;
+}
+
 static bool intel_fbc_can_activate(struct intel_crtc *crtc)
 {
 	struct drm_i915_private *dev_priv = to_i915(crtc->base.dev);
 	struct intel_fbc *fbc = &dev_priv->fbc;
 	struct intel_fbc_state_cache *cache = &fbc->state_cache;
+
+	if (!intel_fbc_can_enable(dev_priv))
+		return false;
 
 	if (!cache->plane.visible) {
 		fbc->no_fbc_reason = "primary plane not visible";
@@ -789,28 +814,6 @@ static bool intel_fbc_can_activate(struct intel_crtc *crtc)
 	if (INTEL_GEN(dev_priv) >= 9 &&
 	    (fbc->state_cache.plane.adjusted_y & 3)) {
 		fbc->no_fbc_reason = "plane Y offset is misaligned";
-		return false;
-	}
-
-	return true;
-}
-
-static bool intel_fbc_can_enable(struct drm_i915_private *dev_priv)
-{
-	struct intel_fbc *fbc = &dev_priv->fbc;
-
-	if (intel_vgpu_active(dev_priv)) {
-		fbc->no_fbc_reason = "VGPU is active";
-		return false;
-	}
-
-	if (!i915_modparams.enable_fbc) {
-		fbc->no_fbc_reason = "disabled per module param or by default";
-		return false;
-	}
-
-	if (fbc->underrun_detected) {
-		fbc->no_fbc_reason = "underrun detected";
 		return false;
 	}
 
@@ -964,7 +967,7 @@ static void __intel_fbc_post_update(struct intel_crtc *crtc)
 
 	fbc->flip_pending = false;
 
-	if (!i915_modparams.enable_fbc) {
+	if (!dev_priv->params.enable_fbc) {
 		intel_fbc_deactivate(dev_priv, "disabled at runtime per module param");
 		__intel_fbc_disable(dev_priv);
 
@@ -1318,8 +1321,8 @@ void intel_fbc_handle_fifo_underrun_irq(struct drm_i915_private *dev_priv)
  */
 static int intel_sanitize_fbc_option(struct drm_i915_private *dev_priv)
 {
-	if (i915_modparams.enable_fbc >= 0)
-		return !!i915_modparams.enable_fbc;
+	if (dev_priv->params.enable_fbc >= 0)
+		return !!dev_priv->params.enable_fbc;
 
 	if (!HAS_FBC(dev_priv))
 		return 0;
@@ -1363,9 +1366,9 @@ void intel_fbc_init(struct drm_i915_private *dev_priv)
 	if (need_fbc_vtd_wa(dev_priv))
 		mkwrite_device_info(dev_priv)->display.has_fbc = false;
 
-	i915_modparams.enable_fbc = intel_sanitize_fbc_option(dev_priv);
+	dev_priv->params.enable_fbc = intel_sanitize_fbc_option(dev_priv);
 	drm_dbg_kms(&dev_priv->drm, "Sanitized enable_fbc value: %d\n",
-		    i915_modparams.enable_fbc);
+		    dev_priv->params.enable_fbc);
 
 	if (!HAS_FBC(dev_priv)) {
 		fbc->no_fbc_reason = "unsupported by this chipset";

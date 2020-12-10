@@ -26,7 +26,6 @@
  */
 
 #include <drm/drm_dp_helper.h>
-#include <drm/i915_drm.h>
 
 #include "display/intel_display.h"
 #include "display/intel_display_types.h"
@@ -480,7 +479,7 @@ parse_sdvo_panel_data(struct drm_i915_private *dev_priv,
 	struct drm_display_mode *panel_fixed_mode;
 	int index;
 
-	index = i915_modparams.vbt_sdvo_panel_type;
+	index = dev_priv->params.vbt_sdvo_panel_type;
 	if (index == -2) {
 		drm_dbg_kms(&dev_priv->drm,
 			    "Ignore SDVO panel mode from BIOS VBT tables.\n");
@@ -723,6 +722,9 @@ parse_power_conservation_features(struct drm_i915_private *dev_priv,
 	 */
 	if (!(power->drrs & BIT(panel_type)))
 		dev_priv->vbt.drrs_type = DRRS_NOT_SUPPORTED;
+
+	if (bdb->version >= 232)
+		dev_priv->vbt.edp.hobl = power->hobl & BIT(panel_type);
 }
 
 static void
@@ -830,9 +832,9 @@ parse_edp(struct drm_i915_private *dev_priv, const struct bdb_header *bdb)
 		u8 vswing;
 
 		/* Don't read from VBT if module parameter has valid value*/
-		if (i915_modparams.edp_vswing) {
+		if (dev_priv->params.edp_vswing) {
 			dev_priv->vbt.edp.low_vswing =
-				i915_modparams.edp_vswing == 1;
+				dev_priv->params.edp_vswing == 1;
 		} else {
 			vswing = (edp->edp_vswing_preemph >> (panel_type * 4)) & 0xF;
 			dev_priv->vbt.edp.low_vswing = vswing == 0;
@@ -1600,7 +1602,9 @@ static u8 map_ddc_pin(struct drm_i915_private *dev_priv, u8 vbt_pin)
 	const u8 *ddc_pin_map;
 	int n_entries;
 
-	if (INTEL_PCH_TYPE(dev_priv) >= PCH_ICP) {
+	if (INTEL_PCH_TYPE(dev_priv) >= PCH_DG1) {
+		return vbt_pin;
+	} else if (INTEL_PCH_TYPE(dev_priv) >= PCH_ICP) {
 		ddc_pin_map = icp_ddc_pin_map;
 		n_entries = ARRAY_SIZE(icp_ddc_pin_map);
 	} else if (HAS_PCH_CNP(dev_priv)) {
@@ -1620,35 +1624,67 @@ static u8 map_ddc_pin(struct drm_i915_private *dev_priv, u8 vbt_pin)
 	return 0;
 }
 
-static enum port dvo_port_to_port(u8 dvo_port)
+static enum port __dvo_port_to_port(int n_ports, int n_dvo,
+				    const int port_mapping[][3], u8 dvo_port)
 {
-	/*
-	 * Each DDI port can have more than one value on the "DVO Port" field,
-	 * so look for all the possible values for each port.
-	 */
-	static const int dvo_ports[][3] = {
-		[PORT_A] = { DVO_PORT_HDMIA, DVO_PORT_DPA, -1},
-		[PORT_B] = { DVO_PORT_HDMIB, DVO_PORT_DPB, -1},
-		[PORT_C] = { DVO_PORT_HDMIC, DVO_PORT_DPC, -1},
-		[PORT_D] = { DVO_PORT_HDMID, DVO_PORT_DPD, -1},
-		[PORT_E] = { DVO_PORT_CRT, DVO_PORT_HDMIE, DVO_PORT_DPE},
-		[PORT_F] = { DVO_PORT_HDMIF, DVO_PORT_DPF, -1},
-		[PORT_G] = { DVO_PORT_HDMIG, DVO_PORT_DPG, -1},
-	};
 	enum port port;
 	int i;
 
-	for (port = PORT_A; port < ARRAY_SIZE(dvo_ports); port++) {
-		for (i = 0; i < ARRAY_SIZE(dvo_ports[port]); i++) {
-			if (dvo_ports[port][i] == -1)
+	for (port = PORT_A; port < n_ports; port++) {
+		for (i = 0; i < n_dvo; i++) {
+			if (port_mapping[port][i] == -1)
 				break;
 
-			if (dvo_port == dvo_ports[port][i])
+			if (dvo_port == port_mapping[port][i])
 				return port;
 		}
 	}
 
 	return PORT_NONE;
+}
+
+static enum port dvo_port_to_port(struct drm_i915_private *dev_priv,
+				  u8 dvo_port)
+{
+	/*
+	 * Each DDI port can have more than one value on the "DVO Port" field,
+	 * so look for all the possible values for each port.
+	 */
+	static const int port_mapping[][3] = {
+		[PORT_A] = { DVO_PORT_HDMIA, DVO_PORT_DPA, -1 },
+		[PORT_B] = { DVO_PORT_HDMIB, DVO_PORT_DPB, -1 },
+		[PORT_C] = { DVO_PORT_HDMIC, DVO_PORT_DPC, -1 },
+		[PORT_D] = { DVO_PORT_HDMID, DVO_PORT_DPD, -1 },
+		[PORT_E] = { DVO_PORT_HDMIE, DVO_PORT_DPE, DVO_PORT_CRT },
+		[PORT_F] = { DVO_PORT_HDMIF, DVO_PORT_DPF, -1 },
+		[PORT_G] = { DVO_PORT_HDMIG, DVO_PORT_DPG, -1 },
+		[PORT_H] = { DVO_PORT_HDMIH, DVO_PORT_DPH, -1 },
+		[PORT_I] = { DVO_PORT_HDMII, DVO_PORT_DPI, -1 },
+	};
+	/*
+	 * Bspec lists the ports as A, B, C, D - however internally in our
+	 * driver we keep them as PORT_A, PORT_B, PORT_D and PORT_E so the
+	 * registers in Display Engine match the right offsets. Apply the
+	 * mapping here to translate from VBT to internal convention.
+	 */
+	static const int rkl_port_mapping[][3] = {
+		[PORT_A] = { DVO_PORT_HDMIA, DVO_PORT_DPA, -1 },
+		[PORT_B] = { DVO_PORT_HDMIB, DVO_PORT_DPB, -1 },
+		[PORT_C] = { -1 },
+		[PORT_D] = { DVO_PORT_HDMIC, DVO_PORT_DPC, -1 },
+		[PORT_E] = { DVO_PORT_HDMID, DVO_PORT_DPD, -1 },
+	};
+
+	if (IS_DG1(dev_priv) || IS_ROCKETLAKE(dev_priv))
+		return __dvo_port_to_port(ARRAY_SIZE(rkl_port_mapping),
+					  ARRAY_SIZE(rkl_port_mapping[0]),
+					  rkl_port_mapping,
+					  dvo_port);
+	else
+		return __dvo_port_to_port(ARRAY_SIZE(port_mapping),
+					  ARRAY_SIZE(port_mapping[0]),
+					  port_mapping,
+					  dvo_port);
 }
 
 static void parse_ddi_port(struct drm_i915_private *dev_priv,
@@ -1660,7 +1696,7 @@ static void parse_ddi_port(struct drm_i915_private *dev_priv,
 	bool is_dvi, is_hdmi, is_dp, is_edp, is_crt;
 	enum port port;
 
-	port = dvo_port_to_port(child->dvo_port);
+	port = dvo_port_to_port(dev_priv, child->dvo_port);
 	if (port == PORT_NONE)
 		return;
 
@@ -2101,7 +2137,7 @@ void intel_bios_init(struct drm_i915_private *dev_priv)
 
 	INIT_LIST_HEAD(&dev_priv->vbt.display_devices);
 
-	if (!HAS_DISPLAY(dev_priv) || !INTEL_DISPLAY_ENABLED(dev_priv)) {
+	if (!HAS_DISPLAY(dev_priv)) {
 		drm_dbg_kms(&dev_priv->drm,
 			    "Skipping VBT init due to disabled display.\n");
 		return;
@@ -2604,10 +2640,12 @@ enum aux_ch intel_bios_port_aux_ch(struct drm_i915_private *dev_priv,
 		aux_ch = AUX_CH_B;
 		break;
 	case DP_AUX_C:
-		aux_ch = AUX_CH_C;
+		aux_ch = (IS_DG1(dev_priv) || IS_ROCKETLAKE(dev_priv)) ?
+			AUX_CH_D : AUX_CH_C;
 		break;
 	case DP_AUX_D:
-		aux_ch = AUX_CH_D;
+		aux_ch = (IS_DG1(dev_priv) || IS_ROCKETLAKE(dev_priv)) ?
+			AUX_CH_E : AUX_CH_D;
 		break;
 	case DP_AUX_E:
 		aux_ch = AUX_CH_E;
@@ -2617,6 +2655,12 @@ enum aux_ch intel_bios_port_aux_ch(struct drm_i915_private *dev_priv,
 		break;
 	case DP_AUX_G:
 		aux_ch = AUX_CH_G;
+		break;
+	case DP_AUX_H:
+		aux_ch = AUX_CH_H;
+		break;
+	case DP_AUX_I:
+		aux_ch = AUX_CH_I;
 		break;
 	default:
 		MISSING_CASE(info->alternate_aux_channel);

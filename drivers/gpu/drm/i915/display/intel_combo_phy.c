@@ -97,10 +97,11 @@ static bool check_phy_reg(struct drm_i915_private *dev_priv,
 	u32 val = intel_de_read(dev_priv, reg);
 
 	if ((val & mask) != expected_val) {
-		DRM_DEBUG_DRIVER("Combo PHY %c reg %08x state mismatch: "
-				 "current %08x mask %08x expected %08x\n",
-				 phy_name(phy),
-				 reg.reg, val, mask, expected_val);
+		drm_dbg(&dev_priv->drm,
+			"Combo PHY %c reg %08x state mismatch: "
+			"current %08x mask %08x expected %08x\n",
+			phy_name(phy),
+			reg.reg, val, mask, expected_val);
 		return false;
 	}
 
@@ -172,18 +173,34 @@ static void cnl_combo_phys_uninit(struct drm_i915_private *dev_priv)
 	u32 val;
 
 	if (!cnl_combo_phy_verify_state(dev_priv))
-		DRM_WARN("Combo PHY HW state changed unexpectedly.\n");
+		drm_warn(&dev_priv->drm,
+			 "Combo PHY HW state changed unexpectedly.\n");
 
 	val = intel_de_read(dev_priv, CHICKEN_MISC_2);
 	val |= CNL_COMP_PWR_DOWN;
 	intel_de_write(dev_priv, CHICKEN_MISC_2, val);
 }
 
+static bool has_phy_misc(struct drm_i915_private *i915, enum phy phy)
+{
+	/*
+	 * Some platforms only expect PHY_MISC to be programmed for PHY-A and
+	 * PHY-B and may not even have instances of the register for the
+	 * other combo PHY's.
+	 */
+	if (IS_JSL_EHL(i915) ||
+	    IS_ROCKETLAKE(i915) ||
+	    IS_DG1(i915))
+		return phy < PHY_C;
+
+	return true;
+}
+
 static bool icl_combo_phy_enabled(struct drm_i915_private *dev_priv,
 				  enum phy phy)
 {
 	/* The PHY C added by EHL has no PHY_MISC register */
-	if (IS_ELKHARTLAKE(dev_priv) && phy == PHY_C)
+	if (!has_phy_misc(dev_priv, phy))
 		return intel_de_read(dev_priv, ICL_PORT_COMP_DW0(phy)) & COMP_INIT;
 	else
 		return !(intel_de_read(dev_priv, ICL_PHY_MISC(phy)) &
@@ -212,9 +229,51 @@ static bool ehl_vbt_ddi_d_present(struct drm_i915_private *i915)
 	 * in the log and let the internal display win.
 	 */
 	if (ddi_d_present)
-		DRM_ERROR("VBT claims to have both internal and external displays on PHY A.  Configuring for internal.\n");
+		drm_err(&i915->drm,
+			"VBT claims to have both internal and external displays on PHY A.  Configuring for internal.\n");
 
 	return false;
+}
+
+static bool phy_is_master(struct drm_i915_private *dev_priv, enum phy phy)
+{
+	/*
+	 * Certain PHYs are connected to compensation resistors and act
+	 * as masters to other PHYs.
+	 *
+	 * ICL,TGL:
+	 *   A(master) -> B(slave), C(slave)
+	 * RKL,DG1:
+	 *   A(master) -> B(slave)
+	 *   C(master) -> D(slave)
+	 *
+	 * We must set the IREFGEN bit for any PHY acting as a master
+	 * to another PHY.
+	 */
+	if ((IS_DG1(dev_priv) || IS_ROCKETLAKE(dev_priv)) && phy == PHY_C)
+		return true;
+
+	return phy == PHY_A;
+}
+
+static bool verify_wa14011224835(struct drm_i915_private *i915)
+{
+	u32 grccode, val;
+	bool ret = true;
+
+	grccode = REG_FIELD_GET(GRCCODE,
+				intel_de_read(i915, ICL_PORT_COMP_DW6(PHY_A)));
+	val = REG_FIELD_PREP(IREF_RCAL_ORD, grccode);
+	ret &= check_phy_reg(i915, PHY_B, ICL_PORT_COMP_DW2(PHY_B),
+			     IREF_RCAL_ORD, val);
+
+	grccode = REG_FIELD_GET(GRCCODE_LDO,
+				intel_de_read(i915, ICL_PORT_COMP_DW0(PHY_A)));
+	val = REG_FIELD_PREP(RCOMPCODE_LD_CAP_OV, grccode);
+	ret &= check_phy_reg(i915, PHY_B, ICL_PORT_COMP_DW2(PHY_B),
+			     IREF_RCAL_ORD, val);
+
+	return ret;
 }
 
 static bool icl_combo_phy_verify_state(struct drm_i915_private *dev_priv,
@@ -228,11 +287,11 @@ static bool icl_combo_phy_verify_state(struct drm_i915_private *dev_priv,
 
 	ret = cnl_verify_procmon_ref_values(dev_priv, phy);
 
-	if (phy == PHY_A) {
+	if (phy_is_master(dev_priv, phy)) {
 		ret &= check_phy_reg(dev_priv, phy, ICL_PORT_COMP_DW8(phy),
 				     IREFGEN, IREFGEN);
 
-		if (IS_ELKHARTLAKE(dev_priv)) {
+		if (IS_JSL_EHL(dev_priv)) {
 			if (ehl_vbt_ddi_d_present(dev_priv))
 				expected_val = ICL_PHY_MISC_MUX_DDID;
 
@@ -244,6 +303,11 @@ static bool icl_combo_phy_verify_state(struct drm_i915_private *dev_priv,
 
 	ret &= check_phy_reg(dev_priv, phy, ICL_PORT_CL_DW5(phy),
 			     CL_POWER_DOWN_ENABLE, CL_POWER_DOWN_ENABLE);
+
+	/* Wa_14011224835:rkl[a0..b0] */
+	if (IS_RKL_REVID(dev_priv, RKL_REVID_A0, RKL_REVID_B0) &&
+	    phy == PHY_B)
+		ret &= verify_wa14011224835(dev_priv);
 
 	return ret;
 }
@@ -300,6 +364,26 @@ void intel_combo_phy_power_up_lanes(struct drm_i915_private *dev_priv,
 	intel_de_write(dev_priv, ICL_PORT_CL_DW10(phy), val);
 }
 
+static void rkl_combo_phy_b_init_wa(struct drm_i915_private *i915)
+{
+	u32 grccode, val;
+
+	wait_for_us(intel_de_read(i915, ICL_PORT_COMP_DW3(PHY_A)) &
+		    FIRST_COMP_DONE, 100);
+
+	grccode = REG_FIELD_GET(GRCCODE,
+				intel_de_read(i915, ICL_PORT_COMP_DW6(PHY_A)));
+	val = REG_FIELD_PREP(IREF_RCAL_ORD, grccode);
+	intel_de_rmw(i915, ICL_PORT_COMP_DW2(PHY_B), IREF_RCAL_ORD,
+		     val | IREF_RCAL_ORD_EN);
+
+	grccode = REG_FIELD_GET(GRCCODE_LDO,
+				intel_de_read(i915, ICL_PORT_COMP_DW0(PHY_A)));
+	val = REG_FIELD_PREP(RCOMPCODE_LD_CAP_OV, grccode);
+	intel_de_rmw(i915, ICL_PORT_COMP_DW6(PHY_B), RCOMPCODE_LD_CAP_OV,
+		     val | RCOMPCODEOVEN_LDO_SYNC);
+}
+
 static void icl_combo_phys_init(struct drm_i915_private *dev_priv)
 {
 	enum phy phy;
@@ -308,17 +392,13 @@ static void icl_combo_phys_init(struct drm_i915_private *dev_priv)
 		u32 val;
 
 		if (icl_combo_phy_verify_state(dev_priv, phy)) {
-			DRM_DEBUG_DRIVER("Combo PHY %c already enabled, won't reprogram it.\n",
-					 phy_name(phy));
+			drm_dbg(&dev_priv->drm,
+				"Combo PHY %c already enabled, won't reprogram it.\n",
+				phy_name(phy));
 			continue;
 		}
 
-		/*
-		 * Although EHL adds a combo PHY C, there's no PHY_MISC
-		 * register for it and no need to program the
-		 * DE_IO_COMP_PWR_DOWN setting on PHY C.
-		 */
-		if (IS_ELKHARTLAKE(dev_priv) && phy == PHY_C)
+		if (!has_phy_misc(dev_priv, phy))
 			goto skip_phy_misc;
 
 		/*
@@ -330,7 +410,7 @@ static void icl_combo_phys_init(struct drm_i915_private *dev_priv)
 		 * "internal" child devices.
 		 */
 		val = intel_de_read(dev_priv, ICL_PHY_MISC(phy));
-		if (IS_ELKHARTLAKE(dev_priv) && phy == PHY_A) {
+		if (IS_JSL_EHL(dev_priv) && phy == PHY_A) {
 			val &= ~ICL_PHY_MISC_MUX_DDID;
 
 			if (ehl_vbt_ddi_d_present(dev_priv))
@@ -343,7 +423,7 @@ static void icl_combo_phys_init(struct drm_i915_private *dev_priv)
 skip_phy_misc:
 		cnl_set_procmon_ref_values(dev_priv, phy);
 
-		if (phy == PHY_A) {
+		if (phy_is_master(dev_priv, phy)) {
 			val = intel_de_read(dev_priv, ICL_PORT_COMP_DW8(phy));
 			val |= IREFGEN;
 			intel_de_write(dev_priv, ICL_PORT_COMP_DW8(phy), val);
@@ -356,6 +436,11 @@ skip_phy_misc:
 		val = intel_de_read(dev_priv, ICL_PORT_CL_DW5(phy));
 		val |= CL_POWER_DOWN_ENABLE;
 		intel_de_write(dev_priv, ICL_PORT_CL_DW5(phy), val);
+
+		if (IS_RKL_REVID(dev_priv, RKL_REVID_A0, RKL_REVID_B0) &&
+		    phy == PHY_B)
+			/* Wa_14011224835:rkl[a0..b0] */
+			rkl_combo_phy_b_init_wa(dev_priv);
 	}
 }
 
@@ -368,15 +453,11 @@ static void icl_combo_phys_uninit(struct drm_i915_private *dev_priv)
 
 		if (phy == PHY_A &&
 		    !icl_combo_phy_verify_state(dev_priv, phy))
-			DRM_WARN("Combo PHY %c HW state changed unexpectedly\n",
+			drm_warn(&dev_priv->drm,
+				 "Combo PHY %c HW state changed unexpectedly\n",
 				 phy_name(phy));
 
-		/*
-		 * Although EHL adds a combo PHY C, there's no PHY_MISC
-		 * register for it and no need to program the
-		 * DE_IO_COMP_PWR_DOWN setting on PHY C.
-		 */
-		if (IS_ELKHARTLAKE(dev_priv) && phy == PHY_C)
+		if (!has_phy_misc(dev_priv, phy))
 			goto skip_phy_misc;
 
 		val = intel_de_read(dev_priv, ICL_PHY_MISC(phy));
