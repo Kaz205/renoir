@@ -5,6 +5,7 @@
 #include "i915_drv.h"
 #include "intel_pxp.h"
 #include "intel_pxp_context.h"
+#include "intel_pxp_tee.h"
 
 /* KCR register definitions */
 #define KCR_INIT            _MMIO(0x320f0)
@@ -24,6 +25,8 @@ int intel_pxp_init(struct intel_pxp *pxp)
 
 	intel_uncore_write(gt->uncore, KCR_INIT, KCR_INIT_ALLOW_DISPLAY_ME_WRITES);
 
+	intel_pxp_tee_component_init(pxp);
+
 	drm_info(&gt->i915->drm, "Protected Xe Path (PXP) protected content support initialized\n");
 
 	return 0;
@@ -31,5 +34,7 @@ int intel_pxp_init(struct intel_pxp *pxp)
 
 void intel_pxp_uninit(struct intel_pxp *pxp)
 {
+	intel_pxp_tee_component_fini(pxp);
+
 	intel_pxp_ctx_fini(&pxp->ctx);
 }

@@ -1281,6 +1281,12 @@ struct drm_i915_private {
 	/* Mutex to protect the above hdcp component related values. */
 	struct mutex hdcp_comp_mutex;
 
+	struct i915_pxp_comp_master *pxp_tee_master;
+	bool pxp_tee_comp_added;
+
+	/* Mutex to protect the above pxp_tee component related values. */
+	struct mutex pxp_tee_comp_mutex;
+
 	I915_SELFTEST_DECLARE(struct i915_selftest_stash selftest;)
 
 	/*
