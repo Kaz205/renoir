@@ -31,59 +31,6 @@ enum pxp_session_req {
 	PXP_REQ_SESSION_TERMINATE
 };
 
-/*
- * struct pxp_sm_query_pxp_tag - Params to query the PXP tag of specified
- * session id and whether the session is alive from PXP state machine.
- */
-struct pxp_sm_query_pxp_tag {
-	u32 session_is_alive;
-	u32 pxp_tag; /* in  - Session ID, out pxp tag */
-};
-
-/*
- * struct pxp_set_session_status_params - Params to reserved, set or destroy
- * the session from the PXP state machine.
- */
-struct pxp_set_session_status_params {
-	u32 pxp_tag; /* in [optional], out pxp tag */
-	u32 session_type; /* in, session type */
-	u32 session_mode; /* in, session mode */
-	u32 req_session_state; /* in, new session state */
-};
-
-/*
- * struct pxp_tee_io_message_params - Params to send/receive message to/from TEE.
- */
-struct pxp_tee_io_message_params {
-	u8 __user *msg_in; /* in - message input */
-	u32 msg_in_size; /* in - message input size */
-	u8 __user *msg_out; /* in - message output buffer */
-	u32 msg_out_size; /* out- message output size from TEE */
-	u32 msg_out_buf_size; /* in - message output buffer size */
-};
-
-/* struct pxp_info - Params for PXP operation. */
-struct pxp_info {
-	u32 action; /* in - specified action of this operation */
-	u32 sm_status; /* out - status output for this operation */
-
-	union {
-		/* in - action params to query PXP tag */
-		struct pxp_sm_query_pxp_tag query_pxp_tag;
-		/* in - action params to set the PXP session state */
-		struct pxp_set_session_status_params set_session_status;
-		/* in - action params to send TEE commands */
-		struct pxp_tee_io_message_params tee_io_message;
-	};
-} __attribute__((packed));
-
-struct drm_i915_pxp_ops {
-	/* in - user space pointer to struct pxp_info */
-	struct pxp_info __user *info_ptr;
-	/* in - memory size that info_ptr points to */
-	u32 info_size;
-};
-
 static void intel_pxp_write_irq_mask_reg(struct intel_gt *gt, u32 mask)
 {
 	lockdep_assert_held(&gt->irq_lock);
