@@ -8,6 +8,22 @@
 
 #include "intel_pxp_context.h"
 
+enum pxp_session_types {
+	SESSION_TYPE_TYPE0 = 0,
+	SESSION_TYPE_TYPE1 = 1,
+
+	SESSION_TYPE_MAX
+};
+
+enum pxp_protection_modes {
+	PROTECTION_MODE_NONE = 0,
+	PROTECTION_MODE_LM   = 2,
+	PROTECTION_MODE_HM   = 3,
+	PROTECTION_MODE_SM   = 6,
+
+	PROTECTION_MODE_ALL
+};
+
 struct intel_pxp {
 	struct pxp_context ctx;
 };

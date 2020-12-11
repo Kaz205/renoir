@@ -10,6 +10,7 @@
 #include "intel_pxp.h"
 #include "intel_pxp_context.h"
 #include "intel_pxp_tee.h"
+#include "intel_pxp_arb.h"
 
 static int intel_pxp_tee_io_message(struct intel_pxp *pxp,
 				    void *msg_in, u32 msg_in_size,
@@ -70,7 +71,9 @@ static int intel_pxp_tee_io_message(struct intel_pxp *pxp,
 static int i915_pxp_tee_component_bind(struct device *i915_kdev,
 				       struct device *tee_kdev, void *data)
 {
+	int ret;
 	struct drm_i915_private *i915 = kdev_to_i915(i915_kdev);
+	struct intel_pxp *pxp = &i915->gt.pxp;
 
 	if (!i915 || !tee_kdev || !data)
 		return -EPERM;
@@ -79,6 +82,16 @@ static int i915_pxp_tee_component_bind(struct device *i915_kdev,
 	i915->pxp_tee_master = (struct i915_pxp_comp_master *)data;
 	i915->pxp_tee_master->tee_dev = tee_kdev;
 	mutex_unlock(&i915->pxp_tee_comp_mutex);
+
+	mutex_lock(&pxp->ctx.mutex);
+	/* Create arb session only if tee is ready, during system boot or sleep/resume */
+	ret = intel_pxp_arb_create_session(pxp);
+	mutex_unlock(&pxp->ctx.mutex);
+
+	if (ret) {
+		drm_err(&i915->drm, "Failed to create arb session ret=[%d]\n", ret);
+		return ret;
+	}
 
 	return 0;
 }
@@ -129,4 +142,29 @@ void intel_pxp_tee_component_fini(struct intel_pxp *pxp)
 	mutex_unlock(&i915->pxp_tee_comp_mutex);
 
 	component_del(i915->drm.dev, &i915_pxp_tee_component_ops);
+}
+
+int intel_pxp_tee_cmd_create_arb_session(struct intel_pxp *pxp)
+{
+	int ret;
+	u32 msg_out_size_received = 0;
+	u32 msg_in[PXP_TEE_ARB_CMD_DW_LEN] = PXP_TEE_ARB_CMD_BIN;
+	u32 msg_out[PXP_TEE_ARB_CMD_DW_LEN] = {0};
+	struct intel_gt *gt = container_of(pxp, typeof(*gt), pxp);
+	struct drm_i915_private *i915 = gt->i915;
+
+	mutex_lock(&i915->pxp_tee_comp_mutex);
+
+	ret = intel_pxp_tee_io_message(pxp,
+				       &msg_in,
+				       sizeof(msg_in),
+				       &msg_out, &msg_out_size_received,
+				       sizeof(msg_out));
+
+	mutex_unlock(&i915->pxp_tee_comp_mutex);
+
+	if (ret)
+		drm_err(&i915->drm, "Failed to send/receive tee message\n");
+
+	return ret;
 }

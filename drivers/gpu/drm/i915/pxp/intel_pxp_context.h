@@ -7,13 +7,19 @@
 #define __INTEL_PXP_CONTEXT_H__
 
 #include <linux/mutex.h>
+#include "intel_pxp_arb.h"
 
 /* struct pxp_context - Represents combined view of driver and logical HW states. */
 struct pxp_context {
 	/** @mutex: mutex to protect the pxp context */
 	struct mutex mutex;
 
+	struct pxp_protected_session arb_session;
+	u32 arb_session_pxp_tag;
+
 	int id;
+
+	bool flag_display_hm_surface_keys;
 };
 
 void intel_pxp_ctx_init(struct pxp_context *ctx);

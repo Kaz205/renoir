@@ -6,6 +6,7 @@
 #include "intel_pxp.h"
 #include "intel_pxp_context.h"
 #include "intel_pxp_tee.h"
+#include "intel_pxp_arb.h"
 
 /* KCR register definitions */
 #define KCR_INIT            _MMIO(0x320f0)
