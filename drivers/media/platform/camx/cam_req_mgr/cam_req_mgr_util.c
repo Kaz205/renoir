@@ -210,7 +210,7 @@ int32_t cam_create_device_hdl(struct cam_create_dev_hdl *hdl_data)
 	hdl_tbl->hdl[idx].dev_id = hdl_data->dev_id;
 	spin_unlock_bh(&hdl_tbl_lock);
 
-	pr_debug("%s: handle = %x", __func__, handle);
+	CAM_DBG(CAM_CRM, "%s: handle = %x", __func__, handle);
 	return handle;
 }
 
@@ -350,6 +350,7 @@ destroy_hdl_fail:
 
 int cam_destroy_device_hdl(int32_t dev_hdl)
 {
+	CAM_DBG(CAM_CRM, "%s: handle = %x", __func__, dev_hdl);
 	return cam_destroy_hdl(dev_hdl, HDL_TYPE_DEV);
 }
 

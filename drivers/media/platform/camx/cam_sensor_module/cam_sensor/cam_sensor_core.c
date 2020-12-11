@@ -585,7 +585,6 @@ void cam_sensor_shutdown(struct cam_sensor_ctrl_t *s_ctrl)
 {
 	struct cam_sensor_power_ctrl_t *power_info =
 		&s_ctrl->sensordata->power_info;
-	int rc = 0;
 
 	if ((s_ctrl->sensor_state == CAM_SENSOR_INIT) &&
 		(s_ctrl->is_probe_succeed == 0))
@@ -597,12 +596,14 @@ void cam_sensor_shutdown(struct cam_sensor_ctrl_t *s_ctrl)
 	if (s_ctrl->sensor_state != CAM_SENSOR_INIT)
 		cam_sensor_power_down(s_ctrl);
 
-	rc = cam_destroy_device_hdl(s_ctrl->bridge_intf.device_hdl);
-	if (rc < 0)
-		CAM_ERR(CAM_SENSOR, "dhdl already destroyed: rc = %d", rc);
-	s_ctrl->bridge_intf.device_hdl = -1;
-	s_ctrl->bridge_intf.link_hdl = -1;
-	s_ctrl->bridge_intf.session_hdl = -1;
+	if (s_ctrl->sensor_state >= CAM_SENSOR_ACQUIRE) {
+		if (cam_destroy_device_hdl(s_ctrl->bridge_intf.device_hdl))
+			CAM_WARN(CAM_SENSOR, "Destroy device hdl fails");
+		s_ctrl->bridge_intf.device_hdl = -1;
+		s_ctrl->bridge_intf.link_hdl = -1;
+		s_ctrl->bridge_intf.session_hdl = -1;
+	}
+
 	kfree(power_info->power_setting);
 	kfree(power_info->power_down_setting);
 	power_info->power_setting = NULL;
@@ -675,8 +676,7 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 	switch (cmd->op_code) {
 	case CAM_SENSOR_PROBE_CMD: {
 		if (s_ctrl->is_probe_succeed == 1) {
-			CAM_ERR(CAM_SENSOR,
-				"Already Sensor Probed in the slot");
+			CAM_DBG(CAM_SENSOR, "Sensor already probed");
 			break;
 		}
 

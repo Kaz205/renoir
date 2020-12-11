@@ -164,12 +164,18 @@ static int cam_req_mgr_close(struct file *filep)
 	cam_req_mgr_handle_core_shutdown();
 
 	list_for_each_entry(sd, &g_dev.v4l2_dev->subdevs, list) {
-		if (!(sd->flags & V4L2_SUBDEV_FL_HAS_DEVNODE))
+		if (!(sd->flags & V4L2_SUBDEV_FL_HAS_DEVNODE) ||
+		    !sd->internal_ops)
 			continue;
-		if (sd->internal_ops && sd->internal_ops->close) {
+		if (sd->internal_ops->close) {
 			CAM_DBG(CAM_CRM, "Invoke subdev close for device %s",
 				sd->name);
 			sd->internal_ops->close(sd, subdev_fh);
+		}
+		if (sd->internal_ops->release) {
+			CAM_DBG(CAM_CRM, "Invoke subdev release for device %s",
+				sd->name);
+			sd->internal_ops->release(sd);
 		}
 	}
 
