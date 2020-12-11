@@ -50,4 +50,5 @@ int intel_pxp_sm_ioctl_query_pxp_tag(struct intel_pxp *pxp,
 bool intel_pxp_sm_is_hw_session_in_play(struct intel_pxp *pxp,
 					int session_type, int session_index);
 int intel_pxp_sm_terminate_all_sessions(struct intel_pxp *pxp, int session_type);
+int intel_pxp_sm_close(struct intel_pxp *pxp, struct drm_file *drmfile);
 #endif /* __INTEL_PXP_SM_H__ */

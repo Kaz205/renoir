@@ -460,3 +460,28 @@ int intel_pxp_sm_ioctl_query_pxp_tag(struct intel_pxp *pxp,
 
 	return 0;
 }
+
+int intel_pxp_sm_close(struct intel_pxp *pxp, struct drm_file *drmfile)
+{
+	int ret;
+	struct intel_pxp_sm_session *curr, *n;
+
+	list_for_each_entry_safe(curr, n, session_list(pxp, SESSION_TYPE_TYPE0), list) {
+		if (curr->drmfile && curr->drmfile == drmfile &&
+		    curr->pid == pid_nr(drmfile->pid)) {
+			ret = pxp_terminate_hw_session(pxp, curr->type,
+						       curr->index);
+			if (ret)
+				return ret;
+
+			ret = pxp_set_pxp_tag(pxp, curr->type, curr->index,
+					      PROTECTION_MODE_NONE);
+			if (ret)
+				return ret;
+
+			list_del(&curr->list);
+			kfree(curr);
+		}
+	}
+	return 0;
+}

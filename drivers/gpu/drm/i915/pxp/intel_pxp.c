@@ -320,3 +320,18 @@ end:
 			ret = -EFAULT;
 	return ret;
 }
+
+void intel_pxp_close(struct intel_pxp *pxp, struct drm_file *drmfile)
+{
+	int ret;
+	struct intel_gt *gt = container_of(pxp, typeof(*gt), pxp);
+
+	if (pxp->ctx.id == 0 || !drmfile)
+		return;
+
+	mutex_lock(&pxp->ctx.mutex);
+	ret = intel_pxp_sm_close(pxp, drmfile);
+	if (ret)
+		drm_err(&gt->i915->drm, "Failed to %s, ret=[%d]\n", __func__, ret);
+	mutex_unlock(&pxp->ctx.mutex);
+}
