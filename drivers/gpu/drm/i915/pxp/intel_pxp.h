@@ -37,6 +37,8 @@ struct intel_pxp {
 	struct pxp_context ctx;
 };
 
+struct drm_i915_private;
+
 #ifdef CONFIG_DRM_I915_PXP
 void intel_pxp_irq_handler(struct intel_pxp *pxp, u16 iir);
 int i915_pxp_teardown_required_callback(struct intel_pxp *pxp);
@@ -44,6 +46,7 @@ int i915_pxp_global_terminate_complete_callback(struct intel_pxp *pxp);
 
 int intel_pxp_init(struct intel_pxp *pxp);
 void intel_pxp_uninit(struct intel_pxp *pxp);
+bool intel_pxp_gem_object_status(struct drm_i915_private *i915);
 #else
 static inline void intel_pxp_irq_handler(struct intel_pxp *pxp, u16 iir)
 {
@@ -66,6 +69,11 @@ static inline int intel_pxp_init(struct intel_pxp *pxp)
 
 static inline void intel_pxp_uninit(struct intel_pxp *pxp)
 {
+}
+
+static inline bool intel_pxp_gem_object_status(struct drm_i915_private *i915)
+{
+	return false;
 }
 #endif
 
