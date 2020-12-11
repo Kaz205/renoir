@@ -17,6 +17,9 @@ void intel_pxp_ctx_init(struct pxp_context *ctx)
 	ctx->global_state_attacked = false;
 
 	mutex_init(&ctx->mutex);
+
+	INIT_LIST_HEAD(&ctx->type0_sessions);
+	INIT_LIST_HEAD(&ctx->type1_sessions);
 }
 
 /**

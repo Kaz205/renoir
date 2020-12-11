@@ -12,8 +12,6 @@
 #include "intel_pxp_tee.h"
 #include "intel_pxp_cmd.h"
 
-#define GEN12_KCR_SIP _MMIO(0x32260) /* KCR type0 session in play 0-31 */
-
 /* Arbitrary session */
 #define ARB_SESSION_INDEX 0xf
 #define ARB_SESSION_TYPE SESSION_TYPE_TYPE0

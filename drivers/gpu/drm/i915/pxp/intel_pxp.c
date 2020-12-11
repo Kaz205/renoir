@@ -7,12 +7,43 @@
 #include "intel_pxp_context.h"
 #include "intel_pxp_tee.h"
 #include "intel_pxp_arb.h"
+#include "intel_pxp_sm.h"
 
 /* KCR register definitions */
 #define KCR_INIT            _MMIO(0x320f0)
 #define KCR_INIT_MASK_SHIFT (16)
 /* Setting KCR Init bit is required after system boot */
 #define KCR_INIT_ALLOW_DISPLAY_ME_WRITES (BIT(14) | (BIT(14) << KCR_INIT_MASK_SHIFT))
+
+#define PXP_ACTION_SET_SESSION_STATUS 1
+#define PXP_REQ_SESSION_ID_INIT 0
+
+/*
+ * struct pxp_set_session_status_params - Params to reserved, set or destroy
+ * the session from the PXP state machine.
+ */
+struct pxp_set_session_status_params {
+	u32 pxp_tag; /* in [optional], out pxp tag */
+	u32 session_type; /* in, session type */
+	u32 session_mode; /* in, session mode */
+	u32 req_session_state; /* in, new session state */
+};
+
+/* struct pxp_info - Params for PXP operation. */
+struct pxp_info {
+	u32 action; /* in - specified action of this operation */
+	u32 sm_status; /* out - status output for this operation */
+
+	/* in - action params to set the PXP session state */
+	struct pxp_set_session_status_params set_session_status;
+} __attribute__((packed));
+
+struct drm_i915_pxp_ops {
+	/* in - user space pointer to struct pxp_info */
+	struct pxp_info __user *info_ptr;
+	/* in - memory size that info_ptr points to */
+	u32 info_size;
+};
 
 static void intel_pxp_write_irq_mask_reg(struct intel_gt *gt, u32 mask)
 {
@@ -151,4 +182,64 @@ bool intel_pxp_gem_object_status(struct drm_i915_private *i915)
 		return true;
 	else
 		return false;
+}
+
+int i915_pxp_ops_ioctl(struct drm_device *dev, void *data, struct drm_file *drmfile)
+{
+	int ret;
+	struct pxp_info pxp_info = {0};
+	struct drm_i915_pxp_ops *pxp_ops = data;
+	struct drm_i915_private *i915 = to_i915(dev);
+	struct intel_pxp *pxp = &i915->gt.pxp;
+
+	if (pxp->ctx.id == 0 || !drmfile || !pxp_ops ||
+	    pxp_ops->info_size != sizeof(pxp_info))
+		return -EINVAL;
+
+	if (copy_from_user(&pxp_info, pxp_ops->info_ptr, sizeof(pxp_info)) != 0)
+		return -EFAULT;
+
+	mutex_lock(&pxp->ctx.mutex);
+
+	if (pxp->ctx.global_state_in_suspend) {
+		drm_err(&i915->drm, "Return failure due to state in suspend\n");
+		pxp_info.sm_status = PXP_SM_STATUS_SESSION_NOT_AVAILABLE;
+		ret = 0;
+		goto end;
+	}
+
+	if (pxp->ctx.global_state_attacked) {
+		drm_err(&i915->drm, "Retry required due to state attacked\n");
+		pxp_info.sm_status = PXP_SM_STATUS_RETRY_REQUIRED;
+		ret = 0;
+		goto end;
+	}
+
+	if (pxp_info.action == PXP_ACTION_SET_SESSION_STATUS) {
+		struct pxp_set_session_status_params *params = &pxp_info.set_session_status;
+
+		if (params->req_session_state == PXP_REQ_SESSION_ID_INIT) {
+			ret = intel_pxp_sm_ioctl_reserve_session(pxp, drmfile,
+								 params->session_type,
+								 params->session_mode,
+								 &params->pxp_tag);
+			if (ret == PXP_SM_STATUS_RETRY_REQUIRED ||
+			    ret == PXP_SM_STATUS_SESSION_NOT_AVAILABLE) {
+				pxp_info.sm_status = ret;
+				ret = 0;
+			}
+		} else {
+			ret = -EINVAL;
+		}
+	} else {
+		ret = -EINVAL;
+	}
+
+end:
+	mutex_unlock(&pxp->ctx.mutex);
+
+	if (ret == 0)
+		if (copy_to_user(pxp_ops->info_ptr, &pxp_info, sizeof(pxp_info)) != 0)
+			ret = -EFAULT;
+	return ret;
 }

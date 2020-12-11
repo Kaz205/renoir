@@ -24,9 +24,6 @@
 /* CRYPTO_KEY_EXCHANGE */
 #define CRYPTO_KEY_EXCHANGE ((0x3 << 29) | (0x01609 << 16))
 
-#define PXP_MAX_TYPE0_SESSIONS 16
-#define PXP_MAX_TYPE1_SESSIONS 6
-
 static struct i915_vma *intel_pxp_cmd_get_batch(struct intel_pxp *pxp,
 						struct intel_context *ce,
 						struct intel_gt_buffer_pool_node *pool,
