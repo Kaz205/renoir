@@ -9,6 +9,12 @@
 #include <linux/mutex.h>
 #include "intel_pxp_arb.h"
 
+#define PXP_MAX_TYPE0_SESSIONS 16
+#define PXP_MAX_TYPE1_SESSIONS 6
+
+/* we need to reserve one type0 slot for arbitrary session */
+#define PXP_MAX_NORMAL_TYPE0_SESSIONS (PXP_MAX_TYPE0_SESSIONS - 1)
+
 /* struct pxp_context - Represents combined view of driver and logical HW states. */
 struct pxp_context {
 	/** @mutex: mutex to protect the pxp context */
@@ -19,6 +25,9 @@ struct pxp_context {
 
 	struct list_head type0_sessions;
 	struct list_head type1_sessions;
+
+	u32 type0_pxp_tag[PXP_MAX_NORMAL_TYPE0_SESSIONS];
+	u32 type1_pxp_tag[PXP_MAX_TYPE1_SESSIONS];
 
 	int id;
 

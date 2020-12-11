@@ -17,6 +17,7 @@
 #define KCR_INIT_ALLOW_DISPLAY_ME_WRITES (BIT(14) | (BIT(14) << KCR_INIT_MASK_SHIFT))
 
 enum pxp_ioctl_action {
+	PXP_ACTION_QUERY_PXP_TAG = 0,
 	PXP_ACTION_SET_SESSION_STATUS = 1,
 	PXP_ACTION_TEE_IO_MESSAGE = 4,
 };
@@ -28,6 +29,15 @@ enum pxp_session_req {
 	PXP_REQ_SESSION_IN_PLAY,
 	/* Request KMD to terminate the session */
 	PXP_REQ_SESSION_TERMINATE
+};
+
+/*
+ * struct pxp_sm_query_pxp_tag - Params to query the PXP tag of specified
+ * session id and whether the session is alive from PXP state machine.
+ */
+struct pxp_sm_query_pxp_tag {
+	u32 session_is_alive;
+	u32 pxp_tag; /* in  - Session ID, out pxp tag */
 };
 
 /*
@@ -58,6 +68,8 @@ struct pxp_info {
 	u32 sm_status; /* out - status output for this operation */
 
 	union {
+		/* in - action params to query PXP tag */
+		struct pxp_sm_query_pxp_tag query_pxp_tag;
 		/* in - action params to set the PXP session state */
 		struct pxp_set_session_status_params set_session_status;
 		/* in - action params to send TEE commands */
@@ -270,6 +282,14 @@ int i915_pxp_ops_ioctl(struct drm_device *dev, void *data, struct drm_file *drmf
 		} else {
 			ret = -EINVAL;
 		}
+		break;
+	}
+	case PXP_ACTION_QUERY_PXP_TAG:
+	{
+		struct pxp_sm_query_pxp_tag *params = &pxp_info.query_pxp_tag;
+
+		ret = intel_pxp_sm_ioctl_query_pxp_tag(pxp, &params->session_is_alive,
+						       &params->pxp_tag);
 		break;
 	}
 	case PXP_ACTION_TEE_IO_MESSAGE:

@@ -16,6 +16,21 @@
 #define SESSION_TYPE_MASK BIT(7)
 #define SESSION_ID_MASK (BIT(7) - 1)
 
+struct pxp_tag {
+	union {
+		u32 value;
+		struct {
+			u32 session_id  : 8;
+			u32 instance_id : 8;
+			u32 enable      : 1;
+			u32 hm          : 1;
+			u32 reserved_1  : 1;
+			u32 sm          : 1;
+			u32 reserved_2  : 12;
+		};
+	};
+};
+
 static inline struct list_head *session_list(struct intel_pxp *pxp,
 					     int session_type)
 {
@@ -196,6 +211,80 @@ end:
 	return ret;
 }
 
+static int pxp_set_pxp_tag(struct intel_pxp *pxp, int session_type,
+			   int session_idx, int protection_mode)
+{
+	struct pxp_tag *pxp_tag;
+
+	if (session_type == SESSION_TYPE_TYPE0 && session_idx < PXP_MAX_TYPE0_SESSIONS)
+		pxp_tag = (struct pxp_tag *)&pxp->ctx.type0_pxp_tag[session_idx];
+	else if (session_type == SESSION_TYPE_TYPE1 && session_idx < PXP_MAX_TYPE1_SESSIONS)
+		pxp_tag = (struct pxp_tag *)&pxp->ctx.type1_pxp_tag[session_idx];
+	else
+		return -EINVAL;
+
+	switch (protection_mode) {
+	case PROTECTION_MODE_NONE:
+	{
+		pxp_tag->enable = false;
+		pxp_tag->hm = false;
+		pxp_tag->sm = false;
+		break;
+	}
+	case PROTECTION_MODE_LM:
+	{
+		pxp_tag->enable = true;
+		pxp_tag->hm = false;
+		pxp_tag->sm = false;
+		pxp_tag->instance_id++;
+		break;
+	}
+	case PROTECTION_MODE_HM:
+	{
+		pxp_tag->enable = true;
+		pxp_tag->hm = true;
+		pxp_tag->sm = false;
+		pxp_tag->instance_id++;
+		break;
+	}
+	case PROTECTION_MODE_SM:
+	{
+		pxp_tag->enable = true;
+		pxp_tag->hm = true;
+		pxp_tag->sm = true;
+		pxp_tag->instance_id++;
+		break;
+	}
+	default:
+		return -EINVAL;
+	}
+
+	pxp_tag->session_id = session_idx & SESSION_ID_MASK;
+
+	if (session_type == SESSION_TYPE_TYPE1)
+		pxp_tag->session_id |= SESSION_TYPE_MASK;
+
+	return 0;
+}
+
+static u32 pxp_get_pxp_tag(struct intel_pxp *pxp, int session_type,
+			   int session_idx, u32 *session_is_alive)
+{
+	struct pxp_tag *pxp_tag;
+
+	if (session_type == SESSION_TYPE_TYPE0 && session_idx < PXP_MAX_TYPE0_SESSIONS)
+		pxp_tag = (struct pxp_tag *)&pxp->ctx.type0_pxp_tag[session_idx];
+	else if (session_type == SESSION_TYPE_TYPE1 && session_idx < PXP_MAX_TYPE1_SESSIONS)
+		pxp_tag = (struct pxp_tag *)&pxp->ctx.type1_pxp_tag[session_idx];
+	else
+		return -EINVAL;
+
+	if (session_is_alive)
+		*session_is_alive = pxp_tag->enable;
+
+	return pxp_tag->value;
+}
+
 /**
  * intel_pxp_sm_ioctl_reserve_session - To reserve an available protected session.
  * @pxp: pointer to pxp struct
@@ -233,7 +322,16 @@ int intel_pxp_sm_ioctl_reserve_session(struct intel_pxp *pxp, struct drm_file *d
 			ret = create_session_entry(pxp, drmfile, pxp->ctx.id,
 						   session_type,
 						   protection_mode, idx);
-			*pxp_tag = idx;
+			if (ret)
+				return ret;
+
+			ret = pxp_set_pxp_tag(pxp, session_type, idx,
+					      protection_mode);
+			if (ret)
+				return ret;
+
+			*pxp_tag = pxp_get_pxp_tag(pxp, session_type,
+						   idx, NULL);
 			return ret;
 		}
 	}
@@ -306,6 +404,11 @@ int intel_pxp_sm_ioctl_terminate_session(struct intel_pxp *pxp, int session_type
 			if (ret)
 				return ret;
 
+			ret = pxp_set_pxp_tag(pxp, session_type, session_index,
+					      PROTECTION_MODE_NONE);
+			if (ret)
+				return ret;
+
 			list_del(&curr->list);
 			kfree(curr);
 			return 0;
@@ -326,9 +429,34 @@ int intel_pxp_sm_terminate_all_sessions(struct intel_pxp *pxp, int session_type)
 		return ret;
 
 	list_for_each_entry_safe(curr, n, session_list(pxp, session_type), list) {
+		ret = pxp_set_pxp_tag(pxp, session_type,
+				      curr->index, PROTECTION_MODE_NONE);
+		if (ret)
+			return ret;
+
 		list_del(&curr->list);
 		kfree(curr);
 	}
 
 	return ret;
+}
+
+int intel_pxp_sm_ioctl_query_pxp_tag(struct intel_pxp *pxp,
+				     u32 *session_is_alive, u32 *pxp_tag)
+{
+	int session_type = 0;
+	int session_index = 0;
+	int ret;
+
+	if (!session_is_alive || !pxp_tag)
+		return -EINVAL;
+
+	ret = pxp_get_session_index(*pxp_tag, &session_index, &session_type);
+	if (ret)
+		return ret;
+
+	*pxp_tag = pxp_get_pxp_tag(pxp, session_type, session_index,
+				   session_is_alive);
+
+	return 0;
 }

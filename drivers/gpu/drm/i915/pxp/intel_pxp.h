@@ -16,12 +16,6 @@
 
 #define GEN12_KCR_SIP _MMIO(0x32260) /* KCR type0 session in play 0-31 */
 
-#define PXP_MAX_TYPE0_SESSIONS 16
-#define PXP_MAX_TYPE1_SESSIONS 6
-
-/* we need to reserve one type0 slot for arbitrary session */
-#define PXP_MAX_NORMAL_TYPE0_SESSIONS (PXP_MAX_TYPE0_SESSIONS - 1)
-
 enum pxp_session_types {
 	SESSION_TYPE_TYPE0 = 0,
 	SESSION_TYPE_TYPE1 = 1,

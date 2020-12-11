@@ -44,6 +44,8 @@ int intel_pxp_sm_ioctl_mark_session_in_play(struct intel_pxp *pxp, int session_t
 					    u32 session_id);
 int intel_pxp_sm_ioctl_terminate_session(struct intel_pxp *pxp, int session_type,
 					 int session_id);
+int intel_pxp_sm_ioctl_query_pxp_tag(struct intel_pxp *pxp,
+				     u32 *session_is_alive, u32 *pxp_tag);
 
 bool intel_pxp_sm_is_hw_session_in_play(struct intel_pxp *pxp,
 					int session_type, int session_index);
