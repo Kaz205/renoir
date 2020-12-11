@@ -16,7 +16,10 @@
 /* Setting KCR Init bit is required after system boot */
 #define KCR_INIT_ALLOW_DISPLAY_ME_WRITES (BIT(14) | (BIT(14) << KCR_INIT_MASK_SHIFT))
 
-#define PXP_ACTION_SET_SESSION_STATUS 1
+enum pxp_ioctl_action {
+	PXP_ACTION_SET_SESSION_STATUS = 1,
+	PXP_ACTION_TEE_IO_MESSAGE = 4,
+};
 
 enum pxp_session_req {
 	/* Request KMD to allocate session id and move it to IN INIT */
@@ -38,13 +41,28 @@ struct pxp_set_session_status_params {
 	u32 req_session_state; /* in, new session state */
 };
 
+/*
+ * struct pxp_tee_io_message_params - Params to send/receive message to/from TEE.
+ */
+struct pxp_tee_io_message_params {
+	u8 __user *msg_in; /* in - message input */
+	u32 msg_in_size; /* in - message input size */
+	u8 __user *msg_out; /* in - message output buffer */
+	u32 msg_out_size; /* out- message output size from TEE */
+	u32 msg_out_buf_size; /* in - message output buffer size */
+};
+
 /* struct pxp_info - Params for PXP operation. */
 struct pxp_info {
 	u32 action; /* in - specified action of this operation */
 	u32 sm_status; /* out - status output for this operation */
 
-	/* in - action params to set the PXP session state */
-	struct pxp_set_session_status_params set_session_status;
+	union {
+		/* in - action params to set the PXP session state */
+		struct pxp_set_session_status_params set_session_status;
+		/* in - action params to send TEE commands */
+		struct pxp_tee_io_message_params tee_io_message;
+	};
 } __attribute__((packed));
 
 struct drm_i915_pxp_ops {
@@ -228,7 +246,9 @@ int i915_pxp_ops_ioctl(struct drm_device *dev, void *data, struct drm_file *drmf
 		goto end;
 	}
 
-	if (pxp_info.action == PXP_ACTION_SET_SESSION_STATUS) {
+	switch (pxp_info.action) {
+	case PXP_ACTION_SET_SESSION_STATUS:
+	{
 		struct pxp_set_session_status_params *params = &pxp_info.set_session_status;
 
 		if (params->req_session_state == PXP_REQ_SESSION_ID_INIT) {
@@ -250,8 +270,26 @@ int i915_pxp_ops_ioctl(struct drm_device *dev, void *data, struct drm_file *drmf
 		} else {
 			ret = -EINVAL;
 		}
-	} else {
+		break;
+	}
+	case PXP_ACTION_TEE_IO_MESSAGE:
+	{
+		struct pxp_tee_io_message_params *params = &pxp_info.tee_io_message;
+
+		ret = intel_pxp_tee_ioctl_io_message(pxp,
+						     params->msg_in, params->msg_in_size,
+						     params->msg_out, &params->msg_out_size,
+						     params->msg_out_buf_size);
+		if (ret) {
+			drm_err(&i915->drm, "Failed to send TEE IO message\n");
+			ret = -EFAULT;
+		}
+		break;
+	}
+	default:
+		drm_err(&i915->drm, "Failed to %s due to bad params\n", __func__);
 		ret = -EINVAL;
+		break;
 	}
 
 end:
