@@ -31,13 +31,13 @@ static int intel_pxp_tee_io_message(struct intel_pxp *pxp,
 		print_hex_dump(KERN_DEBUG, "TEE input message binaries:",
 			       DUMP_PREFIX_OFFSET, 4, 4, msg_in, msg_in_size, true);
 
-	ret = pxp_tee_master->ops->send(pxp_tee_master->tee_dev, msg_in, msg_in_size);
+	ret = pxp_tee_master->ops->send(pxp_tee_master->tee_dev, msg_in, msg_in_size, 1);
 	if (ret) {
 		drm_err(&i915->drm, "Failed to send TEE message\n");
 		return -EFAULT;
 	}
 
-	ret = pxp_tee_master->ops->receive(pxp_tee_master->tee_dev, msg_out, msg_out_buf_size);
+	ret = pxp_tee_master->ops->receive(pxp_tee_master->tee_dev, msg_out, msg_out_buf_size, 1);
 	if (ret < 0) {
 		drm_err(&i915->drm, "Failed to receive TEE message\n");
 		return -EFAULT;
