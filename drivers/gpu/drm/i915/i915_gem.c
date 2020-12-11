@@ -203,7 +203,8 @@ static int
 i915_gem_create(struct drm_file *file,
 		struct intel_memory_region *mr,
 		u64 *size_p,
-		u32 *handle_p)
+		u32 *handle_p,
+		u64 user_flags)
 {
 	struct drm_i915_gem_object *obj;
 	u32 handle;
@@ -222,6 +223,8 @@ i915_gem_create(struct drm_file *file,
 	obj = i915_gem_object_create_region(mr, size, 0);
 	if (IS_ERR(obj))
 		return PTR_ERR(obj);
+
+	obj->user_flags = user_flags;
 
 	ret = drm_gem_handle_create(file, &obj->base, &handle);
 	/* drop reference from allocate - handle holds it now */
@@ -277,11 +280,12 @@ i915_gem_dumb_create(struct drm_file *file,
 	return i915_gem_create(file,
 			       intel_memory_region_by_type(to_i915(dev),
 							   mem_type),
-			       &args->size, &args->handle);
+			       &args->size, &args->handle, 0);
 }
 
 struct create_ext {
-        struct drm_i915_private *i915;
+	struct drm_i915_private *i915;
+	unsigned long user_flags;
 };
 
 static int __create_setparam(struct drm_i915_gem_object_param *args,
@@ -290,6 +294,17 @@ static int __create_setparam(struct drm_i915_gem_object_param *args,
 	if (!(args->param & I915_OBJECT_PARAM)) {
 		DRM_DEBUG("Missing I915_OBJECT_PARAM namespace\n");
 		return -EINVAL;
+	}
+
+	switch (lower_32_bits(args->param)) {
+	case I915_PARAM_PROTECTED_CONTENT:
+		if (args->size) {
+			return -EINVAL;
+		} else if (args->data) {
+			ext_data->user_flags = args->data;
+			return 0;
+		}
+	break;
 	}
 
 	return -EINVAL;
@@ -337,7 +352,7 @@ i915_gem_create_ioctl(struct drm_device *dev, void *data,
 	return i915_gem_create(file,
 			       intel_memory_region_by_type(i915,
 							   INTEL_MEMORY_SYSTEM),
-			       &args->size, &args->handle);
+			       &args->size, &args->handle, ext_data.user_flags);
 }
 
 static int
