@@ -641,7 +641,7 @@ static int i915_interrupt_info(struct seq_file *m, void *data)
 		seq_printf(m, "GPM/WGBOXPERF Intr Mask: %08x\n",
 			   I915_READ(GEN11_GPM_WGBOXPERF_INTR_MASK));
 		seq_printf(m, "Crypto Intr Mask:\t %08x\n",
-			   I915_READ(GEN11_CRYPTO_RSVD_INTR_MASK));
+			   I915_READ(GEN11_CRYPTO_INTR_MASK));
 		seq_printf(m, "Gunit/CSME Intr Mask:\t %08x\n",
 			   I915_READ(GEN11_GUNIT_CSME_INTR_MASK));
 
