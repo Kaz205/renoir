@@ -578,6 +578,12 @@ int intel_gt_init(struct intel_gt *gt)
 	if (err)
 		goto err_gt;
 
+	if (INTEL_GEN(gt->i915) >= 12) {
+		err = intel_pxp_init(&gt->pxp);
+		if (err)
+			goto err_gt;
+	}
+
 	goto out_fw;
 err_gt:
 	__intel_gt_disable(gt);
@@ -619,6 +625,7 @@ void intel_gt_driver_release(struct intel_gt *gt)
 	if (vm) /* FIXME being called twice on error paths :( */
 		i915_vm_put(vm);
 
+	intel_pxp_uninit(&gt->pxp);
 	intel_gt_pm_fini(gt);
 	intel_gt_fini_scratch(gt);
 	intel_gt_fini_buffer_pool(gt);
