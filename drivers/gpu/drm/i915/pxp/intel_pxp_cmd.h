@@ -16,5 +16,7 @@ int intel_pxp_cmd_add_prolog(struct intel_pxp *pxp, u32 *cmd,
 			     int session_index);
 int intel_pxp_cmd_add_epilog(u32 *cmd);
 int intel_pxp_cmd_add_inline_termination(u32 *cmd);
+int intel_pxp_cmd_terminate_all_hw_session(struct intel_pxp *pxp,
+					   int session_type);
 
 #endif /* __INTEL_PXP_SM_H__ */

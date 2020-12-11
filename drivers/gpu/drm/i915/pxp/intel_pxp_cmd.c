@@ -7,6 +7,7 @@
 #include "i915_drv.h"
 #include "gt/intel_context.h"
 #include "gt/intel_engine_pm.h"
+#include "intel_pxp_sm.h"
 
 /* PXP GPU command definitions */
 
@@ -272,4 +273,59 @@ int intel_pxp_cmd_add_inline_termination(u32 *cmd)
 
 	increased_size_in_dw = (cmd_termin - cmd);
 	return increased_size_in_dw;
+}
+
+int intel_pxp_cmd_terminate_all_hw_session(struct intel_pxp *pxp,
+					   int session_type)
+{
+	u32 *cmd = NULL;
+	u32 *cmd_ptr = NULL;
+	int cmd_size_in_dw = 0;
+	int ret;
+	int idx;
+	struct intel_gt *gt = container_of(pxp, struct intel_gt, pxp);
+
+	/* Calculate how many bytes need to be alloc */
+	for (idx = 0; idx < pxp_session_max(session_type); idx++) {
+		if (intel_pxp_sm_is_hw_session_in_play(pxp, session_type, idx)) {
+			cmd_size_in_dw += intel_pxp_cmd_add_prolog(pxp, NULL, session_type, idx);
+			cmd_size_in_dw += intel_pxp_cmd_add_inline_termination(NULL);
+		}
+	}
+	cmd_size_in_dw += intel_pxp_cmd_add_epilog(NULL);
+
+	cmd = kzalloc(cmd_size_in_dw * 4, GFP_KERNEL);
+	if (!cmd)
+		return -ENOMEM;
+
+	/* Program the command */
+	cmd_ptr = cmd;
+	for (idx = 0; idx < pxp_session_max(session_type); idx++) {
+		if (intel_pxp_sm_is_hw_session_in_play(pxp, session_type, idx)) {
+			cmd_ptr += intel_pxp_cmd_add_prolog(pxp, cmd_ptr, session_type, idx);
+			cmd_ptr += intel_pxp_cmd_add_inline_termination(cmd_ptr);
+		}
+	}
+	cmd_ptr += intel_pxp_cmd_add_epilog(cmd_ptr);
+
+	if (cmd_size_in_dw != (cmd_ptr - cmd)) {
+		ret = -EINVAL;
+		drm_err(&gt->i915->drm, "Failed to %s\n", __func__);
+		goto end;
+	}
+
+	if (drm_debug_enabled(DRM_UT_DRIVER)) {
+		print_hex_dump(KERN_DEBUG, "global termination cmd binaries:",
+			       DUMP_PREFIX_OFFSET, 4, 4, cmd, cmd_size_in_dw * 4, true);
+	}
+
+	ret = intel_pxp_cmd_submit(pxp, cmd, cmd_size_in_dw);
+	if (ret) {
+		drm_err(&gt->i915->drm, "Failed to pxp_submit_cmd()\n");
+		goto end;
+	}
+
+end:
+	kfree(cmd);
+	return ret;
 }

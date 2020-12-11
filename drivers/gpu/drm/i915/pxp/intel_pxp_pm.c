@@ -6,6 +6,7 @@
 #include "intel_pxp_context.h"
 #include "intel_pxp_arb.h"
 #include "intel_pxp_pm.h"
+#include "intel_pxp_sm.h"
 
 void intel_pxp_pm_prepare_suspend(struct intel_pxp *pxp)
 {
@@ -52,6 +53,12 @@ int intel_pxp_pm_resume(struct intel_pxp *pxp)
 		ret = intel_pxp_arb_terminate_session(pxp);
 		if (ret) {
 			drm_err(&gt->i915->drm, "Failed to terminate the arb session\n");
+			goto end;
+		}
+
+		ret = intel_pxp_sm_terminate_all_sessions(pxp, SESSION_TYPE_TYPE0);
+		if (ret) {
+			drm_err(&gt->i915->drm, "Failed to terminate the sessions\n");
 			goto end;
 		}
 

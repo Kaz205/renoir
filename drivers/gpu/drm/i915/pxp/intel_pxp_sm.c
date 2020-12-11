@@ -6,6 +6,7 @@
 #include "gt/intel_engine_pm.h"
 #include "intel_pxp_sm.h"
 #include "intel_pxp.h"
+#include "intel_pxp_cmd.h"
 
 #define KCR_STATUS_1   _MMIO(0x320f4)
 #define KCR_STATUS_1_ATTACK_MASK 0x80000000
@@ -14,12 +15,6 @@
 
 #define SESSION_TYPE_MASK BIT(7)
 #define SESSION_ID_MASK (BIT(7) - 1)
-
-static inline int session_max(int session_type)
-{
-	return (session_type == SESSION_TYPE_TYPE0) ?
-		PXP_MAX_NORMAL_TYPE0_SESSIONS : PXP_MAX_TYPE1_SESSIONS;
-}
 
 static inline struct list_head *session_list(struct intel_pxp *pxp,
 					     int session_type)
@@ -59,8 +54,8 @@ static bool is_sw_session_active(struct intel_pxp *pxp, int session_type,
 	return false;
 }
 
-static bool is_hw_session_in_play(struct intel_pxp *pxp,
-				  int session_type, int session_index)
+bool intel_pxp_sm_is_hw_session_in_play(struct intel_pxp *pxp,
+					int session_type, int session_index)
 {
 	u64 regval_sip = 0;
 	intel_wakeref_t wakeref;
@@ -83,7 +78,7 @@ static int wait_hw_sw_state(struct intel_pxp *pxp, int session_index, int sessio
 	int retry = 0;
 
 	for (retry = 0; retry < max_retry; retry++) {
-		if (is_hw_session_in_play(pxp, session_type, session_index) ==
+		if (intel_pxp_sm_is_hw_session_in_play(pxp, session_type, session_index) ==
 		    is_sw_session_active(pxp, session_type, session_index, true))
 			return 0;
 
@@ -162,6 +157,45 @@ static int pxp_get_session_index(u32 session_id, int *index_out, int *type_out)
 	return 0;
 }
 
+static int pxp_terminate_hw_session(struct intel_pxp *pxp, int session_type,
+				    int session_index)
+{
+	u32 *cmd = NULL;
+	u32 *cmd_ptr = NULL;
+	int cmd_size_in_dw = 0;
+	int ret;
+	struct intel_gt *gt = container_of(pxp, struct intel_gt, pxp);
+
+	cmd_size_in_dw += intel_pxp_cmd_add_prolog(pxp, NULL, session_type, session_index);
+	cmd_size_in_dw += intel_pxp_cmd_add_inline_termination(NULL);
+	cmd_size_in_dw += intel_pxp_cmd_add_epilog(NULL);
+
+	cmd = kzalloc(cmd_size_in_dw * 4, GFP_KERNEL);
+	if (!cmd)
+		return -ENOMEM;
+
+	cmd_ptr = cmd;
+	cmd_ptr += intel_pxp_cmd_add_prolog(pxp, cmd_ptr, session_type, session_index);
+	cmd_ptr += intel_pxp_cmd_add_inline_termination(cmd_ptr);
+	cmd_ptr += intel_pxp_cmd_add_epilog(cmd_ptr);
+
+	if (cmd_size_in_dw != (cmd_ptr - cmd)) {
+		ret = -EINVAL;
+		drm_err(&gt->i915->drm, "Failed to %s\n", __func__);
+		goto end;
+	}
+
+	ret = intel_pxp_cmd_submit(pxp, cmd, cmd_size_in_dw);
+	if (ret) {
+		drm_err(&gt->i915->drm, "Failed to submit cmd()\n");
+		goto end;
+	}
+
+end:
+	kfree(cmd);
+	return ret;
+}
+
 /**
  * intel_pxp_sm_ioctl_reserve_session - To reserve an available protected session.
  * @pxp: pointer to pxp struct
@@ -190,7 +224,7 @@ int intel_pxp_sm_ioctl_reserve_session(struct intel_pxp *pxp, struct drm_file *d
 	    is_type0_session_attacked(pxp))
 		return -EPERM;
 
-	for (idx = 0; idx < session_max(session_type); idx++) {
+	for (idx = 0; idx < pxp_session_max(session_type); idx++) {
 		if (!is_sw_session_active(pxp, session_type, idx, false)) {
 			ret = wait_hw_sw_state(pxp, idx, session_type);
 			if (ret)
@@ -242,4 +276,59 @@ int intel_pxp_sm_ioctl_mark_session_in_play(struct intel_pxp *pxp, int session_t
 
 	drm_err(&gt->i915->drm, "Failed to %s couldn't find active session\n", __func__);
 	return -EINVAL;
+}
+
+/**
+ * intel_pxp_sm_ioctl_terminate_session - To terminate an active HW session and free its entry.
+ * @pxp: pointer to pxp struct.
+ * @session_type: type of the session to be terminated. One of enum pxp_session_types.
+ * @session_id: Session identifier of the session, containing type and index info
+ *
+ * Return: 0 means terminate is successful, or didn't find the desired session.
+ */
+int intel_pxp_sm_ioctl_terminate_session(struct intel_pxp *pxp, int session_type,
+					 int session_id)
+{
+	int ret;
+	struct intel_pxp_sm_session *curr, *n;
+	int session_type_in_id;
+	int session_index;
+
+	lockdep_assert_held(&pxp->ctx.mutex);
+
+	ret = pxp_get_session_index(session_id, &session_index, &session_type_in_id);
+	if (ret)
+		return ret;
+
+	list_for_each_entry_safe(curr, n, session_list(pxp, session_type), list) {
+		if (curr->index == session_index) {
+			ret = pxp_terminate_hw_session(pxp, session_type, session_index);
+			if (ret)
+				return ret;
+
+			list_del(&curr->list);
+			kfree(curr);
+			return 0;
+		}
+	}
+	return 0;
+}
+
+int intel_pxp_sm_terminate_all_sessions(struct intel_pxp *pxp, int session_type)
+{
+	int ret;
+	struct intel_pxp_sm_session *curr, *n;
+
+	lockdep_assert_held(&pxp->ctx.mutex);
+
+	ret = intel_pxp_cmd_terminate_all_hw_session(pxp, session_type);
+	if (ret)
+		return ret;
+
+	list_for_each_entry_safe(curr, n, session_list(pxp, session_type), list) {
+		list_del(&curr->list);
+		kfree(curr);
+	}
+
+	return ret;
 }

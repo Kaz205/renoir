@@ -8,6 +8,7 @@
 #include "intel_pxp_tee.h"
 #include "intel_pxp_arb.h"
 #include "intel_pxp_sm.h"
+#include "intel_pxp_cmd.h"
 
 /* KCR register definitions */
 #define KCR_INIT            _MMIO(0x320f0)
@@ -22,6 +23,8 @@ enum pxp_session_req {
 	PXP_REQ_SESSION_ID_INIT = 0x0,
 	/* Inform KMD that UMD has completed the initialization */
 	PXP_REQ_SESSION_IN_PLAY,
+	/* Request KMD to terminate the session */
+	PXP_REQ_SESSION_TERMINATE
 };
 
 /*
@@ -68,7 +71,11 @@ static int intel_pxp_teardown_required_callback(struct intel_pxp *pxp)
 	pxp->ctx.flag_display_hm_surface_keys = false;
 
 	ret = intel_pxp_arb_terminate_session(pxp);
+	if (ret)
+		goto end;
 
+	ret = intel_pxp_sm_terminate_all_sessions(pxp, SESSION_TYPE_TYPE0);
+end:
 	mutex_unlock(&pxp->ctx.mutex);
 
 	return ret;
@@ -237,6 +244,9 @@ int i915_pxp_ops_ioctl(struct drm_device *dev, void *data, struct drm_file *drmf
 		} else if (params->req_session_state == PXP_REQ_SESSION_IN_PLAY) {
 			ret = intel_pxp_sm_ioctl_mark_session_in_play(pxp, params->session_type,
 								      params->pxp_tag);
+		} else if (params->req_session_state == PXP_REQ_SESSION_TERMINATE) {
+			ret = intel_pxp_sm_ioctl_terminate_session(pxp, params->session_type,
+								   params->pxp_tag);
 		} else {
 			ret = -EINVAL;
 		}

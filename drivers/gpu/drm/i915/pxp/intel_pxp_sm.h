@@ -42,4 +42,10 @@ int intel_pxp_sm_ioctl_reserve_session(struct intel_pxp *pxp, struct drm_file *d
 				       u32 *pxp_tag);
 int intel_pxp_sm_ioctl_mark_session_in_play(struct intel_pxp *pxp, int session_type,
 					    u32 session_id);
+int intel_pxp_sm_ioctl_terminate_session(struct intel_pxp *pxp, int session_type,
+					 int session_id);
+
+bool intel_pxp_sm_is_hw_session_in_play(struct intel_pxp *pxp,
+					int session_type, int session_index);
+int intel_pxp_sm_terminate_all_sessions(struct intel_pxp *pxp, int session_type);
 #endif /* __INTEL_PXP_SM_H__ */

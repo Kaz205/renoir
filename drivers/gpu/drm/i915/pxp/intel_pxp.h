@@ -53,6 +53,12 @@ struct intel_pxp {
 	struct pxp_context ctx;
 };
 
+static inline int pxp_session_max(int session_type)
+{
+	return (session_type == SESSION_TYPE_TYPE0) ?
+		PXP_MAX_NORMAL_TYPE0_SESSIONS : PXP_MAX_TYPE1_SESSIONS;
+}
+
 struct drm_i915_private;
 
 #ifdef CONFIG_DRM_I915_PXP
