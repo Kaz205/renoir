@@ -33,7 +33,6 @@
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_crtc.h>
 #include <drm/drm_edid.h>
-#include <drm/i915_drm.h>
 
 #include "i915_drv.h"
 #include "intel_connector.h"
@@ -1709,6 +1708,9 @@ intel_tv_detect(struct drm_connector *connector,
 
 	drm_dbg_kms(&i915->drm, "[CONNECTOR:%d:%s] force=%d\n",
 		    connector->base.id, connector->name, force);
+
+	if (!INTEL_DISPLAY_ENABLED(i915))
+		return connector_status_disconnected;
 
 	if (force) {
 		struct intel_load_detect_pipe tmp;

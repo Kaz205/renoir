@@ -158,6 +158,10 @@ static void gt_sanitize(struct intel_gt *gt, bool force)
 
 	intel_uc_reset_prepare(&gt->uc);
 
+	for_each_engine(engine, gt, id)
+		if (engine->sanitize)
+			engine->sanitize(engine);
+
 	if (reset_engines(gt) || force) {
 		for_each_engine(engine, gt, id)
 			__intel_engine_reset(engine, false);
@@ -209,7 +213,7 @@ int intel_gt_resume(struct intel_gt *gt)
 	/* Only when the HW is re-initialised, can we replay the requests */
 	err = intel_gt_init_hw(gt);
 	if (err) {
-		dev_err(gt->i915->drm.dev,
+		drm_err(&gt->i915->drm,
 			"Failed to initialize GPU, declaring it wedged!\n");
 		goto err_wedged;
 	}
@@ -225,7 +229,7 @@ int intel_gt_resume(struct intel_gt *gt)
 
 		intel_engine_pm_put(engine);
 		if (err) {
-			dev_err(gt->i915->drm.dev,
+			drm_err(&gt->i915->drm,
 				"Failed to restart %s (%d)\n",
 				engine->name, err);
 			goto err_wedged;

@@ -488,6 +488,9 @@ Color Management Properties
 .. kernel-doc:: drivers/gpu/drm/drm_color_mgmt.c
    :export:
 
+.. kernel-doc:: include/drm/drm_color_mgmt.h
+   :internal:
+
 Tile Group Property
 -------------------
 

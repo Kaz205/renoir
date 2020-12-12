@@ -34,10 +34,10 @@
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_color_mgmt.h>
 #include <drm/drm_crtc.h>
+#include <drm/drm_damage_helper.h>
 #include <drm/drm_fourcc.h>
 #include <drm/drm_plane_helper.h>
 #include <drm/drm_rect.h>
-#include <drm/i915_drm.h>
 
 #include "i915_drv.h"
 #include "i915_trace.h"
@@ -321,6 +321,21 @@ int intel_plane_check_src_coordinates(struct intel_plane_state *plane_state)
 	}
 
 	return 0;
+}
+
+static u8 icl_nv12_y_plane_mask(struct drm_i915_private *i915)
+{
+	if (IS_ROCKETLAKE(i915))
+		return BIT(PLANE_SPRITE2) | BIT(PLANE_SPRITE3);
+	else
+		return BIT(PLANE_SPRITE4) | BIT(PLANE_SPRITE5);
+}
+
+bool icl_is_nv12_y_plane(struct drm_i915_private *dev_priv,
+			 enum plane_id plane_id)
+{
+	return INTEL_GEN(dev_priv) >= 11 &&
+		icl_nv12_y_plane_mask(dev_priv) & BIT(plane_id);
 }
 
 bool icl_is_hdr_plane(struct drm_i915_private *dev_priv, enum plane_id plane_id)
@@ -2800,8 +2815,9 @@ static bool skl_plane_format_mod_supported(struct drm_plane *_plane,
 static bool gen12_plane_supports_mc_ccs(struct drm_i915_private *dev_priv,
 					enum plane_id plane_id)
 {
-	/* Wa_14010477008:tgl[a0..c0] */
-	if (IS_TGL_REVID(dev_priv, TGL_REVID_A0, TGL_REVID_C0))
+	/* Wa_14010477008:tgl[a0..c0],rkl[all] */
+	if (IS_ROCKETLAKE(dev_priv) ||
+	    IS_TGL_DISP_REVID(dev_priv, TGL_REVID_A0, TGL_REVID_C0))
 		return false;
 
 	return plane_id < PLANE_SPRITE4;
@@ -2975,7 +2991,7 @@ static const u32 *icl_get_plane_formats(struct drm_i915_private *dev_priv,
 	if (icl_is_hdr_plane(dev_priv, plane_id)) {
 		*num_formats = ARRAY_SIZE(icl_hdr_plane_formats);
 		return icl_hdr_plane_formats;
-	} else if (icl_is_nv12_y_plane(plane_id)) {
+	} else if (icl_is_nv12_y_plane(dev_priv, plane_id)) {
 		*num_formats = ARRAY_SIZE(icl_sdr_y_plane_formats);
 		return icl_sdr_y_plane_formats;
 	} else {
@@ -3107,6 +3123,9 @@ skl_universal_plane_create(struct drm_i915_private *dev_priv,
 					     BIT(DRM_MODE_BLEND_COVERAGE));
 
 	drm_plane_create_zpos_immutable_property(&plane->base, plane_id);
+
+	if (INTEL_GEN(dev_priv) >= 12)
+		drm_plane_enable_fb_damage_clips(&plane->base);
 
 	drm_plane_helper_add(&plane->base, &intel_plane_helper_funcs);
 

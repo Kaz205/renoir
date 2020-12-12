@@ -54,6 +54,7 @@ struct drm_printer;
 	param(int, enable_fbc, -1, 0600) \
 	param(int, enable_psr, -1, 0600) \
 	param(bool, psr_safest_params, false, 0600) \
+	param(bool, enable_psr2_sel_fetch, false, 0600) \
 	param(int, disable_power_well, -1, 0400) \
 	param(int, enable_ips, 1, 0600) \
 	param(int, invert_brightness, 0, 0600) \
@@ -74,7 +75,6 @@ struct drm_printer;
 	/* leave bools at the end to not create holes */ \
 	param(bool, alpha_support, IS_ENABLED(CONFIG_DRM_I915_ALPHA_SUPPORT), 0400) \
 	param(bool, enable_hangcheck, true, 0600) \
-	param(bool, prefault_disable, false, 0600) \
 	param(bool, load_detect_test, false, 0600) \
 	param(bool, force_reset_modeset_test, false, 0600) \
 	param(bool, error_capture, true, 0600) \

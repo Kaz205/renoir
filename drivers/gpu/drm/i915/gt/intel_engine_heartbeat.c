@@ -4,6 +4,7 @@
  * Copyright © 2019 Intel Corporation
  */
 
+#include "i915_drv.h"
 #include "i915_request.h"
 
 #include "intel_context.h"
@@ -117,7 +118,7 @@ static void heartbeat(struct work_struct *wrk)
 		goto unlock;
 
 	idle_pulse(engine, rq);
-	if (i915_modparams.enable_hangcheck)
+	if (engine->i915->params.enable_hangcheck)
 		engine->heartbeat.systole = i915_request_get(rq);
 
 	__i915_request_commit(rq);
@@ -180,7 +181,7 @@ int intel_engine_pulse(struct intel_engine_cs *engine)
 	struct i915_sched_attr attr = { .priority = I915_PRIORITY_BARRIER };
 	struct intel_context *ce = engine->kernel_context;
 	struct i915_request *rq;
-	int err = 0;
+	int err;
 
 	if (!intel_engine_has_preemption(engine))
 		return -ENODEV;
@@ -188,8 +189,10 @@ int intel_engine_pulse(struct intel_engine_cs *engine)
 	if (!intel_engine_pm_get_if_awake(engine))
 		return 0;
 
-	if (mutex_lock_interruptible(&ce->timeline->mutex))
+	if (mutex_lock_interruptible(&ce->timeline->mutex)) {
+		err = -EINTR;
 		goto out_rpm;
+	}
 
 	intel_context_enter(ce);
 	rq = __i915_request_create(ce, GFP_NOWAIT | __GFP_NOWARN);
@@ -204,6 +207,8 @@ int intel_engine_pulse(struct intel_engine_cs *engine)
 
 	__i915_request_commit(rq);
 	__i915_request_queue(rq, &attr);
+	GEM_BUG_ON(rq->sched.attr.priority < I915_PRIORITY_BARRIER);
+	err = 0;
 
 out_unlock:
 	mutex_unlock(&ce->timeline->mutex);

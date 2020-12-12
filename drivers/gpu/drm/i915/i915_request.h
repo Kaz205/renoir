@@ -84,19 +84,26 @@ enum {
 	I915_FENCE_FLAG_PQUEUE,
 
 	/*
+	 * I915_FENCE_FLAG_HOLD - this request is currently on hold
+	 *
+	 * This request has been suspended, pending an ongoing investigation.
+	 */
+	I915_FENCE_FLAG_HOLD,
+
+	/*
+	 * I915_FENCE_FLAG_INITIAL_BREADCRUMB - this request has the initial
+	 * breadcrumb that marks the end of semaphore waits and start of the
+	 * user payload.
+	 */
+	I915_FENCE_FLAG_INITIAL_BREADCRUMB,
+
+	/*
 	 * I915_FENCE_FLAG_SIGNAL - this request is currently on signal_list
 	 *
 	 * Internal bookkeeping used by the breadcrumb code to track when
 	 * a request is on the various signal_list.
 	 */
 	I915_FENCE_FLAG_SIGNAL,
-
-	/*
-	 * I915_FENCE_FLAG_HOLD - this request is currently on hold
-	 *
-	 * This request has been suspended, pending an ongoing investigation.
-	 */
-	I915_FENCE_FLAG_HOLD,
 
 	/*
 	 * I915_FENCE_FLAG_NOPREEMPT - this request should not be preempted
@@ -154,9 +161,6 @@ enum {
 struct i915_request {
 	struct dma_fence fence;
 	spinlock_t lock;
-
-	/** On Which ring this request was generated */
-	struct drm_i915_private *i915;
 
 	/**
 	 * Context and ring buffer related to this request
@@ -305,6 +309,9 @@ __i915_request_create(struct intel_context *ce, gfp_t gfp);
 struct i915_request * __must_check
 i915_request_create(struct intel_context *ce);
 
+void i915_request_set_error_once(struct i915_request *rq, int error);
+void __i915_request_skip(struct i915_request *rq);
+
 struct i915_request *__i915_request_commit(struct i915_request *request);
 void __i915_request_queue(struct i915_request *rq,
 			  const struct i915_sched_attr *attr);
@@ -354,8 +361,6 @@ void i915_request_add(struct i915_request *rq);
 bool __i915_request_submit(struct i915_request *request);
 void i915_request_submit(struct i915_request *request);
 
-void i915_request_skip(struct i915_request *request, int error);
-
 void __i915_request_unsubmit(struct i915_request *request);
 void i915_request_unsubmit(struct i915_request *request);
 
@@ -385,6 +390,12 @@ static inline bool i915_request_is_active(const struct i915_request *rq)
 static inline bool i915_request_in_priority_queue(const struct i915_request *rq)
 {
 	return test_bit(I915_FENCE_FLAG_PQUEUE, &rq->fence.flags);
+}
+
+static inline bool
+i915_request_has_initial_breadcrumb(const struct i915_request *rq)
+{
+	return test_bit(I915_FENCE_FLAG_INITIAL_BREADCRUMB, &rq->fence.flags);
 }
 
 /**

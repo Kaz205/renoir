@@ -23,8 +23,6 @@
 
 #include <linux/kernel.h>
 
-#include <drm/i915_drm.h>
-
 #include "i915_drv.h"
 #include "intel_display_types.h"
 #include "intel_hotplug.h"
@@ -83,37 +81,12 @@
  *
  * It is only valid and used by digital port encoder.
  *
- * Return pin that is associatade with @port and HDP_NONE if no pin is
- * hard associated with that @port.
+ * Return pin that is associatade with @port.
  */
 enum hpd_pin intel_hpd_pin_default(struct drm_i915_private *dev_priv,
 				   enum port port)
 {
-	switch (port) {
-	case PORT_A:
-		return HPD_PORT_A;
-	case PORT_B:
-		return HPD_PORT_B;
-	case PORT_C:
-		return HPD_PORT_C;
-	case PORT_D:
-		return HPD_PORT_D;
-	case PORT_E:
-		return HPD_PORT_E;
-	case PORT_F:
-		if (IS_CNL_WITH_PORT_F(dev_priv))
-			return HPD_PORT_E;
-		return HPD_PORT_F;
-	case PORT_G:
-		return HPD_PORT_G;
-	case PORT_H:
-		return HPD_PORT_H;
-	case PORT_I:
-		return HPD_PORT_I;
-	default:
-		MISSING_CASE(port);
-		return HPD_NONE;
-	}
+	return HPD_PORT_A + port - PORT_A;
 }
 
 #define HPD_STORM_DETECT_PERIOD		1000
@@ -503,7 +476,6 @@ void intel_hpd_irq_handler(struct drm_i915_private *dev_priv,
 	 * only the one of them (DP) will have ->hpd_pulse().
 	 */
 	for_each_intel_encoder(&dev_priv->drm, encoder) {
-		bool has_hpd_pulse = intel_encoder_has_hpd_pulse(encoder);
 		enum port port = encoder->port;
 		bool long_hpd;
 
@@ -511,7 +483,7 @@ void intel_hpd_irq_handler(struct drm_i915_private *dev_priv,
 		if (!(BIT(pin) & pin_mask))
 			continue;
 
-		if (!has_hpd_pulse)
+		if (!intel_encoder_has_hpd_pulse(encoder))
 			continue;
 
 		long_hpd = long_mask & BIT(pin);

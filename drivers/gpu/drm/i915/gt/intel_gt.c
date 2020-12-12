@@ -7,6 +7,7 @@
 #include "i915_drv.h"
 #include "intel_context.h"
 #include "intel_gt.h"
+#include "intel_gt_buffer_pool.h"
 #include "intel_gt_clock_utils.h"
 #include "intel_gt_pm.h"
 #include "intel_gt_requests.h"
@@ -28,6 +29,7 @@ void intel_gt_init_early(struct intel_gt *gt, struct drm_i915_private *i915)
 	INIT_LIST_HEAD(&gt->closed_vma);
 	spin_lock_init(&gt->closed_lock);
 
+	intel_gt_init_buffer_pool(gt);
 	intel_gt_init_reset(gt);
 	intel_gt_init_requests(gt);
 	intel_gt_init_timelines(gt);
@@ -40,6 +42,14 @@ void intel_gt_init_early(struct intel_gt *gt, struct drm_i915_private *i915)
 void intel_gt_init_hw_early(struct intel_gt *gt, struct i915_ggtt *ggtt)
 {
 	gt->ggtt = ggtt;
+}
+
+int intel_gt_init_mmio(struct intel_gt *gt)
+{
+	intel_uc_init_mmio(&gt->uc);
+	intel_sseu_info_init(gt);
+
+	return intel_engines_init_mmio(gt);
 }
 
 static void init_unused_ring(struct intel_gt *gt, u32 base)
@@ -347,7 +357,7 @@ static int intel_gt_init_scratch(struct intel_gt *gt, unsigned int size)
 		goto err_unref;
 	}
 
-	ret = i915_vma_pin(vma, 0, 0, PIN_GLOBAL | PIN_HIGH);
+	ret = i915_ggtt_pin(vma, 0, PIN_HIGH);
 	if (ret)
 		goto err_unref;
 
@@ -443,6 +453,11 @@ err_rq:
 		rq = requests[id];
 		if (!rq)
 			continue;
+
+		if (rq->fence.error) {
+			err = -EIO;
+			goto out;
+		}
 
 		GEM_BUG_ON(!test_bit(CONTEXT_ALLOC_BIT, &rq->context->flags));
 		if (!rq->context->state)
@@ -543,7 +558,9 @@ int intel_gt_init(struct intel_gt *gt)
 	if (err)
 		goto err_engines;
 
-	intel_uc_init(&gt->uc);
+	err = intel_uc_init(&gt->uc);
+	if (err)
+		goto err_engines;
 
 	err = intel_gt_resume(gt);
 	if (err)
@@ -584,8 +601,7 @@ void intel_gt_driver_remove(struct intel_gt *gt)
 {
 	__intel_gt_disable(gt);
 
-	intel_uc_fini_hw(&gt->uc);
-	intel_uc_fini(&gt->uc);
+	intel_uc_driver_remove(&gt->uc);
 
 	intel_engines_release(gt);
 }
@@ -605,6 +621,7 @@ void intel_gt_driver_release(struct intel_gt *gt)
 
 	intel_gt_pm_fini(gt);
 	intel_gt_fini_scratch(gt);
+	intel_gt_fini_buffer_pool(gt);
 }
 
 void intel_gt_driver_late_release(struct intel_gt *gt)
@@ -617,4 +634,12 @@ void intel_gt_driver_late_release(struct intel_gt *gt)
 	intel_gt_fini_reset(gt);
 	intel_gt_fini_timelines(gt);
 	intel_engines_free(gt);
+}
+
+void intel_gt_info_print(const struct intel_gt_info *info,
+			 struct drm_printer *p)
+{
+	drm_printf(p, "available engines: %x\n", info->engine_mask);
+
+	intel_sseu_dump(&info->sseu, p);
 }
