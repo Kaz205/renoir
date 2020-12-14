@@ -2531,10 +2531,27 @@ static cpumask_t **build_cpu_array(void)
 	return tmp_array;
 }
 
+static void walt_get_possible_siblings(int cpuid, struct cpumask *cluster_cpus)
+{
+	int cpu;
+	struct cpu_topology *cpu_topo, *cpuid_topo = &cpu_topology[cpuid];
+
+	if (cpuid_topo->package_id == -1)
+		return;
+
+	for_each_possible_cpu(cpu) {
+		cpu_topo = &cpu_topology[cpu];
+
+		if (cpuid_topo->package_id != cpu_topo->package_id)
+			continue;
+		cpumask_set_cpu(cpu, cluster_cpus);
+	}
+}
+
 void walt_update_cluster_topology(void)
 {
 	struct cpumask cpus = *cpu_possible_mask;
-	const struct cpumask *cluster_cpus;
+	struct cpumask cluster_cpus;
 	struct walt_sched_cluster *cluster;
 	struct list_head new_head;
 	cpumask_t **tmp;
@@ -2543,14 +2560,15 @@ void walt_update_cluster_topology(void)
 	INIT_LIST_HEAD(&new_head);
 
 	for_each_cpu(i, &cpus) {
-		cluster_cpus = topology_possible_sibling_cpumask(i);
-		if (cpumask_empty(cluster_cpus)) {
+		cpumask_clear(&cluster_cpus);
+		walt_get_possible_siblings(i, &cluster_cpus);
+		if (cpumask_empty(&cluster_cpus)) {
 			WARN(1, "WALT: Invalid cpu topology!!");
 			cleanup_clusters(&new_head);
 			return;
 		}
-		cpumask_andnot(&cpus, &cpus, cluster_cpus);
-		add_cluster(cluster_cpus, &new_head);
+		cpumask_andnot(&cpus, &cpus, &cluster_cpus);
+		add_cluster(&cluster_cpus, &new_head);
 	}
 
 	assign_cluster_ids(&new_head);
