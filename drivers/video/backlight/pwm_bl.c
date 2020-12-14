@@ -296,9 +296,9 @@ static int pwm_backlight_parse_dt(struct device *dev,
 		if (num_steps) {
 			unsigned int num_input_levels = num_levels;
 			unsigned int i;
-			u32 x1, x2, x;
+			u32 x1, x2, x, dx;
 			u32 y1, y2;
-			s64 dx, dy;
+			s64 dy;
 
 			if (num_input_levels < 2) {
 				dev_err(dev, "can't interpolate\n");
@@ -332,7 +332,7 @@ static int pwm_backlight_parse_dt(struct device *dev,
 				x2 = x1 + dx;
 				y1 = data->levels[i];
 				y2 = data->levels[i + 1];
-				dy = y2 - y1;
+				dy = (s64)y2 - y1;
 
 				for (x = x1; x < x2; x++) {
 					table[x] = y1 +
@@ -341,14 +341,6 @@ static int pwm_backlight_parse_dt(struct device *dev,
 			}
 			/* Fill in the last point, since no line starts here. */
 			table[x2] = y2;
-
-			/*
-			 * If we don't start at 0 yet we're increasing, assume
-			 * the dts wanted to crop the low end of the range, so
-			 * insert a 0 to provide a display off mode.
-			 */
-			if (table[0] > 0 && table[0] < table[num_levels - 1])
-				table[0] = 0;
 
 			/*
 			 * As we use interpolation lets remove current

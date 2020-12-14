@@ -174,8 +174,8 @@ struct drm_gem_object {
 	 *
 	 * Reference count of this object
 	 *
-	 * Please use drm_gem_object_get() to acquire and drm_gem_object_put()
-	 * or drm_gem_object_put_unlocked() to release a reference to a GEM
+	 * Please use drm_gem_object_get() to acquire and drm_gem_object_put_locked()
+	 * or drm_gem_object_put() to release a reference to a GEM
 	 * buffer object.
 	 */
 	struct kref refcount;
@@ -356,7 +356,7 @@ static inline void drm_gem_object_get(struct drm_gem_object *obj)
  * This function is meant to be used by drivers which are not encumbered with
  * &drm_device.struct_mutex legacy locking and which are using the
  * gem_free_object_unlocked callback. It avoids all the locking checks and
- * locking overhead of drm_gem_object_put() and drm_gem_object_put_unlocked().
+ * locking overhead of drm_gem_object_put_locked() and drm_gem_object_put().
  *
  * Drivers should never call this directly in their code. Instead they should
  * wrap it up into a ``driver_gem_object_put(struct driver_gem_object *obj)``
@@ -370,8 +370,8 @@ __drm_gem_object_put(struct drm_gem_object *obj)
 	kref_put(&obj->refcount, drm_gem_object_free);
 }
 
-void drm_gem_object_put_unlocked(struct drm_gem_object *obj);
 void drm_gem_object_put(struct drm_gem_object *obj);
+void drm_gem_object_put_locked(struct drm_gem_object *obj);
 
 int drm_gem_handle_create(struct drm_file *file_priv,
 			  struct drm_gem_object *obj,

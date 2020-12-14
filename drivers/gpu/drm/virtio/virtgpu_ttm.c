@@ -224,7 +224,9 @@ static int virtio_gpu_ttm_vram_unbind(struct ttm_tt *ttm)
 		virtio_gpu_get_vgdev(gtt->obj->tbo.bdev);
 	struct virtio_gpu_object *obj = gtt->obj;
 
-	virtio_gpu_cmd_unmap(vgdev, obj->hw_res_handle);
+	if (obj->mapped)
+		virtio_gpu_cmd_unmap(vgdev, obj->hw_res_handle);
+
 	return 0;
 }
 

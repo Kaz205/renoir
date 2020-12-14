@@ -26,10 +26,10 @@
 #include <linux/moduleparam.h>
 
 #include <drm/ttm/ttm_execbuf_util.h>
-#include <linux/dma-buf.h>
-#include <linux/uuid.h>
+
 #include "virtgpu_drv.h"
 #include <drm/virtgpu_drm.h>
+#include <linux/virtio_dma_buf.h>
 
 static int virtio_gpu_virglrenderer_workaround = 1;
 module_param_named(virglhack, virtio_gpu_virglrenderer_workaround, int, 0400);
@@ -188,14 +188,21 @@ int virtio_gpu_object_create(struct virtio_gpu_device *vgdev,
 		if (ret == 0) {
 			spin_lock_irqsave(&drv->lock, irq_flags);
 			signaled = virtio_fence_signaled(&fence->f);
-			if (!signaled)
-				/* virtio create command still in flight */
-				ttm_eu_fence_buffer_objects(&ticket, &validate_list,
-							    &fence->f);
 			spin_unlock_irqrestore(&drv->lock, irq_flags);
-			if (signaled)
+			if (!signaled) {
+				/*
+				 * The virtio create command is (probably) still
+				 * in flight. This races with the command
+				 * completing, but using a fired fence is okay.
+				 */
+				ttm_eu_fence_buffer_objects(&ticket,
+							    &validate_list,
+							    &fence->f);
+			} else {
 				/* virtio create command finished */
-				ttm_eu_backoff_reservation(&ticket, &validate_list);
+				ttm_eu_backoff_reservation(&ticket,
+							   &validate_list);
+			}
 		}
 		virtio_gpu_unref_list(&validate_list);
 	}
@@ -279,25 +286,4 @@ int virtio_gpu_object_wait(struct virtio_gpu_object *bo, bool no_wait)
 	r = ttm_bo_wait(&bo->tbo, true, no_wait);
 	ttm_bo_unreserve(&bo->tbo);
 	return r;
-}
-
-int virtio_gpu_dma_buf_to_handle(struct dma_buf *dma_buf, bool no_wait,
-				 uint32_t *handle)
-{
-	struct virtio_gpu_object *qobj;
-	struct virtio_gpu_device *vgdev;
-	uuid_t uuid;
-
-	if (dma_buf_get_uuid(dma_buf, &uuid) != 0)
-		return -EINVAL;
-
-	qobj = gem_to_virtio_gpu_obj(dma_buf->priv);
-	vgdev = (struct virtio_gpu_device *)qobj->gem_base.dev->dev_private;
-	if (!qobj->create_callback_done && !no_wait)
-		wait_event(vgdev->resp_wq, qobj->create_callback_done);
-	if (!qobj->create_callback_done)
-		return -ETIMEDOUT;
-
-	*handle = qobj->hw_res_handle;
-	return 0;
 }

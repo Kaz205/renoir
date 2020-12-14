@@ -926,7 +926,7 @@ static void ast_cursor_fini(struct drm_device *dev)
 		drm_gem_vram_of_gem(ast->cursor_cache);
 	drm_gem_vram_kunmap(gbo);
 	drm_gem_vram_unpin(gbo);
-	drm_gem_object_put_unlocked(ast->cursor_cache);
+	drm_gem_object_put(ast->cursor_cache);
 }
 
 int ast_mode_init(struct drm_device *dev)
@@ -1170,7 +1170,7 @@ static int ast_cursor_set(struct drm_crtc *crtc,
 
 	ret = drm_gem_vram_pin(gbo, 0);
 	if (ret)
-		goto err_drm_gem_object_put_unlocked;
+		goto err_drm_gem_object_put;
 	src = drm_gem_vram_kmap(gbo, true, NULL);
 	if (IS_ERR(src)) {
 		ret = PTR_ERR(src);
@@ -1223,7 +1223,7 @@ static int ast_cursor_set(struct drm_crtc *crtc,
 
 	drm_gem_vram_kunmap(gbo);
 	drm_gem_vram_unpin(gbo);
-	drm_gem_object_put_unlocked(obj);
+	drm_gem_object_put(obj);
 
 	return 0;
 
@@ -1231,8 +1231,8 @@ err_drm_gem_vram_kunmap:
 	drm_gem_vram_kunmap(gbo);
 err_drm_gem_vram_unpin:
 	drm_gem_vram_unpin(gbo);
-err_drm_gem_object_put_unlocked:
-	drm_gem_object_put_unlocked(obj);
+err_drm_gem_object_put:
+	drm_gem_object_put(obj);
 	return ret;
 }
 

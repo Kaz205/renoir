@@ -573,7 +573,7 @@ static void omap8250_uart_qos_work(struct work_struct *work)
 	struct omap8250_priv *priv;
 
 	priv = container_of(work, struct omap8250_priv, qos_work);
-	pm_qos_update_request(&priv->pm_qos_request, priv->latency);
+	cpu_latency_qos_update_request(&priv->pm_qos_request, priv->latency);
 }
 
 #ifdef CONFIG_SERIAL_8250_DMA
@@ -790,7 +790,10 @@ static void __dma_rx_do_complete(struct uart_8250_port *p)
 	dmaengine_tx_status(dma->rxchan, dma->rx_cookie, &state);
 
 	count = dma->rx_size - state.residue;
-
+	if (count < dma->rx_size)
+		dmaengine_terminate_async(dma->rxchan);
+	if (!count)
+		goto unlock;
 	ret = tty_insert_flip_string(tty_port, dma->rx_buf, count);
 
 	p->port.icount.rx += ret;
@@ -852,7 +855,6 @@ static void omap_8250_rx_dma_flush(struct uart_8250_port *p)
 	spin_unlock_irqrestore(&priv->rx_dma_lock, flags);
 
 	__dma_rx_do_complete(p);
-	dmaengine_terminate_all(dma->rxchan);
 }
 
 static int omap_8250_rx_dma(struct uart_8250_port *p)
@@ -1225,15 +1227,15 @@ static int omap8250_probe(struct platform_device *pdev)
 			 DEFAULT_CLK_SPEED);
 	}
 
-	priv->latency = PM_QOS_CPU_DMA_LAT_DEFAULT_VALUE;
-	priv->calc_latency = PM_QOS_CPU_DMA_LAT_DEFAULT_VALUE;
-	pm_qos_add_request(&priv->pm_qos_request, PM_QOS_CPU_DMA_LATENCY,
-			   priv->latency);
+	priv->latency = PM_QOS_CPU_LATENCY_DEFAULT_VALUE;
+	priv->calc_latency = PM_QOS_CPU_LATENCY_DEFAULT_VALUE;
+	cpu_latency_qos_add_request(&priv->pm_qos_request, priv->latency);
 	INIT_WORK(&priv->qos_work, omap8250_uart_qos_work);
 
 	spin_lock_init(&priv->rx_dma_lock);
 
 	device_init_wakeup(&pdev->dev, true);
+	pm_runtime_enable(&pdev->dev);
 	pm_runtime_use_autosuspend(&pdev->dev);
 
 	/*
@@ -1247,7 +1249,6 @@ static int omap8250_probe(struct platform_device *pdev)
 		pm_runtime_set_autosuspend_delay(&pdev->dev, -1);
 
 	pm_runtime_irq_safe(&pdev->dev);
-	pm_runtime_enable(&pdev->dev);
 
 	pm_runtime_get_sync(&pdev->dev);
 
@@ -1298,7 +1299,7 @@ static int omap8250_remove(struct platform_device *pdev)
 	pm_runtime_put_sync(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
 	serial8250_unregister_port(priv->line);
-	pm_qos_remove_request(&priv->pm_qos_request);
+	cpu_latency_qos_remove_request(&priv->pm_qos_request);
 	device_init_wakeup(&pdev->dev, false);
 	return 0;
 }
@@ -1448,7 +1449,7 @@ static int omap8250_runtime_suspend(struct device *dev)
 	if (up->dma && up->dma->rxchan)
 		omap_8250_rx_dma_flush(up);
 
-	priv->latency = PM_QOS_CPU_DMA_LAT_DEFAULT_VALUE;
+	priv->latency = PM_QOS_CPU_LATENCY_DEFAULT_VALUE;
 	schedule_work(&priv->qos_work);
 
 	return 0;

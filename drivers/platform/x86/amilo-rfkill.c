@@ -28,12 +28,8 @@
 static int amilo_a1655_rfkill_set_block(void *data, bool blocked)
 {
 	u8 param = blocked ? A1655_WIFI_OFF : A1655_WIFI_ON;
-	int rc;
 
-	i8042_lock_chip();
-	rc = i8042_command(&param, A1655_WIFI_COMMAND);
-	i8042_unlock_chip();
-	return rc;
+	return i8042_command(&param, A1655_WIFI_COMMAND);
 }
 
 static const struct rfkill_ops amilo_a1655_rfkill_ops = {

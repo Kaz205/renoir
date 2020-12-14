@@ -60,7 +60,7 @@ fb_create(struct drm_device *dev, struct drm_file *filp,
 	int ret;
 
 	fb = drm_gem_fb_create_with_funcs(dev, filp, mode_cmd, &fb_funcs);
-	if (IS_ERR_OR_NULL(fb))
+	if (IS_ERR(fb))
 		return fb;
 
 	gem_obj = drm_gem_object_lookup(filp, mode_cmd->handles[0]);
@@ -70,7 +70,7 @@ fb_create(struct drm_device *dev, struct drm_file *filp,
 		goto fail;
 	}
 
-	drm_gem_object_put_unlocked(gem_obj);
+	drm_gem_object_put(gem_obj);
 
 	ret = xen_drm_front_fb_attach(drm_info->front_info,
 				      xen_drm_front_dbuf_to_cookie(gem_obj),

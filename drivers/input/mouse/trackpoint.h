@@ -24,16 +24,19 @@
  * 0x01 was the original IBM trackpoint, others implement very limited
  * subset of trackpoint features.
  */
-#define TP_VARIANT_IBM		0x01
-#define TP_VARIANT_ALPS		0x02
-#define TP_VARIANT_ELAN		0x03
-#define TP_VARIANT_NXP		0x04
+#define TP_VARIANT_IBM			0x01
+#define TP_VARIANT_ALPS			0x02
+#define TP_VARIANT_ELAN			0x03
+#define TP_VARIANT_NXP			0x04
+#define TP_VARIANT_JYT_SYNAPTICS	0x05
+#define TP_VARIANT_SYNAPTICS		0x06
 
 /*
  * Commands
  */
 #define TP_RECALIB		0x51	/* Recalibrate */
 #define TP_POWER_DOWN		0x44	/* Can only be undone through HW reset */
+#define TP_ELAN_POWER_UP	0xBB
 #define TP_EXT_DEV		0x21	/* Determines if external device is connected (RO) */
 #define TP_EXT_BTN		0x4B	/* Read extended button status */
 #define TP_POR			0x7F	/* Execute Power on Reset */
@@ -107,7 +110,7 @@
 #define TP_TOGGLE_EXT_TAG	0x22	/* Bit 3 of the first packet coming from the
 					   external device will be forced to 1 */
 #define TP_MASK_EXT_TAG			0x04
-
+#define TP_TOGGLE_ELAN_SLEEP	0x8
 
 /* Power on Self Test Results */
 #define TP_POR_SUCCESS		0x3B

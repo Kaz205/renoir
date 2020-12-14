@@ -620,6 +620,8 @@ struct ath10k_hw_params {
 
 	/* tx stats support over pktlog */
 	bool tx_stats_over_pktlog;
+
+	bool dynamic_sar_support;
 };
 
 struct htt_rx_desc;

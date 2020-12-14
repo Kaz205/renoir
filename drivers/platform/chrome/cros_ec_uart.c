@@ -23,17 +23,17 @@
  * TTY driver in AP accumulates incoming bytes and calls the registered callback
  * function. Byte count can range from 1 to MAX bytes supported by EC.
  * This driver should wait for long time for all callbacks to be processed.
- * Considering the worst case scenario, wait for ~1 sec. This timeout should
+ * Considering the worst case scenario, wait for 500 msec. This timeout should
  * account for max latency and some additional guard time.
- * Best case: Entire packet is received in ~1 ms, wait queue will be released
+ * Best case: Entire packet is received in ~200 ms, wait queue will be released
  * and packet will be processed.
  * Worst case: TTY driver sends bytes in multiple callbacks. In this case this
  * driver will wait for ~1 sec beyond which it will timeout.
- * This timeout value should not exceed ~1.2 secs because in case if
+ * This timeout value should not exceed ~500 msec because in case if
  * EC_CMD_REBOOT_EC sent, high level driver should be able to intercept EC
  * in RO.
  */
-#define EC_MSG_DEADLINE_MS		1000
+#define EC_MSG_DEADLINE_MS		500
 
 /**
  * struct response_info - Encapsulate EC response related

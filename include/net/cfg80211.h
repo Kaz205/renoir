@@ -1529,6 +1529,55 @@ struct station_info {
 	u32 airtime_link_metric;
 };
 
+/**
+ * struct cfg80211_sar_sub_specs - sub specs limit
+ * @power: value in 0.25dbm
+ * @freq_range_index: index the power limitation applies to
+ */
+struct cfg80211_sar_sub_specs {
+	u8 power;
+	u8 freq_range_index;
+};
+
+/**
+ * struct cfg80211_sar_specs - sar limit specs
+ * @type: it's set with power in 0.25dbm or other types
+ * @num_sub_specs: number of sar sub specs
+ * @sub_specs: memory to hold the sar sub specs
+ */
+struct cfg80211_sar_specs {
+	enum nl80211_sar_type type;
+	u16 num_sub_specs;
+	struct cfg80211_sar_sub_specs *sub_specs;
+};
+
+
+/**
+ * @struct cfg80211_sar_chan_ranges - sar frequency ranges
+ * @index: the index of this range. It's used to specify
+ *	the frequency range when setting SAR power limitation
+ * @start_freq:  start channel frequency in kHZ. For example,
+ *	2.4G channel 1 is represented as 2412000
+ * @end_freq:    end channel frequency in kHZ
+ */
+struct cfg80211_sar_freq_ranges {
+	u8 index;
+	u32 start_freq;
+	u32 end_freq;
+};
+
+/**
+ * struct cfg80211_sar_capa - sar limit capability
+ * @type: it's set via power in 0.25dbm or other types
+ * @num_freq_ranges: number of frequency ranges
+ * @chan_ranges: memory to hold the channel ranges.
+ */
+struct cfg80211_sar_capa {
+	enum nl80211_sar_type type;
+	u8 num_freq_ranges;
+	const struct cfg80211_sar_freq_ranges *freq_ranges;
+};
+
 #if IS_ENABLED(CONFIG_CFG80211)
 /**
  * cfg80211_get_station - retrieve information about a given station
@@ -3950,6 +3999,8 @@ struct cfg80211_ops {
 				   struct cfg80211_update_owe_info *owe_info);
 	int	(*probe_mesh_link)(struct wiphy *wiphy, struct net_device *dev,
 				   const u8 *buf, size_t len);
+
+	int	(*set_sar_specs)(struct wiphy *wiphy, struct cfg80211_sar_specs *sar);
 };
 
 /*
@@ -4682,6 +4733,8 @@ struct wiphy {
 	   support_only_he_mbssid:1;
 
 	const struct cfg80211_pmsr_capabilities *pmsr_capa;
+
+	const struct cfg80211_sar_capa *sar_capa;
 
 	char priv[0] __aligned(NETDEV_ALIGN);
 };

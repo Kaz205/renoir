@@ -22,13 +22,16 @@
  * Authors: Andreas Pokorny
  */
 
+#include <drm/drm_drv.h>
 #include <drm/drm_prime.h>
+#include <linux/virtio_dma_buf.h>
 #include <linux/dma-buf.h>
 #include "virtgpu_drv.h"
 
-int virtgpu_gem_prime_get_uuid(struct drm_gem_object *obj,
-			       uuid_t *uuid)
+static int virtgpu_virtio_get_uuid(struct dma_buf *buf,
+				  uuid_t *uuid)
 {
+	struct drm_gem_object *obj = buf->priv;
 	struct virtio_gpu_object *bo = gem_to_virtio_gpu_obj(obj);
 	struct virtio_gpu_device *vgdev = obj->dev->dev_private;
 
@@ -41,12 +44,31 @@ int virtgpu_gem_prime_get_uuid(struct drm_gem_object *obj,
 	return 0;
 }
 
+const struct virtio_dma_buf_ops virtgpu_dmabuf_ops =  {
+	.ops = {
+		.cache_sgt_mapping = true,
+		.attach = virtio_dma_buf_attach,
+		.detach = drm_gem_map_detach,
+		.map_dma_buf = drm_gem_map_dma_buf,
+		.unmap_dma_buf = drm_gem_unmap_dma_buf,
+		.release = drm_gem_dmabuf_release,
+		.mmap = drm_gem_dmabuf_mmap,
+		.vmap = drm_gem_dmabuf_vmap,
+		.vunmap = drm_gem_dmabuf_vunmap,
+	},
+	.device_attach = drm_gem_map_attach,
+	.get_uuid = virtgpu_virtio_get_uuid,
+};
+
 struct dma_buf *virtgpu_gem_prime_export(struct drm_gem_object *obj,
-					 int flags)
+					int flags)
 {
+	struct dma_buf *buf;
+	struct drm_device *dev = obj->dev;
+	struct virtio_gpu_device *vgdev = dev->dev_private;
 	struct virtio_gpu_object *bo = gem_to_virtio_gpu_obj(obj);
-	struct virtio_gpu_device *vgdev = obj->dev->dev_private;
 	int ret = 0;
+	DEFINE_DMA_BUF_EXPORT_INFO(exp_info);
 
 	if (vgdev->has_resource_assign_uuid) {
 		ret = virtio_gpu_cmd_resource_assign_uuid(vgdev, bo);
@@ -56,7 +78,40 @@ struct dma_buf *virtgpu_gem_prime_export(struct drm_gem_object *obj,
 		bo->uuid_state = UUID_INITIALIZATION_FAILED;
 	}
 
-	return drm_gem_prime_export(obj, flags);
+	exp_info.ops = &virtgpu_dmabuf_ops.ops;
+	exp_info.size = obj->size;
+	exp_info.flags = flags;
+	exp_info.priv = obj;
+	exp_info.resv = obj->resv;
+
+	buf = virtio_dma_buf_export(&exp_info);
+	if (IS_ERR(buf))
+		return buf;
+
+	drm_dev_get(dev);
+	drm_gem_object_get(obj);
+
+	return buf;
+}
+
+struct drm_gem_object *virtgpu_gem_prime_import(struct drm_device *dev,
+						struct dma_buf *buf)
+{
+	struct drm_gem_object *obj;
+
+	if (buf->ops == &virtgpu_dmabuf_ops.ops) {
+		obj = buf->priv;
+		if (obj->dev == dev) {
+			/*
+			 * Importing dmabuf exported from our own gem increases
+			 * refcount on gem itself instead of f_count of dmabuf.
+			 */
+			drm_gem_object_get(obj);
+			return obj;
+		}
+	}
+
+	return drm_gem_prime_import(dev, buf);
 }
 
 struct sg_table *virtgpu_gem_prime_get_sg_table(struct drm_gem_object *obj)

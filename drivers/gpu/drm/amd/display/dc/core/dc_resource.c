@@ -668,6 +668,8 @@ static void calculate_recout(struct pipe_ctx *pipe_ctx)
 		pipe_ctx->plane_res.scl_data.recout.x += (surf_clip.x
 			- stream->src.x) * stream->dst.width
 						/ stream->src.width;
+	if (stream->src.x > surf_clip.x)
+		surf_clip.width -= stream->src.x - surf_clip.x;
 
 	pipe_ctx->plane_res.scl_data.recout.width = surf_clip.width *
 			stream->dst.width / stream->src.width;
@@ -682,6 +684,8 @@ static void calculate_recout(struct pipe_ctx *pipe_ctx)
 		pipe_ctx->plane_res.scl_data.recout.y += (surf_clip.y
 			- stream->src.y) * stream->dst.height
 						/ stream->src.height;
+	else if (stream->src.y > surf_clip.y)
+		surf_clip.height -= stream->src.y - surf_clip.y;
 
 	pipe_ctx->plane_res.scl_data.recout.height = surf_clip.height *
 			stream->dst.height / stream->src.height;

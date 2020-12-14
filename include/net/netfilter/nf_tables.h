@@ -143,6 +143,8 @@ static inline u64 nft_reg_load64(u32 *sreg)
 static inline void nft_data_copy(u32 *dst, const struct nft_data *src,
 				 unsigned int len)
 {
+	if (len % NFT_REG32_SIZE)
+		dst[len / NFT_REG32_SIZE] = 0;
 	memcpy(dst, src, len);
 }
 
@@ -868,6 +870,12 @@ static inline struct nft_expr *nft_expr_next(const struct nft_expr *expr)
 static inline struct nft_expr *nft_expr_last(const struct nft_rule *rule)
 {
 	return (struct nft_expr *)&rule->data[rule->dlen];
+}
+
+static inline bool nft_expr_more(const struct nft_rule *rule,
+				 const struct nft_expr *expr)
+{
+	return expr != nft_expr_last(rule) && expr->ops;
 }
 
 static inline struct nft_userdata *nft_userdata(const struct nft_rule *rule)

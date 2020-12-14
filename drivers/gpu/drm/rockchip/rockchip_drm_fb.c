@@ -84,7 +84,7 @@ rockchip_user_fb_create(struct drm_device *dev, struct drm_file *file_priv,
 			width * info->cpp[i];
 
 		if (obj->size < min_size) {
-			drm_gem_object_put_unlocked(obj);
+			drm_gem_object_put(obj);
 			ret = -EINVAL;
 			goto err_gem_object_unreference;
 		}
@@ -101,7 +101,7 @@ rockchip_user_fb_create(struct drm_device *dev, struct drm_file *file_priv,
 
 err_gem_object_unreference:
 	for (i--; i >= 0; i--)
-		drm_gem_object_put_unlocked(objs[i]);
+		drm_gem_object_put(objs[i]);
 	return ERR_PTR(ret);
 }
 

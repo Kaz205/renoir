@@ -934,11 +934,13 @@ static int q6asm_dai_probe(struct platform_device *pdev)
 					ARRAY_SIZE(q6asm_fe_dais));
 }
 
+#ifdef CONFIG_OF
 static const struct of_device_id q6asm_dai_device_id[] = {
 	{ .compatible = "qcom,q6asm-dais" },
 	{},
 };
 MODULE_DEVICE_TABLE(of, q6asm_dai_device_id);
+#endif
 
 static struct platform_driver q6asm_dai_platform_driver = {
 	.driver = {

@@ -2582,3 +2582,27 @@ void dc_get_clock(struct dc *dc, enum dc_clock_type clock_type, struct dc_clock_
 	if (dc->hwss.get_clock)
 		dc->hwss.get_clock(dc, clock_type, clock_cfg);
 }
+
+/* enable/disable eDP PSR without specify stream for eDP */
+bool dc_set_psr_allow_active(struct dc *dc, bool enable)
+{
+	int i;
+
+	for (i = 0; i < dc->current_state->stream_count ; i++) {
+		struct dc_link *link;
+		struct dc_stream_state *stream = dc->current_state->streams[i];
+
+		link = stream->link;
+		if (!link)
+			continue;
+
+		if (link->psr_feature_enabled) {
+			if (enable && !link->psr_allow_active)
+				return dc_link_set_psr_allow_active(link, true, false);
+			else if (!enable && link->psr_allow_active)
+				return dc_link_set_psr_allow_active(link, false, true);
+		}
+	}
+
+	return true;
+}

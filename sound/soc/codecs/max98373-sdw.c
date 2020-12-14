@@ -7,6 +7,7 @@
 #include <linux/mod_devicetable.h>
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
+#include <linux/slab.h>
 #include <sound/pcm.h>
 #include <sound/pcm_params.h>
 #include <sound/soc.h>
@@ -14,6 +15,8 @@
 #include <linux/of.h>
 #include <linux/soundwire/sdw.h>
 #include <linux/soundwire/sdw_type.h>
+#include <linux/soundwire/sdw_registers.h>
+#include "max98373.h"
 #include "max98373-sdw.h"
 
 struct sdw_stream_data {
@@ -208,7 +211,6 @@ static bool max98373_readable_register(struct device *dev, unsigned int reg)
 static bool max98373_volatile_reg(struct device *dev, unsigned int reg)
 {
 	switch (reg) {
-	case MAX98373_R203E_AMP_PATH_GAIN:
 	case MAX98373_R2054_MEAS_ADC_PVDD_CH_READBACK:
 	case MAX98373_R2055_MEAS_ADC_THERM_CH_READBACK:
 	case MAX98373_R20B6_BDE_CUR_STATE_READBACK:
@@ -239,67 +241,8 @@ static const struct regmap_config max98373_sdw_regmap = {
 	.use_single_write = true,
 };
 
-static void max98373_read_config(struct sdw_slave *slave)
-{
-	int value;
-	struct device *dev = &slave->dev;
-	struct max98373_priv *max98373 = dev_get_drvdata(dev);
-
-	if (!device_property_read_u32(dev, "maxim,vmon-slot-no", &value))
-		max98373->v_slot = value & 0xF;
-	else
-		max98373->v_slot = 0;
-
-	if (!device_property_read_u32(dev, "maxim,imon-slot-no", &value))
-		max98373->i_slot = value & 0xF;
-	else
-		max98373->i_slot = 1;
-
-	if (!device_property_read_u32(dev, "maxim,spkfb-slot-no", &value))
-		max98373->spkfb_slot = value & 0xF;
-	else
-		max98373->spkfb_slot = 2;
-
-	/* update interleave mode info */
-	if (device_property_read_bool(dev, "maxim,interleave_mode"))
-		max98373->interleave_mode = true;
-	else
-		max98373->interleave_mode = false;
-}
-
-/*     MAX98373 reset and initialization. */
-static int max98373_reset(struct device *dev)
-{
-	int ret, reg, count;
-	struct max98373_priv *max98373 = dev_get_drvdata(dev);
-
-	/* Software Reset */
-	ret = regmap_update_bits(max98373->regmap,
-				 MAX98373_R2000_SW_RESET,
-				 MAX98373_SOFT_RESET,
-				 MAX98373_SOFT_RESET);
-	if (ret) {
-		dev_err(dev, "Reset command failed. (ret:%d)\n", ret);
-		return ret;
-	}
-
-	for (count = 0; count < 3; count++) {
-		usleep_range(10000, 11000);
-		/* Software Reset Verification */
-		ret = regmap_read(max98373->regmap,
-				  MAX98373_R21FF_REV_ID, &reg);
-		if (!ret) {
-			dev_dbg(dev, "Reset completed (retry:%d)\n", count);
-			return 0;
-		}
-	}
-
-	dev_err(dev, "Reset failed. (ret:%d)\n", ret);
-	return ret;
-}
-
 /* Power management functions and structure */
-static int max98373_suspend(struct device *dev)
+static __maybe_unused int max98373_suspend(struct device *dev)
 {
 	struct max98373_priv *max98373 = dev_get_drvdata(dev);
 
@@ -308,11 +251,17 @@ static int max98373_suspend(struct device *dev)
 	return 0;
 }
 
-static int max98373_resume(struct device *dev)
+static __maybe_unused int max98373_resume(struct device *dev)
 {
 	struct sdw_slave *slave = dev_to_sdw_dev(dev);
 	struct max98373_priv *max98373 = dev_get_drvdata(dev);
 	unsigned long time;
+
+	if (!max98373->hw_init)
+		return 0;
+
+	if (!slave->unattach_request)
+		goto regmap_sync;
 
 	time = wait_for_completion_timeout(&slave->initialization_complete,
 					   msecs_to_jiffies(2000));
@@ -321,6 +270,8 @@ static int max98373_resume(struct device *dev)
 		return -ETIMEDOUT;
 	}
 
+regmap_sync:
+	slave->unattach_request = 0;
 	regcache_cache_only(max98373->regmap, false);
 	regcache_sync(max98373->regmap);
 
@@ -335,10 +286,12 @@ static const struct dev_pm_ops max98373_pm = {
 static int max98373_read_prop(struct sdw_slave *slave)
 {
 	struct sdw_slave_prop *prop = &slave->prop;
-	int nval, i, num_of_ports;
+	int nval, i;
 	u32 bit;
 	unsigned long addr;
 	struct sdw_dpn_prop *dpn;
+
+	prop->scp_int1_mask = SDW_SCP_INT1_BUS_CLASH | SDW_SCP_INT1_PARITY;
 
 	/* BITMAP: 00001000  Dataport 3 is active */
 	prop->source_ports = BIT(3);
@@ -348,7 +301,6 @@ static int max98373_read_prop(struct sdw_slave *slave)
 	prop->clk_stop_timeout = 20;
 
 	nval = hweight32(prop->source_ports);
-	num_of_ports = nval;
 	prop->src_dpn_prop = devm_kcalloc(&slave->dev, nval,
 					  sizeof(*prop->src_dpn_prop),
 					  GFP_KERNEL);
@@ -368,7 +320,6 @@ static int max98373_read_prop(struct sdw_slave *slave)
 
 	/* do this again for sink now */
 	nval = hweight32(prop->sink_ports);
-	num_of_ports += nval;
 	prop->sink_dpn_prop = devm_kcalloc(&slave->dev, nval,
 					   sizeof(*prop->sink_dpn_prop),
 					   GFP_KERNEL);
@@ -386,17 +337,6 @@ static int max98373_read_prop(struct sdw_slave *slave)
 		i++;
 	}
 
-	/* Allocate port_ready based on num_of_ports */
-	slave->port_ready = devm_kcalloc(&slave->dev, num_of_ports,
-					 sizeof(*slave->port_ready),
-					 GFP_KERNEL);
-	if (!slave->port_ready)
-		return -ENOMEM;
-
-	/* Initialize completion */
-	for (i = 0; i < num_of_ports; i++)
-		init_completion(&slave->port_ready[i]);
-
 	/* set the timeout values */
 	prop->clk_stop_timeout = 20;
 
@@ -407,7 +347,6 @@ static int max98373_io_init(struct sdw_slave *slave)
 {
 	struct device *dev = &slave->dev;
 	struct max98373_priv *max98373 = dev_get_drvdata(dev);
-	int ret;
 
 	if (max98373->pm_init_once) {
 		regcache_cache_only(max98373->regmap, false);
@@ -434,9 +373,7 @@ static int max98373_io_init(struct sdw_slave *slave)
 	pm_runtime_get_noresume(dev);
 
 	/* Software Reset */
-	ret = max98373_reset(dev);
-	if (ret)
-		return ret;
+	max98373_reset(max98373, dev);
 
 	/* Set soundwire mode */
 	regmap_write(max98373->regmap, MAX98373_R2025_AUDIO_IF_MODE, 3);
@@ -460,13 +397,6 @@ static int max98373_io_init(struct sdw_slave *slave)
 	regmap_write(max98373->regmap,
 		     MAX98373_R202A_PCM_TO_SPK_MONO_MIX_2,
 		     0x1);
-	/* Set initial volume (0dB) */
-	regmap_write(max98373->regmap,
-		     MAX98373_R203D_AMP_DIG_VOL_CTRL,
-		     0x00);
-	regmap_write(max98373->regmap,
-		     MAX98373_R203E_AMP_PATH_GAIN,
-		     0x00);
 	/* Enable DC blocker */
 	regmap_write(max98373->regmap,
 		     MAX98373_R203F_AMP_DSP_CFG,
@@ -614,12 +544,17 @@ static int max98373_sdw_dai_hw_params(struct snd_pcm_substream *substream,
 	stream_config.bps = snd_pcm_format_width(params_format(params));
 	stream_config.direction = direction;
 
-	if (max98373->slot) {
+	if (max98373->slot && direction == SDW_DATA_DIR_RX) {
 		stream_config.ch_count = max98373->slot;
 		port_config.ch_mask = max98373->rx_mask;
 	} else {
-		stream_config.ch_count = params_channels(params);
-		port_config.ch_mask = GENMASK(stream_config.ch_count - 1, 0);
+		/* only IV are supported by capture */
+		if (direction == SDW_DATA_DIR_TX)
+			stream_config.ch_count = 2;
+		else
+			stream_config.ch_count = params_channels(params);
+
+		port_config.ch_mask = GENMASK((int)stream_config.ch_count - 1, 0);
 	}
 
 	ret = sdw_stream_add_slave(max98373->slave, &stream_config,
@@ -774,7 +709,11 @@ static int max98373_sdw_set_tdm_slot(struct snd_soc_dai *dai,
 	struct max98373_priv *max98373 =
 		snd_soc_component_get_drvdata(component);
 
-	if (!tx_mask && !rx_mask && !slots && !slot_width)
+	/* tx_mask is unused since it's irrelevant for I/V feedback */
+	if (tx_mask)
+		return -EINVAL;
+
+	if (!rx_mask && !slots && !slot_width)
 		max98373->tdm_mode = false;
 	else
 		max98373->tdm_mode = true;
@@ -830,7 +769,7 @@ static int max98373_init(struct sdw_slave *slave, struct regmap *regmap)
 	max98373->slave = slave;
 
 	/* Read voltage and slot configuration */
-	max98373_read_config(slave);
+	max98373_slot_config(dev, max98373);
 
 	max98373->hw_init = false;
 	max98373->pm_init_once = false;
@@ -892,8 +831,8 @@ static int max98373_sdw_probe(struct sdw_slave *slave,
 
 	/* Regmap Initialization */
 	regmap = devm_regmap_init_sdw(slave, &max98373_sdw_regmap);
-	if (!regmap)
-		return -EINVAL;
+	if (IS_ERR(regmap))
+		return PTR_ERR(regmap);
 
 	return max98373_init(slave, regmap);
 }

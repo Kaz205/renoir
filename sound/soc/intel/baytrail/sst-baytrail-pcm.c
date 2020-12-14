@@ -62,7 +62,7 @@ static int sst_byt_pcm_hw_params(struct snd_soc_component *component,
 				 struct snd_pcm_substream *substream,
 				 struct snd_pcm_hw_params *params)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_pcm_runtime *rtd = asoc_substream_to_rtd(substream);
 	struct sst_byt_priv_data *pdata = snd_soc_component_get_drvdata(component);
 	struct sst_byt_pcm_data *pcm_data = &pdata->pcm[substream->stream];
 	struct sst_byt *byt = pdata->byt;
@@ -134,7 +134,7 @@ static int sst_byt_pcm_hw_free(struct snd_soc_component *component,
 
 static int sst_byt_pcm_restore_stream_context(struct snd_pcm_substream *substream)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_pcm_runtime *rtd = asoc_substream_to_rtd(substream);
 	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, DRV_NAME);
 	struct sst_byt_priv_data *pdata = snd_soc_component_get_drvdata(component);
 	struct sst_byt_pcm_data *pcm_data = &pdata->pcm[substream->stream];
@@ -168,7 +168,7 @@ static void sst_byt_pcm_work(struct work_struct *work)
 static int sst_byt_pcm_trigger(struct snd_soc_component *component,
 			       struct snd_pcm_substream *substream, int cmd)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_pcm_runtime *rtd = asoc_substream_to_rtd(substream);
 	struct sst_byt_priv_data *pdata = snd_soc_component_get_drvdata(component);
 	struct sst_byt_pcm_data *pcm_data = &pdata->pcm[substream->stream];
 	struct sst_byt *byt = pdata->byt;
@@ -210,7 +210,7 @@ static u32 byt_notify_pointer(struct sst_byt_stream *stream, void *data)
 	struct sst_byt_pcm_data *pcm_data = data;
 	struct snd_pcm_substream *substream = pcm_data->substream;
 	struct snd_pcm_runtime *runtime = substream->runtime;
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_pcm_runtime *rtd = asoc_substream_to_rtd(substream);
 	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, DRV_NAME);
 	struct sst_byt_priv_data *pdata = snd_soc_component_get_drvdata(component);
 	struct sst_byt *byt = pdata->byt;
@@ -232,7 +232,7 @@ static u32 byt_notify_pointer(struct sst_byt_stream *stream, void *data)
 static snd_pcm_uframes_t sst_byt_pcm_pointer(struct snd_soc_component *component,
 					     struct snd_pcm_substream *substream)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_pcm_runtime *rtd = asoc_substream_to_rtd(substream);
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct sst_byt_priv_data *pdata = snd_soc_component_get_drvdata(component);
 	struct sst_byt_pcm_data *pcm_data = &pdata->pcm[substream->stream];
@@ -245,7 +245,7 @@ static snd_pcm_uframes_t sst_byt_pcm_pointer(struct snd_soc_component *component
 static int sst_byt_pcm_open(struct snd_soc_component *component,
 			    struct snd_pcm_substream *substream)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_pcm_runtime *rtd = asoc_substream_to_rtd(substream);
 	struct sst_byt_priv_data *pdata = snd_soc_component_get_drvdata(component);
 	struct sst_byt_pcm_data *pcm_data = &pdata->pcm[substream->stream];
 	struct sst_byt *byt = pdata->byt;
@@ -273,7 +273,7 @@ static int sst_byt_pcm_open(struct snd_soc_component *component,
 static int sst_byt_pcm_close(struct snd_soc_component *component,
 			     struct snd_pcm_substream *substream)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_pcm_runtime *rtd = asoc_substream_to_rtd(substream);
 	struct sst_byt_priv_data *pdata = snd_soc_component_get_drvdata(component);
 	struct sst_byt_pcm_data *pcm_data = &pdata->pcm[substream->stream];
 	struct sst_byt *byt = pdata->byt;
@@ -299,7 +299,7 @@ static int sst_byt_pcm_mmap(struct snd_soc_component *component,
 			    struct snd_pcm_substream *substream,
 			    struct vm_area_struct *vma)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_pcm_runtime *rtd = asoc_substream_to_rtd(substream);
 
 	dev_dbg(rtd->dev, "PCM: mmap\n");
 	return snd_pcm_lib_default_mmap(substream, vma);

@@ -488,7 +488,7 @@ static int fuse_create_open(struct inode *dir, struct dentry *entry,
 						    &security_ctx,
 						    &security_ctxlen);
 		if (err)
-			goto out_put_forget_req;
+			goto out_free_ff;
 
 		if (security_ctxlen > 0) {
 			args.in_numargs = 3;
@@ -498,6 +498,7 @@ static int fuse_create_open(struct inode *dir, struct dentry *entry,
 	}
 
 	err = fuse_simple_request(fc, &args);
+	kfree(security_ctx);
 	if (err)
 		goto out_free_ff;
 
@@ -533,7 +534,6 @@ static int fuse_create_open(struct inode *dir, struct dentry *entry,
 	return err;
 
 out_free_ff:
-	kfree(security_ctx);
 	fuse_file_free(ff);
 out_put_forget_req:
 	kfree(forget);
@@ -620,7 +620,7 @@ static int create_new_entry(struct fuse_conn *fc, struct fuse_args *args,
 						    &security_ctx,
 						    &security_ctxlen);
 		if (err)
-			return err;
+			goto out_put_forget_req;
 
 		if (security_ctxlen > 0) {
 			args->in_args[idx].size = security_ctxlen;
@@ -719,6 +719,28 @@ static int fuse_mkdir(struct inode *dir, struct dentry *entry, umode_t mode)
 	args.in_args[1].value = entry->d_name.name;
 
 	return create_new_entry(fc, &args, dir, entry, S_IFDIR,
+				fc->init_security);
+}
+
+static int fuse_chromeos_tmpfile(struct inode *dir, struct dentry *entry,
+				 umode_t mode)
+{
+	struct fuse_chromeos_tmpfile_in inarg;
+	struct fuse_conn *fc = get_fuse_conn(dir);
+	FUSE_ARGS(args);
+
+	if (!fc->dont_mask)
+		mode &= ~current_umask();
+
+	memset(&inarg, 0, sizeof(inarg));
+	inarg.mode = mode;
+	inarg.umask = current_umask();
+	args.opcode = FUSE_CHROMEOS_TMPFILE;
+	args.in_numargs = 1;
+	args.in_args[0].size = sizeof(inarg);
+	args.in_args[0].value = &inarg;
+
+	return create_new_entry(fc, &args, dir, entry, S_IFREG,
 				fc->init_security);
 }
 
@@ -1551,6 +1573,7 @@ int fuse_do_setattr(struct dentry *dentry, struct iattr *attr,
 	loff_t oldsize;
 	int err;
 	bool trust_local_cmtime = is_wb && S_ISREG(inode->i_mode);
+	bool fault_blocked = false;
 
 	if (!fc->default_permissions)
 		attr->ia_valid |= ATTR_FORCE;
@@ -1558,6 +1581,22 @@ int fuse_do_setattr(struct dentry *dentry, struct iattr *attr,
 	err = setattr_prepare(dentry, attr);
 	if (err)
 		return err;
+
+	if (attr->ia_valid & ATTR_SIZE) {
+		if (WARN_ON(!S_ISREG(inode->i_mode)))
+			return -EIO;
+		is_truncate = true;
+	}
+
+	if (FUSE_IS_DAX(inode) && is_truncate) {
+		down_write(&fi->i_mmap_sem);
+		fault_blocked = true;
+		err = fuse_dax_break_layouts(inode, 0, 0);
+		if (err) {
+			up_write(&fi->i_mmap_sem);
+			return err;
+		}
+	}
 
 	if (attr->ia_valid & ATTR_OPEN) {
 		/* This is coming from open(..., ... | O_TRUNC); */
@@ -1571,15 +1610,9 @@ int fuse_do_setattr(struct dentry *dentry, struct iattr *attr,
 			 */
 			i_size_write(inode, 0);
 			truncate_pagecache(inode, 0);
-			return 0;
+			goto out;
 		}
 		file = NULL;
-	}
-
-	if (attr->ia_valid & ATTR_SIZE) {
-		if (WARN_ON(!S_ISREG(inode->i_mode)))
-			return -EIO;
-		is_truncate = true;
 	}
 
 	/* Flush dirty data/metadata before non-truncate SETATTR */
@@ -1664,6 +1697,10 @@ int fuse_do_setattr(struct dentry *dentry, struct iattr *attr,
 	}
 
 	clear_bit(FUSE_I_SIZE_UNSTABLE, &fi->state);
+out:
+	if (fault_blocked)
+		up_write(&fi->i_mmap_sem);
+
 	return 0;
 
 error:
@@ -1671,6 +1708,9 @@ error:
 		fuse_release_nowrite(inode);
 
 	clear_bit(FUSE_I_SIZE_UNSTABLE, &fi->state);
+
+	if (fault_blocked)
+		up_write(&fi->i_mmap_sem);
 	return err;
 }
 
@@ -1762,6 +1802,7 @@ static const struct inode_operations fuse_dir_inode_operations = {
 	.listxattr	= fuse_listxattr,
 	.get_acl	= fuse_get_acl,
 	.set_acl	= fuse_set_acl,
+	.tmpfile	= fuse_chromeos_tmpfile,
 };
 
 static const struct file_operations fuse_dir_operations = {
