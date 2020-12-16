@@ -496,7 +496,7 @@ bool ipu_psys_ppg_enqueue_bufsets(struct ipu_psys_ppg *kppg)
 void ipu_psys_enter_power_gating(struct ipu_psys *psys)
 {
 	struct ipu_psys_scheduler *sched;
-	struct ipu_psys_ppg *kppg;
+	struct ipu_psys_ppg *kppg, *tmp;
 	struct ipu_psys_fh *fh;
 	int ret = 0;
 
@@ -508,7 +508,7 @@ void ipu_psys_enter_power_gating(struct ipu_psys *psys)
 			continue;
 		}
 
-		list_for_each_entry(kppg, &sched->ppgs, list) {
+		list_for_each_entry_safe(kppg, tmp, &sched->ppgs, list) {
 			mutex_lock(&kppg->mutex);
 			/* kppg has already power down */
 			if (kppg->state == PPG_STATE_STOPPED) {
@@ -532,7 +532,7 @@ void ipu_psys_enter_power_gating(struct ipu_psys *psys)
 void ipu_psys_exit_power_gating(struct ipu_psys *psys)
 {
 	struct ipu_psys_scheduler *sched;
-	struct ipu_psys_ppg *kppg;
+	struct ipu_psys_ppg *kppg, *tmp;
 	struct ipu_psys_fh *fh;
 	int ret = 0;
 
@@ -544,7 +544,7 @@ void ipu_psys_exit_power_gating(struct ipu_psys *psys)
 			continue;
 		}
 
-		list_for_each_entry(kppg, &sched->ppgs, list) {
+		list_for_each_entry_safe(kppg, tmp, &sched->ppgs, list) {
 			mutex_lock(&kppg->mutex);
 			/* kppg is not started and power up */
 			if (kppg->state == PPG_STATE_START ||
