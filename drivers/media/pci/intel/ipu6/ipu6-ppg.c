@@ -257,26 +257,24 @@ int ipu_psys_ppg_start(struct ipu_psys_ppg *kppg)
 	ret = pm_runtime_get_sync(&psys->adev->dev);
 	if (ret < 0) {
 		dev_err(&psys->adev->dev, "failed to power on psys\n");
-		pm_runtime_put_noidle(&psys->adev->dev);
 		goto error;
 	}
 
 	ret = ipu_psys_kcmd_start(psys, kcmd);
 	if (ret) {
-		list_move_tail(&kcmd->list, &kppg->kcmds_finished_list);
-		ipu_psys_kcmd_complete(psys, kcmd, -EIO);
+		ipu_psys_kcmd_complete(kppg, kcmd, -EIO);
 		goto error;
 	}
 
 	dev_dbg(&psys->adev->dev, "s_change:%s: %p %d -> %d\n",
 		__func__, kppg, kppg->state, PPG_STATE_STARTED);
 	kppg->state = PPG_STATE_STARTED;
-	list_move_tail(&kcmd->list, &kppg->kcmds_finished_list);
-	ipu_psys_kcmd_complete(psys, kcmd, 0);
+	ipu_psys_kcmd_complete(kppg, kcmd, 0);
 
 	return 0;
 
 error:
+	pm_runtime_put_noidle(&psys->adev->dev);
 	ipu_psys_reset_process_cell(&psys->adev->dev,
 				    kcmd->kpg->pg,
 				    kcmd->pg_manifest,
@@ -395,8 +393,7 @@ int ipu_psys_ppg_stop(struct ipu_psys_ppg *kppg)
 			ipu_psys_free_cmd_queue_resource(
 				&psys->resource_pool_running,
 				ipu_fw_psys_ppg_get_base_queue_id(kcmd));
-			list_move_tail(&kcmd->list, &kppg->kcmds_finished_list);
-			ipu_psys_kcmd_complete(psys, kcmd, 0);
+			ipu_psys_kcmd_complete(kppg, kcmd, 0);
 			spin_lock_irqsave(&psys->pgs_lock, flags);
 			kppg->kpg->pg_size = 0;
 			spin_unlock_irqrestore(&psys->pgs_lock, flags);

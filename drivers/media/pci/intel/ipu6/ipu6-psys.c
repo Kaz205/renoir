@@ -448,15 +448,17 @@ static struct ipu_psys_ppg *ipu_psys_lookup_ppg(struct ipu_psys *psys,
  * Move kcmd into completed state (due to running finished or failure).
  * Fill up the event struct and notify waiters.
  */
-void ipu_psys_kcmd_complete(struct ipu_psys *psys,
+void ipu_psys_kcmd_complete(struct ipu_psys_ppg *kppg,
 			    struct ipu_psys_kcmd *kcmd, int error)
 {
 	struct ipu_psys_fh *fh = kcmd->fh;
+	struct ipu_psys *psys = fh->psys;
 
 	kcmd->ev.type = IPU_PSYS_EVENT_TYPE_CMD_COMPLETE;
 	kcmd->ev.user_token = kcmd->user_token;
 	kcmd->ev.issue_id = kcmd->issue_id;
 	kcmd->ev.error = error;
+	list_move_tail(&kcmd->list, &kppg->kcmds_finished_list);
 
 	if (kcmd->constraint.min_freq)
 		ipu_buttress_remove_psys_constraint(psys->adev->isp,
@@ -651,8 +653,7 @@ static int ipu_psys_kcmd_send_to_ppg(struct ipu_psys_kcmd *kcmd)
 				"kppg 0x%p  stopped!\n", kppg);
 			id = ipu_fw_psys_ppg_get_base_queue_id(kcmd);
 			ipu_psys_free_cmd_queue_resource(rpr, id);
-			list_add(&kcmd->list, &kppg->kcmds_finished_list);
-			ipu_psys_kcmd_complete(psys, kcmd, 0);
+			ipu_psys_kcmd_complete(kppg, kcmd, 0);
 			spin_lock_irqsave(&psys->pgs_lock, flags);
 			kppg->kpg->pg_size = 0;
 			spin_unlock_irqrestore(&psys->pgs_lock, flags);
@@ -854,8 +855,7 @@ void ipu_psys_handle_events(struct ipu_psys *psys)
 			       status == IPU_PSYS_EVENT_FRAGMENT_COMPLETE) ?
 				0 : -EIO;
 			mutex_lock(&kppg->mutex);
-			list_move_tail(&kcmd->list, &kppg->kcmds_finished_list);
-			ipu_psys_kcmd_complete(psys, kcmd, res);
+			ipu_psys_kcmd_complete(kppg, kcmd, res);
 			mutex_unlock(&kppg->mutex);
 		}
 	} while (1);

@@ -371,15 +371,13 @@ static void ipu_psys_update_ppg_state_by_kcmd(struct ipu_psys *psys,
 	    kppg->state == PPG_STATE_RESUMED ||
 	    kppg->state == PPG_STATE_RUNNING) {
 		if (kcmd->state == KCMD_STATE_PPG_START) {
-			list_move_tail(&kcmd->list, &kppg->kcmds_finished_list);
-			ipu_psys_kcmd_complete(psys, kcmd, 0);
+			ipu_psys_kcmd_complete(kppg, kcmd, 0);
 		} else if (kcmd->state == KCMD_STATE_PPG_STOP) {
 			kppg->state = PPG_STATE_STOP;
 		}
 	} else if (kppg->state == PPG_STATE_SUSPENDED) {
 		if (kcmd->state == KCMD_STATE_PPG_START) {
-			list_move_tail(&kcmd->list, &kppg->kcmds_finished_list);
-			ipu_psys_kcmd_complete(psys, kcmd, 0);
+			ipu_psys_kcmd_complete(kppg, kcmd, 0);
 		} else if (kcmd->state == KCMD_STATE_PPG_STOP) {
 			/*
 			 * Record the previous state
@@ -393,12 +391,10 @@ static void ipu_psys_update_ppg_state_by_kcmd(struct ipu_psys *psys,
 		if (kcmd->state == KCMD_STATE_PPG_START) {
 			kppg->state = PPG_STATE_START;
 		} else if (kcmd->state == KCMD_STATE_PPG_STOP) {
-			list_move_tail(&kcmd->list, &kppg->kcmds_finished_list);
-			ipu_psys_kcmd_complete(psys, kcmd, 0);
+			ipu_psys_kcmd_complete(kppg, kcmd, 0);
 		} else if (kcmd->state == KCMD_STATE_PPG_ENQUEUE) {
 			dev_err(&psys->adev->dev, "ppg %p stopped!\n", kppg);
-			list_move_tail(&kcmd->list, &kppg->kcmds_finished_list);
-			ipu_psys_kcmd_complete(psys, kcmd, -EIO);
+			ipu_psys_kcmd_complete(kppg, kcmd, -EIO);
 		}
 	}
 
