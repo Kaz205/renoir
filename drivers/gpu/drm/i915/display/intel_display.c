@@ -12941,7 +12941,7 @@ static void
 intel_dump_dp_vsc_sdp(struct drm_i915_private *dev_priv,
 		      const struct drm_dp_vsc_sdp *vsc)
 {
-	if (!drm_debug_enabled(DRM_UT_KMS))
+	if (!drm_debug_syslog_enabled(DRM_UT_KMS))
 		return;
 
 	drm_dp_vsc_sdp_log(KERN_DEBUG, dev_priv->drm.dev, vsc);
@@ -13603,7 +13603,7 @@ pipe_config_dp_vsc_sdp_mismatch(struct drm_i915_private *dev_priv,
 				const struct drm_dp_vsc_sdp *b)
 {
 	if (fastset) {
-		if (!drm_debug_enabled(DRM_UT_KMS))
+		if (!drm_debug_syslog_enabled(DRM_UT_KMS))
 			return;
 
 		drm_dbg_kms(&dev_priv->drm,
