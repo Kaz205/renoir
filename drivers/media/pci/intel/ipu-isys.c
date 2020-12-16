@@ -47,7 +47,7 @@
 
 /* LTR & DID value are 10 bit at most */
 #define LTR_DID_VAL_MAX		1023
-#define LTR_DEFAULT_VALUE	0x64503C19
+#define LTR_DEFAULT_VALUE	0x70503C19
 #define FILL_TIME_DEFAULT_VALUE 0xFFF0783C
 #define LTR_DID_PKGC_2R		20
 #define LTR_DID_PKGC_8		100
@@ -361,6 +361,8 @@ static void set_iwake_ltrdid(struct ipu_isys *isys,
 	fc.bits.ltr_scale = ltr_scale;
 	fc.bits.did_val = did_val;
 	fc.bits.did_scale = 2;
+	dev_dbg(&isys->adev->dev,
+		"%s ltr: %d  did: %d", __func__, ltr_val, did_val);
 	writel(fc.value, isp->base + IPU_BUTTRESS_FABIC_CONTROL);
 }
 
@@ -391,7 +393,8 @@ void update_watermark_setting(struct ipu_isys *isys)
 	struct video_stream_watermark *p_watermark;
 	struct ltr_did ltrdid;
 	u16 calc_fill_time_us = 0;
-	u16 ltr, did;
+	u16 ltr = 0;
+	u16 did = 0;
 	u32 iwake_threshold, iwake_critical_threshold;
 	u64 threshold_bytes;
 	u64 isys_pb_datarate_mbs = 0;
@@ -423,6 +426,7 @@ void update_watermark_setting(struct ipu_isys *isys)
 	mutex_unlock(&iwake_watermark->mutex);
 
 	if (!isys_pb_datarate_mbs) {
+		enable_iwake(isys, false);
 		set_iwake_ltrdid(isys, 0, 0, LTR_IWAKE_OFF);
 		mutex_lock(&iwake_watermark->mutex);
 		set_iwake_register(isys, GDA_IRQ_CRITICAL_THRESHOLD_INDEX,
@@ -460,6 +464,8 @@ void update_watermark_setting(struct ipu_isys *isys)
 		iwake_critical_threshold = iwake_threshold +
 			(IS_PIXEL_BUFFER_PAGES - iwake_threshold) / 2;
 
+		dev_dbg(&isys->adev->dev, "%s threshold: %u  critical: %u",
+			__func__, iwake_threshold, iwake_critical_threshold);
 		set_iwake_ltrdid(isys, ltr, did, LTR_IWAKE_ON);
 		mutex_lock(&iwake_watermark->mutex);
 		set_iwake_register(isys,
