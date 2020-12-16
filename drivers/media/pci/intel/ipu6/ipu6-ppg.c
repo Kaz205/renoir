@@ -394,6 +394,8 @@ int ipu_psys_ppg_stop(struct ipu_psys_ppg *kppg)
 			pm_runtime_put(&psys->adev->dev);
 			kppg->state = PPG_STATE_STOPPED;
 			return 0;
+		} else {
+			return 0;
 		}
 	}
 	dev_dbg(&psys->adev->dev, "s_change:%s %p %d -> %d\n",
