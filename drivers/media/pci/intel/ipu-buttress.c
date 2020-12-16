@@ -612,6 +612,28 @@ out_mutex_unlock:
 	mutex_unlock(&isp->buttress.power_mutex);
 }
 
+static void ipu_buttress_set_isys_ratio(struct ipu_device *isp,
+					unsigned int isys_divisor)
+{
+	struct ipu_buttress_ctrl *ctrl = isp->isys->ctrl;
+
+	mutex_lock(&isp->buttress.power_mutex);
+
+	if (ctrl->divisor == isys_divisor)
+		goto out_mutex_unlock;
+
+	ctrl->divisor = isys_divisor;
+
+	if (ctrl->started) {
+		writel(BUTTRESS_FREQ_CTL_START |
+		       ctrl->qos_floor << BUTTRESS_FREQ_CTL_QOS_FLOOR_SHIFT |
+		       isys_divisor, isp->base + BUTTRESS_REG_IS_FREQ_CTL);
+	}
+
+out_mutex_unlock:
+	mutex_unlock(&isp->buttress.power_mutex);
+}
+
 static void ipu_buttress_set_psys_freq(struct ipu_device *isp,
 				       unsigned int freq)
 {
@@ -1089,6 +1111,54 @@ static int ipu_buttress_psys_force_freq_set(void *data, u64 val)
 	return 0;
 }
 
+int ipu_buttress_isys_freq_get(void *data, u64 *val)
+{
+	struct ipu_device *isp = data;
+	u32 reg_val;
+	int rval;
+
+	rval = pm_runtime_get_sync(&isp->isys->dev);
+	if (rval < 0) {
+		pm_runtime_put(&isp->isys->dev);
+		dev_err(&isp->pdev->dev, "Runtime PM failed (%d)\n", rval);
+		return rval;
+	}
+
+	reg_val = readl(isp->base + BUTTRESS_REG_IS_FREQ_CTL);
+
+	pm_runtime_put(&isp->isys->dev);
+
+	*val = IPU_IS_FREQ_RATIO_BASE *
+	    (reg_val & IPU_BUTTRESS_IS_FREQ_CTL_DIVISOR_MASK);
+
+	return 0;
+}
+
+int ipu_buttress_isys_freq_set(void *data, u64 val)
+{
+	struct ipu_device *isp = data;
+	int rval;
+
+	if (val < BUTTRESS_MIN_FORCE_IS_FREQ ||
+	    val > BUTTRESS_MAX_FORCE_IS_FREQ)
+		return -EINVAL;
+
+	rval = pm_runtime_get_sync(&isp->isys->dev);
+	if (rval < 0) {
+		pm_runtime_put(&isp->isys->dev);
+		dev_err(&isp->pdev->dev, "Runtime PM failed (%d)\n", rval);
+		return rval;
+	}
+
+	do_div(val, BUTTRESS_IS_FREQ_STEP);
+	if (val)
+		ipu_buttress_set_isys_ratio(isp, val);
+
+	pm_runtime_put(&isp->isys->dev);
+
+	return 0;
+}
+
 DEFINE_SIMPLE_ATTRIBUTE(ipu_buttress_psys_force_freq_fops,
 			ipu_buttress_psys_force_freq_get,
 			ipu_buttress_psys_force_freq_set, "%llu\n");
@@ -1097,7 +1167,8 @@ DEFINE_SIMPLE_ATTRIBUTE(ipu_buttress_psys_freq_fops,
 			ipu_buttress_psys_freq_get, NULL, "%llu\n");
 
 DEFINE_SIMPLE_ATTRIBUTE(ipu_buttress_isys_freq_fops,
-			ipu_buttress_isys_freq_get, NULL, "%llu\n");
+			ipu_buttress_isys_freq_get,
+			ipu_buttress_isys_freq_set, "%llu\n");
 
 int ipu_buttress_debugfs_init(struct ipu_device *isp)
 {
@@ -1142,7 +1213,7 @@ int ipu_buttress_debugfs_init(struct ipu_device *isp)
 	if (!file)
 		goto err;
 
-	file = debugfs_create_file("isys_freq", 0400, dir, isp,
+	file = debugfs_create_file("isys_freq", 0700, dir, isp,
 				   &ipu_buttress_isys_freq_fops);
 	if (!file)
 		goto err;
