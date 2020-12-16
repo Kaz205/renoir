@@ -51,7 +51,7 @@ static struct i915_vma *intel_pxp_cmd_get_batch(struct intel_pxp *pxp,
 
 	memcpy(cmd, cmd_buf, cmd_size_in_dw * 4);
 
-	if (drm_debug_enabled(DRM_UT_DRIVER)) {
+	if (drm_debug_syslog_enabled(DRM_UT_DRIVER)) {
 		print_hex_dump(KERN_DEBUG, "cmd binaries:",
 			       DUMP_PREFIX_OFFSET, 4, 4, cmd, cmd_size_in_dw * 4, true);
 	}
@@ -314,7 +314,7 @@ int intel_pxp_cmd_terminate_all_hw_session(struct intel_pxp *pxp,
 		goto end;
 	}
 
-	if (drm_debug_enabled(DRM_UT_DRIVER)) {
+	if (drm_debug_syslog_enabled(DRM_UT_DRIVER)) {
 		print_hex_dump(KERN_DEBUG, "global termination cmd binaries:",
 			       DUMP_PREFIX_OFFSET, 4, 4, cmd, cmd_size_in_dw * 4, true);
 	}

@@ -27,7 +27,7 @@ static int intel_pxp_tee_io_message(struct intel_pxp *pxp,
 
 	lockdep_assert_held(&i915->pxp_tee_comp_mutex);
 
-	if (drm_debug_enabled(DRM_UT_DRIVER))
+	if (drm_debug_syslog_enabled(DRM_UT_DRIVER))
 		print_hex_dump(KERN_DEBUG, "TEE input message binaries:",
 			       DUMP_PREFIX_OFFSET, 4, 4, msg_in, msg_in_size, true);
 
@@ -51,7 +51,7 @@ static int intel_pxp_tee_io_message(struct intel_pxp *pxp,
 	*msg_out_size_ptr = ret;
 	ret = 0;
 
-	if (drm_debug_enabled(DRM_UT_DRIVER))
+	if (drm_debug_syslog_enabled(DRM_UT_DRIVER))
 		print_hex_dump(KERN_DEBUG, "TEE output message binaries:",
 			       DUMP_PREFIX_OFFSET, 4, 4, msg_out, *msg_out_size_ptr, true);
 

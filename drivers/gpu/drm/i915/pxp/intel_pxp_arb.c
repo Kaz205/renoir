@@ -161,7 +161,7 @@ static int intel_pxp_arb_session_with_global_termination(struct intel_pxp *pxp)
 		goto end;
 	}
 
-	if (drm_debug_enabled(DRM_UT_DRIVER)) {
+	if (drm_debug_syslog_enabled(DRM_UT_DRIVER)) {
 		print_hex_dump(KERN_DEBUG, "global termination cmd binaries:",
 			       DUMP_PREFIX_OFFSET, 4, 4, cmd, cmd_size_in_dw * 4, true);
 	}
