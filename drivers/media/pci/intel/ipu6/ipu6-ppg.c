@@ -168,7 +168,6 @@ void ipu_psys_ppg_complete(struct ipu_psys *psys, struct ipu_psys_ppg *kppg)
 	mutex_lock(&kppg->mutex);
 	old_ppg_state = kppg->state;
 	if (kppg->state == PPG_STATE_STOPPING) {
-		unsigned long flags;
 		struct ipu_psys_kcmd tmp_kcmd = {
 			.kpg = kppg->kpg,
 		};
@@ -179,9 +178,6 @@ void ipu_psys_ppg_complete(struct ipu_psys *psys, struct ipu_psys_ppg *kppg)
 		queue_id = ipu_fw_psys_ppg_get_base_queue_id(&tmp_kcmd);
 		ipu_psys_free_cmd_queue_resource(&psys->resource_pool_running,
 						 queue_id);
-		spin_lock_irqsave(&psys->pgs_lock, flags);
-		kppg->kpg->pg_size = 0;
-		spin_unlock_irqrestore(&psys->pgs_lock, flags);
 		pm_runtime_put(&psys->adev->dev);
 	} else {
 		if (kppg->state == PPG_STATE_SUSPENDING) {
@@ -388,15 +384,10 @@ int ipu_psys_ppg_stop(struct ipu_psys_ppg *kppg)
 				dev_err(&psys->adev->dev,
 					"ppg(%d) failed to resume\n", ppg_id);
 		} else if (kcmd != &kcmd_temp) {
-			unsigned long flags;
-
 			ipu_psys_free_cmd_queue_resource(
 				&psys->resource_pool_running,
 				ipu_fw_psys_ppg_get_base_queue_id(kcmd));
 			ipu_psys_kcmd_complete(kppg, kcmd, 0);
-			spin_lock_irqsave(&psys->pgs_lock, flags);
-			kppg->kpg->pg_size = 0;
-			spin_unlock_irqrestore(&psys->pgs_lock, flags);
 			dev_dbg(&psys->adev->dev,
 				"s_change:%s %p %d -> %d\n", __func__,
 				kppg, kppg->state, PPG_STATE_STOPPED);

@@ -654,9 +654,6 @@ static int ipu_psys_kcmd_send_to_ppg(struct ipu_psys_kcmd *kcmd)
 			id = ipu_fw_psys_ppg_get_base_queue_id(kcmd);
 			ipu_psys_free_cmd_queue_resource(rpr, id);
 			ipu_psys_kcmd_complete(kppg, kcmd, 0);
-			spin_lock_irqsave(&psys->pgs_lock, flags);
-			kppg->kpg->pg_size = 0;
-			spin_unlock_irqrestore(&psys->pgs_lock, flags);
 			pm_runtime_put(&psys->adev->dev);
 			resche = false;
 		} else {
@@ -920,11 +917,12 @@ int ipu_psys_fh_deinit(struct ipu_psys_fh *fh)
 	mutex_lock(&fh->mutex);
 	if (!list_empty(&sched->ppgs)) {
 		list_for_each_entry_safe(kppg, kppg0, &sched->ppgs, list) {
+			unsigned long flags;
+
 			mutex_lock(&kppg->mutex);
 			if (!(kppg->state &
 			      (PPG_STATE_STOPPED |
 			       PPG_STATE_STOPPING))) {
-				unsigned long flags;
 				struct ipu_psys_kcmd tmp = {
 					.kpg = kppg->kpg,
 				};
@@ -939,9 +937,6 @@ int ipu_psys_fh_deinit(struct ipu_psys_fh *fh)
 				    "s_change:%s %p %d -> %d\n", __func__,
 				    kppg, kppg->state, PPG_STATE_STOPPED);
 				kppg->state = PPG_STATE_STOPPED;
-				spin_lock_irqsave(&psys->pgs_lock, flags);
-				kppg->kpg->pg_size = 0;
-				spin_unlock_irqrestore(&psys->pgs_lock, flags);
 				if (psys->power_gating != PSYS_POWER_GATED)
 					pm_runtime_put(&psys->adev->dev);
 			}
@@ -973,6 +968,10 @@ int ipu_psys_fh_deinit(struct ipu_psys_fh *fh)
 				ipu_psys_kcmd_free(kcmd);
 				mutex_lock(&fh->mutex);
 			}
+
+			spin_lock_irqsave(&psys->pgs_lock, flags);
+			kppg->kpg->pg_size = 0;
+			spin_unlock_irqrestore(&psys->pgs_lock, flags);
 
 			mutex_destroy(&kppg->mutex);
 			kfree(kppg->manifest);
