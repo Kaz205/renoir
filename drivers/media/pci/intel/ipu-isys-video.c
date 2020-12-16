@@ -418,6 +418,43 @@ ipu_isys_video_try_fmt_vid_mplane(struct ipu_isys_video *av,
 		    max(mpix->plane_fmt[0].bytesperline,
 			av->isys->pdata->ipdata->isys_dma_overshoot)), 1U);
 
+	if (av->compression_ctrl)
+		av->compression = v4l2_ctrl_g_ctrl(av->compression_ctrl);
+
+	/* overwrite bpl/height with compression alignment */
+	if (av->compression) {
+		u32 planar_tile_status_size, tile_status_size;
+
+		mpix->plane_fmt[0].bytesperline =
+		    ALIGN(mpix->plane_fmt[0].bytesperline,
+			  IPU_ISYS_COMPRESSION_LINE_ALIGN);
+		mpix->height = ALIGN(mpix->height,
+				     IPU_ISYS_COMPRESSION_HEIGHT_ALIGN);
+
+		mpix->plane_fmt[0].sizeimage =
+		    ALIGN(mpix->plane_fmt[0].bytesperline * mpix->height,
+			  IPU_ISYS_COMPRESSION_PAGE_ALIGN);
+
+		/* ISYS compression only for RAW and single plannar */
+		planar_tile_status_size =
+		    DIV_ROUND_UP_ULL((mpix->plane_fmt[0].bytesperline *
+				      mpix->height /
+				      IPU_ISYS_COMPRESSION_TILE_SIZE_BYTES) *
+				     IPU_ISYS_COMPRESSION_TILE_STATUS_BITS,
+				     BITS_PER_BYTE);
+		tile_status_size = ALIGN(planar_tile_status_size,
+					 IPU_ISYS_COMPRESSION_PAGE_ALIGN);
+
+		/* tile status buffer offsets relative to buffer base address */
+		av->ts_offsets[0] = mpix->plane_fmt[0].sizeimage;
+		mpix->plane_fmt[0].sizeimage += tile_status_size;
+
+		dev_dbg(&av->isys->adev->dev,
+			"cmprs: bpl:%d, height:%d img size:%d, ts_sz:%d\n",
+			mpix->plane_fmt[0].bytesperline, mpix->height,
+			av->ts_offsets[0], tile_status_size);
+	}
+
 	memset(mpix->plane_fmt[0].reserved, 0,
 	       sizeof(mpix->plane_fmt[0].reserved));
 
@@ -813,9 +850,30 @@ ipu_isys_prepare_fw_cfg_default(struct ipu_isys_video *av,
 		pin_info->snoopable = true;
 		pin_info->error_handling_enable = false;
 		break;
-	/* snoopable sensor data to CPU */
-	case IPU_FW_ISYS_PIN_TYPE_MIPI:
 	case IPU_FW_ISYS_PIN_TYPE_RAW_SOC:
+		if (av->compression) {
+			type_index = IPU_FW_ISYS_VC1_SENSOR_DATA;
+			pin_info->sensor_type
+				= isys->sensor_types[type_index]++;
+			pin_info->snoopable = false;
+			pin_info->error_handling_enable = false;
+			type = isys->sensor_types[type_index];
+			if (type > isys->sensor_info.vc1_data_end)
+				isys->sensor_types[type_index] =
+					isys->sensor_info.vc1_data_start;
+		} else {
+			type_index = IPU_FW_ISYS_VC0_SENSOR_DATA;
+			pin_info->sensor_type
+				= isys->sensor_types[type_index]++;
+			pin_info->snoopable = true;
+			pin_info->error_handling_enable = false;
+			type = isys->sensor_types[type_index];
+			if (type > isys->sensor_info.vc0_data_end)
+				isys->sensor_types[type_index] =
+					isys->sensor_info.vc0_data_start;
+		}
+		break;
+	case IPU_FW_ISYS_PIN_TYPE_MIPI:
 		type_index = IPU_FW_ISYS_VC0_SENSOR_DATA;
 		pin_info->sensor_type = isys->sensor_types[type_index]++;
 		pin_info->snoopable = true;
@@ -826,6 +884,7 @@ ipu_isys_prepare_fw_cfg_default(struct ipu_isys_video *av,
 				isys->sensor_info.vc0_data_start;
 
 		break;
+
 	default:
 		dev_err(&av->isys->adev->dev,
 			"Unknown pin type, use metadata type as default\n");
@@ -833,6 +892,11 @@ ipu_isys_prepare_fw_cfg_default(struct ipu_isys_video *av,
 		pin_info->sensor_type = isys->sensor_info.sensor_metadata;
 		pin_info->snoopable = true;
 		pin_info->error_handling_enable = false;
+	}
+	if (av->compression) {
+		pin_info->payload_buf_size = av->mpix.plane_fmt[0].sizeimage;
+		pin_info->reserve_compression = av->compression;
+		pin_info->ts_offsets[0] = av->ts_offsets[0];
 	}
 }
 
