@@ -105,10 +105,23 @@ static void intel_pxp_irq_work(struct work_struct *work)
 int intel_pxp_init(struct intel_pxp *pxp)
 {
 	struct intel_gt *gt = container_of(pxp, struct intel_gt, pxp);
+	int i;
 
 	/* PXP only available for GEN12+ */
 	if (INTEL_GEN(gt->i915) < 12)
 		return -ENODEV;
+
+	/* Find the first VCS engine present */
+	for (i = 0; i < I915_MAX_VCS; i++) {
+		if (HAS_ENGINE(gt, _VCS(i))) {
+			pxp->vcs_engine = gt->engine[_VCS(i)];
+			break;
+		}
+	}
+	if (!pxp->vcs_engine) {
+		drm_err(&gt->i915->drm, "Could not find a VCS engine\n");
+		return -ENODEV;
+	}
 
 	intel_pxp_ctx_init(&pxp->ctx);
 

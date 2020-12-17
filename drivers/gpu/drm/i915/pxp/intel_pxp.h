@@ -16,6 +16,8 @@
 
 #define GEN12_KCR_SIP _MMIO(0x32260) /* KCR type0 session in play 0-31 */
 
+struct intel_engine_cs;
+
 enum pxp_session_types {
 	SESSION_TYPE_TYPE0 = 0,
 	SESSION_TYPE_TYPE1 = 1,
@@ -45,6 +47,8 @@ struct intel_pxp {
 	u32 current_events;
 
 	struct pxp_context ctx;
+
+	struct intel_engine_cs *vcs_engine;
 };
 
 static inline int pxp_session_max(int session_type)

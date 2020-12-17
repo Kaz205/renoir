@@ -81,18 +81,17 @@ int intel_pxp_cmd_submit(struct intel_pxp *pxp, u32 *cmd,
 	struct intel_gt_buffer_pool_node *pool = NULL;
 	struct intel_gt *gt = container_of(pxp, struct intel_gt, pxp);
 
-	if (!HAS_ENGINE(gt, VCS0) ||
-	    !gt->engine[VCS0]->kernel_context) {
-		err = -EINVAL;
-		goto end;
-	}
-
 	if (!cmd || (cmd_size_in_dw * 4) > PAGE_SIZE) {
 		drm_err(&gt->i915->drm, "Failed to %s bad params\n", __func__);
 		return -EINVAL;
 	}
 
-	ce = gt->engine[VCS0]->kernel_context;
+	ce = pxp->vcs_engine->kernel_context;
+	if (!ce) {
+		drm_err(&gt->i915->drm, "VCS engine does not have context\n");
+		err = -EINVAL;
+		goto end;
+	}
 
 	intel_engine_pm_get(ce->engine);
 	is_engine_pm_get = true;
