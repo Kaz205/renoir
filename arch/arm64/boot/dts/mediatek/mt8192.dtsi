@@ -1471,6 +1471,7 @@
 					     "core2",
 					     "core3",
 					     "core4";
+			#cooling-cells = <2>;
 		};
 
 		gpu_opp_table: opp_table0 {
