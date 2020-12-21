@@ -11,6 +11,7 @@
  * GNU General Public License for more details.
  */
 
+#include "linux/gfp.h"
 #include <linux/module.h>
 #include <linux/dma-buf.h>
 #include <linux/dma-direction.h>
@@ -20,6 +21,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/workqueue.h>
 #include <linux/genalloc.h>
+#include <linux/scatterlist.h>
 #include <uapi/media/cam_req_mgr.h>
 #include <linux/debugfs.h>
 #include "cam_smmu_api.h"
@@ -43,7 +45,8 @@ module_param(g_num_pf_handled, int, 0644);
 struct firmware_alloc_info {
 	struct device *fw_dev;
 	void *fw_kva;
-	dma_addr_t fw_dma_hdl;
+	size_t num_pages;
+	struct page **pages;
 };
 
 struct firmware_alloc_info icp_fw;
@@ -876,6 +879,8 @@ int cam_smmu_alloc_firmware(int32_t smmu_hdl,
 	size_t firmware_len = 0;
 	size_t firmware_start = 0;
 	struct iommu_domain *domain;
+	struct sg_table sgt;
+	int i;
 
 	if (!iova || !len || !cpuva || (smmu_hdl == HANDLE_INIT)) {
 		CAM_ERR(CAM_SMMU, "Error: Input args are invalid");
@@ -909,30 +914,51 @@ int cam_smmu_alloc_firmware(int32_t smmu_hdl,
 	firmware_start = iommu_cb_set.cb_info[idx].firmware_info.iova_start;
 	CAM_DBG(CAM_SMMU, "Firmware area len from DT = %zu", firmware_len);
 
-	icp_fw.fw_kva = dma_alloc_coherent(icp_fw.fw_dev,
-		firmware_len,
-		&icp_fw.fw_dma_hdl,
-		GFP_KERNEL);
+	icp_fw.num_pages = ALIGN(firmware_len, PAGE_SIZE) / PAGE_SIZE;
+	icp_fw.pages = kcalloc(icp_fw.num_pages, sizeof(*icp_fw.pages), GFP_KERNEL);
+	if (!icp_fw.pages)
+		goto unlock_and_end;
+
+	for (i = 0; i < icp_fw.num_pages; ++i) {
+		icp_fw.pages[i] = alloc_page(GFP_KERNEL | __GFP_ZERO);
+		if (!icp_fw.pages[i])
+			goto free_pages;
+	}
+
+	icp_fw.fw_kva = vmap(icp_fw.pages, icp_fw.num_pages, VM_MAP, pgprot_writecombine(PAGE_KERNEL));
 	if (!icp_fw.fw_kva) {
 		CAM_ERR(CAM_SMMU, "FW memory alloc failed");
 		rc = -ENOMEM;
-		goto unlock_and_end;
-	} else {
-		CAM_DBG(CAM_SMMU, "DMA alloc returned fw = %pK, hdl = %pK",
-			icp_fw.fw_kva, (void *)icp_fw.fw_dma_hdl);
+		goto free_pages;
 	}
 
+	rc = sg_alloc_table_from_pages(&sgt, icp_fw.pages, icp_fw.num_pages, 0, firmware_len, GFP_KERNEL);
+	if (rc)
+		goto vunmap;
+
+	/*
+	 * FIXME: Map once to flush the caches and then unmap, because
+	 * iommu_map_sg() needs an unmapped scatterlist.
+	 */
+	rc = dma_map_sg_attrs(icp_fw.fw_dev, sgt.sgl, sgt.orig_nents, DMA_BIDIRECTIONAL, 0);
+	if (rc <= 0) {
+		CAM_ERR(CAM_SMMU, "FW memory flush failed");
+		sg_free_table(&sgt);
+		rc = -ENOMEM;
+		goto vunmap;
+	}
+	dma_unmap_sg_attrs(icp_fw.fw_dev, sgt.sgl, sgt.orig_nents, DMA_BIDIRECTIONAL, 0);
+
 	domain = iommu_cb_set.cb_info[idx].domain;
-	rc = iommu_map(domain,
-		firmware_start,
-		icp_fw.fw_dma_hdl,
-		firmware_len,
-		IOMMU_READ|IOMMU_WRITE|IOMMU_PRIV);
-	if (rc) {
+	rc = iommu_map_sg(domain, firmware_start, sgt.sgl, sgt.orig_nents, IOMMU_READ | IOMMU_WRITE | IOMMU_PRIV);
+	sg_free_table(&sgt);
+
+	if (rc < firmware_len) {
 		CAM_ERR(CAM_SMMU, "Failed to map FW into IOMMU");
 		rc = -ENOMEM;
-		goto alloc_fail;
+		goto vunmap;
 	}
+
 	iommu_cb_set.cb_info[idx].is_fw_allocated = true;
 
 	*iova = iommu_cb_set.cb_info[idx].firmware_info.iova_start;
@@ -940,13 +966,17 @@ int cam_smmu_alloc_firmware(int32_t smmu_hdl,
 	*len = firmware_len;
 	mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
 
-	return rc;
-
-alloc_fail:
-	dma_free_coherent(icp_fw.fw_dev,
-		firmware_len,
-		icp_fw.fw_kva,
-		icp_fw.fw_dma_hdl);
+	return 0;
+vunmap:
+	vunmap(icp_fw.fw_kva);
+	icp_fw.fw_kva = NULL;
+free_pages:
+	for (i = 0; i < icp_fw.num_pages; ++i) {
+		if (icp_fw.pages[i])
+			__free_pages(icp_fw.pages[i], 0);
+	}
+	kfree(icp_fw.pages);
+	icp_fw.pages = NULL;
 unlock_and_end:
 	mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
 end:
@@ -962,6 +992,7 @@ int cam_smmu_dealloc_firmware(int32_t smmu_hdl)
 	size_t firmware_start = 0;
 	struct iommu_domain *domain = NULL;
 	size_t unmapped = 0;
+	int i;
 
 	if (smmu_hdl == HANDLE_INIT) {
 		CAM_ERR(CAM_SMMU, "Error: Invalid handle");
@@ -1006,13 +1037,15 @@ int cam_smmu_dealloc_firmware(int32_t smmu_hdl)
 		rc = -EINVAL;
 	}
 
-	dma_free_coherent(icp_fw.fw_dev,
-		firmware_len,
-		icp_fw.fw_kva,
-		icp_fw.fw_dma_hdl);
+	vunmap(icp_fw.fw_kva);
+	icp_fw.fw_kva = NULL;
 
-	icp_fw.fw_kva = 0;
-	icp_fw.fw_dma_hdl = 0;
+	for (i = 0; i < icp_fw.num_pages; ++i) {
+		if (icp_fw.pages[i])
+			__free_pages(icp_fw.pages[i], 0);
+	}
+	kfree(icp_fw.pages);
+	icp_fw.pages = NULL;
 
 	iommu_cb_set.cb_info[idx].is_fw_allocated = false;
 
@@ -2359,7 +2392,9 @@ static int cam_smmu_probe(struct platform_device *pdev)
 	if (of_device_is_compatible(dev->of_node, "qcom,msm-cam-smmu-fw-dev")) {
 		icp_fw.fw_dev = &pdev->dev;
 		icp_fw.fw_kva = NULL;
-		icp_fw.fw_dma_hdl = 0;
+		icp_fw.pages = NULL;
+		icp_fw.num_pages = 0;
+		dma_set_mask_and_coherent(dev, DMA_BIT_MASK(64));
 		return rc;
 	}
 
