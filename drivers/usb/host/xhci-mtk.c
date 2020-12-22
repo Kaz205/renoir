@@ -181,7 +181,10 @@ static int xhci_mtk_host_disable(struct xhci_hcd_mtk *mtk)
 	if (ret) {
 		dev_err(mtk->dev, "ip sleep failed!!!\n");
 		return ret;
+	} else {
+		usleep_range(200, 250);
 	}
+
 	return 0;
 }
 
