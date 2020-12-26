@@ -183,7 +183,7 @@ static int a6xx_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	a6xx_gmu_irq_enable(adreno_dev);
 
 	/* Vote for minimal DDR BW for GMU to init */
-	level = pwr->pwrlevels[pwr->default_pwrlevel].bus_min;
+	level = pwr->pwrlevels[pwr->num_pwrlevels - 1].bus_min;
 
 	icc_set_bw(pwr->icc_path, 0, MBps_to_icc(pwr->ddr_table[level]));
 
@@ -333,9 +333,8 @@ static int a6xx_hwsched_notify_slumber(struct adreno_device *adreno_dev)
 
 	CMD_MSG_HDR(req, H2F_MSG_PREPARE_SLUMBER);
 
-	req.freq = gmu->hfi.dcvs_table.gpu_level_num -
-			pwr->default_pwrlevel - 1;
-	req.bw = pwr->pwrlevels[pwr->default_pwrlevel].bus_freq;
+	req.freq = gmu->hfi.dcvs_table.gpu_level_num - 1;
+	req.bw = pwr->pwrlevels[pwr->num_pwrlevels - 1].bus_freq;
 
 	/* Disable the power counter so that the GMU is not busy */
 	gmu_core_regwrite(device, A6XX_GMU_CX_GMU_POWER_COUNTER_ENABLE, 0);
