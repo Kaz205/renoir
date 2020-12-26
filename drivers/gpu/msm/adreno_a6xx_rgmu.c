@@ -580,7 +580,7 @@ static int a6xx_rgmu_enable_clks(struct adreno_device *adreno_dev)
 	}
 
 	ret = clk_set_rate(rgmu->gpu_clk,
-		pwr->pwrlevels[pwr->default_pwrlevel].gpu_freq);
+		pwr->pwrlevels[pwr->num_pwrlevels - 1].gpu_freq);
 	if (ret) {
 		dev_err(&rgmu->pdev->dev, "Couldn't set the GPU clock\n");
 		return ret;
