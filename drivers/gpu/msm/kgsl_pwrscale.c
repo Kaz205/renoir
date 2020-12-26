@@ -256,7 +256,7 @@ void kgsl_pwrscale_enable(struct kgsl_device *device)
 		 * run at default level;
 		 */
 		kgsl_pwrctrl_pwrlevel_change(device,
-					device->pwrctrl.default_pwrlevel);
+					device->pwrctrl.num_pwrlevels - 1);
 		device->pwrscale.enabled = false;
 	}
 }
@@ -790,7 +790,7 @@ int kgsl_pwrscale_init(struct kgsl_device *device, struct platform_device *pdev,
 	gpu_profile->profile.get_cur_freq = kgsl_devfreq_get_cur_freq;
 
 	gpu_profile->profile.initial_freq =
-		pwr->pwrlevels[pwr->default_pwrlevel].gpu_freq;
+		pwr->pwrlevels[pwr->num_pwrlevels - 1].gpu_freq;
 
 	gpu_profile->profile.polling_ms = 10;
 
