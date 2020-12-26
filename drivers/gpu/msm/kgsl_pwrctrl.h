@@ -93,7 +93,6 @@ struct kgsl_pwrlevel {
  * @sysfs_thermal_pwrlevel - maximum powerlevel constraint from sysfs
  * @cooling_thermal_pwrlevel - maximum pwrlevel constraint from devfreq cooling fw
  * @thermal_pwrlevel_floor - minimum powerlevel constraint from thermal
- * @default_pwrlevel - device wake up power level
  * @max_pwrlevel - maximum allowable powerlevel per the user
  * @min_pwrlevel - minimum allowable powerlevel per the user
  * @num_pwrlevels - number of available power levels
@@ -138,7 +137,6 @@ struct kgsl_pwrctrl {
 	unsigned int sysfs_thermal_pwrlevel;
 	unsigned int cooling_thermal_pwrlevel;
 	unsigned int thermal_pwrlevel_floor;
-	unsigned int default_pwrlevel;
 	unsigned int wakeup_maxpwrlevel;
 	unsigned int max_pwrlevel;
 	unsigned int min_pwrlevel;
