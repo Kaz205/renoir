@@ -67,6 +67,25 @@
 #define NUM_REGS				7
 #define NUM_MODE_REGS				187
 
+/* Flip Mirror Controls from sensor */
+#define OV8856_REG_FORMAT1			0x3820
+#define OV8856_REG_FORMAT2			0x3821
+#define OV8856_REG_FORMAT1_OP_1			BIT(1)
+#define OV8856_REG_FORMAT1_OP_2			BIT(2)
+#define OV8856_REG_FORMAT1_OP_3			BIT(6)
+#define OV8856_REG_FORMAT2_OP_1			BIT(1)
+#define OV8856_REG_FORMAT2_OP_2			BIT(2)
+#define OV8856_REG_FORMAT2_OP_3			BIT(6)
+#define OV8856_REG_FLIP_OPT_1			0x376b
+#define OV8856_REG_FLIP_OPT_2			0x5001
+#define OV8856_REG_FLIP_OPT_3			0x502e
+#define OV8856_REG_MIRROR_OPT_1			0x5004
+#define OV8856_REG_FLIP_OP_0			BIT(0)
+#define OV8856_REG_FLIP_OP_1			BIT(1)
+#define OV8856_REG_FLIP_OP_2			BIT(2)
+#define OV8856_REG_MIRROR_OP_1			BIT(1)
+#define OV8856_REG_MIRROR_OP_2			BIT(2)
+
 #define to_ov8856(_sd)			container_of(_sd, struct ov8856, sd)
 
 enum {
@@ -421,11 +440,11 @@ static const struct ov8856_mode_regs ov8856_mode_lanes_regs[] = {
 		{0x3800, 0x00},
 		{0x3801, 0x00},
 		{0x3802, 0x00},
-		{0x3803, 0x06},
+		{0x3803, 0x00},
 		{0x3804, 0x0c},
 		{0x3805, 0xdf},
 		{0x3806, 0x09},
-		{0x3807, 0xa7},
+		{0x3807, 0xaf},
 		{0x3808, 0x06},
 		{0x3809, 0x68},
 		{0x380a, 0x04},
@@ -435,9 +454,9 @@ static const struct ov8856_mode_regs ov8856_mode_lanes_regs[] = {
 		{0x380e, 0x05},
 		{0x380f, 0xea},
 		{0x3810, 0x00},
-		{0x3811, 0x00},
+		{0x3811, 0x04},
 		{0x3812, 0x00},
-		{0x3813, 0x01},
+		{0x3813, 0x05},
 		{0x3814, 0x03},
 		{0x3815, 0x01},
 		{0x3816, 0x00},
@@ -800,11 +819,11 @@ static const struct ov8856_mode_regs ov8856_mode_lanes_regs[] = {
 		{0x3800, 0x00},
 		{0x3801, 0x00},
 		{0x3802, 0x00},
-		{0x3803, 0x06},
+		{0x3803, 0x00},
 		{0x3804, 0x0c},
 		{0x3805, 0xdf},
 		{0x3806, 0x09},
-		{0x3807, 0xa7},
+		{0x3807, 0xaf},
 		{0x3808, 0x06},
 		{0x3809, 0x68},
 		{0x380a, 0x04},
@@ -814,9 +833,9 @@ static const struct ov8856_mode_regs ov8856_mode_lanes_regs[] = {
 		{0x380e, 0x04},
 		{0x380f, 0xe8},
 		{0x3810, 0x00},
-		{0x3811, 0x00},
+		{0x3811, 0x04},
 		{0x3812, 0x00},
-		{0x3813, 0x01},
+		{0x3813, 0x05},
 		{0x3814, 0x03},
 		{0x3815, 0x01},
 		{0x3816, 0x00},
@@ -1213,6 +1232,93 @@ static int ov8856_test_pattern(struct ov8856 *ov8856, u32 pattern)
 				OV8856_REG_VALUE_08BIT, pattern);
 }
 
+static int ov8856_set_ctrl_hflip(struct ov8856 *ov8856, u32 ctrl_val)
+{
+	int ret;
+	u32 val;
+
+	ret = ov8856_read_reg(ov8856, OV8856_REG_MIRROR_OPT_1,
+			      OV8856_REG_VALUE_08BIT, &val);
+	if (ret)
+		return ret;
+
+	ret = ov8856_write_reg(ov8856, OV8856_REG_MIRROR_OPT_1,
+				OV8856_REG_VALUE_08BIT,
+				ctrl_val ? val & ~OV8856_REG_MIRROR_OP_2 :
+				val | OV8856_REG_MIRROR_OP_2);
+
+	if (ret)
+		return ret;
+
+	ret = ov8856_read_reg(ov8856, OV8856_REG_FORMAT2,
+			      OV8856_REG_VALUE_08BIT, &val);
+	if (ret)
+		return ret;
+
+	return ov8856_write_reg(ov8856, OV8856_REG_FORMAT2,
+				OV8856_REG_VALUE_08BIT,
+				ctrl_val ? val & ~OV8856_REG_FORMAT2_OP_1 &
+				~OV8856_REG_FORMAT2_OP_2 &
+				~OV8856_REG_FORMAT2_OP_3 :
+				val | OV8856_REG_FORMAT2_OP_1 |
+				OV8856_REG_FORMAT2_OP_2 |
+				OV8856_REG_FORMAT2_OP_3);
+}
+
+static int ov8856_set_ctrl_vflip(struct ov8856 *ov8856, u8 ctrl_val)
+{
+	int ret;
+	u32 val;
+
+	ret = ov8856_read_reg(ov8856, OV8856_REG_FLIP_OPT_1,
+			      OV8856_REG_VALUE_08BIT, &val);
+	if (ret)
+		return ret;
+
+	ret = ov8856_write_reg(ov8856, OV8856_REG_FLIP_OPT_1,
+				OV8856_REG_VALUE_08BIT,
+				ctrl_val ? val | OV8856_REG_FLIP_OP_1 |
+				OV8856_REG_FLIP_OP_2 :
+				val & ~OV8856_REG_FLIP_OP_1 &
+				~OV8856_REG_FLIP_OP_2);
+
+	ret = ov8856_read_reg(ov8856, OV8856_REG_FLIP_OPT_2,
+			      OV8856_REG_VALUE_08BIT, &val);
+	if (ret)
+		return ret;
+
+	ret = ov8856_write_reg(ov8856, OV8856_REG_FLIP_OPT_2,
+			       OV8856_REG_VALUE_08BIT,
+			       ctrl_val ? val | OV8856_REG_FLIP_OP_2 :
+			       val & ~OV8856_REG_FLIP_OP_2);
+
+	ret = ov8856_read_reg(ov8856, OV8856_REG_FLIP_OPT_3,
+			      OV8856_REG_VALUE_08BIT, &val);
+	if (ret)
+		return ret;
+
+	ret = ov8856_write_reg(ov8856, OV8856_REG_FLIP_OPT_3,
+			       OV8856_REG_VALUE_08BIT,
+			       ctrl_val ? val & ~OV8856_REG_FLIP_OP_0 &
+			       ~OV8856_REG_FLIP_OP_1 :
+			       val | OV8856_REG_FLIP_OP_0 |
+			       OV8856_REG_FLIP_OP_1);
+
+	ret = ov8856_read_reg(ov8856, OV8856_REG_FORMAT1,
+			      OV8856_REG_VALUE_08BIT, &val);
+	if (ret)
+		return ret;
+
+	return ov8856_write_reg(ov8856, OV8856_REG_FORMAT1,
+			       OV8856_REG_VALUE_08BIT,
+			       ctrl_val ? val | OV8856_REG_FORMAT1_OP_1 |
+			       OV8856_REG_FORMAT1_OP_3 |
+			       OV8856_REG_FORMAT1_OP_2 :
+			       val & ~OV8856_REG_FORMAT1_OP_1 &
+			       ~OV8856_REG_FORMAT1_OP_3 &
+			       ~OV8856_REG_FORMAT1_OP_2);
+}
+
 static int ov8856_set_ctrl(struct v4l2_ctrl *ctrl)
 {
 	struct ov8856 *ov8856 = container_of(ctrl->handler,
@@ -1260,6 +1366,14 @@ static int ov8856_set_ctrl(struct v4l2_ctrl *ctrl)
 
 	case V4L2_CID_TEST_PATTERN:
 		ret = ov8856_test_pattern(ov8856, ctrl->val);
+		break;
+
+	case V4L2_CID_HFLIP:
+		ret = ov8856_set_ctrl_hflip(ov8856, ctrl->val);
+		break;
+
+	case V4L2_CID_VFLIP:
+		ret = ov8856_set_ctrl_vflip(ov8856, ctrl->val);
 		break;
 
 	default:
@@ -1338,6 +1452,10 @@ static int ov8856_init_controls(struct ov8856 *ov8856)
 				     V4L2_CID_TEST_PATTERN,
 				     ARRAY_SIZE(ov8856_test_pattern_menu) - 1,
 				     0, 0, ov8856_test_pattern_menu);
+	v4l2_ctrl_new_std(ctrl_hdlr, &ov8856_ctrl_ops,
+			  V4L2_CID_HFLIP, 0, 1, 1, 0);
+	v4l2_ctrl_new_std(ctrl_hdlr, &ov8856_ctrl_ops,
+			  V4L2_CID_VFLIP, 0, 1, 1, 0);
 	if (ctrl_hdlr->error)
 		return ctrl_hdlr->error;
 
