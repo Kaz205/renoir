@@ -61,6 +61,10 @@ ap_ts_pen_1v8: &i2c4 {
 	};
 };
 
+&wifi {
+	qcom,ath10k-calibration-variant = "GO_LAZOR";
+};
+
 &ts_reset_l {
 	pinconf {
 		/* This pin is not connected on -rev0, pull up to park. */
