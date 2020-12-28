@@ -68,6 +68,9 @@ void mtk_mmsys_ddp_connect(struct device *dev,
 
 	if (funcs->sel_in)
 		funcs->sel_in(mmsys->regs, cur, next, true);
+
+	if (funcs->ovl_mout_en)
+		funcs->ovl_mout_en(mmsys->regs, cur, next, true);
 }
 EXPORT_SYMBOL_GPL(mtk_mmsys_ddp_connect);
 
@@ -86,6 +89,9 @@ void mtk_mmsys_ddp_disconnect(struct device *dev,
 
 	if (funcs->sel_in)
 		funcs->sel_in(mmsys->regs, cur, next, false);
+
+	if (funcs->ovl_mout_en)
+		funcs->ovl_mout_en(mmsys->regs, cur, next, false);
 }
 EXPORT_SYMBOL_GPL(mtk_mmsys_ddp_disconnect);
 

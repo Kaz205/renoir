@@ -50,6 +50,10 @@ struct mtk_mmsys_conn_funcs {
 			enum mtk_ddp_comp_id cur,
 			enum mtk_ddp_comp_id next,
 			bool enable);
+	void (*ovl_mout_en)(void __iomem *config_regs,
+			    enum mtk_ddp_comp_id cur,
+			    enum mtk_ddp_comp_id next,
+			    bool enable);
 	void (*sel_in)(void __iomem *config_regs,
 		       enum mtk_ddp_comp_id cur,
 		       enum mtk_ddp_comp_id next,
