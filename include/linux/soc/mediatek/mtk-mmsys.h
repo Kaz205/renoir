@@ -60,6 +60,7 @@ struct mtk_mmsys_conn_funcs {
 };
 
 extern struct mtk_mmsys_conn_funcs mt2701_mmsys_funcs;
+extern struct mtk_mmsys_conn_funcs mt8183_mmsys_funcs;
 
 void mtk_mmsys_ddp_connect(struct device *dev,
 			   enum mtk_ddp_comp_id cur,

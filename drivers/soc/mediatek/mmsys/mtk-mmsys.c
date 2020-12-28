@@ -47,6 +47,7 @@ static const struct mtk_mmsys_driver_data mt8173_mmsys_driver_data = {
 
 static const struct mtk_mmsys_driver_data mt8183_mmsys_driver_data = {
 	.clk_driver = "clk-mt8183-mm",
+	.funcs = &mt8183_mmsys_funcs,
 };
 
 void mtk_mmsys_ddp_connect(struct device *dev,
