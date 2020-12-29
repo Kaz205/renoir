@@ -55,6 +55,7 @@ enum cnss_dev_bus_type {
 	CNSS_BUS_NONE = -1,
 	CNSS_BUS_PCI,
 	CNSS_BUS_USB,
+	CNSS_BUS_MAX,
 };
 
 struct cnss_vreg_cfg {
