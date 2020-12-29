@@ -64,7 +64,7 @@ static void arb_session_entry_init(struct intel_pxp *pxp)
 	arb->is_in_play = false;
 }
 
-int intel_pxp_arb_reserve_session(struct intel_pxp *pxp)
+static int intel_pxp_arb_reserve_session(struct intel_pxp *pxp)
 {
 	int ret;
 
