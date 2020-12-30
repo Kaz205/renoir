@@ -871,7 +871,6 @@
 	};
 
 	cam_jpeg_mgr: qcom,cam-jpeg {
-		status = "disable";
 		#address-cells = <2>;
 		#size-cells = <2>;
 		ranges;
