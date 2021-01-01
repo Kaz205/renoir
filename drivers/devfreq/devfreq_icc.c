@@ -10,6 +10,7 @@
 #include <linux/init.h>
 #include <linux/io.h>
 #include <linux/delay.h>
+#include <linux/devfreq_boost.h>
 #include <linux/ktime.h>
 #include <linux/time.h>
 #include <linux/err.h>
@@ -276,6 +277,9 @@ int devfreq_add_icc(struct device *dev)
 		icc_put(d->icc_path);
 		return PTR_ERR(d->df);
 	}
+
+	if (!strcmp(dev_name(dev), "soc:qcom,cpu-llcc-ddr-bw"))
+		devfreq_register_boost_device(DEVFREQ_CPU_LLCC_DDR_BW, d->df);
 
 	return 0;
 }
