@@ -2153,6 +2153,8 @@ void walt_update_task_ravg(struct task_struct *p, struct rq *rq, int event,
 	update_task_demand(p, rq, event, wallclock);
 	update_cpu_busy_time(p, rq, event, wallclock, irqtime);
 	update_task_pred_demand(rq, p, event);
+	if (event == PUT_PREV_TASK && p->state)
+		p->wts.iowaited = p->in_iowait;
 
 	trace_sched_update_task_ravg(p, rq, event, wallclock, irqtime,
 				&rq->wrq.grp_time);
