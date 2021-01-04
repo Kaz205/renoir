@@ -238,6 +238,9 @@ enum {
 	 * on system suspend to save power. This shouldn't be upstreamed.
 	 */
 	HCI_QUIRK_DISABLE_REMOTE_WAKE,
+
+	/* This quirk will be set when running on Intel SdP/StP controller */
+	HCI_QUIRK_RESTRICT_CONN_PARAMS,
 };
 
 /* HCI device flags */
