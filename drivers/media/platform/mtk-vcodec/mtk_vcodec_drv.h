@@ -484,6 +484,7 @@ struct mtk_vcodec_dev {
 	struct device_node *component_node[MTK_VDEC_HW_MAX];
 	int comp_idx;
 
+	struct task_struct *kthread_core;
 	wait_queue_head_t core_read;
 	struct list_head core_queue;
 	spinlock_t core_lock;

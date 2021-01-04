@@ -117,7 +117,7 @@ struct vdec_lat_buf *vdec_msg_queue_get_core_buf(
 
 	if (list_empty(&dev->core_queue)) {
 		mtk_v4l2_debug(3, "core queue is NULL, num_core = %d", dev->num_core);
-		ret = wait_event_interruptible(dev->core_read,
+		ret = wait_event_freezable(dev->core_read,
 			!list_empty(&dev->core_queue));
 		if (ret)
 			return NULL;
@@ -219,4 +219,38 @@ void vdec_msg_queue_deinit(
 	}
 
 	msg_queue->init_done = false;
+}
+
+int vdec_msg_queue_core_thead(void *data)
+{
+	struct mtk_vcodec_dev *dev = data;
+	struct vdec_lat_buf *lat_buf;
+	struct mtk_vcodec_ctx *ctx;
+
+	set_freezable();
+	for (;;) {
+		try_to_freeze();
+		if (kthread_should_stop())
+			break;
+
+		lat_buf = vdec_msg_queue_get_core_buf(dev);
+		if (!lat_buf)
+			continue;
+
+		ctx = lat_buf->ctx;
+		mtk_vcodec_dec_enable_hardware(ctx, MTK_VDEC_CORE);
+		mtk_vcodec_set_curr_ctx(dev, ctx, MTK_VDEC_CORE);
+
+		if (!lat_buf->core_decode)
+			mtk_v4l2_err("Core decode callback func is NULL");
+		else
+			lat_buf->core_decode(lat_buf);
+
+		mtk_vcodec_set_curr_ctx(dev, NULL, MTK_VDEC_CORE);
+		mtk_vcodec_dec_disable_hardware(ctx, MTK_VDEC_CORE);
+		vdec_msg_queue_buf_to_lat(lat_buf);
+	}
+
+	mtk_v4l2_debug(3, "Video Capture Thread End");
+	return 0;
 }

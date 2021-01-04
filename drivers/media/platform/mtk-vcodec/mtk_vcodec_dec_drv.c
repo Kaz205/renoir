@@ -297,6 +297,15 @@ static int mtk_vcodec_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_res;
 
+	if (VDEC_LAT_ARCH(dev->vdec_pdata->hw_arch)) {
+		init_waitqueue_head(&dev->core_read);
+		INIT_LIST_HEAD(&dev->core_queue);
+		spin_lock_init(&dev->core_lock);
+		dev->kthread_core = kthread_run(vdec_msg_queue_core_thead, dev,
+			"mtk-%s", "core");
+		dev->num_core = 0;
+	}
+
 	for (i = 0; i < MTK_VDEC_HW_MAX; i++)
 		mutex_init(&dev->dec_mutex[i]);
 	mutex_init(&dev->dev_mutex);

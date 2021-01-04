@@ -122,4 +122,10 @@ void vdec_msg_queue_deinit(
 	struct mtk_vcodec_ctx *ctx,
 	struct vdec_msg_queue *msg_queue);
 
+/**
+ * vdec_msg_queue_core_thead - used for core decoder.
+ * @data: private data used for each codec
+ */
+int vdec_msg_queue_core_thead(void *data);
+
 #endif
