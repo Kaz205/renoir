@@ -5,6 +5,7 @@
  */
 
 #include <linux/clk.h>
+#include <linux/interrupt.h>
 #include <linux/of_address.h>
 #include <linux/of_platform.h>
 #include <linux/pm_runtime.h>
@@ -66,28 +67,54 @@ void mtk_vcodec_release_dec_pm(struct mtk_vcodec_dev *dev)
 	pm_runtime_disable(dev->pm.dev);
 }
 
-void mtk_vcodec_dec_pw_on(struct mtk_vcodec_pm *pm)
+void mtk_vcodec_dec_pw_on(struct mtk_vcodec_dev *vdec_dev, int comp_idx)
 {
+	struct mtk_vcodec_dev *comp_dev;
+	struct mtk_vcodec_pm *pm;
 	int ret;
 
+	comp_dev = mtk_vcodec_get_hw_dev(vdec_dev, comp_idx);
+	if (!comp_dev) {
+		mtk_v4l2_err("Failed to get hw dev\n");
+		return;
+	}
+	pm = &comp_dev->pm;
 	ret = pm_runtime_get_sync(pm->dev);
 	if (ret)
 		mtk_v4l2_err("pm_runtime_get_sync fail %d", ret);
 }
 
-void mtk_vcodec_dec_pw_off(struct mtk_vcodec_pm *pm)
+void mtk_vcodec_dec_pw_off(struct mtk_vcodec_dev *vdec_dev, int comp_idx)
 {
+	struct mtk_vcodec_dev *comp_dev;
+	struct mtk_vcodec_pm *pm;
 	int ret;
 
+	comp_dev = mtk_vcodec_get_hw_dev(vdec_dev, comp_idx);
+	if (!comp_dev) {
+		mtk_v4l2_err("Failed to get hw dev\n");
+		return;
+	}
+	pm = &comp_dev->pm;
 	ret = pm_runtime_put_sync(pm->dev);
 	if (ret)
 		mtk_v4l2_err("pm_runtime_put_sync fail %d", ret);
 }
 
-void mtk_vcodec_dec_clock_on(struct mtk_vcodec_pm *pm)
+void mtk_vcodec_dec_clock_on(struct mtk_vcodec_dev *vdec_dev, int comp_idx)
 {
-	struct mtk_vcodec_clk *dec_clk = &pm->vdec_clk;
-	int ret, i = 0;
+	struct mtk_vcodec_dev *comp_dev;
+	struct mtk_vcodec_pm *pm;
+	struct mtk_vcodec_clk *dec_clk;
+	int ret, i;
+
+	comp_dev = mtk_vcodec_get_hw_dev(vdec_dev, comp_idx);
+	if (!comp_dev) {
+		mtk_v4l2_err("Failed to get hw dev\n");
+		return;
+	}
+	pm = &comp_dev->pm;
+	dec_clk = &pm->vdec_clk;
 
 	for (i = 0; i < dec_clk->clk_num; i++) {
 		ret = clk_prepare_enable(dec_clk->clk_info[i].vcodec_clk);
@@ -97,6 +124,8 @@ void mtk_vcodec_dec_clock_on(struct mtk_vcodec_pm *pm)
 			goto error;
 		}
 	}
+
+	enable_irq(comp_dev->dec_irq);
 	return;
 
 error:
@@ -104,11 +133,22 @@ error:
 		clk_disable_unprepare(dec_clk->clk_info[i].vcodec_clk);
 }
 
-void mtk_vcodec_dec_clock_off(struct mtk_vcodec_pm *pm)
+void mtk_vcodec_dec_clock_off(struct mtk_vcodec_dev *vdec_dev, int comp_idx)
 {
-	struct mtk_vcodec_clk *dec_clk = &pm->vdec_clk;
-	int i = 0;
+	struct mtk_vcodec_dev *comp_dev;
+	struct mtk_vcodec_pm *pm;
+	struct mtk_vcodec_clk *dec_clk;
+	int i;
 
+	comp_dev = mtk_vcodec_get_hw_dev(vdec_dev, comp_idx);
+	if (!comp_dev) {
+		mtk_v4l2_err("Failed to get hw dev\n");
+		return;
+	}
+	pm = &comp_dev->pm;
+	dec_clk = &pm->vdec_clk;
+
+	disable_irq(comp_dev->dec_irq);
 	for (i = dec_clk->clk_num - 1; i >= 0; i--)
 		clk_disable_unprepare(dec_clk->clk_info[i].vcodec_clk);
 }
