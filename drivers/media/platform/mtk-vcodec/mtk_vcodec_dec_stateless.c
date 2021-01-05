@@ -385,6 +385,9 @@ static void mtk_init_vdec_params(struct mtk_vcodec_ctx *ctx)
 	src_vq = v4l2_m2m_get_vq(ctx->m2m_ctx,
 				 V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE);
 
+	if (ctx->dev->vdec_pdata->hw_arch != MTK_VDEC_PURE_SIN_CORE)
+		v4l2_m2m_set_dst_buffered(ctx->m2m_ctx, 1);
+
 	/* Support request api for output plane */
 	src_vq->supports_requests = true;
 	src_vq->requires_requests = true;
