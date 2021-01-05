@@ -75,11 +75,27 @@ static const struct mtk_stateless_control mtk_stateless_controls[] = {
 		.codec_type = V4L2_PIX_FMT_H264_SLICE,
 		.needed_in_request = true,
 	},
+	{
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_VP8_FRAME_HEADER,
+		},
+		.codec_type = V4L2_PIX_FMT_VP8_FRAME,
+		.needed_in_request = true,
+	},
+	{
+		.cfg = {
+			.id = V4L2_CID_MPEG_VIDEO_VP8_PROFILE,
+			.min = V4L2_MPEG_VIDEO_VP8_PROFILE_0,
+			.def = V4L2_MPEG_VIDEO_VP8_PROFILE_0,
+			.max = V4L2_MPEG_VIDEO_VP8_PROFILE_3,
+		},
+		.codec_type = V4L2_PIX_FMT_VP8_FRAME,
+	},
 };
 #define NUM_CTRLS ARRAY_SIZE(mtk_stateless_controls)
 
-static struct mtk_video_fmt mtk_video_formats[3];
-static struct mtk_codec_framesizes mtk_vdec_framesizes[1];
+static struct mtk_video_fmt mtk_video_formats[4];
+static struct mtk_codec_framesizes mtk_vdec_framesizes[2];
 
 struct mtk_video_fmt default_out_format;
 struct mtk_video_fmt default_cap_format;
@@ -424,6 +440,7 @@ static void mtk_vcodec_add_formats(unsigned int fourcc,
 
 	switch (fourcc) {
 	case V4L2_PIX_FMT_H264_SLICE:
+	case V4L2_PIX_FMT_VP8_FRAME:
 		mtk_video_formats[count_formats].fourcc = fourcc;
 		mtk_video_formats[count_formats].type = MTK_FMT_DEC;
 		mtk_video_formats[count_formats].num_planes = 1;
@@ -466,6 +483,10 @@ static void mtk_vcodec_get_supported_formats(struct mtk_vcodec_ctx *ctx)
 	}
 	if (ctx->dev->dec_capability & MTK_VDEC_FORMAT_H264_SLICE) {
 		mtk_vcodec_add_formats(V4L2_PIX_FMT_H264_SLICE, ctx);
+		out_format_count++;
+	}
+	if (ctx->dev->dec_capability & MTK_VDEC_FORMAT_VP8_FRAME) {
+		mtk_vcodec_add_formats(V4L2_PIX_FMT_VP8_FRAME, ctx);
 		out_format_count++;
 	}
 
