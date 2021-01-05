@@ -73,6 +73,7 @@ static const struct mtk_stateless_control mtk_stateless_controls[] = {
 			.max = V4L2_STATELESS_H264_DECODE_MODE_FRAME_BASED,
 		},
 		.codec_type = V4L2_PIX_FMT_H264_SLICE,
+		.needed_in_request = true,
 	},
 };
 #define NUM_CTRLS ARRAY_SIZE(mtk_stateless_controls)
@@ -380,7 +381,7 @@ static int mtk_vcodec_dec_ctrls_setup(struct mtk_vcodec_ctx *ctx)
 	struct v4l2_ctrl *ctrl;
 	unsigned int i;
 
-	v4l2_ctrl_handler_init(&ctx->ctrl_hdl, NUM_CTRLS);
+	v4l2_ctrl_handler_init(&ctx->ctrl_hdl, NUM_CTRLS + 1);
 	if (ctx->ctrl_hdl.error) {
 		mtk_v4l2_err("v4l2_ctrl_handler_init failed\n");
 		return ctx->ctrl_hdl.error;
