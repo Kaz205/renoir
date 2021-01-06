@@ -26,6 +26,9 @@ struct fscrypt_master_key;
 #define FSCRYPT_CONTEXT_V1	1
 #define FSCRYPT_CONTEXT_V2	2
 
+/* Keep this in sync with include/uapi/linux/fscrypt.h */
+#define FSCRYPT_MODE_MAX	FSCRYPT_MODE_ADIANTUM
+
 struct fscrypt_context_v1 {
 	u8 version; /* FSCRYPT_CONTEXT_V1 */
 	u8 contents_encryption_mode;
@@ -442,17 +445,17 @@ struct fscrypt_master_key {
 	spinlock_t		mk_decrypted_inodes_lock;
 
 	/* Crypto API transforms for DIRECT_KEY policies, allocated on-demand */
-	struct crypto_skcipher	*mk_direct_tfms[__FSCRYPT_MODE_MAX + 1];
+	struct crypto_skcipher	*mk_direct_tfms[FSCRYPT_MODE_MAX + 1];
 
 	/*
 	 * Crypto API transforms for filesystem-layer implementation of
 	 * IV_INO_LBLK_64 policies, allocated on-demand.
 	 */
-	struct crypto_skcipher	*mk_iv_ino_lblk_64_tfms[__FSCRYPT_MODE_MAX + 1];
+	struct crypto_skcipher	*mk_iv_ino_lblk_64_tfms[FSCRYPT_MODE_MAX + 1];
 
 #ifdef CONFIG_FS_ENCRYPTION_INLINE_CRYPT
 	/* Raw keys for IV_INO_LBLK_64 policies, allocated on-demand */
-	u8			*mk_iv_ino_lblk_64_raw_keys[__FSCRYPT_MODE_MAX + 1];
+	u8			*mk_iv_ino_lblk_64_raw_keys[FSCRYPT_MODE_MAX + 1];
 
 	/* The data unit size being used for inline encryption */
 	unsigned int		mk_data_unit_size;
