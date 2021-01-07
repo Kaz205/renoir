@@ -51,7 +51,9 @@
 #define SX932X_REG_STAT3		0x04
 #define SX932X_REG_IRQ_MSK		0x05
 #define SX932X_REG_IRQ_CFG0		0x06
-#define SX932X_REG_IRQ_CFG2		0x07
+#define SX932X_REG_IRQ_CFG1		0x07
+#define SX932X_REG_IRQ_CFG2		0x08
+
 
 #define SX932X_REG_GNRL_CTRL0		0x10
 #define SX932X_REG_GNRL_CTRL1		0x11
@@ -1126,6 +1128,18 @@ static const struct iio_buffer_setup_ops sx932x_buffer_setup_ops = {
 					  ADV_CTRL17, (5 << 4) | 6),           \
 			SX932X_REG_CONFIG(_property_prefix, "adv_ctrl18",      \
 					  ADV_CTRL18, (3 << 4) | 3),           \
+			SX932X_REG_CONFIG(_property_prefix, "gnrl_ctrl0",      \
+					  GNRL_CTRL0, 0x16),                   \
+			SX932X_REG_CONFIG(_property_prefix, "afe_ctrl0",       \
+					  AFE_CTRL0, 0x00),                    \
+			SX932X_REG_CONFIG(_property_prefix, "afe_ph1",         \
+					  AFE_PH1, 0x26),                      \
+			SX932X_REG_CONFIG(_property_prefix, "irq_cfg0",        \
+					  IRQ_CFG0, 0x00),                     \
+			SX932X_REG_CONFIG(_property_prefix, "irq_cfg1",        \
+					  IRQ_CFG1, 0x80),                     \
+			SX932X_REG_CONFIG(_property_prefix, "irq_cfg2",        \
+					  IRQ_CFG2, 0x00),                     \
 			SX932X_REG_CONFIG(_property_prefix, "gnrl_ctrl1",      \
 					  GNRL_CTRL1, 0x2f),                   \
 			{                                                      \
