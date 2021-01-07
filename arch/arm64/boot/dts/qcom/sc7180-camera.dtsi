@@ -941,7 +941,6 @@
 	};
 
 	cam_lrme_mgr: qcom,cam-lrme {
-		status = "disable";
 		#address-cells = <2>;
 		#size-cells = <2>;
 		ranges;
