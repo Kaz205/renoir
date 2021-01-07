@@ -22,6 +22,7 @@ properties:
   compatible:
     enum:
       - mediatek,mt8183-svs
+      - mediatek,mt8192-svs
 
   reg:
     description: Address range of the MTK SVS controller.
@@ -46,6 +47,14 @@ properties:
     items:
       - const: svs-calibration-data
       - const: t-calibration-data
+
+  resets:
+    description:
+      svs reset control.
+
+  reset-names:
+    items:
+      - const: svs_rst
 
 required:
   - compatible
