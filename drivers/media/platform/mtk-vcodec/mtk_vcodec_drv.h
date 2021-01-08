@@ -8,6 +8,8 @@
 #ifndef _MTK_VCODEC_DRV_H_
 #define _MTK_VCODEC_DRV_H_
 
+#include <linux/component.h>
+#include <linux/io.h>
 #include <linux/platform_device.h>
 #include <linux/videodev2.h>
 #include <media/v4l2-ctrls.h>
@@ -30,8 +32,8 @@
  * enum mtk_hw_reg_idx - MTK hw register base index
  */
 enum mtk_hw_reg_idx {
-	VDEC_SYS,
 	VDEC_MISC,
+	VDEC_SYS,
 	VDEC_LD,
 	VDEC_TOP,
 	VDEC_CM,
@@ -310,6 +312,13 @@ enum mtk_chip {
 	MTK_MT8192,
 };
 
+enum mtk_vdec_hw_id {
+	MTK_VDEC_LAT0,
+	MTK_VDEC_LAT1,
+	MTK_VDEC_CORE,
+	MTK_VDEC_HW_MAX,
+};
+
 /**
  * struct mtk_vcodec_dec_pdata - compatible data for each IC
  * @init_vdec_params: init vdec params
@@ -455,6 +464,10 @@ struct mtk_vcodec_dev {
 	struct mtk_vcodec_pm pm;
 	unsigned int dec_capability;
 	unsigned int enc_capability;
+
+	struct mtk_vcodec_dev *hw_dev[MTK_VDEC_HW_MAX];
+	struct device_node *component_node[MTK_VDEC_HW_MAX];
+	int comp_idx;
 };
 
 static inline struct mtk_vcodec_ctx *fh_to_ctx(struct v4l2_fh *fh)
