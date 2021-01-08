@@ -439,7 +439,7 @@ static int cpufreq_set_cur_state(struct thermal_cooling_device *cdev,
 {
 	struct cpufreq_cooling_device *cpufreq_cdev = cdev->devdata;
 	struct device *cpu_dev;
-	int rc;
+	int ret;
 
 	/* Request state should be less than max_level */
 	if (WARN_ON(state > cpufreq_cdev->max_level))
@@ -449,12 +449,12 @@ static int cpufreq_set_cur_state(struct thermal_cooling_device *cdev,
 	if (cpufreq_cdev->cpufreq_state == state)
 		return 0;
 
-	cpufreq_cdev->cpufreq_state = state;
-
-	rc = freq_qos_update_request(&cpufreq_cdev->qos_req,
+	ret = freq_qos_update_request(&cpufreq_cdev->qos_req,
 				get_state_freq(cpufreq_cdev, state));
-	if (rc)
-		return rc;
+	if (ret <= 0)
+		return ret;
+
+	cpufreq_cdev->cpufreq_state = state;
 
 	if (cpu_cooling_ratelimit()) {
 		cpu_dev = get_cpu_device(cpufreq_cdev->policy->cpu);
@@ -463,7 +463,7 @@ static int cpufreq_set_cur_state(struct thermal_cooling_device *cdev,
 			 state, get_state_freq(cpufreq_cdev, state));
 	}
 
-	return 0;
+	return ret;
 }
 
 /* Bind cpufreq callbacks to thermal cooling device ops */
