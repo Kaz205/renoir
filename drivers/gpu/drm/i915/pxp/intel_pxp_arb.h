@@ -34,6 +34,6 @@ struct pxp_protected_session {
 };
 
 int intel_pxp_arb_create_session(struct intel_pxp *pxp);
-int intel_pxp_arb_terminate_session(struct intel_pxp *pxp);
+int intel_pxp_arb_terminate_session_with_global_terminate(struct intel_pxp *pxp);
 
 #endif /* __INTEL_PXP_ARB_H__ */

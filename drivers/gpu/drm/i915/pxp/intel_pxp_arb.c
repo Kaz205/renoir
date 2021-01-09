@@ -17,6 +17,8 @@
 #define ARB_SESSION_TYPE SESSION_TYPE_TYPE0
 #define ARB_PROTECTION_MODE PROTECTION_MODE_HM
 
+#define PXP_GLOBAL_TERMINATE _MMIO(0x320f8)
+
 static bool is_hw_arb_session_in_play(struct intel_pxp *pxp)
 {
 	u32 regval_sip = 0;
@@ -132,7 +134,7 @@ end:
 	return ret;
 }
 
-static int intel_pxp_arb_session_with_global_termination(struct intel_pxp *pxp)
+static int intel_pxp_arb_session_termination(struct intel_pxp *pxp)
 {
 	u32 *cmd = NULL;
 	u32 *cmd_ptr = NULL;
@@ -186,7 +188,7 @@ end:
  *
  * Return: status. 0 means terminate is successful.
  */
-int intel_pxp_arb_terminate_session(struct intel_pxp *pxp)
+int intel_pxp_arb_terminate_session_with_global_terminate(struct intel_pxp *pxp)
 {
 	int ret;
 	struct intel_gt *gt = container_of(pxp, struct intel_gt, pxp);
@@ -195,13 +197,21 @@ int intel_pxp_arb_terminate_session(struct intel_pxp *pxp)
 	lockdep_assert_held(&pxp->ctx.mutex);
 
 	/* terminate the hw sessions */
-	ret = intel_pxp_arb_session_with_global_termination(pxp);
+	ret = intel_pxp_arb_session_termination(pxp);
 	if (ret) {
-		drm_err(&gt->i915->drm, "Failed to intel_pxp_arb_session_with_global_termination\n");
+		drm_err(&gt->i915->drm, "Failed to intel_pxp_arb_session_termination\n");
 		return ret;
 	}
 
 	arb->is_in_play = false;
+
+	ret = wait_arb_hw_sw_state(pxp);
+	if (ret) {
+		drm_err(&gt->i915->drm, "Failed to wait_arb_hw_sw_state\n");
+		return ret;
+	}
+
+	intel_uncore_write(gt->uncore, PXP_GLOBAL_TERMINATE, 1);
 
 	return ret;
 }

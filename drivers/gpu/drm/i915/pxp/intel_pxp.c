@@ -47,11 +47,11 @@ static int intel_pxp_teardown_required_callback(struct intel_pxp *pxp)
 	pxp->ctx.global_state_attacked = true;
 	pxp->ctx.flag_display_hm_surface_keys = false;
 
-	ret = intel_pxp_arb_terminate_session(pxp);
+	ret = intel_pxp_sm_terminate_all_sessions(pxp, SESSION_TYPE_TYPE0);
 	if (ret)
 		goto end;
 
-	ret = intel_pxp_sm_terminate_all_sessions(pxp, SESSION_TYPE_TYPE0);
+	ret = intel_pxp_arb_terminate_session_with_global_terminate(pxp);
 end:
 	mutex_unlock(&pxp->ctx.mutex);
 

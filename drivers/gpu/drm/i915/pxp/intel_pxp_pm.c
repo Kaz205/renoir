@@ -50,15 +50,15 @@ int intel_pxp_pm_resume(struct intel_pxp *pxp)
 
 	/* Re-enable PXP-IOCTLs */
 	if (pxp->ctx.global_state_in_suspend) {
-		ret = intel_pxp_arb_terminate_session(pxp);
-		if (ret) {
-			drm_err(&gt->i915->drm, "Failed to terminate the arb session\n");
-			goto end;
-		}
-
 		ret = intel_pxp_sm_terminate_all_sessions(pxp, SESSION_TYPE_TYPE0);
 		if (ret) {
 			drm_err(&gt->i915->drm, "Failed to terminate the sessions\n");
+			goto end;
+		}
+
+		ret = intel_pxp_arb_terminate_session_with_global_terminate(pxp);
+		if (ret) {
+			drm_err(&gt->i915->drm, "Failed to terminate the arb session\n");
 			goto end;
 		}
 
