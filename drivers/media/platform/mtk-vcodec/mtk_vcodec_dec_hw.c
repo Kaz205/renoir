@@ -22,6 +22,8 @@
 #define VDEC_IRQ_CLR	0x10
 #define VDEC_IRQ_CFG_REG	0xa4
 
+typedef irqreturn_t (*vdec_irq_handler)(int irq, void *priv);
+
 static int mtk_vdec_hw_bind(struct device *dev, struct device *master,
 	void *data)
 {
@@ -68,6 +70,13 @@ static void mtk_vdec_hw_wake_up_ctx(struct mtk_vcodec_ctx *ctx)
 	wake_up_interruptible(&ctx->queue);
 }
 
+/* Wake up core context wait_queue */
+static void mtk_vdec_hw_wake_up_core_ctx(struct mtk_vcodec_ctx *ctx)
+{
+	ctx->int_core_cond = 1;
+	wake_up_interruptible(&ctx->core_queue);
+}
+
 static irqreturn_t mtk_vdec_hw_irq_handler(int irq, void *priv)
 {
 	struct mtk_vcodec_dev *dev = priv;
@@ -98,13 +107,41 @@ static irqreturn_t mtk_vdec_hw_irq_handler(int irq, void *priv)
 
 	mtk_vdec_hw_wake_up_ctx(ctx);
 
-	mtk_v4l2_debug(3, "wake up ctx %d, dec_done_status=%x",
-		ctx->id, dec_done_status);
+	mtk_v4l2_debug(3, "wake up ctx %d, dec_done_status=%x",	ctx->id,
+		dec_done_status);
 
 	return IRQ_HANDLED;
 }
 
-static int mtk_vdec_hw_init_irq(struct mtk_vcodec_dev *dev)
+static irqreturn_t mtk_vdec_hw_core_irq_handler(int irq, void *priv)
+{
+	struct mtk_vcodec_dev *dev = priv;
+	struct mtk_vcodec_ctx *ctx;
+	unsigned int dec_done_status;
+	void __iomem *vdec_misc_addr = dev->reg_base[VDEC_MISC] +
+					VDEC_IRQ_CFG_REG;
+
+	ctx = mtk_vcodec_get_curr_ctx(dev);
+
+	dec_done_status = readl(vdec_misc_addr);
+	if ((dec_done_status & MTK_VDEC_IRQ_STATUS_DEC_SUCCESS) !=
+		MTK_VDEC_IRQ_STATUS_DEC_SUCCESS)
+		return IRQ_HANDLED;
+
+	/* clear interrupt */
+	writel((readl(vdec_misc_addr) | VDEC_IRQ_CFG), vdec_misc_addr);
+	writel((readl(vdec_misc_addr) & ~VDEC_IRQ_CLR), vdec_misc_addr);
+
+	mtk_vdec_hw_wake_up_core_ctx(ctx);
+
+	mtk_v4l2_debug(3, "wake up core ctx %d, dec_done_status=%x", ctx->id,
+		dec_done_status);
+
+	return IRQ_HANDLED;
+}
+
+static int mtk_vdec_hw_init_irq(struct mtk_vcodec_dev *dev,
+	vdec_irq_handler irq_handler)
 {
 	struct platform_device *pdev = dev->plat_dev;
 	int ret;
@@ -116,8 +153,7 @@ static int mtk_vdec_hw_init_irq(struct mtk_vcodec_dev *dev)
 	}
 
 	ret = devm_request_irq(&pdev->dev, dev->dec_irq,
-				mtk_vdec_hw_irq_handler,
-				0, pdev->name, dev);
+				irq_handler, 0, pdev->name, dev);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to install dev->dec_irq %d (%d)",
 			dev->dec_irq, ret);
@@ -131,6 +167,7 @@ static int mtk_vdec_hw_init_irq(struct mtk_vcodec_dev *dev)
 static int mtk_vdec_hw_probe(struct platform_device *pdev)
 {
 	struct mtk_vcodec_dev *dev;
+	vdec_irq_handler irq_handler;
 	int ret;
 
 	dev = devm_kzalloc(&pdev->dev, sizeof(*dev), GFP_KERNEL);
@@ -153,9 +190,17 @@ static int mtk_vdec_hw_probe(struct platform_device *pdev)
 		goto err;
 	}
 
-	ret = mtk_vdec_hw_init_irq(dev);
-	if (ret)
+	irq_handler = of_device_get_match_data(&pdev->dev);
+	if (!irq_handler) {
+		dev_err(&pdev->dev, "Failed to get match data.\n");
 		goto err;
+	}
+
+	ret = mtk_vdec_hw_init_irq(dev, irq_handler);
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to register irq handler.\n");
+		goto err;
+	}
 
 	platform_set_drvdata(pdev, dev);
 
@@ -174,9 +219,11 @@ err:
 static const struct of_device_id mtk_vdec_hw_ids[] = {
 	{
 		.compatible = "mediatek,mtk-vcodec-lat",
+		.data = mtk_vdec_hw_irq_handler,
 	},
 	{
 		.compatible = "mediatek,mtk-vcodec-core",
+		.data = mtk_vdec_hw_core_irq_handler,
 	},
 	{},
 };

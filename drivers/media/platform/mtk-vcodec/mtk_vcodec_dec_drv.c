@@ -158,6 +158,8 @@ static int fops_vcodec_open(struct file *file)
 	INIT_LIST_HEAD(&ctx->list);
 	ctx->dev = dev;
 	init_waitqueue_head(&ctx->queue);
+	if (VDEC_LAT_ARCH(ctx->dev->vdec_pdata->hw_arch))
+		init_waitqueue_head(&ctx->core_queue);
 	mutex_init(&ctx->lock);
 
 	ctx->type = MTK_INST_DECODER;

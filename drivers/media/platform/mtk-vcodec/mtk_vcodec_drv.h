@@ -27,6 +27,7 @@
 #define MTK_VCODEC_MAX_PLANES	3
 #define MTK_V4L2_BENCHMARK	0
 #define WAIT_INTR_TIMEOUT_MS	1000
+#define VDEC_LAT_ARCH(hw_arch) ((hw_arch) >= MTK_VDEC_LAT_SIN_CORE)
 
 /**
  * enum mtk_hw_reg_idx - MTK hw register base index
@@ -285,6 +286,9 @@ struct mtk_vcodec_ctx {
 	int int_cond;
 	int int_type;
 	wait_queue_head_t queue;
+	int int_core_cond;
+	int int_core_type;
+	wait_queue_head_t core_queue;
 	unsigned int irq_status;
 
 	struct v4l2_ctrl_handler ctrl_hdl;
@@ -317,6 +321,12 @@ enum mtk_vdec_hw_id {
 	MTK_VDEC_LAT1,
 	MTK_VDEC_CORE,
 	MTK_VDEC_HW_MAX,
+};
+
+enum mtk_vdec_hw_arch {
+	MTK_VDEC_PURE_SIN_CORE,
+	MTK_VDEC_LAT_SIN_CORE,
+	MTK_VDEC_LAT_DUAL_CORE,
 };
 
 /**
@@ -358,6 +368,7 @@ struct mtk_vcodec_dec_pdata {
 	const int num_framesizes;
 
 	enum mtk_chip chip;
+	enum mtk_vdec_hw_arch hw_arch;
 
 	bool uses_stateless_api;
 };
