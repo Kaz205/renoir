@@ -1064,6 +1064,8 @@ static struct drm_gem_object *_msm_gem_new(struct drm_device *dev,
 		struct msm_gem_vma *vma;
 		struct page **pages;
 
+		drm_gem_private_object_init(dev, obj, size);
+
 		msm_gem_lock(obj);
 
 		vma = add_vma(obj, NULL);
@@ -1075,7 +1077,6 @@ static struct drm_gem_object *_msm_gem_new(struct drm_device *dev,
 
 		to_msm_bo(obj)->vram_node = &vma->node;
 
-		drm_gem_private_object_init(dev, obj, size);
 
 		pages = get_pages(obj);
 		if (IS_ERR(pages)) {
