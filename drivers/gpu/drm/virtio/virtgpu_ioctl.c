@@ -342,11 +342,12 @@ static int virtio_gpu_resource_create_ioctl(struct drm_device *dev, void *data,
 	return 0;
 }
 
-static int virtio_gpu_resource_info_ioctl(struct drm_device *dev, void *data,
-					  struct drm_file *file_priv)
+static int virtio_gpu_resource_info_cros_ioctl(struct drm_device *dev,
+					       void *data,
+					       struct drm_file *file_priv)
 {
 	struct virtio_gpu_device *vgdev = dev->dev_private;
-	struct drm_virtgpu_resource_info *ri = data;
+	struct drm_virtgpu_resource_info_cros *ri = data;
 	struct drm_gem_object *gobj = NULL;
 	struct virtio_gpu_object *qobj = NULL;
 	int ret = 0;
@@ -718,7 +719,8 @@ struct drm_ioctl_desc virtio_gpu_ioctls[DRM_VIRTIO_NUM_IOCTLS] = {
 			  virtio_gpu_resource_create_ioctl,
 			  DRM_RENDER_ALLOW),
 
-	DRM_IOCTL_DEF_DRV(VIRTGPU_RESOURCE_INFO, virtio_gpu_resource_info_ioctl,
+	DRM_IOCTL_DEF_DRV(VIRTGPU_RESOURCE_INFO_CROS,
+			  virtio_gpu_resource_info_cros_ioctl,
 			  DRM_RENDER_ALLOW),
 
 	/* make transfer async to the main ring? - no sure, can we
