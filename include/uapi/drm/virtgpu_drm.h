@@ -113,7 +113,15 @@ struct drm_virtgpu_resource_info_cros {
 	__u32 res_handle;
 	__u32 size;
 
+/* Return res_handle and size.  Return extended info (strides, num_planes,
+ * etc.) until chromeos-5.4 and return blob_mem since chromeos-5.10.
+ */
+#define VIRTGPU_RESOURCE_INFO_TYPE_DEFAULT 0
+/* Return res_handle, size, and extended info */
+#define VIRTGPU_RESOURCE_INFO_TYPE_EXTENDED 1
 	union {
+		__u32 type; /* in, VIRTGPU_RESOURCE_INFO_TYPE_* */
+		__u32 blob_mem;
 		__u32 stride;
 		__u32 strides[4]; /* strides[0] is accessible with stride. */
 	};
