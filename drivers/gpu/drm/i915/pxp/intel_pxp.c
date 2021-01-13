@@ -35,7 +35,7 @@ static void intel_pxp_write_irq_mask_reg(struct intel_gt *gt, u32 mask)
 {
 	lockdep_assert_held(&gt->irq_lock);
 
-	intel_uncore_write(gt->uncore, GEN11_CRYPTO_INTR_MASK, mask << 16);
+	intel_uncore_write(gt->uncore, GEN11_CRYPTO_RSVD_INTR_MASK, mask << 16);
 }
 
 static int intel_pxp_teardown_required_callback(struct intel_pxp *pxp)
@@ -98,7 +98,7 @@ static void intel_pxp_irq_work(struct work_struct *work)
 		intel_pxp_global_terminate_complete_callback(pxp);
 
 	spin_lock_irq(&gt->irq_lock);
-	intel_pxp_write_irq_mask_reg(gt, 0);
+	intel_pxp_write_irq_mask_reg(gt, ~pxp->handled_irr);
 	spin_unlock_irq(&gt->irq_lock);
 }
 
@@ -156,23 +156,20 @@ void intel_pxp_uninit(struct intel_pxp *pxp)
  */
 void intel_pxp_irq_handler(struct intel_pxp *pxp, u16 iir)
 {
-	struct drm_i915_private *i915;
 	const u32 events = iir & pxp->handled_irr;
 	struct intel_gt *gt = container_of(pxp, typeof(*gt), pxp);
 
-	if (!gt || !gt->i915 || INTEL_GEN(i915) < 12)
+	if (!gt || !gt->i915 || INTEL_GEN(gt->i915) < 12)
 		return;
-
-	i915 = gt->i915;
 
 	lockdep_assert_held(&gt->irq_lock);
 
-	if (unlikely(!events)) {
-		drm_err(&i915->drm, "%s returned due to iir=[0x%04x]\n", __func__, iir);
+	if (!events) {
+		drm_err(&gt->i915->drm, "pxp irq handler called with zero irr\n");
 		return;
 	}
 
-	intel_pxp_write_irq_mask_reg(gt, pxp->handled_irr);
+	intel_pxp_write_irq_mask_reg(gt, ~0);
 
 	pxp->current_events |= events;
 	schedule_work(&pxp->irq_work);

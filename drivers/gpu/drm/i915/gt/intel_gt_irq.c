@@ -235,6 +235,9 @@ void gen11_gt_irq_reset(struct intel_gt *gt)
 	intel_uncore_write(uncore, GEN11_GPM_WGBOXPERF_INTR_MASK,  ~0);
 	intel_uncore_write(uncore, GEN11_GUC_SG_INTR_ENABLE, 0);
 	intel_uncore_write(uncore, GEN11_GUC_SG_INTR_MASK,  ~0);
+
+	intel_uncore_write(uncore, GEN11_CRYPTO_RSVD_INTR_ENABLE, 0);
+	intel_uncore_write(uncore, GEN11_CRYPTO_RSVD_INTR_MASK,  ~0);
 }
 
 void gen11_gt_irq_postinstall(struct intel_gt *gt)
@@ -247,6 +250,10 @@ void gen11_gt_irq_postinstall(struct intel_gt *gt)
 	struct intel_uncore *uncore = gt->uncore;
 	const u32 dmask = irqs << 16 | irqs;
 	const u32 smask = irqs << 16;
+	const u32 smask_pxp =
+		(PXP_IRQ_VECTOR_DISPLAY_PXP_STATE_TERMINATED |
+		 PXP_IRQ_VECTOR_DISPLAY_APP_TERM_PER_FW_REQ |
+		 PXP_IRQ_VECTOR_PXP_DISP_STATE_RESET_COMPLETE) << 16;
 
 	BUILD_BUG_ON(irqs & 0xffff0000);
 
@@ -273,6 +280,9 @@ void gen11_gt_irq_postinstall(struct intel_gt *gt)
 	/* Same thing for GuC interrupts */
 	intel_uncore_write(uncore, GEN11_GUC_SG_INTR_ENABLE, 0);
 	intel_uncore_write(uncore, GEN11_GUC_SG_INTR_MASK,  ~0);
+
+	intel_uncore_write(uncore, GEN11_CRYPTO_RSVD_INTR_ENABLE, smask_pxp);
+	intel_uncore_write(uncore, GEN11_CRYPTO_RSVD_INTR_MASK,  ~smask_pxp);
 }
 
 void gen5_gt_irq_handler(struct intel_gt *gt, u32 gt_iir)
