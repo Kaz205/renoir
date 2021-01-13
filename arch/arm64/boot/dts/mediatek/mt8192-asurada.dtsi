@@ -1329,6 +1329,12 @@
 		};
 	};
 
+	scp_pins: scp {
+		pins_scp_vreq {
+			pinmux = <PINMUX_GPIO195__FUNC_SCP_VREQ_VAO>;
+		};
+	};
+
 	spi_pins_1: spi1@0 {
 		pins_spi{
 			pinmux = <PINMUX_GPIO157__FUNC_SPI1_A_CSB>,
@@ -1453,6 +1459,8 @@
 &scp {
 	memory-region = <&scp_mem_reserved>;
 	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&scp_pins>;
 
 	cros_ec {
 		compatible = "google,cros-ec-rpmsg";
