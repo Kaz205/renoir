@@ -974,8 +974,8 @@ static int cros_typec_get_cmd_version(struct cros_typec_data *typec)
 	return 0;
 }
 
-/* Check the EC feature flags to see if TYPEC_* features are supported. */
-static int cros_typec_feature_supported(struct cros_typec_data *typec, enum ec_feature_code feature)
+/* Check the EC feature flags to see if TYPEC_* commands are supported. */
+static int cros_typec_cmds_supported(struct cros_typec_data *typec)
 {
 	struct ec_response_get_features resp = {};
 	int ret;
@@ -984,12 +984,11 @@ static int cros_typec_feature_supported(struct cros_typec_data *typec, enum ec_f
 				    &resp, sizeof(resp));
 	if (ret < 0) {
 		dev_warn(typec->dev,
-			 "Failed to get features, assuming typec feature=%d unsupported.\n",
-			 feature);
+			 "Failed to get features, assuming typec commands unsupported.\n");
 		return 0;
 	}
 
-	return resp.flags[feature / 32] & EC_FEATURE_MASK_1(feature);
+	return resp.flags[EC_FEATURE_TYPEC_CMD / 32] & EC_FEATURE_MASK_1(EC_FEATURE_TYPEC_CMD);
 }
 
 static void cros_typec_port_work(struct work_struct *work)
@@ -1051,8 +1050,7 @@ static int cros_typec_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	typec->typec_cmd_supported = !!cros_typec_feature_supported(typec,
-					EC_FEATURE_TYPEC_CMD);
+	typec->typec_cmd_supported = !!cros_typec_cmds_supported(typec);
 
 	ret = cros_typec_ec_command(typec, 0, EC_CMD_USB_PD_PORTS, NULL, 0,
 				    &resp, sizeof(resp));
