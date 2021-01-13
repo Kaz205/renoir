@@ -7,6 +7,8 @@
 #ifndef __ANX7625_H__
 #define __ANX7625_H__
 
+#include <sound/hdmi-codec.h>
+
 #define ANX7625_DRV_VERSION "0.1.04"
 
 /* Loading OCM re-trying times */
@@ -123,6 +125,7 @@
 #define AUDIO_CHANNEL_STATUS_6 0xd5
 #define TDM_SLAVE_MODE 0x10
 #define I2S_SLAVE_MODE 0x08
+#define AUDIO_LAYOUT   0x01
 
 #define AUDIO_CONTROL_REGISTER 0xe6
 #define TDM_TIMING_MODE 0x08
@@ -407,6 +410,7 @@ struct anx7625_port_data {
 
 struct anx7625_data {
 	struct anx7625_platform_data pdata;
+	struct platform_device *audio_pdev;
 	atomic_t power_status;
 	int hpd_status;
 	int hpd_high_cnt;
@@ -427,6 +431,8 @@ struct anx7625_data {
 	struct mipi_dsi_device *dsi;
 	wait_queue_head_t queue;
 	bool power_handled;
+	hdmi_codec_plugged_cb plugged_cb;
+	struct device *codec_dev;
 
 	struct anx7625_port_data typec_ports[2];
 };
