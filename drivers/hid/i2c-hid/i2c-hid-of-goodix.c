@@ -89,7 +89,7 @@ static int i2c_hid_of_goodix_probe(struct i2c_client *client,
 
 static const struct goodix_i2c_hid_timing_data goodix_gt7375p_timing_data = {
 	.post_power_delay_ms = 10,
-	.post_gpio_reset_delay_ms = 180,
+	.post_gpio_reset_delay_ms = 120,
 };
 
 static const struct of_device_id goodix_i2c_hid_of_match[] = {
