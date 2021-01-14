@@ -2048,7 +2048,7 @@ static void pci_configure_ltr(struct pci_dev *dev)
 {
 #ifdef CONFIG_PCIEASPM
 	struct pci_host_bridge *host = pci_find_host_bridge(dev->bus);
-	struct pci_dev *bridge;
+	struct pci_dev *bridge = NULL;
 	u32 cap, ctl;
 
 	if (!pci_is_pcie(dev))
@@ -2083,6 +2083,21 @@ static void pci_configure_ltr(struct pci_dev *dev)
 	if (pci_pcie_type(dev) == PCI_EXP_TYPE_ROOT_PORT ||
 	    ((bridge = pci_upstream_bridge(dev)) &&
 	      bridge->ltr_path)) {
+		/*
+		 * Downstream ports reset the LTR enable bit when the
+		 * link goes down (e.g on hot-remove) so re-enable the
+		 * bit here if not set anymore.
+		 * PCIe r5.0, sec 7.5.3.16.
+		 */
+		if (bridge && pcie_downstream_port(bridge)) {
+			pcie_capability_read_dword(bridge, PCI_EXP_DEVCTL2, &ctl);
+			if (!(ctl & PCI_EXP_DEVCTL2_LTR_EN)) {
+				pci_dbg(bridge, "re-enabling LTR\n");
+				pcie_capability_set_word(bridge, PCI_EXP_DEVCTL2,
+							 PCI_EXP_DEVCTL2_LTR_EN);
+			}
+		}
+		pci_dbg(dev, "enabling LTR\n");
 		pcie_capability_set_word(dev, PCI_EXP_DEVCTL2,
 					 PCI_EXP_DEVCTL2_LTR_EN);
 		dev->ltr_path = 1;
