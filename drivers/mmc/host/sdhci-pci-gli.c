@@ -84,6 +84,10 @@
 #define PCIE_GLI_9763E_SCR	 0x8E0
 #define   GLI_9763E_SCR_AXI_REQ	   BIT(9)
 
+#define PCIE_GLI_9763E_CFG2      0x8A4
+#define   GLI_9763E_CFG2_L1DLY     GENMASK(28, 19)
+#define   GLI_9763E_CFG2_L1DLY_MAX 0x3FF
+
 #define PCI_GLI_9755_WT       0x800
 #define   PCI_GLI_9755_WT_EN    BIT(0)
 #define   GLI_9755_WT_EN_ON     0x1
@@ -627,6 +631,12 @@ static void gli_set_gl9763e(struct sdhci_pci_slot *slot)
 	pci_read_config_dword(pdev, PCIE_GLI_9763E_SCR, &value);
 	value |= GLI_9763E_SCR_AXI_REQ;
 	pci_write_config_dword(pdev, PCIE_GLI_9763E_SCR, value);
+
+	pci_read_config_dword(pdev, PCIE_GLI_9763E_CFG2, &value);
+	value &= ~GLI_9763E_CFG2_L1DLY;
+	/* set ASPM L1 entry delay to 260us */
+	value |= FIELD_PREP(GLI_9763E_CFG2_L1DLY, GLI_9763E_CFG2_L1DLY_MAX);
+	pci_write_config_dword(pdev, PCIE_GLI_9763E_CFG2, value);
 
 	pci_read_config_dword(pdev, PCIE_GLI_9763E_VHS, &value);
 	value &= ~GLI_9763E_VHS_REV;
