@@ -536,7 +536,13 @@ static ssize_t vfd_out_locked(struct virtwl_vfd *vfd, char __user *buffer,
 		if ((to_read + read_count) > len)
 			to_read = len - read_count;
 
-		if (copy_to_user(buffer + read_count, buf, to_read)) {
+		/*
+		 * We are under vfd->lock so we need to disable page faults
+		 * and avoid acquiring mm->mmap_sem in order to avoid deadlock
+		 * with do_mmap()->virtwl_vfd_mmap(), which takes vfd->lock
+		 * under mm->mmap_sem.
+		 */
+		if (probe_user_write(buffer + read_count, buf, to_read)) {
 			read_count = -EFAULT;
 			break;
 		}
