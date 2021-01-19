@@ -36,6 +36,8 @@
 
 #define HFI_MAX_POLL_TRY 5
 
+static int cam_bps_handle_resume(struct cam_hw_info *bps_dev);
+
 static int cam_bps_cpas_vote(struct cam_bps_device_core_info *core_info,
 			struct cam_icp_cpas_vote *cpas_vote)
 {
@@ -126,6 +128,13 @@ int cam_bps_deinit_hw(void *device_priv,
 			soc_info, core_info);
 		return -EINVAL;
 	}
+
+	/*
+	 * Transfer GDSC power control before deinit HW.
+	 * The operation prevent the observed issue with BPS
+	 * clock enable during next season.
+	 */
+	cam_bps_handle_resume(bps_dev);
 
 	rc = cam_bps_disable_soc_resources(soc_info, core_info->clk_enable);
 	if (rc)

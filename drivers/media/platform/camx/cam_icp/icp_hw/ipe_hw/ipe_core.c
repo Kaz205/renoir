@@ -35,6 +35,8 @@
 
 #define HFI_MAX_POLL_TRY 5
 
+static int cam_ipe_handle_resume(struct cam_hw_info *ipe_dev);
+
 static int cam_ipe_caps_vote(struct cam_ipe_device_core_info *core_info,
 	struct cam_icp_cpas_vote *cpas_vote)
 {
@@ -124,6 +126,13 @@ int cam_ipe_deinit_hw(void *device_priv,
 			soc_info, core_info);
 		return -EINVAL;
 	}
+
+	/*
+	 * Transfer GDSC power control before deinit HW.
+	 * The operation prevent the observed issue with IPE
+	 * clock enable during next season.
+	 */
+	cam_ipe_handle_resume(ipe_dev);
 
 	rc = cam_ipe_disable_soc_resources(soc_info, core_info->clk_enable);
 	if (rc)
