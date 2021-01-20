@@ -1418,7 +1418,8 @@ int usb4_port_retimer_nvm_write(struct tb_port *port, u8 index, unsigned int add
  */
 int usb4_port_retimer_nvm_authenticate(struct tb_port *port, u8 index)
 {
-	u32 val;
+	u32 val, status = 0;
+	int ret;
 
 	/*
 	 * We need to use the raw operation here because once the
@@ -1426,8 +1427,24 @@ int usb4_port_retimer_nvm_authenticate(struct tb_port *port, u8 index)
 	 * so we do not get back the status now.
 	 */
 	val = USB4_SB_OPCODE_NVM_AUTH_WRITE;
-	return usb4_port_sb_write(port, USB4_SB_TARGET_RETIMER, index,
-				  USB4_SB_OPCODE, &val, sizeof(val));
+	ret = usb4_port_sb_write(port, USB4_SB_TARGET_RETIMER, index,
+				 USB4_SB_OPCODE, &val, sizeof(val));
+	if (ret)
+		return ret;
+
+	/*
+	 * Per USB4 Re-Timer Specification Rev 0.96, section 5.2, wait for
+	 * at least 5 seconds and then enumerate retimers. Then read the
+	 * results of the NVM_AUTH_WRITE port operation.
+	 */
+	msleep(6000);
+
+	ret = usb4_port_enumerate_retimers(port);
+
+	ret = usb4_port_retimer_nvm_authenticate_status(port, index, &status);
+	if (ret)
+		return ret;
+	return status ? -EIO : 0;
 }
 
 /**
