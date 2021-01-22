@@ -104,15 +104,9 @@ enum gsi_channel_state {
 	GSI_CHANNEL_STATE_ERROR			= 0xf,
 };
 
-enum gsi_channel_flag {
-	GSI_CHANNEL_FLAG_STOPPING,
-	GSI_CHANNEL_FLAG_COUNT,		/* Last; not a flag */
-};
-
 /* We only care about channels between IPA and AP */
 struct gsi_channel {
 	struct gsi *gsi;
-	DECLARE_BITMAP(flags, GSI_CHANNEL_FLAG_COUNT);
 	bool toward_ipa;
 	bool command;			/* AP command TX channel or not */
 

@@ -733,10 +733,6 @@ static void gsi_channel_freeze(struct gsi_channel *channel)
 {
 	gsi_channel_trans_quiesce(channel);
 
-	/* Don't let the NAPI poll loop re-enable interrupts when done */
-	set_bit(GSI_CHANNEL_FLAG_STOPPING, channel->flags);
-	smp_mb__after_atomic();	/* Ensure gsi_channel_poll() sees new value */
-
 	napi_disable(&channel->napi);
 
 	gsi_irq_ieob_disable(channel->gsi, channel->evt_ring_id);
@@ -746,10 +742,6 @@ static void gsi_channel_freeze(struct gsi_channel *channel)
 static void gsi_channel_thaw(struct gsi_channel *channel)
 {
 	gsi_irq_ieob_enable(channel->gsi, channel->evt_ring_id);
-
-	/* Allow the NAPI poll loop to re-enable interrupts again */
-	clear_bit(GSI_CHANNEL_FLAG_STOPPING, channel->flags);
-	smp_mb__after_atomic();	/* Ensure gsi_channel_poll() sees new value */
 
 	napi_enable(&channel->napi);
 }
@@ -1532,8 +1524,7 @@ static int gsi_channel_poll(struct napi_struct *napi, int budget)
 
 	if (count < budget) {
 		napi_complete(&channel->napi);
-		if (!test_bit(GSI_CHANNEL_FLAG_STOPPING, channel->flags))
-			gsi_irq_ieob_enable(channel->gsi, channel->evt_ring_id);
+		gsi_irq_ieob_enable(channel->gsi, channel->evt_ring_id);
 	}
 
 	return count;
