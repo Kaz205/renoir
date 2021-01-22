@@ -231,7 +231,7 @@ static int cros_ec_notify(struct notifier_block *nb,
 	u32 device_event_mask;
 
 	if (!host_event)
-		return NOTIFY_BAD;
+		return NOTIFY_DONE;
 
 	if (!(host_event & EC_HOST_EVENT_MASK(EC_HOST_EVENT_DEVICE)))
 		return NOTIFY_DONE;
