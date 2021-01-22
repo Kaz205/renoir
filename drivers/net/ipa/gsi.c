@@ -737,21 +737,21 @@ static void gsi_channel_freeze(struct gsi_channel *channel)
 	set_bit(GSI_CHANNEL_FLAG_STOPPING, channel->flags);
 	smp_mb__after_atomic();	/* Ensure gsi_channel_poll() sees new value */
 
-	gsi_irq_ieob_disable(channel->gsi, channel->evt_ring_id);
-
 	napi_disable(&channel->napi);
+
+	gsi_irq_ieob_disable(channel->gsi, channel->evt_ring_id);
 }
 
 /* Allow transactions to be used on the channel again. */
 static void gsi_channel_thaw(struct gsi_channel *channel)
 {
+	gsi_irq_ieob_enable(channel->gsi, channel->evt_ring_id);
+
 	/* Allow the NAPI poll loop to re-enable interrupts again */
 	clear_bit(GSI_CHANNEL_FLAG_STOPPING, channel->flags);
 	smp_mb__after_atomic();	/* Ensure gsi_channel_poll() sees new value */
 
 	napi_enable(&channel->napi);
-
-	gsi_irq_ieob_enable(channel->gsi, channel->evt_ring_id);
 }
 
 /* Program a channel for use */
