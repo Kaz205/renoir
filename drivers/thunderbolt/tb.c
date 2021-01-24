@@ -576,7 +576,7 @@ static void tb_scan_port(struct tb_port *port)
 			 */
 
 	if (tb_wait_for_port(port, false) <= 0) {
-		tb_retimer_scan(port, NULL);
+		tb_retimer_scan(port, true, NULL);
 		return;
 	}
 
@@ -585,7 +585,7 @@ static void tb_scan_port(struct tb_port *port)
 		return;
 	}
 
-	tb_retimer_scan(port, NULL);
+	tb_retimer_scan(port, true, NULL);
 
 	sw = tb_switch_alloc(port->sw->tb, &port->sw->dev,
 			     tb_downstream_route(port));
@@ -652,7 +652,7 @@ static void tb_scan_port(struct tb_port *port)
 		tb_sw_warn(sw, "failed to enable TMU\n");
 
 	/* Scan upstream retimers */
-	tb_retimer_scan(upstream_port, NULL);
+	tb_retimer_scan(upstream_port, true, NULL);
 
 	/*
 	 * Create USB 3.x tunnels only when the switch is plugged to the
