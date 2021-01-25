@@ -2634,7 +2634,7 @@ void tb_switch_remove(struct tb_switch *sw)
 		}
 
 		/* Remove any downstream retimers */
-		tb_retimer_remove_all(port);
+		tb_retimer_remove_all(port, sw);
 	}
 
 	if (!sw->is_unplugged)
