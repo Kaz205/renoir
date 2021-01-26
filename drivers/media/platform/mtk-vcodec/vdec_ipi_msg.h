@@ -20,6 +20,7 @@ enum vdec_ipi_msgid {
 	AP_IPIMSG_DEC_RESET = 0xA004,
 	AP_IPIMSG_DEC_CORE = 0xA005,
 	AP_IPIMSG_DEC_CORE_END = 0xA006,
+	AP_IPIMSG_DEC_GET_PARAM = 0xA007,
 
 	VPU_IPIMSG_DEC_INIT_ACK = 0xB000,
 	VPU_IPIMSG_DEC_START_ACK = 0xB001,
@@ -28,6 +29,7 @@ enum vdec_ipi_msgid {
 	VPU_IPIMSG_DEC_RESET_ACK = 0xB004,
 	VPU_IPIMSG_DEC_CORE_ACK = 0xB005,
 	VPU_IPIMSG_DEC_CORE_END_ACK = 0xB006,
+	VPU_IPIMSG_DEC_GET_PARAM_ACK = 0xB007,
 };
 
 /**
@@ -112,6 +114,40 @@ struct vdec_vpu_ipi_init_ack {
 	uint32_t vpu_inst_addr;
 	uint32_t vdec_abi_version;
 	uint32_t inst_id;
+};
+
+/**
+ * struct vdec_ap_ipi_get_param - for AP_IPIMSG_SET_PARAM
+ * @msg_id	: AP_IPIMSG_DEC_START
+ * @inst_id     : instance ID. Used if the ABI version >= 2.
+ * @data	: picture information
+ * @param_type	: get param type
+ * @codec_type	: Codec fourcc
+ */
+struct vdec_ap_ipi_get_param {
+	uint32_t msg_id;
+	uint32_t inst_id;
+	uint32_t data[4];
+	uint32_t param_type;
+	uint32_t codec_type;
+};
+
+
+/**
+ * struct vdec_vpu_ipi_init_ack - for VPU_IPIMSG_DEC_INIT_ACK
+ * @msg_id	: VPU_IPIMSG_DEC_INIT_ACK
+ * @status	: VPU exeuction result
+ * @ap_inst_addr	: AP vcodec_vpu_inst instance address
+ * @data     : picture information from SCP.
+ * @param_type	: get param type
+ */
+struct vdec_vpu_ipi_get_param_ack {
+	uint32_t msg_id;
+	int32_t status;
+	uint64_t ap_inst_addr;
+	uint32_t data[4];
+	uint32_t param_type;
+	uint32_t reserved;
 };
 
 #endif
