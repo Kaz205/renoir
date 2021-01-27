@@ -120,7 +120,7 @@ static int cros_ec_ring_probe(struct platform_device *pdev)
 
 	iio_device_attach_buffer(indio_dev, buffer);
 	ret = cros_ec_sensorhub_register_push_data(
-			sensor_hub, sensor_hub->sensor_num, indio_dev,
+			sensor_hub, sensor_hub->sensor_num, false, indio_dev,
 			cros_sensor_ring_push_sample);
 	if (ret)
 		return ret;

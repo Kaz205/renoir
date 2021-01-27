@@ -420,7 +420,7 @@ static int cros_ec_light_prox_probe(struct platform_device *pdev)
 	if (!indio_dev)
 		return -ENOMEM;
 
-	ret = cros_ec_sensors_core_init(pdev, indio_dev, true,
+	ret = cros_ec_sensors_core_init(pdev, indio_dev, true, false,
 					cros_ec_light_capture,
 					cros_ec_light_push_data);
 	if (ret)
@@ -488,7 +488,7 @@ static int cros_ec_light_prox_probe(struct platform_device *pdev)
 			channel->type = IIO_LIGHT;
 		}
 		cros_ec_sensorhub_register_push_data(
-				sensor_hub, sensor_num + 1,
+				sensor_hub, sensor_num + 1, false,
 				indio_dev,
 				cros_ec_light_push_data_rgb);
 	}

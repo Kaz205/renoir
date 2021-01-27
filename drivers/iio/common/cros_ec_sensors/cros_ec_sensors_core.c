@@ -274,6 +274,7 @@ static void cros_ec_sensors_core_clean(void *arg)
  * @pdev:		platform device created for the sensors
  * @indio_dev:		iio device structure of the device
  * @physical_device:	true if the device refers to a physical device
+ * @send_to_device:	true sends samples to both device and sensor ring.
  * @trigger_capture:    function pointer to call buffer is triggered,
  *    for backward compatibility.
  * @push_data:          function to call when cros_ec_sensorhub receives
@@ -284,6 +285,7 @@ static void cros_ec_sensors_core_clean(void *arg)
 int cros_ec_sensors_core_init(struct platform_device *pdev,
 			      struct iio_dev *indio_dev,
 			      bool physical_device,
+			      bool send_to_device,
 			      cros_ec_sensors_capture_t trigger_capture,
 			      cros_ec_sensorhub_push_data_cb_t push_data)
 {
@@ -394,6 +396,7 @@ int cros_ec_sensors_core_init(struct platform_device *pdev,
 #endif
 			ret = cros_ec_sensorhub_register_push_data(
 					sensor_hub, sensor_platform->sensor_num,
+					send_to_device,
 					indio_dev, push_data);
 			if (ret)
 				return ret;

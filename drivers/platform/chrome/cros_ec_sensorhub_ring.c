@@ -38,6 +38,10 @@
  * triggered samples.
  */
 static inline int
+cros_sensorhub_send_sample_to_device(struct cros_ec_sensorhub *sensorhub,
+			   struct cros_ec_sensors_ring_sample *sample);
+
+static inline int
 cros_sensorhub_send_sample(struct cros_ec_sensorhub *sensorhub,
 			   struct cros_ec_sensors_ring_sample *sample)
 {
@@ -48,6 +52,9 @@ cros_sensorhub_send_sample(struct cros_ec_sensorhub *sensorhub,
 	if (id >= sensorhub->sensor_num)
 		return -EINVAL;
 
+	if (sensorhub->push_data[id].send_to_device)
+		cros_sensorhub_send_sample_to_device(sensorhub, sample);
+
 	cb = sensorhub->push_data[sensorhub->sensor_num].push_data_cb;
 
 	indio_dev = sensorhub->push_data[sensorhub->sensor_num].indio_dev;
@@ -56,10 +63,15 @@ cros_sensorhub_send_sample(struct cros_ec_sensorhub *sensorhub,
 
 	return cb(indio_dev, (s16 *)sample, 0);
 }
+
+static inline int
+cros_sensorhub_send_sample_to_device(struct cros_ec_sensorhub *sensorhub,
+			   struct cros_ec_sensors_ring_sample *sample)
 #else
 static inline int
 cros_sensorhub_send_sample(struct cros_ec_sensorhub *sensorhub,
 			   struct cros_ec_sensors_ring_sample *sample)
+#endif
 {
 	int id = sample->sensor_id;
 	cros_ec_sensorhub_push_data_cb_t cb;
@@ -76,13 +88,13 @@ cros_sensorhub_send_sample(struct cros_ec_sensorhub *sensorhub,
 
 	return cb(indio_dev, sample->vector, sample->timestamp);
 }
-#endif
 
 /**
  * cros_ec_sensorhub_register_push_data() - register the callback to the hub.
  *
  * @sensorhub : Sensor Hub object
  * @sensor_num : The sensor the caller is interested in.
+ * @send_to_device : True to send samples to the device and the sensor ring.
  * @indio_dev : The iio device to use when a sample arrives.
  * @cb : The callback to call when a sample arrives.
  *
@@ -94,6 +106,7 @@ cros_sensorhub_send_sample(struct cros_ec_sensorhub *sensorhub,
  */
 int cros_ec_sensorhub_register_push_data(struct cros_ec_sensorhub *sensorhub,
 					 u8 sensor_num,
+					 bool send_to_device,
 					 struct iio_dev *indio_dev,
 					 cros_ec_sensorhub_push_data_cb_t cb)
 {
@@ -102,6 +115,9 @@ int cros_ec_sensorhub_register_push_data(struct cros_ec_sensorhub *sensorhub,
 	if (sensorhub->push_data[sensor_num].indio_dev)
 		return -EINVAL;
 
+#if IS_ENABLED(CONFIG_IIO_CROS_EC_SENSORS_RING)
+	sensorhub->push_data[sensor_num].send_to_device = send_to_device;
+#endif
 	sensorhub->push_data[sensor_num].indio_dev = indio_dev;
 	sensorhub->push_data[sensor_num].push_data_cb = cb;
 
