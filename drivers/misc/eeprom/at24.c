@@ -722,10 +722,6 @@ static int at24_probe(struct i2c_client *client)
 	}
 
 	pm_runtime_idle(dev);
-	if (err) {
-		pm_runtime_disable(dev);
-		return -ENODEV;
-	}
 
 	dev_info(dev, "%u byte %s EEPROM, %s, %u bytes/write\n",
 		 byte_len, client->name,
