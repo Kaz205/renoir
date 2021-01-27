@@ -1811,7 +1811,7 @@
 		};
 
 		dpi0: dpi@14016000 {
-			compatible = "mediatek,mt8183-dpi";
+			compatible = "mediatek,mt8192-dpi";
 			reg = <0 0x14016000 0 0x1000>;
 			interrupts = <GIC_SPI 270 IRQ_TYPE_LEVEL_HIGH 0>;
 			clocks = <&mmsys CLK_MM_DPI_DPI0>,
