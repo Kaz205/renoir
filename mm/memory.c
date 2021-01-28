@@ -2162,7 +2162,6 @@ static bool pte_spinlock(struct vm_fault *vmf)
 		return true;
 	}
 
-again:
 	local_irq_disable();
 	if (vma_has_changed(vmf)) {
 		trace_spf_vma_changed(_RET_IP_, vmf->vma, vmf->address);
@@ -2184,7 +2183,7 @@ again:
 	vmf->ptl = pte_lockptr(vmf->vma->vm_mm, vmf->pmd);
 	if (unlikely(!spin_trylock(vmf->ptl))) {
 		local_irq_enable();
-		goto again;
+		goto out;
 	}
 
 	if (vma_has_changed(vmf)) {
@@ -2221,7 +2220,6 @@ static bool pte_map_lock(struct vm_fault *vmf)
 	 * we've got the lock. After that a concurrent zap_pte_range() will
 	 * block on the PTL and thus we're safe.
 	 */
-again:
 	local_irq_disable();
 	if (vma_has_changed(vmf)) {
 		trace_spf_vma_changed(_RET_IP_, vmf->vma, vmf->address);
@@ -2252,7 +2250,7 @@ again:
 	if (unlikely(!spin_trylock(ptl))) {
 		pte_unmap(pte);
 		local_irq_enable();
-		goto again;
+		goto out;
 	}
 
 	if (vma_has_changed(vmf)) {
