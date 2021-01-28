@@ -43,6 +43,7 @@ struct charger_data {
 static enum power_supply_property cros_pchg_props[] = {
 	POWER_SUPPLY_PROP_STATUS,
 	POWER_SUPPLY_PROP_CAPACITY,
+	POWER_SUPPLY_PROP_SCOPE,
 	/*
 	 * todo: Add the following.
 	 *
@@ -184,6 +185,9 @@ static int cros_pchg_get_prop(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CAPACITY:
 		val->intval = port->battery_percentage;
 		break;
+	case POWER_SUPPLY_PROP_SCOPE:
+		val->intval = POWER_SUPPLY_SCOPE_DEVICE;
+		break;
 	default:
 		return -EINVAL;
 	}
@@ -302,7 +306,7 @@ static int cros_pchg_probe(struct platform_device *pdev)
 
 		psy_desc = &port->psy_desc;
 		psy_desc->name = port->name;
-		psy_desc->type = POWER_SUPPLY_TYPE_WIRELESS;
+		psy_desc->type = POWER_SUPPLY_TYPE_BATTERY;
 		psy_desc->get_property = cros_pchg_get_prop;
 		psy_desc->external_power_changed = NULL;
 		psy_desc->properties = cros_pchg_props;
