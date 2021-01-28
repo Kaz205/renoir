@@ -110,6 +110,8 @@ static int cros_pchg_get_status(struct port_data *port)
 	struct ec_params_pchg req;
 	struct ec_response_pchg rsp;
 	struct device *dev = charger->dev;
+	int old_status = port->psy_status;
+	int old_percentage = port->battery_percentage;
 	int ret;
 
 	req.port = port->port_number;
@@ -138,6 +140,10 @@ static int cros_pchg_get_status(struct port_data *port)
 		port->battery_percentage = rsp.battery_percentage;
 		break;
 	}
+
+	if (port->psy_status != old_status
+			|| port->battery_percentage != old_percentage)
+		power_supply_changed(port->psy);
 
 	dev_dbg(dev,
 		"Port %d: state=%d battery=%d%%\n",
