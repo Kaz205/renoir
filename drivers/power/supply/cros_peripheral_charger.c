@@ -129,17 +129,19 @@ static int cros_pchg_get_status(struct port_data *port)
 	case PCHG_STATE_ENABLED:
 	default:
 		port->psy_status = POWER_SUPPLY_STATUS_UNKNOWN;
-		port->battery_percentage = 0;
 		break;
 	case PCHG_STATE_DETECTED:
 		port->psy_status = POWER_SUPPLY_STATUS_NOT_CHARGING;
-		port->battery_percentage = rsp.battery_percentage;
 		break;
 	case PCHG_STATE_CHARGING:
 		port->psy_status = POWER_SUPPLY_STATUS_CHARGING;
-		port->battery_percentage = rsp.battery_percentage;
+		break;
+	case PCHG_STATE_FULL:
+		port->psy_status = POWER_SUPPLY_STATUS_FULL;
 		break;
 	}
+
+	port->battery_percentage = rsp.battery_percentage;
 
 	if (port->psy_status != old_status
 			|| port->battery_percentage != old_percentage)

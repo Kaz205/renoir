@@ -5536,6 +5536,8 @@ enum pchg_state {
 	PCHG_STATE_DETECTED,
 	/* Device is being charged. */
 	PCHG_STATE_CHARGING,
+	/* Device is fully charged. It implies DETECTED (& not charging). */
+	PCHG_STATE_FULL,
 };
 
 #define EC_PCHG_STATE_TEXT { \
@@ -5544,6 +5546,7 @@ enum pchg_state {
 	[PCHG_STATE_ENABLED] = "ENABLED", \
 	[PCHG_STATE_DETECTED] = "DETECTED", \
 	[PCHG_STATE_CHARGING] = "CHARGING", \
+	[PCHG_STATE_FULL] = "FULL", \
 	}
 
 /*****************************************************************************/
