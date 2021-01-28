@@ -54,6 +54,8 @@
 #define UUID_INITIALIZED 1
 #define UUID_INITIALIZATION_FAILED 2
 
+#define MAX_CAPSET_ID 31
+
 struct virtio_gpu_object_params {
 	uint32_t format;
 	uint32_t width;
@@ -237,6 +239,7 @@ struct virtio_gpu_device {
 
 	struct virtio_gpu_drv_capset *capsets;
 	uint32_t num_capsets;
+	uint32_t capset_id_mask;
 	struct list_head cap_cache;
 
 	/* coherent memory */
