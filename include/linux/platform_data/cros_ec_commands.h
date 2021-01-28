@@ -5569,9 +5569,14 @@ struct ec_params_pchg {
 } __ec_align1;
 
 struct ec_response_pchg {
-	uint32_t error; /* enum pchg_error */
-	uint8_t state; /* enum pchg_state state */
+	uint32_t error;			/* enum pchg_error */
+	uint8_t state;			/* enum pchg_state state */
 	uint8_t battery_percentage;
+	uint8_t unused0;
+	uint8_t unused1;
+	/* Fields added in version 1 */
+	uint32_t fw_version;
+	uint32_t dropped_event_count;
 } __ec_align2;
 
 enum pchg_state {
@@ -5587,6 +5592,12 @@ enum pchg_state {
 	PCHG_STATE_CHARGING,
 	/* Device is fully charged. It implies DETECTED (& not charging). */
 	PCHG_STATE_FULL,
+	/* In download (a.k.a. firmware update) mode */
+	PCHG_STATE_DOWNLOAD,
+	/* In download mode. Ready for receiving data. */
+	PCHG_STATE_DOWNLOADING,
+	/* Put no more entry below */
+	PCHG_STATE_COUNT,
 };
 
 #define EC_PCHG_STATE_TEXT { \
@@ -5596,6 +5607,8 @@ enum pchg_state {
 	[PCHG_STATE_DETECTED] = "DETECTED", \
 	[PCHG_STATE_CHARGING] = "CHARGING", \
 	[PCHG_STATE_FULL] = "FULL", \
+	[PCHG_STATE_DOWNLOAD] = "DOWNLOAD", \
+	[PCHG_STATE_DOWNLOADING] = "DOWNLOADING", \
 	}
 
 /*****************************************************************************/
