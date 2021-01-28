@@ -51,6 +51,7 @@ static int virtio_gpu_features(struct seq_file *m, void *data)
 	virtio_add_bool(m, "host visible", vgdev->has_host_visible);
 	virtio_add_int(m, "cap sets", vgdev->num_capsets);
 	virtio_add_int(m, "scanouts", vgdev->num_scanouts);
+	virtio_add_bool(m, "context init", vgdev->has_context_init);
 	return 0;
 }
 
