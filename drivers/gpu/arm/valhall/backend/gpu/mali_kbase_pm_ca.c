@@ -69,7 +69,7 @@ void kbase_devfreq_set_core_mask(struct kbase_device *kbdev, u64 core_mask)
 	}
 
 	if (kbase_dummy_job_wa_enabled(kbdev)) {
-		dev_err(kbdev->dev, "Dynamic core scaling not supported as dummy job WA is enabled");
+		dev_err_once(kbdev->dev, "Dynamic core scaling not supported as dummy job WA is enabled");
 		goto unlock;
 	}
 

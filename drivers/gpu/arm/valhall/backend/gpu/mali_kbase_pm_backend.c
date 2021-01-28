@@ -632,7 +632,7 @@ void kbase_pm_set_debug_core_mask(struct kbase_device *kbdev,
 	lockdep_assert_held(&kbdev->pm.lock);
 
 	if (kbase_dummy_job_wa_enabled(kbdev)) {
-		dev_warn(kbdev->dev, "Change of core mask not supported for slot 0 as dummy job WA is enabled");
+		dev_warn_once(kbdev->dev, "Change of core mask not supported for slot 0 as dummy job WA is enabled");
 		new_core_mask_js0 = kbdev->pm.debug_core_mask[0];
 	}
 
