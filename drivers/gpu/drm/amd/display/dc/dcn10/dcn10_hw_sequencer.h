@@ -91,4 +91,6 @@ void lock_all_pipes(struct dc *dc,
 	struct dc_state *context,
 	bool lock);
 
+void dcn10_cursor_lock(struct dc *dc, struct pipe_ctx *pipe, bool lock);
+
 #endif /* __DC_HWSS_DCN10_H__ */

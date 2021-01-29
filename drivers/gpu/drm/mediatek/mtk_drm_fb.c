@@ -87,6 +87,6 @@ struct drm_framebuffer *mtk_drm_mode_fb_create(struct drm_device *dev,
 	return fb;
 
 unreference:
-	drm_gem_object_put_unlocked(gem);
+	drm_gem_object_put(gem);
 	return ERR_PTR(ret);
 }

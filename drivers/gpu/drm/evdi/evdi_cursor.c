@@ -50,7 +50,7 @@ static void evdi_cursor_set_gem(struct evdi_cursor *cursor,
 	if (obj)
 		drm_gem_object_get(&obj->base);
 	if (cursor->obj)
-		drm_gem_object_put_unlocked(&cursor->obj->base);
+		drm_gem_object_put(&cursor->obj->base);
 
 	cursor->obj = obj;
 }

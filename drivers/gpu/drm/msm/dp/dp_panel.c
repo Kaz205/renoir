@@ -7,6 +7,7 @@
 
 #include <drm/drm_connector.h>
 #include <drm/drm_edid.h>
+#include <drm/drm_print.h>
 
 struct dp_panel_private {
 	struct device *dev;
@@ -206,12 +207,18 @@ int dp_panel_read_sink_caps(struct dp_panel *dp_panel,
 	panel = container_of(dp_panel, struct dp_panel_private, dp_panel);
 
 	rc = dp_panel_read_dpcd(dp_panel);
-	bw_code = drm_dp_link_rate_to_bw_code(dp_panel->link_info.rate);
-	if (rc || !is_link_rate_valid(bw_code) ||
-			!is_lane_count_valid(dp_panel->link_info.num_lanes) ||
-			(bw_code > dp_panel->max_bw_code)) {
+	if (rc) {
 		DRM_ERROR("read dpcd failed %d\n", rc);
 		return rc;
+	}
+
+	bw_code = drm_dp_link_rate_to_bw_code(dp_panel->link_info.rate);
+	if (!is_link_rate_valid(bw_code) ||
+			!is_lane_count_valid(dp_panel->link_info.num_lanes) ||
+			(bw_code > dp_panel->max_bw_code)) {
+		DRM_ERROR("Illegal link rate=%d lane=%d\n", dp_panel->link_info.rate,
+				dp_panel->link_info.num_lanes);
+		return -EINVAL;
 	}
 
 	if (dp_panel->dfp_present) {
@@ -235,6 +242,11 @@ int dp_panel_read_sink_caps(struct dp_panel *dp_panel,
 					      &panel->aux->ddc);
 	if (!dp_panel->edid) {
 		DRM_ERROR("panel edid read failed\n");
+		/* check edid read fail is due to unplug */
+		if (!dp_catalog_link_is_connected(panel->catalog)) {
+			rc = -ETIMEDOUT;
+			goto end;
+		}
 
 		/* fail safe edid */
 		mutex_lock(&connector->dev->mode_config.mutex);

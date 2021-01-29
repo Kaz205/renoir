@@ -57,6 +57,7 @@ xfs_bmbt_to_iomap(
 	bool			shared)
 {
 	struct xfs_mount	*mp = ip->i_mount;
+	struct xfs_buftarg	*target = xfs_inode_buftarg(ip);
 
 	if (unlikely(!xfs_valid_startblock(ip, imap->br_startblock)))
 		return xfs_alert_fsblock_zero(ip, imap);
@@ -77,8 +78,8 @@ xfs_bmbt_to_iomap(
 	}
 	iomap->offset = XFS_FSB_TO_B(mp, imap->br_startoff);
 	iomap->length = XFS_FSB_TO_B(mp, imap->br_blockcount);
-	iomap->bdev = xfs_find_bdev_for_inode(VFS_I(ip));
-	iomap->dax_dev = xfs_find_daxdev_for_inode(VFS_I(ip));
+	iomap->bdev = target->bt_bdev;
+	iomap->dax_dev = target->bt_daxdev;
 
 	if (xfs_ipincount(ip) &&
 	    (ip->i_itemp->ili_fsync_fields & ~XFS_ILOG_TIMESTAMP))
@@ -95,12 +96,14 @@ xfs_hole_to_iomap(
 	xfs_fileoff_t		offset_fsb,
 	xfs_fileoff_t		end_fsb)
 {
+	struct xfs_buftarg	*target = xfs_inode_buftarg(ip);
+
 	iomap->addr = IOMAP_NULL_ADDR;
 	iomap->type = IOMAP_HOLE;
 	iomap->offset = XFS_FSB_TO_B(ip->i_mount, offset_fsb);
 	iomap->length = XFS_FSB_TO_B(ip->i_mount, end_fsb - offset_fsb);
-	iomap->bdev = xfs_find_bdev_for_inode(VFS_I(ip));
-	iomap->dax_dev = xfs_find_daxdev_for_inode(VFS_I(ip));
+	iomap->bdev = target->bt_bdev;
+	iomap->dax_dev = target->bt_daxdev;
 }
 
 xfs_extlen_t
@@ -1002,9 +1005,15 @@ xfs_file_iomap_begin(
 		 * I/O, which must be block aligned, we need to report the
 		 * newly allocated address.  If the data fork has a hole, copy
 		 * the COW fork mapping to avoid allocating to the data fork.
+		 *
+		 * Otherwise, ensure that the imap range does not extend past
+		 * the range allocated/found in cmap.
 		 */
 		if (directio || imap.br_startblock == HOLESTARTBLOCK)
 			imap = cmap;
+		else
+			xfs_trim_extent(&imap, cmap.br_startoff,
+					cmap.br_blockcount);
 
 		end_fsb = imap.br_startoff + imap.br_blockcount;
 		length = XFS_FSB_TO_B(mp, end_fsb) - offset;

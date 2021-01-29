@@ -59,6 +59,9 @@ void kbase_devfreq_set_core_mask(struct kbase_device *kbdev, u64 core_mask)
 
 	spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
 
+	if (pm_backend->ca_cores_enabled == core_mask)
+		goto unlock;
+
 	if (!(core_mask & kbdev->pm.debug_core_mask_all)) {
 		dev_err(kbdev->dev, "OPP core mask 0x%llX does not intersect with debug mask 0x%llX\n",
 				core_mask, kbdev->pm.debug_core_mask_all);
@@ -66,7 +69,7 @@ void kbase_devfreq_set_core_mask(struct kbase_device *kbdev, u64 core_mask)
 	}
 
 	if (kbase_dummy_job_wa_enabled(kbdev)) {
-		dev_err(kbdev->dev, "Dynamic core scaling not supported as dummy job WA is enabled");
+		dev_err_once(kbdev->dev, "Dynamic core scaling not supported as dummy job WA is enabled");
 		goto unlock;
 	}
 

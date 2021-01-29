@@ -93,7 +93,7 @@ int fscrypt_setup_per_mode_inline_crypt_key(struct fscrypt_info *ci,
 	u8 hkdf_info[sizeof(mode_num) + sizeof(sb->s_uuid)];
 	int err;
 
-	if (WARN_ON(mode_num > __FSCRYPT_MODE_MAX))
+	if (WARN_ON(mode_num > FSCRYPT_MODE_MAX))
 		return -EINVAL;
 
 	/* pairs with smp_store_release() below */

@@ -53,8 +53,8 @@ static acpi_status tb_acpi_add_link(acpi_handle handle, u32 level, void *data,
 	/*
 	 * Check that the device is PCIe. This is because USB3
 	 * SuperSpeed ports have this property and they are not power
-	 * managed with the xHCI and the SuperSpeed hub so in this case
-	 * we find create the link from xHCI instead.
+	 * managed with the xHCI and the SuperSpeed hub so we create the
+	 * link from xHCI instead.
 	 */
 	while (!dev_is_pci(dev))
 		dev = dev->parent;
@@ -72,7 +72,7 @@ static acpi_status tb_acpi_add_link(acpi_handle handle, u32 level, void *data,
 	    (pci_is_pcie(pdev) &&
 		(pci_pcie_type(pdev) == PCI_EXP_TYPE_ROOT_PORT ||
 		 pci_pcie_type(pdev) == PCI_EXP_TYPE_DOWNSTREAM))) {
-		struct device_link *link;
+		const struct device_link *link;
 
 		link = device_link_add(&pdev->dev, &nhi->pdev->dev,
 				       DL_FLAG_AUTOREMOVE_SUPPLIER |
@@ -110,8 +110,8 @@ void tb_acpi_add_links(struct tb_nhi *nhi)
 	 * Find all devices that have usb4-host-controller interface
 	 * property that references to this NHI.
 	 */
-	status = acpi_walk_namespace(ACPI_TYPE_DEVICE, ACPI_ROOT_OBJECT,
-				     32, tb_acpi_add_link, NULL, nhi, NULL);
+	status = acpi_walk_namespace(ACPI_TYPE_DEVICE, ACPI_ROOT_OBJECT, 32,
+				     tb_acpi_add_link, NULL, nhi, NULL);
 	if (ACPI_FAILURE(status))
 		dev_warn(&nhi->pdev->dev, "failed to enumerate tunneled ports\n");
 }

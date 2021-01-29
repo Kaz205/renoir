@@ -35,7 +35,7 @@
 	MODULE_PARM_DESC(name, desc)
 
 struct i915_params i915_modparams __read_mostly = {
-#define MEMBER(T, member, value) .member = (value),
+#define MEMBER(T, member, value, ...) .member = (value),
 	I915_PARAMS_FOR_EACH(MEMBER)
 #undef MEMBER
 };
@@ -88,6 +88,16 @@ i915_param_named_unsafe(enable_psr, int, 0600,
 	"(0=disabled, 1=enabled) "
 	"Default: -1 (use per-chip default)");
 
+i915_param_named(psr_safest_params, bool, 0400,
+	"Replace PSR VBT parameters by the safest and not optimal ones. This "
+	"is helpfull to detect if PSR issues are related to bad values set in "
+	" VBT. (0=use VBT paramters, 1=use safest parameters)");
+
+i915_param_named_unsafe(enable_psr2_sel_fetch, bool, 0400,
+	"Enable PSR2 selective fetch "
+	"(0=disabled, 1=enabled) "
+	"Default: 0");
+
 i915_param_named_unsafe(force_probe, charp, 0400,
 	"Force probe the driver for specified devices. "
 	"See CONFIG_DRM_I915_FORCE_PROBE for details.");
@@ -105,10 +115,6 @@ i915_param_named(fastboot, int, 0600,
 	"Try to skip unnecessary mode sets at boot time "
 	"(0=disabled, 1=enabled) "
 	"Default: -1 (use per-chip default)");
-
-i915_param_named_unsafe(prefault_disable, bool, 0600,
-	"Disable page prefaulting for pread/pwrite/reloc (default:false). "
-	"For developers only.");
 
 i915_param_named_unsafe(load_detect_test, bool, 0600,
 	"Force-enable the VGA load detect code for testing (default:false). "
