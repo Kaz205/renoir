@@ -90,7 +90,6 @@ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
 		.hw_filter_reset_required = true,
 		.fw_diag_ce_download = false,
 		.tx_stats_over_pktlog = true,
-		.dynamic_sar_support = false,
 		.tx_mac_seq_by_fw = false,
 	},
 	{
@@ -126,7 +125,6 @@ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
 		.hw_filter_reset_required = true,
 		.fw_diag_ce_download = false,
 		.tx_stats_over_pktlog = true,
-		.dynamic_sar_support = false,
 		.tx_mac_seq_by_fw = false,
 	},
 	{
@@ -163,7 +161,6 @@ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
 		.hw_filter_reset_required = true,
 		.fw_diag_ce_download = false,
 		.tx_stats_over_pktlog = false,
-		.dynamic_sar_support = false,
 		.tx_mac_seq_by_fw = false,
 	},
 	{
@@ -195,7 +192,6 @@ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
 		.tx_stats_over_pktlog = false,
 		.tx_mac_seq_by_fw = false,
 		.bmi_large_size_download = true,
-		.dynamic_sar_support = true,
 	},
 	{
 		.id = QCA6174_HW_2_1_VERSION,
@@ -230,7 +226,6 @@ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
 		.hw_filter_reset_required = true,
 		.fw_diag_ce_download = false,
 		.tx_stats_over_pktlog = false,
-		.dynamic_sar_support = false,
 		.tx_mac_seq_by_fw = false,
 	},
 	{
@@ -266,7 +261,6 @@ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
 		.hw_filter_reset_required = true,
 		.fw_diag_ce_download = false,
 		.tx_stats_over_pktlog = false,
-		.dynamic_sar_support = false,
 		.tx_mac_seq_by_fw = false,
 	},
 	{
@@ -302,7 +296,6 @@ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
 		.hw_filter_reset_required = true,
 		.fw_diag_ce_download = false,
 		.tx_stats_over_pktlog = false,
-		.dynamic_sar_support = false,
 		.tx_mac_seq_by_fw = false,
 	},
 	{
@@ -341,7 +334,6 @@ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
 		.hw_filter_reset_required = true,
 		.fw_diag_ce_download = true,
 		.tx_stats_over_pktlog = false,
-		.dynamic_sar_support = true,
 		.tx_mac_seq_by_fw = false,
 	},
 	{
@@ -383,7 +375,6 @@ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
 		.hw_filter_reset_required = true,
 		.fw_diag_ce_download = false,
 		.tx_stats_over_pktlog = false,
-		.dynamic_sar_support = false,
 		.tx_mac_seq_by_fw = false,
 	},
 	{
@@ -432,7 +423,6 @@ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
 		.hw_filter_reset_required = true,
 		.fw_diag_ce_download = false,
 		.tx_stats_over_pktlog = false,
-		.dynamic_sar_support = false,
 		.tx_mac_seq_by_fw = false,
 	},
 	{
@@ -478,7 +468,6 @@ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
 		.hw_filter_reset_required = true,
 		.fw_diag_ce_download = false,
 		.tx_stats_over_pktlog = false,
-		.dynamic_sar_support = false,
 		.tx_mac_seq_by_fw = false,
 	},
 	{
@@ -514,7 +503,6 @@ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
 		.hw_filter_reset_required = true,
 		.fw_diag_ce_download = false,
 		.tx_stats_over_pktlog = false,
-		.dynamic_sar_support = false,
 		.tx_mac_seq_by_fw = false,
 	},
 	{
@@ -552,7 +540,6 @@ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
 		.hw_filter_reset_required = true,
 		.fw_diag_ce_download = true,
 		.tx_stats_over_pktlog = false,
-		.dynamic_sar_support = false,
 		.tx_mac_seq_by_fw = false,
 	},
 	{
@@ -581,7 +568,6 @@ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
 		.ast_skid_limit = 0x10,
 		.num_wds_entries = 0x20,
 		.uart_pin_workaround = true,
-		.dynamic_sar_support = false,
 	},
 	{
 		.id = QCA4019_HW_1_0_DEV_VERSION,
@@ -623,7 +609,6 @@ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
 		.hw_filter_reset_required = true,
 		.fw_diag_ce_download = false,
 		.tx_stats_over_pktlog = false,
-		.dynamic_sar_support = false,
 		.tx_mac_seq_by_fw = false,
 	},
 	{
@@ -652,7 +637,6 @@ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
 		.hw_filter_reset_required = false,
 		.fw_diag_ce_download = false,
 		.tx_stats_over_pktlog = false,
-		.dynamic_sar_support = true,
 		.tx_mac_seq_by_fw = true,
 	},
 };
