@@ -2316,7 +2316,8 @@ static struct attribute *coresight_etmv4_attrs[] = {
 };
 
 struct etmv4_reg {
-	void __iomem *addr;
+	struct coresight_device *csdev;
+	u32 offset;
 	u32 data;
 };
 
@@ -2324,7 +2325,7 @@ static void do_smp_cross_read(void *data)
 {
 	struct etmv4_reg *reg = data;
 
-	reg->data = readl_relaxed(reg->addr);
+	reg->data = etm4x_relaxed_read32(&reg->csdev->access, reg->offset);
 }
 
 static u32 etmv4_cross_read(const struct device *dev, u32 offset)
@@ -2332,7 +2333,9 @@ static u32 etmv4_cross_read(const struct device *dev, u32 offset)
 	struct etmv4_drvdata *drvdata = dev_get_drvdata(dev);
 	struct etmv4_reg reg;
 
-	reg.addr = drvdata->base + offset;
+	reg.offset = offset;
+	reg.csdev = drvdata->csdev;
+
 	/*
 	 * smp cross call ensures the CPU will be powered up before
 	 * accessing the ETMv4 trace core registers
