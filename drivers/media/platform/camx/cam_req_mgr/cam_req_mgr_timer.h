@@ -19,17 +19,25 @@
 
 #include "cam_req_mgr_core_defs.h"
 
+
+/** struct tm_kmem_cache
+ * @use_count		: number of clients using crm timers
+ * @kmem_cachep		: pointer to the slab cache
+ */
+struct tm_kmem_cache {
+	int32_t use_count;
+	struct kmem_cache *mem_cachep;
+};
+
 /** struct cam_req_mgr_timer
  * @expires    : timeout value for timer
  * @sys_timer  : system timer variable
- * @tmr_cachep : tmr_cachep Common fields provided in kmem_cache
  * @parent     : priv data - link pointer
  * @timer_cb   : callback func which will be called when timeout expires
  */
 struct cam_req_mgr_timer {
 	int32_t             expires;
 	struct timer_list   sys_timer;
-	struct kmem_cache  *tmr_cachep;
 	void               *parent;
 	void              (*timer_cb)(struct timer_list *tl);
 };
@@ -46,7 +54,7 @@ void crm_timer_modify(struct cam_req_mgr_timer *crm_timer, int32_t expires);
  * @brief : destroys the timer allocated.
  * @timer : timer which will be reset to expires values
  */
-void crm_timer_reset(struct cam_req_mgr_timer *timer);
+void crm_timer_reset(struct cam_req_mgr_timer *crm_timer);
 
 /**
  * crm_timer_init()
@@ -68,5 +76,25 @@ int crm_timer_init(struct cam_req_mgr_timer **timer, int32_t expires,
  * @timer : timer pointer which will be freed
  */
 void crm_timer_exit(struct cam_req_mgr_timer **timer);
+
+/**
+ * crm_timer_cache_create()
+ * @brief : creates kmem timer cache or returns the existing one
+ * @tm_cache : pointer to the created cache, can be used for debug purposes
+ *
+ * NOTE: the number of invocations of crm_timer_cache_create shall be equal to
+ * the number of invocations of crm_timer_cache_destroy
+ */
+int crm_timer_cache_create(struct tm_kmem_cache **tm_cache);
+
+/**
+ * crm_timer_cache_destroy()
+ * @brief : destroys the timer cache.
+ *
+ * NOTE: this will decrease the number of users of the crm timers. The cache will be distroyed
+ * if there are no cache consumers  otherwise the cache memory won't be freed.
+ */
+void crm_timer_cache_destroy(void);
+
 
 #endif

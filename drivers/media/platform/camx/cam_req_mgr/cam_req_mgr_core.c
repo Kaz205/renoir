@@ -3661,7 +3661,8 @@ end:
 
 int cam_req_mgr_core_device_init(void)
 {
-	int i;
+	struct tm_kmem_cache *tm_cache;
+	int i, rc;
 
 	CAM_DBG(CAM_CRM, "Enter g_crm_core_dev %pK", g_crm_core_dev);
 
@@ -3673,6 +3674,12 @@ int cam_req_mgr_core_device_init(void)
 		kzalloc(sizeof(*g_crm_core_dev), GFP_KERNEL);
 	if (!g_crm_core_dev)
 		return -ENOMEM;
+
+	rc = crm_timer_cache_create(&tm_cache);
+	/* If timer cache is not created, it just decreases the fault detection */
+	/* Log an error and continue initialization */
+	if (rc)
+		CAM_ERR(CAM_CRM, "Cannot create Camera request manager timer cache!");
 
 	CAM_DBG(CAM_CRM, "g_crm_core_dev %pK", g_crm_core_dev);
 	INIT_LIST_HEAD(&g_crm_core_dev->session_head);
@@ -3697,6 +3704,7 @@ int cam_req_mgr_core_device_deinit(void)
 
 	CAM_DBG(CAM_CRM, "g_crm_core_dev %pK", g_crm_core_dev);
 	mutex_destroy(&g_crm_core_dev->crm_lock);
+	crm_timer_cache_destroy();
 	kfree(g_crm_core_dev);
 	g_crm_core_dev = NULL;
 

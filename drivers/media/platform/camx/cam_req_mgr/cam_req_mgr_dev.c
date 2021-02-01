@@ -35,7 +35,6 @@
 #define CAM_REQ_MGR_EVENT_MAX 30
 
 static struct cam_req_mgr_device g_dev;
-struct kmem_cache *g_cam_req_mgr_timer_cachep;
 
 static int cam_media_device_setup(struct device *dev)
 {
@@ -730,21 +729,6 @@ static int cam_req_mgr_probe(struct platform_device *pdev)
 	}
 
 	g_dev.state = true;
-
-	if (g_cam_req_mgr_timer_cachep == NULL) {
-		g_cam_req_mgr_timer_cachep = kmem_cache_create("crm_timer",
-			sizeof(struct cam_req_mgr_timer), 64,
-			SLAB_CONSISTENCY_CHECKS | SLAB_RED_ZONE |
-			SLAB_POISON | SLAB_STORE_USER, NULL);
-		if (!g_cam_req_mgr_timer_cachep)
-			CAM_ERR(CAM_CRM,
-				"Failed to create kmem_cache for crm_timer");
-#if defined(CONFIG_ARCH_SM6150)
-		else
-			CAM_DBG(CAM_CRM, "Name : %s",
-				g_cam_req_mgr_timer_cachep->name);
-#endif
-	}
 
 	pr_info("%s driver probed successfully\n", KBUILD_MODNAME);
 

@@ -5535,6 +5535,7 @@ int cam_icp_hw_mgr_init(struct device_node *of_node, uint64_t *hw_mgr_hdl,
 	int i, rc = 0;
 	struct cam_hw_mgr_intf *hw_mgr_intf;
 	struct cam_cpas_query_cap query;
+	struct tm_kmem_cache *tm_cache;
 	uint32_t cam_caps;
 
 	hw_mgr_intf = (struct cam_hw_mgr_intf *)hw_mgr_hdl;
@@ -5543,6 +5544,12 @@ int cam_icp_hw_mgr_init(struct device_node *of_node, uint64_t *hw_mgr_hdl,
 			of_node, hw_mgr_intf);
 		return -EINVAL;
 	}
+
+	rc = crm_timer_cache_create(&tm_cache);
+	/* If timer cache is not created, it just decreases the fault detection */
+	/* Log an error and continue initialization */
+	if (rc)
+		CAM_ERR(CAM_ICP, "Cannot create Camera request manager timer cache!");
 
 	hw_mgr_intf->hw_mgr_priv = &icp_hw_mgr;
 	hw_mgr_intf->hw_get_caps = cam_icp_mgr_get_hw_caps;
@@ -5616,3 +5623,9 @@ dev_init_failed:
 
 	return rc;
 }
+
+void cam_icp_hw_mgr_deinit(void)
+{
+	crm_timer_cache_destroy();
+}
+

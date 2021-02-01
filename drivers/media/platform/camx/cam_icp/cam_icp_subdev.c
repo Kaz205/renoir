@@ -226,6 +226,7 @@ static int cam_icp_probe(struct platform_device *pdev)
 	return rc;
 
 ctx_fail:
+	cam_icp_hw_mgr_deinit();
 	for (--i; i >= 0; i--)
 		cam_icp_context_deinit(&g_icp_dev.ctx_icp[i]);
 hw_init_fail:
@@ -261,6 +262,8 @@ static int cam_icp_remove(struct platform_device *pdev)
 
 	for (i = 0; i < CAM_ICP_CTX_MAX; i++)
 		cam_icp_context_deinit(&g_icp_dev.ctx_icp[i]);
+
+	cam_icp_hw_mgr_deinit();
 	cam_node_deinit(g_icp_dev.node);
 	cam_subdev_remove(&g_icp_dev.sd);
 	mutex_destroy(&g_icp_dev.icp_lock);
