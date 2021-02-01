@@ -2439,6 +2439,7 @@ static struct attribute *coresight_etmv4_mgmt_attrs[] = {
 	coresight_etm4x_reg(trcoslsr, TRCOSLSR),
 	coresight_etm4x_reg(trcconfig, TRCCONFIGR),
 	coresight_etm4x_reg(trctraceid, TRCTRACEIDR),
+	coresight_etm4x_reg(trcdevarch, TRCDEVARCH),
 	NULL,
 };
 
