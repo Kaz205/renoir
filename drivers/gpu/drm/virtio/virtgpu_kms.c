@@ -52,18 +52,6 @@ static void virtio_gpu_config_changed_work_func(struct work_struct *work)
 		      events_clear, &events_clear);
 }
 
-static int virtio_gpu_context_create(struct virtio_gpu_device *vgdev,
-				      uint32_t nlen, const char *name)
-{
-	int handle = ida_alloc(&vgdev->ctx_id_ida, GFP_KERNEL);
-
-	if (handle < 0)
-		return handle;
-	handle += 1;
-	virtio_gpu_cmd_context_create(vgdev, handle, nlen, name);
-	return handle;
-}
-
 static void virtio_gpu_context_destroy(struct virtio_gpu_device *vgdev,
 				      uint32_t ctx_id)
 {
@@ -308,7 +296,7 @@ int virtio_gpu_driver_open(struct drm_device *dev, struct drm_file *file)
 {
 	struct virtio_gpu_device *vgdev = dev->dev_private;
 	struct virtio_gpu_fpriv *vfpriv;
-	int id;
+	int handle;
 	char dbgname[TASK_COMM_LEN];
 
 	/* can't create contexts without 3d renderer */
@@ -321,13 +309,19 @@ int virtio_gpu_driver_open(struct drm_device *dev, struct drm_file *file)
 		return -ENOMEM;
 
 	get_task_comm(dbgname, current);
-	id = virtio_gpu_context_create(vgdev, strlen(dbgname), dbgname);
-	if (id < 0) {
-		kfree(vfpriv);
-		return id;
-	}
 
-	vfpriv->ctx_id = id;
+	handle = ida_alloc(&vgdev->ctx_id_ida, GFP_KERNEL);
+	if (handle < 0)
+		return handle;
+
+	vfpriv->ctx_id = handle + 1;
+
+	/* create the default context without context_init flags for
+	 * back-compatibility
+	 */
+	virtio_gpu_cmd_context_create(vgdev, vfpriv->ctx_id, 0, strlen(dbgname),
+				      dbgname);
+
 	file->driver_priv = vfpriv;
 	return 0;
 }

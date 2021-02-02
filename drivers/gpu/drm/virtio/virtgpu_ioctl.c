@@ -96,6 +96,23 @@ void virtio_gpu_unref_list(struct list_head *head)
 	}
 }
 
+/* A context was already created when the device file was .open() by userspace,
+ * so it is destroyed, and recreated with the same ctx_id, but now contains
+ * meaningful context_init flags.
+ */
+static void virtio_gpu_create_context(struct virtio_gpu_device *vgdev,
+				      struct virtio_gpu_fpriv *vfpriv)
+{
+	char dbgname[TASK_COMM_LEN];
+
+	virtio_gpu_cmd_context_destroy(vgdev, vfpriv->ctx_id);
+
+	get_task_comm(dbgname, current);
+	virtio_gpu_cmd_context_create(vgdev, vfpriv->ctx_id,
+				      vfpriv->context_init, strlen(dbgname),
+				      dbgname);
+}
+
 /*
  * Usage of execbuffer:
  * Relocations need to take into account the full VIRTIO_GPUDrawable size.
@@ -271,6 +288,12 @@ static int virtio_gpu_getparam_ioctl(struct drm_device *dev, void *data,
 		break;
 	case VIRTGPU_PARAM_CROSS_DEVICE:
 		value = vgdev->has_resource_assign_uuid == true ? 1 : 0;
+		break;
+	case VIRTGPU_PARAM_CONTEXT_INIT:
+		value = vgdev->has_context_init == true ? 1 : 0;
+		break;
+	case VIRTGPU_PARAM_SUPPORTED_CAPSET_IDs:
+		value = vgdev->capset_id_mask;
 		break;
 	default:
 		return -EINVAL;
@@ -713,6 +736,62 @@ err_free_obj:
 	return ret;
 }
 
+static int virtio_gpu_context_init_ioctl(struct drm_device *dev,
+					 void *data, struct drm_file *file)
+{
+	int ret = 0;
+	uint32_t num_params, i, param, value;
+	size_t len;
+	struct drm_virtgpu_context_set_param *ctx_set_params;
+	struct virtio_gpu_device *vgdev = dev->dev_private;
+	struct virtio_gpu_fpriv *vfpriv = file->driver_priv;
+	struct drm_virtgpu_context_init *args = data;
+
+	num_params = args->num_params;
+	len = num_params * sizeof(struct drm_virtgpu_context_set_param);
+
+	if (!vgdev->has_context_init || !vgdev->has_virgl_3d)
+		return -EINVAL;
+
+	/* Number of unique parameters supported at this time. */
+	if (num_params > 1)
+		return -EINVAL;
+
+	ctx_set_params = memdup_user(u64_to_user_ptr(args->ctx_set_params),
+				     len);
+
+	if (IS_ERR(ctx_set_params))
+		return PTR_ERR(ctx_set_params);
+
+	for (i = 0; i < num_params; i++) {
+		param = ctx_set_params[i].param;
+		value = ctx_set_params[i].value;
+
+		switch (param) {
+		case VIRTGPU_CONTEXT_PARAM_CAPSET_ID:
+			if (value > MAX_CAPSET_ID)
+				return -EINVAL;
+
+			if ((vgdev->capset_id_mask & (1 << value)) == 0)
+				return -EINVAL;
+
+			/* Context capset ID already set */
+			if (vfpriv->context_init &
+			    VIRTIO_GPU_CONTEXT_INIT_CAPSET_ID_MASK)
+				return -EINVAL;
+
+			vfpriv->context_init |= value;
+			break;
+		default:
+			return -EINVAL;
+		}
+	}
+
+	virtio_gpu_create_context(vgdev, vfpriv);
+
+	return ret;
+}
+
 struct drm_ioctl_desc virtio_gpu_ioctls[DRM_VIRTIO_NUM_IOCTLS] = {
 	DRM_IOCTL_DEF_DRV(VIRTGPU_MAP, virtio_gpu_map_ioctl,
 			  DRM_RENDER_ALLOW),
@@ -749,5 +828,9 @@ struct drm_ioctl_desc virtio_gpu_ioctls[DRM_VIRTIO_NUM_IOCTLS] = {
 
 	DRM_IOCTL_DEF_DRV(VIRTGPU_RESOURCE_CREATE_BLOB,
 			  virtio_gpu_resource_create_blob_ioctl,
+			  DRM_RENDER_ALLOW),
+
+	DRM_IOCTL_DEF_DRV(VIRTGPU_CONTEXT_INIT,
+			  virtio_gpu_context_init_ioctl,
 			  DRM_RENDER_ALLOW)
 	};
