@@ -269,6 +269,9 @@ static int virtio_gpu_getparam_ioctl(struct drm_device *dev, void *data,
 	case VIRTGPU_PARAM_HOST_VISIBLE:
 		value = vgdev->has_host_visible == true ? 1 : 0;
 		break;
+	case VIRTGPU_PARAM_CROSS_DEVICE:
+		value = vgdev->has_resource_assign_uuid == true ? 1 : 0;
+		break;
 	default:
 		return -EINVAL;
 	}
