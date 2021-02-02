@@ -983,7 +983,7 @@ struct ov8856_lane_cfg {
 	const struct ov8856_mode supported_modes[2];
 };
 
-const struct ov8856_lane_cfg *priv_lane;
+static const struct ov8856_lane_cfg *priv_lane;
 
 static const struct ov8856_lane_cfg lane_cfgs[] = {
 	[OV8856_2_LANES] = {
