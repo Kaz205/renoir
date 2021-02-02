@@ -2154,13 +2154,12 @@ static void io_wq_submit_work(struct io_wq_work **workptr)
 	struct io_kiocb *req = container_of(work, struct io_kiocb, work);
 	struct fs_struct *old_fs_struct = current->fs;
 	struct io_ring_ctx *ctx = req->ctx;
-	const struct cred *old_cred;
 	struct sqe_submit *s = &req->submit;
 	const struct io_uring_sqe *sqe = s->sqe;
 	struct io_kiocb *nxt = NULL;
 	int ret = 0;
 
-	old_cred = override_creds(ctx->creds);
+	override_creds(ctx->creds);
 	allow_kernel_signal(SIGINT);
 
 	/* Ensure we clear previously set non-block flag */
