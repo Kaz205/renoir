@@ -576,7 +576,20 @@ static void tb_scan_port(struct tb_port *port)
 			 */
 
 	if (tb_wait_for_port(port, false) <= 0) {
-		tb_retimer_scan(port, true, NULL, NULL);
+		if (tb_route(port->sw))
+			return;
+
+		/*
+		 * For cases, where no devices are attached, push out the
+		 * retimer scan 15 seconds into the future. This is required
+		 * for cases, where immediate communication to the retimer soon
+		 * after boot is not possible. This gives enough time for all
+		 * drivers to load.
+		 */
+		INIT_DELAYED_WORK(&port->retimer_scan_work,
+				  tb_retimer_scan_delayed);
+		queue_delayed_work(port->sw->tb->wq, &port->retimer_scan_work,
+				   msecs_to_jiffies(TB_RETIMER_SCAN_DELAY));
 		return;
 	}
 

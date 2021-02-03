@@ -177,6 +177,8 @@ struct tb_switch {
 	unsigned long quirks;
 };
 
+#define TB_RETIMER_SCAN_DELAY		(15 * 1000)
+
 /**
  * struct tb_port - a thunderbolt port, part of a tb_switch
  * @config: Cached port configuration read from registers
@@ -197,6 +199,7 @@ struct tb_switch {
  * @in_hopids: Currently allocated input HopIDs
  * @out_hopids: Currently allocated output HopIDs
  * @list: Used to link ports to DP resources list
+ * @retimer_scan_work: work to scan onboard retimers if no devices connected
  */
 struct tb_port {
 	struct tb_regs_port_header config;
@@ -216,6 +219,7 @@ struct tb_port {
 	struct ida in_hopids;
 	struct ida out_hopids;
 	struct list_head list;
+	struct delayed_work retimer_scan_work;
 };
 
 /**
@@ -961,6 +965,7 @@ void tb_xdomain_remove(struct tb_xdomain *xd);
 struct tb_xdomain *tb_xdomain_find_by_link_depth(struct tb *tb, u8 link,
 						 u8 depth);
 
+void tb_retimer_scan_delayed(struct work_struct *work);
 int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode,
 		    u8 *typec_port_index);
 void tb_retimer_remove_all(struct tb_port *port, struct tb_switch *sw);
