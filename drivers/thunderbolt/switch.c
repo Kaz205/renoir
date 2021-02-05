@@ -1381,31 +1381,6 @@ static ssize_t authorized_show(struct device *dev,
 	return sprintf(buf, "%u\n", sw->authorized);
 }
 
-static int disapprove_switch(struct device *dev, void *data)
-{
-	char *envp[] = { "AUTHORIZED=0", NULL };
-	struct tb_switch *sw;
-
-	sw = tb_to_switch(dev);
-	if (sw && sw->authorized) {
-		int ret;
-
-		/* First children */
-		ret = device_for_each_child_reverse(&sw->dev, NULL, disapprove_switch);
-		if (ret)
-			return ret;
-
-		ret = tb_domain_disapprove_switch(sw->tb, sw);
-		if (ret)
-			return ret;
-
-		sw->authorized = 0;
-		kobject_uevent_env(&sw->dev.kobj, KOBJ_CHANGE, envp);
-	}
-
-	return 0;
-}
-
 static int tb_switch_set_authorized(struct tb_switch *sw, unsigned int val)
 {
 	char envp_string[13];
@@ -1415,18 +1390,10 @@ static int tb_switch_set_authorized(struct tb_switch *sw, unsigned int val)
 	if (!mutex_trylock(&sw->tb->lock))
 		return restart_syscall();
 
-	if (!!sw->authorized == !!val)
+	if (sw->authorized)
 		goto unlock;
 
 	switch (val) {
-	/* Disapprove switch */
-	case 0:
-		if (tb_route(sw)) {
-			ret = disapprove_switch(&sw->dev, NULL);
-			goto unlock;
-		}
-		break;
-
 	/* Approve switch */
 	case 1:
 		if (sw->key)
