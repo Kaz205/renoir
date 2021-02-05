@@ -11,6 +11,10 @@
  * GNU General Public License for more details.
  */
 
+#include "linux/mutex.h"
+#include "linux/of.h"
+#include <linux/nvmem-provider.h>
+
 #include "cam_eeprom_dev.h"
 #include "cam_req_mgr_dev.h"
 #include "cam_eeprom_soc.h"
@@ -135,6 +139,14 @@ static struct v4l2_subdev_ops cam_eeprom_subdev_ops = {
 	.core = &cam_eeprom_subdev_core_ops,
 };
 
+static int cam_eeprom_read(void *priv, unsigned int off, void *val,
+			   size_t count)
+{
+	struct cam_eeprom_ctrl_t *e_ctrl = priv;
+
+	return cam_eeprom_nvmem_read(e_ctrl, off, val, count);
+}
+
 static int cam_eeprom_init_subdev(struct cam_eeprom_ctrl_t *e_ctrl)
 {
 	int rc = 0;
@@ -150,10 +162,12 @@ static int cam_eeprom_init_subdev(struct cam_eeprom_ctrl_t *e_ctrl)
 	e_ctrl->v4l2_dev_str.token = e_ctrl;
 
 	rc = cam_register_subdev(&(e_ctrl->v4l2_dev_str));
-	if (rc)
+	if (rc) {
 		CAM_ERR(CAM_SENSOR, "Fail with cam_register_subdev");
+		return rc;
+	}
 
-	return rc;
+	return 0;
 }
 
 static int cam_eeprom_i2c_driver_probe(struct i2c_client *client,
@@ -419,6 +433,8 @@ static int32_t cam_eeprom_platform_driver_probe(
 	int32_t                         rc = 0;
 	struct cam_eeprom_ctrl_t       *e_ctrl = NULL;
 	struct cam_eeprom_soc_private  *soc_private = NULL;
+	struct nvmem_config nvmem_config = { };
+	struct device *dev = &pdev->dev;
 
 	e_ctrl = kzalloc(sizeof(struct cam_eeprom_ctrl_t), GFP_KERNEL);
 	if (!e_ctrl)
@@ -462,9 +478,49 @@ static int32_t cam_eeprom_platform_driver_probe(
 		goto free_soc;
 	}
 
+	rc = of_property_read_u32(dev->of_node, "i2c-address",
+				  &e_ctrl->i2c_address);
+	if (rc < 0)
+		goto free_soc;
+	rc = of_property_read_u32(dev->of_node, "memory-bytes",
+				  &e_ctrl->memory_bytes);
+	if (rc < 0)
+		goto free_soc;
+	rc = of_property_read_u32(dev->of_node, "address-bits",
+				  &e_ctrl->address_bits);
+	if (rc < 0)
+		goto free_soc;
+
+	e_ctrl->reg = devm_regulator_get(dev, "cam_vio");
+	if (IS_ERR(e_ctrl->reg)) {
+		rc = PTR_ERR(e_ctrl->reg);
+		if (rc != 0) {
+			CAM_ERR(CAM_EEPROM, "Can't get regulator");
+			goto free_soc;
+		}
+	}
+
+	nvmem_config.dev = dev;
+	nvmem_config.read_only = true;
+	nvmem_config.root_only = false;
+	nvmem_config.owner = THIS_MODULE;
+	nvmem_config.compat = true;
+	nvmem_config.base_dev = dev;
+	nvmem_config.reg_read = cam_eeprom_read;
+	nvmem_config.priv = e_ctrl;
+	nvmem_config.stride = 1;
+	nvmem_config.word_size = 1;
+	nvmem_config.size = e_ctrl->memory_bytes;
+
+	e_ctrl->nvmem = nvmem_register(&nvmem_config);
+	if (IS_ERR(e_ctrl->nvmem)) {
+		rc = PTR_ERR(e_ctrl->nvmem);
+		goto free_soc;
+	}
+
 	rc = cam_eeprom_init_subdev(e_ctrl);
 	if (rc)
-		goto free_soc;
+		goto unreg_nvmem;
 
 	e_ctrl->bridge_intf.device_hdl = -1;
 	e_ctrl->bridge_intf.ops.get_dev_info = NULL;
@@ -474,6 +530,8 @@ static int32_t cam_eeprom_platform_driver_probe(
 	e_ctrl->cam_eeprom_state = CAM_EEPROM_INIT;
 
 	return rc;
+unreg_nvmem:
+	nvmem_unregister(e_ctrl->nvmem);
 free_soc:
 	kfree(soc_private);
 free_cci_client:
@@ -498,6 +556,8 @@ static int cam_eeprom_platform_driver_remove(struct platform_device *pdev)
 
 	CAM_INFO(CAM_EEPROM, "Platform driver remove invoked");
 	soc_info = &e_ctrl->soc_info;
+
+	nvmem_unregister(e_ctrl->nvmem);
 
 	for (i = 0; i < soc_info->num_clk; i++)
 		devm_clk_put(soc_info->dev, soc_info->clk[i]);

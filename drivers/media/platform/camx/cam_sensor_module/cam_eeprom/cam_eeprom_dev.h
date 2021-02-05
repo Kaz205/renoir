@@ -166,6 +166,11 @@ struct cam_eeprom_intf_params {
  * @cam_eeprom_state:   eeprom_device_state
  * @userspace_probe :   flag indicates userspace or kernel probe
  * @cal_data        :   Calibration data
+ * @nvmem           :   Nvmem device
+ * @i2c_address     :   eeprom i2c address
+ * @memory_bytes    :   eeprom size
+ * @address_bits    :   address bits
+ * @regulator       :   eeprom power supply
  *
  */
 struct cam_eeprom_ctrl_t {
@@ -184,6 +189,11 @@ struct cam_eeprom_ctrl_t {
 	enum cam_eeprom_state cam_eeprom_state;
 	bool userspace_probe;
 	struct cam_eeprom_memory_block_t cal_data;
+	struct nvmem_device *nvmem;
+	u32 i2c_address;
+	u32 memory_bytes;
+	u32 address_bits;
+	struct regulator *reg;
 };
 
 int32_t cam_eeprom_update_i2c_info(struct cam_eeprom_ctrl_t *e_ctrl,

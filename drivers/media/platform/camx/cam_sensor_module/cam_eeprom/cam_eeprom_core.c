@@ -12,14 +12,18 @@
  */
 
 #include <linux/module.h>
+#include <linux/regulator/consumer.h>
 #include <linux/crc32.h>
 #include <media/cam_sensor.h>
 
+#include "cam_sensor_cmn_header.h"
 #include "cam_eeprom_core.h"
 #include "cam_eeprom_soc.h"
 #include "cam_debug_util.h"
 #include "cam_common_util.h"
 #include "cam_packet_util.h"
+#include "cam_cci_soc.h"
+#include "cam_cci_dev.h"
 
 /**
  * cam_eeprom_read_memory() - read map data into buffer
@@ -977,6 +981,98 @@ void cam_eeprom_shutdown(struct cam_eeprom_ctrl_t *e_ctrl)
 	}
 
 	e_ctrl->cam_eeprom_state = CAM_EEPROM_INIT;
+}
+
+int cam_eeprom_nvmem_read(struct cam_eeprom_ctrl_t *e_ctrl, unsigned int off,
+			  void *val, size_t count)
+{
+	struct cam_eeprom_memory_map_t maps[16] = { 0 };
+	struct cam_sensor_cci_client cci_client = { 0 };
+	struct cam_cci_ctrl cci_ctrl = { 0 };
+	struct cam_eeprom_memory_block_t block = {
+		.map = maps,
+		.mapdata = val,
+	};
+	struct v4l2_subdev *sdev;
+	int rc;
+	int i;
+	size_t bytes_per_address = 1 << e_ctrl->address_bits;
+	size_t base = round_down(off, bytes_per_address);
+	size_t num_maps = (round_up(count, bytes_per_address) - base) /
+			  bytes_per_address;
+	size_t first_addr = e_ctrl->i2c_address + (base / bytes_per_address);
+
+	if (num_maps > ARRAY_SIZE(maps))
+		return -ENOMEM;
+
+	block.num_map = num_maps;
+	off -= base;
+	for (i = 0; i < num_maps; ++i) {
+		maps[i].saddr = (first_addr + i) << 1;
+		maps[i].mem.addr = off;
+		maps[i].mem.data_type = CAMERA_SENSOR_I2C_TYPE_BYTE;
+		maps[i].mem.addr_type = bytes_per_address > 8 ?
+						CAMERA_SENSOR_I2C_TYPE_WORD :
+						CAMERA_SENSOR_I2C_TYPE_BYTE;
+		maps[i].mem.valid_size = min(count, bytes_per_address - off);
+		count -= maps[i].mem.valid_size;
+		off += maps[i].mem.valid_size;
+		off -= bytes_per_address;
+	}
+
+	mutex_lock(&e_ctrl->eeprom_mutex);
+
+	sdev = cam_cci_get_subdev(e_ctrl->cci_num);
+	if (!sdev) {
+		CAM_ERR(CAM_EEPROM, "failed cci sub device");
+		rc = -EINVAL;
+		goto unlock;
+	}
+
+	rc = regulator_enable(e_ctrl->reg);
+	if (rc) {
+		CAM_ERR(CAM_EEPROM, "Can't enable regulator %d", rc);
+		goto unlock;
+	}
+
+	cci_ctrl.cci_info = &cci_client;
+	cci_client.cci_i2c_master = e_ctrl->cci_i2c_master;
+	cci_client.i2c_freq_mode = I2C_FAST_MODE;
+
+	rc = cam_cci_init(sdev, &cci_ctrl);
+	if (rc) {
+		CAM_ERR(CAM_EEPROM, "cam_cci_init rc %d", rc);
+		goto disable_reguator;
+	}
+
+	rc = camera_io_init(&(e_ctrl->io_master_info));
+	if (rc) {
+		CAM_ERR(CAM_EEPROM, "cci_init failed");
+		goto cci_release;
+	}
+
+	rc = cam_eeprom_read_memory(e_ctrl, &block);
+	if (rc)
+		CAM_ERR(CAM_EEPROM, "read_eeprom_memory failed %d", rc);
+
+	rc = camera_io_release(&(e_ctrl->io_master_info));
+	if (rc)
+		CAM_ERR(CAM_EEPROM, "IO relese error %d", rc);
+
+cci_release:
+	rc = cam_cci_soc_release(v4l2_get_subdevdata(sdev));
+	if (rc)
+		CAM_ERR(CAM_EEPROM, "CCI relese error %d", rc);
+
+disable_reguator:
+	rc = regulator_disable(e_ctrl->reg);
+	if (rc)
+		CAM_ERR(CAM_EEPROM, "Can't disable regulator %d", rc);
+
+unlock:
+	mutex_unlock(&e_ctrl->eeprom_mutex);
+
+	return rc;
 }
 
 /**

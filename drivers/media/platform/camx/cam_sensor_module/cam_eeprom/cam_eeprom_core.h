@@ -25,5 +25,8 @@ int32_t cam_eeprom_parse_read_memory_map(struct device_node *of_node,
  */
 void cam_eeprom_shutdown(struct cam_eeprom_ctrl_t *e_ctrl);
 
+int cam_eeprom_nvmem_read(struct cam_eeprom_ctrl_t *e_ctrl, unsigned int off,
+			  void *val, size_t count);
+
 #endif
 /* _CAM_EEPROM_CORE_H_ */
