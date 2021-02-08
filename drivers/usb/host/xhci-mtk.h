@@ -26,10 +26,10 @@
  * @tt_port: TT port number
  */
 struct mu3h_sch_tt {
-	DECLARE_BITMAP(split_bit_map, XHCI_MTK_MAX_ESIT);
+	DECLARE_BITMAP(ss_bit_map, XHCI_MTK_MAX_ESIT);
+	DECLARE_BITMAP(idle_bit_map, XHCI_MTK_MAX_ESIT);
+	u32 fs_bus_bw[XHCI_MTK_MAX_ESIT + 1];
 	struct list_head ep_list;
-	struct usb_tt *usb_tt;
-	int tt_port;
 };
 
 /**
@@ -84,9 +84,9 @@ struct mu3h_sch_ep_info {
 	struct list_head endpoint;
 	struct list_head tt_endpoint;
 	struct mu3h_sch_tt *sch_tt;
+	struct usb_host_endpoint *ep;
 	u32 ep_type;
 	u32 maxpkt;
-	void *ep;
 	bool allocated;
 	/*
 	 * mtk xHCI scheduling information put into reserved DWs
