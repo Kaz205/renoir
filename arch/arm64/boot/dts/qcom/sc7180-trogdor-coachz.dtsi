@@ -220,7 +220,7 @@ i2c_wlc: &i2c5 {
 			  "",
 			  "",
 			  "",
-			  "FPMCU_SEL",
+			  "EN_FP_RAILS",
 			  "UIM2_DATA",
 			  "UIM2_CLK",
 			  "UIM2_RST",
