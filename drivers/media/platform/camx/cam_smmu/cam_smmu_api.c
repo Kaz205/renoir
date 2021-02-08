@@ -1359,7 +1359,7 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 			goto err_buf_unmap_attach;
 		}
 
-		size = iommu_map_sg(domain, iova, table->sgl, table->nents,
+		size = iommu_map_sg(domain, iova, table->sgl, table->orig_nents,
 				IOMMU_READ | IOMMU_WRITE);
 		if (size < 0) {
 			CAM_ERR(CAM_SMMU, "IOMMU mapping failed");

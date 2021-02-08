@@ -11,6 +11,7 @@
  * GNU General Public License for more details.
  */
 
+#include <uapi/linux/dma-buf.h>
 #include <linux/module.h>
 #include <linux/types.h>
 #include <linux/mutex.h>
@@ -46,54 +47,56 @@ static int cam_mem_util_map_cpu_va(struct dma_buf *dmabuf,
 	uintptr_t *vaddr,
 	size_t *len)
 {
-	int i, j;
 	void *addr;
-
-	*vaddr = (uintptr_t)dma_buf_vmap(dmabuf);
+	int rc;
 
 	/*
-	 * The alloc returns a virtually contiguous memory region, so
-	 * we just map each individual page and then only use the
-	 * virtual address of the first page.
+	 * dma_buf_begin_cpu_access() and dma_buf_end_cpu_access()
+	 * need to be called in pair to avoid stability issue.
 	 */
-	for (i = 0; i < PAGE_ALIGN(dmabuf->size) / PAGE_SIZE; i++) {
-		addr = dma_buf_kmap(dmabuf, i);
-		if (IS_ERR_OR_NULL(addr)) {
-			CAM_ERR(CAM_MEM, "kernel map fail");
-			for (j = 0; j < i; j++)
-				dma_buf_kunmap(dmabuf,
-					j,
-					(void *)(*vaddr + (j * PAGE_SIZE)));
-			*vaddr = 0;
-			*len = 0;
-			return -ENOSPC;
-		}
+	rc = dma_buf_begin_cpu_access(dmabuf, DMA_BIDIRECTIONAL);
+	if (rc) {
+		CAM_ERR(CAM_MEM, "dma begin access failed rc=%d", rc);
+		return rc;
 	}
 
+	addr = dma_buf_vmap(dmabuf);
+	if (IS_ERR_OR_NULL(addr)) {
+		CAM_ERR(CAM_MEM, "Mapping failed");
+		rc =  PTR_ERR(addr);
+		goto err_end_cpu_access;
+	}
+
+	*vaddr = (uintptr_t)addr;
 	*len = dmabuf->size;
 
 	return 0;
+
+err_end_cpu_access:
+	dma_buf_end_cpu_access(dmabuf, DMA_BIDIRECTIONAL);
+	return rc;
 }
+
 static int cam_mem_util_unmap_cpu_va(struct dma_buf *dmabuf,
 	uint64_t vaddr)
 {
-	int i, page_num;
-
-	if (!dmabuf || !vaddr) {
-		CAM_ERR(CAM_MEM, "Invalid input args %pK %llX", dmabuf, vaddr);
-		return -EINVAL;
-	}
-
-	page_num = PAGE_ALIGN(dmabuf->size) / PAGE_SIZE;
-
-	for (i = 0; i < page_num; i++) {
-		dma_buf_kunmap(dmabuf, i,
-			(void *)(vaddr + (i * PAGE_SIZE)));
-	}
+	int rc;
 
 	dma_buf_vunmap(dmabuf, (void *)vaddr);
 
-	return 0;
+	/*
+	 * dma_buf_begin_cpu_access() and
+	 * dma_buf_end_cpu_access() need to be called in pair
+	 * to avoid stability issue.
+	 */
+	rc = dma_buf_end_cpu_access(dmabuf, DMA_BIDIRECTIONAL);
+	if (rc) {
+		CAM_ERR(CAM_MEM, "Failed in end cpu access, dmabuf=%pK",
+			dmabuf);
+		return rc;
+	}
+
+	return rc;
 }
 
 static int32_t cam_mem_get_slot(struct cam_mem_table *table)
@@ -162,6 +165,14 @@ int cam_mem_get_io_buf(int32_t buf_handle, int32_t mmu_handle,
 		goto handle_mismatch;
 	}
 
+	rc = dma_buf_begin_cpu_access(tbl.bufq[idx].dma_buf, DMA_BIDIRECTIONAL);
+	if (rc)
+		CAM_ERR(CAM_MEM, "dma begin access failed rc=%d", rc);
+
+	rc = dma_buf_end_cpu_access(tbl.bufq[idx].dma_buf, DMA_BIDIRECTIONAL);
+	if (rc)
+		CAM_ERR(CAM_MEM, "dma end access failed rc=%d", rc);
+
 	CAM_DBG(CAM_MEM,
 		"handle:0x%x fd:%d iova_ptr:%pK len_ptr:%llu",
 		mmu_handle, tbl.bufq[idx].fd, iova_ptr, *len_ptr);
@@ -204,9 +215,17 @@ int cam_mem_get_cpu_buf(int32_t buf_handle, uintptr_t *vaddr_ptr, size_t *len)
 		goto end;
 	}
 
+	/* Sync from the device to main memory */
+	rc = dma_buf_begin_cpu_access(tbl.bufq[idx].dma_buf, DMA_FROM_DEVICE);
+	if (rc)
+		CAM_ERR(CAM_MEM, "dma begin access failed rc=%d", rc);
+
 	*vaddr_ptr = tbl.bufq[idx].kmdvaddr;
 	*len = tbl.bufq[idx].len;
 
+	rc = dma_buf_end_cpu_access(tbl.bufq[idx].dma_buf, DMA_FROM_DEVICE);
+	if (rc)
+		CAM_ERR(CAM_MEM, "dma end access failed rc=%d", rc);
 end:
 	mutex_unlock(&tbl.bufq[idx].q_lock);
 	return rc;
@@ -239,70 +258,19 @@ int cam_mem_put_cpu_buf(int32_t buf_handle)
 		goto end;
 	}
 
+	/* Sync from main memory to the device */
+	rc = dma_buf_begin_cpu_access(tbl.bufq[idx].dma_buf, DMA_TO_DEVICE);
+	if (rc)
+		CAM_ERR(CAM_MEM, "dma begin access failed rc=%d", rc);
+
+	rc = dma_buf_end_cpu_access(tbl.bufq[idx].dma_buf, DMA_TO_DEVICE);
+	if (rc)
+		CAM_ERR(CAM_MEM, "dma end access failed rc=%d", rc);
 end:
 	mutex_unlock(&tbl.bufq[idx].q_lock);
 	return rc;
 }
 EXPORT_SYMBOL(cam_mem_put_cpu_buf);
-
-int cam_mem_mgr_cache_ops(struct cam_mem_cache_ops_cmd *cmd)
-{
-	int rc = 0, idx;
-	uint32_t cache_dir = DMA_BIDIRECTIONAL;
-	unsigned long dmabuf_flag = 0;
-
-	if (!cmd)
-		return -EINVAL;
-
-	idx = CAM_MEM_MGR_GET_HDL_IDX(cmd->buf_handle);
-	if (idx >= CAM_MEM_BUFQ_MAX || idx <= 0)
-		return -EINVAL;
-
-	mutex_lock(&tbl.bufq[idx].q_lock);
-
-	if (!tbl.bufq[idx].active) {
-		rc = -EINVAL;
-		goto end;
-	}
-
-	if (cmd->buf_handle != tbl.bufq[idx].buf_handle) {
-		rc = -EINVAL;
-		goto end;
-	}
-
-	rc = dma_buf_get_flags(tbl.bufq[idx].dma_buf, &dmabuf_flag);
-	if (rc) {
-		CAM_ERR(CAM_MEM, "cache get flags failed %d", rc);
-		goto end;
-	}
-
-	if (dmabuf_flag & CAM_MEM_FLAG_CACHE) {
-		switch (cmd->mem_cache_ops) {
-		case CAM_MEM_CLEAN_CACHE:
-			cache_dir = DMA_TO_DEVICE;
-			break;
-		case CAM_MEM_INV_CACHE:
-			cache_dir = DMA_FROM_DEVICE;
-			break;
-		case CAM_MEM_CLEAN_INV_CACHE:
-			cache_dir = DMA_BIDIRECTIONAL;
-			break;
-		default:
-			CAM_ERR(CAM_MEM,
-				"invalid cache ops :%d", cmd->mem_cache_ops);
-			rc = -EINVAL;
-			goto end;
-		}
-	} else {
-		CAM_DBG(CAM_MEM, "BUF is not cached");
-		goto end;
-	}
-
-end:
-	mutex_unlock(&tbl.bufq[idx].q_lock);
-	return rc;
-}
-EXPORT_SYMBOL(cam_mem_mgr_cache_ops);
 
 static int cam_mem_util_get_dma_buf_fd(size_t len,
 	size_t align,
@@ -552,7 +520,7 @@ map_kernel_fail:
 map_hw_fail:
 	cam_mem_put_slot(&tbl, idx);
 slot_fail:
-	cmm_free_buffer(dmabuf);
+	dma_buf_put(dmabuf);
 	return rc;
 }
 
@@ -765,7 +733,7 @@ static int cam_mem_util_unmap(int32_t idx,
 		tbl.bufq[idx].is_imported,
 		tbl.bufq[idx].dma_buf);
 
-	/* Only when dma buffer is allocated by us */
+	/* Allways decrement dmabuf ref counter */
 	if (tbl.bufq[idx].dma_buf)
 		cmm_free_buffer(tbl.bufq[idx].dma_buf);
 

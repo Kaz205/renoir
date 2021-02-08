@@ -437,24 +437,6 @@ static long cam_private_ioctl(struct file *file, void *fh,
 		rc = cam_mem_mgr_release(&cmd);
 		}
 		break;
-	case CAM_REQ_MGR_CACHE_OPS: {
-		struct cam_mem_cache_ops_cmd cmd;
-
-		if (k_ioctl->size != sizeof(cmd))
-			return -EINVAL;
-
-		if (copy_from_user(&cmd,
-			u64_to_user_ptr(k_ioctl->handle),
-			sizeof(struct cam_mem_cache_ops_cmd))) {
-			rc = -EFAULT;
-			break;
-		}
-
-		rc = cam_mem_mgr_cache_ops(&cmd);
-		if (rc)
-			rc = -EINVAL;
-		}
-		break;
 	case CAM_REQ_MGR_LINK_CONTROL: {
 		struct cam_req_mgr_link_control cmd;
 
