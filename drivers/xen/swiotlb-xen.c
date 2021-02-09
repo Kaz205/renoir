@@ -190,8 +190,8 @@ retry:
 	/*
 	 * IO TLB memory already allocated. Just use it.
 	 */
-	if (is_swiotlb_active()) {
-		xen_io_tlb_start = phys_to_virt(get_swiotlb_start());
+	if (is_swiotlb_active(NULL)) {
+		xen_io_tlb_start = phys_to_virt(get_swiotlb_start(NULL));
 		goto end;
 	}
 

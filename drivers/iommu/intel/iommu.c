@@ -3809,7 +3809,7 @@ bounce_sync_single(struct device *dev, dma_addr_t addr, size_t size,
 		return;
 
 	tlb_addr = intel_iommu_iova_to_phys(&domain->domain, addr);
-	if (is_swiotlb_buffer(tlb_addr))
+	if (is_swiotlb_buffer(dev, tlb_addr))
 		swiotlb_tbl_sync_single(dev, tlb_addr, size, dir, target);
 }
 
@@ -3857,7 +3857,7 @@ bounce_map_single(struct device *dev, phys_addr_t paddr, size_t size,
 	 */
 	if (!IS_ALIGNED(paddr | size, VTD_PAGE_SIZE)) {
 		tlb_addr = swiotlb_tbl_map_single(dev,
-				__phys_to_dma(dev, get_swiotlb_start()),
+				__phys_to_dma(dev, get_swiotlb_start(dev)),
 				paddr, size, aligned_size, dir, attrs);
 		if (tlb_addr == DMA_MAPPING_ERROR) {
 			goto swiotlb_error;
@@ -3889,7 +3889,7 @@ bounce_map_single(struct device *dev, phys_addr_t paddr, size_t size,
 	return (phys_addr_t)iova_pfn << PAGE_SHIFT;
 
 mapping_error:
-	if (is_swiotlb_buffer(tlb_addr))
+	if (is_swiotlb_buffer(dev, tlb_addr))
 		swiotlb_tbl_unmap_single(dev, tlb_addr, size,
 					 aligned_size, dir, attrs);
 swiotlb_error:
@@ -3917,7 +3917,7 @@ bounce_unmap_single(struct device *dev, dma_addr_t dev_addr, size_t size,
 		return;
 
 	intel_unmap(dev, dev_addr, size);
-	if (is_swiotlb_buffer(tlb_addr))
+	if (is_swiotlb_buffer(dev, tlb_addr))
 		swiotlb_tbl_unmap_single(dev, tlb_addr, size,
 					 aligned_size, dir, attrs);
 

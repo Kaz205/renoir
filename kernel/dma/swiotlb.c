@@ -106,6 +106,11 @@ struct swiotlb {
 };
 static struct swiotlb default_swiotlb;
 
+static inline struct swiotlb *get_swiotlb(struct device *dev)
+{
+	return &default_swiotlb;
+}
+
 /*
  * Max segment that we can provide which (if pages are contingous) will
  * not be bounced (unless SWIOTLB_FORCE is set).
@@ -736,23 +741,29 @@ size_t swiotlb_max_mapping_size(struct device *dev)
 	return ((size_t)1 << IO_TLB_SHIFT) * IO_TLB_SEGSIZE;
 }
 
-bool is_swiotlb_active(void)
+bool is_swiotlb_active(struct device *dev)
 {
+	struct swiotlb *swiotlb = get_swiotlb(dev);
+
 	/*
 	 * When SWIOTLB is initialized, even if swiotlb->start points to
 	 * physical address zero, swiotlb->end surely doesn't.
 	 */
-	return default_swiotlb.end != 0;
+	return swiotlb->end != 0;
 }
 
-bool is_swiotlb_buffer(phys_addr_t paddr)
+bool is_swiotlb_buffer(struct device *dev, phys_addr_t paddr)
 {
-	return paddr >= default_swiotlb.start && paddr < default_swiotlb.end;
+	struct swiotlb *swiotlb = get_swiotlb(dev);
+
+	return paddr >= swiotlb->start && paddr < swiotlb->end;
 }
 
-phys_addr_t get_swiotlb_start(void)
+phys_addr_t get_swiotlb_start(struct device *dev)
 {
-	return default_swiotlb.start;
+	struct swiotlb *swiotlb = get_swiotlb(dev);
+
+	return swiotlb->start;
 }
 
 #ifdef CONFIG_DEBUG_FS
