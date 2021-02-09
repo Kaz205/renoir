@@ -38,6 +38,13 @@
 #ifdef CONFIG_DEBUG_FS
 #include <linux/debugfs.h>
 #endif
+#ifdef CONFIG_DMA_RESTRICTED_POOL
+#include <linux/io.h>
+#include <linux/of.h>
+#include <linux/of_fdt.h>
+#include <linux/of_reserved_mem.h>
+#include <linux/slab.h>
+#endif
 
 #include <asm/io.h>
 #include <asm/dma.h>
@@ -74,7 +81,8 @@ enum swiotlb_force swiotlb_force;
  *              range check to see if the memory was in fact allocated by this
  *              API.
  * @nslabs:     The number of IO TLB blocks (in groups of 64) between @start and
- *              @end. This is command line adjustable via setup_io_tlb_npages.
+ *              @end. For default swiotlb, this is command line adjustable via
+ *              setup_io_tlb_npages.
  * @used:       The number of used IO TLB block.
  * @list:       The free list describing the number of free entries available
  *              from each index.
@@ -765,3 +773,87 @@ static int __init swiotlb_create_default_debugfs(void)
 
 late_initcall(swiotlb_create_default_debugfs);
 #endif
+
+#ifdef CONFIG_DMA_RESTRICTED_POOL
+static int rmem_swiotlb_device_init(struct reserved_mem *rmem,
+				    struct device *dev)
+{
+	struct swiotlb *swiotlb = rmem->priv;
+	int ret;
+
+	if (dev->dev_swiotlb)
+		return -EBUSY;
+
+	/* Since multiple devices can share the same pool, the private data,
+	 * swiotlb struct, will be initialized by the first device attached
+	 * to it.
+	 */
+	if (!swiotlb) {
+		swiotlb = kzalloc(sizeof(*swiotlb), GFP_KERNEL);
+		if (!swiotlb)
+			return -ENOMEM;
+#ifdef CONFIG_ARM
+		unsigned long pfn = PHYS_PFN(rmem->base);
+
+		if (!PageHighMem(pfn_to_page(pfn))) {
+			ret = -EINVAL;
+			goto cleanup;
+		}
+#endif /* CONFIG_ARM */
+
+		ret = swiotlb_init_tlb_pool(swiotlb, rmem->base, rmem->size);
+		if (ret)
+			goto cleanup;
+
+		rmem->priv = swiotlb;
+	}
+
+#ifdef CONFIG_DEBUG_FS
+	swiotlb_create_debugfs(swiotlb, rmem->name, default_swiotlb.debugfs);
+#endif /* CONFIG_DEBUG_FS */
+
+	dev->dev_swiotlb = swiotlb;
+
+	return 0;
+
+cleanup:
+	kfree(swiotlb);
+
+	return ret;
+}
+
+static void rmem_swiotlb_device_release(struct reserved_mem *rmem,
+					struct device *dev)
+{
+	if (!dev)
+		return;
+
+#ifdef CONFIG_DEBUG_FS
+	debugfs_remove_recursive(dev->dev_swiotlb->debugfs);
+#endif /* CONFIG_DEBUG_FS */
+	dev->dev_swiotlb = NULL;
+}
+
+static const struct reserved_mem_ops rmem_swiotlb_ops = {
+	.device_init = rmem_swiotlb_device_init,
+	.device_release = rmem_swiotlb_device_release,
+};
+
+static int __init rmem_swiotlb_setup(struct reserved_mem *rmem)
+{
+	unsigned long node = rmem->fdt_node;
+
+	if (of_get_flat_dt_prop(node, "reusable", NULL) ||
+	    of_get_flat_dt_prop(node, "linux,cma-default", NULL) ||
+	    of_get_flat_dt_prop(node, "linux,dma-default", NULL) ||
+	    of_get_flat_dt_prop(node, "no-map", NULL))
+		return -EINVAL;
+
+	rmem->ops = &rmem_swiotlb_ops;
+	pr_info("Reserved memory: created device swiotlb memory pool at %pa, size %ld MiB\n",
+		&rmem->base, (unsigned long)rmem->size / SZ_1M);
+	return 0;
+}
+
+RESERVEDMEM_OF_DECLARE(dma, "restricted-dma-pool", rmem_swiotlb_setup);
+#endif /* CONFIG_DMA_RESTRICTED_POOL */
