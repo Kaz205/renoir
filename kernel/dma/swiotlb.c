@@ -39,6 +39,7 @@
 #include <linux/debugfs.h>
 #endif
 #ifdef CONFIG_DMA_RESTRICTED_POOL
+#include <linux/device.h>
 #include <linux/io.h>
 #include <linux/of.h>
 #include <linux/of_fdt.h>
@@ -108,6 +109,10 @@ static struct swiotlb default_swiotlb;
 
 static inline struct swiotlb *get_swiotlb(struct device *dev)
 {
+#ifdef CONFIG_DMA_RESTRICTED_POOL
+	if (dev && dev->dev_swiotlb)
+		return dev->dev_swiotlb;
+#endif
 	return &default_swiotlb;
 }
 
@@ -494,7 +499,7 @@ phys_addr_t swiotlb_tbl_map_single(struct device *hwdev,
 				   enum dma_data_direction dir,
 				   unsigned long attrs)
 {
-	struct swiotlb *swiotlb = &default_swiotlb;
+	struct swiotlb *swiotlb = get_swiotlb(hwdev);
 	unsigned long flags;
 	phys_addr_t tlb_addr;
 	unsigned int nslots, stride, index, wrap;
@@ -504,7 +509,11 @@ phys_addr_t swiotlb_tbl_map_single(struct device *hwdev,
 	unsigned long max_slots;
 	unsigned long tmp_io_tlb_used;
 
+#ifdef CONFIG_DMA_RESTRICTED_POOL
+	if (no_iotlb_memory && !hwdev->dev_swiotlb)
+#else
 	if (no_iotlb_memory)
+#endif
 		panic("Can not allocate SWIOTLB buffer earlier and can't now provide you with the DMA bounce buffer");
 
 	if (mem_encrypt_active())
@@ -626,7 +635,7 @@ void swiotlb_tbl_unmap_single(struct device *hwdev, phys_addr_t tlb_addr,
 			      size_t mapping_size, size_t alloc_size,
 			      enum dma_data_direction dir, unsigned long attrs)
 {
-	struct swiotlb *swiotlb = &default_swiotlb;
+	struct swiotlb *swiotlb = get_swiotlb(hwdev);
 	unsigned long flags;
 	int i, count, nslots = ALIGN(alloc_size, 1 << IO_TLB_SHIFT) >> IO_TLB_SHIFT;
 	int index = (tlb_addr - swiotlb->start) >> IO_TLB_SHIFT;
@@ -674,7 +683,7 @@ void swiotlb_tbl_sync_single(struct device *hwdev, phys_addr_t tlb_addr,
 			     size_t size, enum dma_data_direction dir,
 			     enum dma_sync_target target)
 {
-	struct swiotlb *swiotlb = &default_swiotlb;
+	struct swiotlb *swiotlb = get_swiotlb(hwdev);
 	int index = (tlb_addr - swiotlb->start) >> IO_TLB_SHIFT;
 	phys_addr_t orig_addr = swiotlb->orig_addr[index];
 
@@ -709,7 +718,7 @@ void swiotlb_tbl_sync_single(struct device *hwdev, phys_addr_t tlb_addr,
 bool swiotlb_map(struct device *dev, phys_addr_t *phys, dma_addr_t *dma_addr,
 		size_t size, enum dma_data_direction dir, unsigned long attrs)
 {
-	struct swiotlb *swiotlb = &default_swiotlb;
+	struct swiotlb *swiotlb = get_swiotlb(dev);
 
 	trace_swiotlb_bounced(dev, *dma_addr, size, swiotlb_force);
 
@@ -786,6 +795,11 @@ late_initcall(swiotlb_create_default_debugfs);
 #endif
 
 #ifdef CONFIG_DMA_RESTRICTED_POOL
+bool is_swiotlb_force(struct device *dev)
+{
+	return unlikely(swiotlb_force == SWIOTLB_FORCE) || dev->dev_swiotlb;
+}
+
 static int rmem_swiotlb_device_init(struct reserved_mem *rmem,
 				    struct device *dev)
 {
