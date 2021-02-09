@@ -820,6 +820,39 @@ late_initcall(swiotlb_create_default_debugfs);
 #endif
 
 #ifdef CONFIG_DMA_RESTRICTED_POOL
+struct page *dev_swiotlb_alloc(struct device *dev, size_t size)
+{
+	struct swiotlb *swiotlb;
+	phys_addr_t tlb_addr;
+	unsigned int index;
+
+	if (!dev->dev_swiotlb)
+		return NULL;
+
+	swiotlb = dev->dev_swiotlb;
+	index = swiotlb_tbl_find_free_region(dev, swiotlb->start, size, 0);
+	if (index < 0)
+		return NULL;
+
+	tlb_addr = swiotlb->start + (index << IO_TLB_SHIFT);
+
+	return pfn_to_page(PFN_DOWN(tlb_addr));
+}
+
+bool dev_swiotlb_free(struct device *dev, struct page *page, size_t size)
+{
+	unsigned int index;
+	phys_addr_t tlb_addr = page_to_phys(page);
+
+	if (!is_swiotlb_buffer(dev, tlb_addr))
+		return false;
+
+	index = (tlb_addr - dev->dev_swiotlb->start) >> IO_TLB_SHIFT;
+	swiotlb_tbl_release_region(dev, index, size);
+
+	return true;
+}
+
 bool is_swiotlb_force(struct device *dev)
 {
 	return unlikely(swiotlb_force == SWIOTLB_FORCE) || dev->dev_swiotlb;

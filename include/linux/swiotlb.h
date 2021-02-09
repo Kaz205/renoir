@@ -71,6 +71,8 @@ extern enum swiotlb_force swiotlb_force;
 #ifdef CONFIG_DMA_RESTRICTED_POOL
 bool is_swiotlb_force(struct device *dev);
 bool is_dev_swiotlb_force(struct device *dev);
+struct page *dev_swiotlb_alloc(struct device *dev, size_t size);
+bool dev_swiotlb_free(struct device *dev, struct page *page, size_t size);
 #else
 static inline bool is_swiotlb_force(struct device *dev)
 {
