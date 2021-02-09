@@ -68,7 +68,7 @@ enum swiotlb_force swiotlb_force;
  * swiotlb_tbl_sync_single_*, to see if the memory was in fact allocated by this
  * API.
  */
-phys_addr_t io_tlb_start, io_tlb_end;
+static phys_addr_t io_tlb_start, io_tlb_end;
 
 /*
  * The number of IO TLB blocks (in groups of 64) between io_tlb_start and
@@ -701,6 +701,11 @@ bool is_swiotlb_active(void)
 	 * address zero, io_tlb_end surely doesn't.
 	 */
 	return io_tlb_end != 0;
+}
+
+bool is_swiotlb_buffer(phys_addr_t paddr)
+{
+	return paddr >= io_tlb_start && paddr < io_tlb_end;
 }
 
 phys_addr_t get_swiotlb_start(void)
