@@ -196,7 +196,7 @@ static void mtk_ufoe_start(struct device *dev)
 	writel(UFO_BYPASS, priv->regs + DISP_REG_UFO_START);
 }
 
-void mtk_postmask_config(struct device *dev, unsigned int w,
+static void mtk_postmask_config(struct device *dev, unsigned int w,
 			unsigned int h, unsigned int vrefresh,
 			unsigned int bpc, struct cmdq_pkt *cmdq_pkt)
 {
@@ -208,14 +208,14 @@ void mtk_postmask_config(struct device *dev, unsigned int w,
 		      priv->regs, DISP_POSTMASK_CFG);
 }
 
-void mtk_postmask_start(struct device *dev)
+static void mtk_postmask_start(struct device *dev)
 {
 	struct mtk_ddp_comp_dev *priv = dev_get_drvdata(dev);
 
 	writel(POSTMASK_EN, priv->regs + DISP_POSTMASK_EN);
 }
 
-void mtk_postmask_stop(struct device *dev)
+static void mtk_postmask_stop(struct device *dev)
 {
 	struct mtk_ddp_comp_dev *priv = dev_get_drvdata(dev);
 
