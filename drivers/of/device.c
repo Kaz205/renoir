@@ -168,6 +168,9 @@ int of_dma_configure(struct device *dev, struct device_node *np, bool force_dma)
 
 	arch_setup_dma_ops(dev, dma_addr, size, iommu, coherent);
 
+	if (!iommu)
+		return of_dma_set_restricted_buffer(dev);
+
 	return 0;
 }
 EXPORT_SYMBOL_GPL(of_dma_configure);
