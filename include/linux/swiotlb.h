@@ -70,10 +70,15 @@ extern enum swiotlb_force swiotlb_force;
 
 #ifdef CONFIG_DMA_RESTRICTED_POOL
 bool is_swiotlb_force(struct device *dev);
+bool is_dev_swiotlb_force(struct device *dev);
 #else
 static inline bool is_swiotlb_force(struct device *dev)
 {
 	return unlikely(swiotlb_force == SWIOTLB_FORCE);
+}
+static inline bool is_dev_swiotlb_force(struct device *dev)
+{
+	return false;
 }
 #endif /* CONFIG_DMA_RESTRICTED_POOL */
 
@@ -88,6 +93,10 @@ phys_addr_t get_swiotlb_start(struct device *dev);
 #else
 #define swiotlb_force SWIOTLB_NO_FORCE
 static inline bool is_swiotlb_force(struct device *dev)
+{
+	return false;
+}
+static inline bool is_dev_swiotlb_force(struct device *dev)
 {
 	return false;
 }
