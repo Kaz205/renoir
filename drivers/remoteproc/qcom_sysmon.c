@@ -533,7 +533,7 @@ static void sysmon_stop(struct rproc_subdev *subdev, bool crashed)
 		.subsys_name = sysmon->name,
 		.ssr_event = SSCTL_SSR_EVENT_BEFORE_SHUTDOWN
 	};
-	bool acked = false;
+	bool acked;
 
 	sysmon->shutdown_acked = false;
 
