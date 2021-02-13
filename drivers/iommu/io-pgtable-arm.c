@@ -816,7 +816,6 @@ static size_t arm_lpae_split_blk_unmap(struct arm_lpae_io_pgtable *data,
 
 		tablep = iopte_deref(pte, data);
 	} else if (unmap_idx >= 0) {
-		io_pgtable_tlb_add_page(&data->iop, gather, iova, size);
 		return size;
 	}
 
@@ -845,7 +844,6 @@ static size_t __arm_lpae_unmap(struct arm_lpae_io_pgtable *data,
 		__arm_lpae_set_pte(ptep, 0, &iop->cfg);
 
 		if (!iopte_leaf(pte, lvl, iop->fmt)) {
-			/* Also flush any partial walks */
 			ptep = iopte_deref(pte, data);
 			__arm_lpae_free_pgtable(data, lvl + 1, ptep);
 		} else if (iop->cfg.quirks & IO_PGTABLE_QUIRK_NON_STRICT) {
@@ -934,9 +932,6 @@ static size_t arm_lpae_unmap(struct io_pgtable_ops *ops, unsigned long iova,
 		unmapped += ret;
 		iova += ret;
 	}
-
-	if (unmapped)
-		io_pgtable_tlb_flush_all(&data->iop);
 
 	return unmapped;
 }
