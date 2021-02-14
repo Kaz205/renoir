@@ -134,8 +134,8 @@ static unsigned int lvts_temp_to_raw(struct formula_coeff *co, int temp)
 {
 	unsigned int msr_raw;
 
-	msr_raw = ((long long)((co->golden_temp * 500 + co->b - temp)) << 14)
-		/ (-1 * co->a);
+	msr_raw = div_s64((s64)((co->golden_temp * 500 + co->b - temp)) << 14,
+			  -1 * co->a);
 
 	return msr_raw;
 }
