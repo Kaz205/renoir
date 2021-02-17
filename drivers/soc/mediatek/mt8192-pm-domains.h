@@ -49,6 +49,7 @@ static const struct scpsys_domain_data scpsys_domain_data_mt8192[] = {
 		.ctl_offs = 0x0308,
 		.sram_pdn_bits = GENMASK(8, 8),
 		.sram_pdn_ack_bits = GENMASK(12, 12),
+		.caps = MTK_SCPD_DOMAIN_SUPPLY,
 	},
 	[MT8192_POWER_DOMAIN_MFG1] = {
 		.sta_mask = BIT(3),
