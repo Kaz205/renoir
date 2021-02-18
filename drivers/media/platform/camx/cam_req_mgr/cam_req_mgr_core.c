@@ -2899,8 +2899,11 @@ static int __cam_req_mgr_unlink(struct cam_req_mgr_core_link *link)
 			"Unlink for all devices was not successful");
 
 	mutex_lock(&link->lock);
-	/* Destroy timer of link */
-	crm_timer_exit(&link->watchdog);
+	/* Destroy timer of link if exists */
+	/* Can also be destroyed on ioctrl=CAM_REQ_MGR_LINK_CONTROL with */
+	/* cmd=CAM_REQ_MGR_LINK_DEACTIVATE */
+	if (link->watchdog)
+		crm_timer_exit(&link->watchdog);
 
 	/* Destroy workq of link */
 	cam_req_mgr_workq_destroy(&link->workq);
@@ -3558,9 +3561,11 @@ int cam_req_mgr_link_control(struct cam_req_mgr_link_control *control)
 					dev->ops->process_evt(&evt_data);
 			}
 		} else if (control->ops == CAM_REQ_MGR_LINK_DEACTIVATE) {
-			/* Destroy SOF watchdog timer */
+			/* Destroy SOF watchdog timer if exists */
+			/* Can also be destroyed on ioctrl=CAM_REQ_MGR_UNLINK */
 			spin_lock_bh(&link->link_state_spin_lock);
-			crm_timer_exit(&link->watchdog);
+			if (link->watchdog)
+				crm_timer_exit(&link->watchdog);
 			spin_unlock_bh(&link->link_state_spin_lock);
 			/* notify nodes */
 			for (j = 0; j < link->num_devs; j++) {
