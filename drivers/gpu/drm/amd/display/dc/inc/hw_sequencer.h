@@ -125,6 +125,7 @@ struct hw_sequencer_funcs {
 		struct pipe_ctx *pipe_ctx,
 		bool flip_immediate);
 #endif
+	void (*cursor_lock)(struct dc *dc, struct pipe_ctx *pipe, bool lock);
 
 	void (*update_plane_addr)(
 		const struct dc *dc,

@@ -24,10 +24,8 @@
  * Output:
  * rax: dest
  */
-.weak memmove
-
-ENTRY(memmove)
-ENTRY(__memmove)
+SYM_FUNC_START_WEAK(memmove)
+SYM_FUNC_START(__memmove)
 
 	/* Handle more 32 bytes in loop */
 	mov %rdi, %rax

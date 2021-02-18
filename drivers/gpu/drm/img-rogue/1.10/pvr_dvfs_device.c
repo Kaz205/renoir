@@ -476,16 +476,6 @@ PVRSRV_ERROR InitDVFS(PPVRSRV_DEVICE_NODE psDeviceNode)
 		goto err_exit;
 	}
 
-#if defined(CHROMIUMOS_KERNEL) && \
-  ((LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)) &&	\
-   (LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0)))
-	psDVFSDevice->psDevFreq->policy.user.min_freq = min_freq;
-	psDVFSDevice->psDevFreq->policy.user.max_freq = max_freq;
-#else
-	psDVFSDevice->psDevFreq->min_freq = min_freq;
-	psDVFSDevice->psDevFreq->max_freq = max_freq;
-#endif
-
 	err = devfreq_register_opp_notifier(psDev, psDVFSDevice->psDevFreq);
 	if (err)
 	{

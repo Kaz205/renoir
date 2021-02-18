@@ -7,6 +7,8 @@
 #include "i915_drv.h"
 #include "intel_context.h"
 #include "intel_gt.h"
+#include "intel_gt_buffer_pool.h"
+#include "intel_gt_clock_utils.h"
 #include "intel_gt_pm.h"
 #include "intel_gt_requests.h"
 #include "intel_mocs.h"
@@ -15,6 +17,7 @@
 #include "intel_rps.h"
 #include "intel_uncore.h"
 #include "intel_pm.h"
+#include "shmem_utils.h"
 
 void intel_gt_init_early(struct intel_gt *gt, struct drm_i915_private *i915)
 {
@@ -26,6 +29,7 @@ void intel_gt_init_early(struct intel_gt *gt, struct drm_i915_private *i915)
 	INIT_LIST_HEAD(&gt->closed_vma);
 	spin_lock_init(&gt->closed_lock);
 
+	intel_gt_init_buffer_pool(gt);
 	intel_gt_init_reset(gt);
 	intel_gt_init_requests(gt);
 	intel_gt_init_timelines(gt);
@@ -38,6 +42,14 @@ void intel_gt_init_early(struct intel_gt *gt, struct drm_i915_private *i915)
 void intel_gt_init_hw_early(struct intel_gt *gt, struct i915_ggtt *ggtt)
 {
 	gt->ggtt = ggtt;
+}
+
+int intel_gt_init_mmio(struct intel_gt *gt)
+{
+	intel_uc_init_mmio(&gt->uc);
+	intel_sseu_info_init(gt);
+
+	return intel_engines_init_mmio(gt);
 }
 
 static void init_unused_ring(struct intel_gt *gt, u32 base)
@@ -345,7 +357,7 @@ static int intel_gt_init_scratch(struct intel_gt *gt, unsigned int size)
 		goto err_unref;
 	}
 
-	ret = i915_vma_pin(vma, 0, 0, PIN_GLOBAL | PIN_HIGH);
+	ret = i915_ggtt_pin(vma, 0, PIN_HIGH);
 	if (ret)
 		goto err_unref;
 
@@ -369,18 +381,6 @@ static struct i915_address_space *kernel_vm(struct intel_gt *gt)
 		return &i915_ppgtt_create(gt)->vm;
 	else
 		return i915_vm_get(&gt->ggtt->vm);
-}
-
-static int __intel_context_flush_retire(struct intel_context *ce)
-{
-	struct intel_timeline *tl;
-
-	tl = intel_context_timeline_lock(ce);
-	if (IS_ERR(tl))
-		return PTR_ERR(tl);
-
-	intel_context_timeline_unlock(tl);
-	return 0;
 }
 
 static int __engines_record_defaults(struct intel_gt *gt)
@@ -448,56 +448,28 @@ err_rq:
 
 	for (id = 0; id < ARRAY_SIZE(requests); id++) {
 		struct i915_request *rq;
-		struct i915_vma *state;
-		void *vaddr;
+		struct file *state;
 
 		rq = requests[id];
 		if (!rq)
 			continue;
 
-		GEM_BUG_ON(!test_bit(CONTEXT_ALLOC_BIT, &rq->context->flags));
-		state = rq->context->state;
-		if (!state)
-			continue;
-
-		/* Serialise with retirement on another CPU */
-		GEM_BUG_ON(!i915_request_completed(rq));
-		err = __intel_context_flush_retire(rq->context);
-		if (err)
-			goto out;
-
-		/* We want to be able to unbind the state from the GGTT */
-		GEM_BUG_ON(intel_context_is_pinned(rq->context));
-
-		/*
-		 * As we will hold a reference to the logical state, it will
-		 * not be torn down with the context, and importantly the
-		 * object will hold onto its vma (making it possible for a
-		 * stray GTT write to corrupt our defaults). Unmap the vma
-		 * from the GTT to prevent such accidents and reclaim the
-		 * space.
-		 */
-		err = i915_vma_unbind(state);
-		if (err)
-			goto out;
-
-		i915_gem_object_lock(state->obj);
-		err = i915_gem_object_set_to_cpu_domain(state->obj, false);
-		i915_gem_object_unlock(state->obj);
-		if (err)
-			goto out;
-
-		i915_gem_object_set_cache_coherency(state->obj, I915_CACHE_LLC);
-
-		/* Check we can acquire the image of the context state */
-		vaddr = i915_gem_object_pin_map(state->obj, I915_MAP_FORCE_WB);
-		if (IS_ERR(vaddr)) {
-			err = PTR_ERR(vaddr);
+		if (rq->fence.error) {
+			err = -EIO;
 			goto out;
 		}
 
-		rq->engine->default_state = i915_gem_object_get(state->obj);
-		i915_gem_object_unpin_map(state->obj);
+		GEM_BUG_ON(!test_bit(CONTEXT_ALLOC_BIT, &rq->context->flags));
+		if (!rq->context->state)
+			continue;
+
+		/* Keep a copy of the state's backing pages; free the obj */
+		state = shmem_create_from_object(rq->context->state->obj);
+		if (IS_ERR(state)) {
+			err = PTR_ERR(state);
+			goto out;
+		}
+		rq->engine->default_state = state;
 	}
 
 out:
@@ -568,6 +540,8 @@ int intel_gt_init(struct intel_gt *gt)
 	 */
 	intel_uncore_forcewake_get(gt->uncore, FORCEWAKE_ALL);
 
+	intel_gt_init_clock_frequency(gt);
+
 	err = intel_gt_init_scratch(gt, IS_GEN(gt->i915, 2) ? SZ_256K : SZ_4K);
 	if (err)
 		goto out_fw;
@@ -584,7 +558,9 @@ int intel_gt_init(struct intel_gt *gt)
 	if (err)
 		goto err_engines;
 
-	intel_uc_init(&gt->uc);
+	err = intel_uc_init(&gt->uc);
+	if (err)
+		goto err_engines;
 
 	err = intel_gt_resume(gt);
 	if (err)
@@ -601,6 +577,12 @@ int intel_gt_init(struct intel_gt *gt)
 	err = i915_inject_probe_error(gt->i915, -EIO);
 	if (err)
 		goto err_gt;
+
+	if (INTEL_GEN(gt->i915) >= 12) {
+		err = intel_pxp_init(&gt->pxp);
+		if (err)
+			goto err_gt;
+	}
 
 	goto out_fw;
 err_gt:
@@ -625,8 +607,7 @@ void intel_gt_driver_remove(struct intel_gt *gt)
 {
 	__intel_gt_disable(gt);
 
-	intel_uc_fini_hw(&gt->uc);
-	intel_uc_fini(&gt->uc);
+	intel_uc_driver_remove(&gt->uc);
 
 	intel_engines_release(gt);
 }
@@ -644,8 +625,10 @@ void intel_gt_driver_release(struct intel_gt *gt)
 	if (vm) /* FIXME being called twice on error paths :( */
 		i915_vm_put(vm);
 
+	intel_pxp_uninit(&gt->pxp);
 	intel_gt_pm_fini(gt);
 	intel_gt_fini_scratch(gt);
+	intel_gt_fini_buffer_pool(gt);
 }
 
 void intel_gt_driver_late_release(struct intel_gt *gt)
@@ -658,4 +641,12 @@ void intel_gt_driver_late_release(struct intel_gt *gt)
 	intel_gt_fini_reset(gt);
 	intel_gt_fini_timelines(gt);
 	intel_engines_free(gt);
+}
+
+void intel_gt_info_print(const struct intel_gt_info *info,
+			 struct drm_printer *p)
+{
+	drm_printf(p, "available engines: %x\n", info->engine_mask);
+
+	intel_sseu_dump(&info->sseu, p);
 }

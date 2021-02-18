@@ -35,6 +35,9 @@
 #define AMDGPU_VCN_HARVEST_VCN0 (1 << 0)
 #define AMDGPU_VCN_HARVEST_VCN1 (1 << 1)
 
+/* 1 second timeout */
+#define VCN_IDLE_TIMEOUT	msecs_to_jiffies(1000)
+
 #define VCN_DEC_KMD_CMD 		0x80000000
 #define VCN_DEC_CMD_FENCE		0x00000000
 #define VCN_DEC_CMD_TRAP		0x00000001
@@ -190,6 +193,7 @@ struct amdgpu_vcn {
 	uint8_t	num_vcn_inst;
 	struct amdgpu_vcn_inst	inst[AMDGPU_MAX_VCN_INSTANCES];
 	struct amdgpu_vcn_reg	internal;
+	struct mutex		vcn_jpeg_ring_lock;
 
 	unsigned	harvest_config;
 	int (*pause_dpg_mode)(struct amdgpu_device *adev,

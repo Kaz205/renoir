@@ -57,13 +57,14 @@
 #include <linux/syscalls.h>
 #include <linux/uaccess.h>
 #include <linux/virtio.h>
+#include <linux/virtio_dma_buf.h>
 #include <linux/virtio_wl.h>
 
-#include <drm/virtio_drm.h>
 #include <uapi/linux/dma-buf.h>
 
 #ifdef CONFIG_DRM_VIRTIO_GPU
 #define SEND_VIRTGPU_RESOURCES
+#include <linux/sync_file.h>
 #endif
 
 #define VFD_ILLEGAL_SIGN_BIT 0x80000000
@@ -107,6 +108,8 @@ struct virtwl_info {
 
 	struct mutex vfds_lock;
 	struct idr vfds;
+
+	bool use_send_vfd_v2;
 };
 
 static struct virtwl_vfd *virtwl_vfd_alloc(struct virtwl_info *vi);
@@ -533,7 +536,13 @@ static ssize_t vfd_out_locked(struct virtwl_vfd *vfd, char __user *buffer,
 		if ((to_read + read_count) > len)
 			to_read = len - read_count;
 
-		if (copy_to_user(buffer + read_count, buf, to_read)) {
+		/*
+		 * We are under vfd->lock so we need to disable page faults
+		 * and avoid acquiring mm->mmap_sem in order to avoid deadlock
+		 * with do_mmap()->virtwl_vfd_mmap(), which takes vfd->lock
+		 * under mm->mmap_sem.
+		 */
+		if (probe_user_write(buffer + read_count, buf, to_read)) {
 			read_count = -EFAULT;
 			break;
 		}
@@ -706,27 +715,77 @@ static int encode_vfd_ids(struct virtwl_vfd **vfds, size_t vfd_count,
 }
 
 #ifdef SEND_VIRTGPU_RESOURCES
+static int get_dma_buf_id(struct dma_buf *dma_buf, u32 *id)
+{
+	uuid_t uuid;
+	int ret = 0;
+
+	ret = virtio_dma_buf_get_uuid(dma_buf, &uuid);
+	*id = be32_to_cpu(*(__be32 *)(uuid.b + 12));
+
+	return ret;
+}
+
+static int encode_fence(struct dma_fence *fence,
+			struct virtio_wl_ctrl_vfd_send_vfd_v2 *vfd_id)
+{
+	const char *name = fence->ops->get_driver_name(fence);
+
+	// We only support virtgpu based fences. Since all virtgpu fences are
+	// in the same context, merging sync_files will always reduce to a
+	// single virtgpu fence.
+	if (strcmp(name, "virtio_gpu") != 0)
+		return -EBADFD;
+
+	if (dma_fence_is_signaled(fence)) {
+		vfd_id->kind =
+			VIRTIO_WL_CTRL_VFD_SEND_KIND_VIRTGPU_SIGNALED_FENCE;
+	} else {
+		vfd_id->kind = VIRTIO_WL_CTRL_VFD_SEND_KIND_VIRTGPU_FENCE;
+		vfd_id->seqno = cpu_to_le32(fence->seqno);
+	}
+	return 0;
+}
+
 static int encode_vfd_ids_foreign(struct virtwl_vfd **vfds,
 				  struct dma_buf **virtgpu_dma_bufs,
+				  struct dma_fence **virtgpu_dma_fence,
 				  size_t vfd_count,
-				  struct virtio_wl_ctrl_vfd_send_vfd *vfd_ids)
+				  struct virtio_wl_ctrl_vfd_send_vfd *ids,
+				  struct virtio_wl_ctrl_vfd_send_vfd_v2 *ids_v2)
 {
 	size_t i;
 	int ret;
 
 	for (i = 0; i < vfd_count; i++) {
+		uint32_t kind = UINT_MAX;
+		uint32_t id = 0;
+
 		if (vfds[i]) {
-			vfd_ids[i].kind = VIRTIO_WL_CTRL_VFD_SEND_KIND_LOCAL;
-			vfd_ids[i].id = cpu_to_le32(vfds[i]->id);
+			kind = VIRTIO_WL_CTRL_VFD_SEND_KIND_LOCAL;
+			id = vfds[i]->id;
 		} else if (virtgpu_dma_bufs[i]) {
-			ret = virtio_gpu_dma_buf_to_handle(virtgpu_dma_bufs[i],
-							   false,
-							   &vfd_ids[i].id);
+			ret = get_dma_buf_id(virtgpu_dma_bufs[i],
+					     &id);
 			if (ret)
 				return ret;
-			vfd_ids[i].kind = VIRTIO_WL_CTRL_VFD_SEND_KIND_VIRTGPU;
+			kind = VIRTIO_WL_CTRL_VFD_SEND_KIND_VIRTGPU;
+		} else if (virtgpu_dma_fence[i]) {
+			ret = encode_fence(virtgpu_dma_fence[i],
+					   ids_v2 + i);
+			if (ret)
+				return ret;
 		} else {
 			return -EBADFD;
+		}
+		if (kind != UINT_MAX) {
+			if (ids) {
+				ids[i].kind = kind;
+				ids[i].id = cpu_to_le32(id);
+			} else {
+				ids_v2[i].kind = kind;
+				ids_v2[i].id = cpu_to_le32(id);
+			}
 		}
 	}
 	return 0;
@@ -742,6 +801,7 @@ static int virtwl_vfd_send(struct file *filp, const char __user *buffer,
 	struct virtwl_vfd *vfds[VIRTWL_SEND_MAX_ALLOCS] = { 0 };
 #ifdef SEND_VIRTGPU_RESOURCES
 	struct dma_buf *virtgpu_dma_bufs[VIRTWL_SEND_MAX_ALLOCS] = { 0 };
+	struct dma_fence *virtgpu_dma_fence[VIRTWL_SEND_MAX_ALLOCS] = { 0 };
 	bool foreign_id = false;
 #endif
 	size_t vfd_count = 0;
@@ -783,19 +843,33 @@ static int virtwl_vfd_send(struct file *filp, const char __user *buffer,
 				goto put_files;
 			} else {
 				struct dma_buf *dma_buf = ERR_PTR(-EINVAL);
+				struct dma_fence *dma_fence = ERR_PTR(-EINVAL);
+				bool handled = false;
+
 #ifdef SEND_VIRTGPU_RESOURCES
 				dma_buf = dma_buf_get(vfd_fds[i]);
+				dma_fence = vi->use_send_vfd_v2
+					? sync_file_get_fence(vfd_fds[i])
+					: ERR_PTR(-EINVAL);
+				handled = !IS_ERR(dma_buf) ||
+					  !IS_ERR(dma_fence);
+
 				if (!IS_ERR(dma_buf)) {
-					fdput(vfd_file);
 					virtgpu_dma_bufs[i] = dma_buf;
-					foreign_id = true;
-					vfd_count++;
-					continue;
+				} else {
+					virtgpu_dma_fence[i] = dma_fence;
 				}
+
+				foreign_id = true;
+				vfd_count++;
 #endif
 				fdput(vfd_file);
-				ret = PTR_ERR(dma_buf);
-				goto put_files;
+				if (!handled) {
+					ret = IS_ERR(dma_buf) ?
+						PTR_ERR(dma_buf) :
+						PTR_ERR(dma_fence);
+					goto put_files;
+				}
 			}
 		}
 	}
@@ -807,8 +881,9 @@ static int virtwl_vfd_send(struct file *filp, const char __user *buffer,
 	vfd_ids_size = vfd_count * sizeof(__le32);
 #ifdef SEND_VIRTGPU_RESOURCES
 	if (foreign_id) {
-		vfd_ids_size = vfd_count *
-			       sizeof(struct virtio_wl_ctrl_vfd_send_vfd);
+		vfd_ids_size = vfd_count * (vi->use_send_vfd_v2
+			? sizeof(struct virtio_wl_ctrl_vfd_send_vfd_v2)
+			: sizeof(struct virtio_wl_ctrl_vfd_send_vfd));
 	}
 #endif
 	ctrl_send_size = sizeof(*ctrl_send) + vfd_ids_size + len;
@@ -824,9 +899,18 @@ static int virtwl_vfd_send(struct file *filp, const char __user *buffer,
 	ctrl_send->hdr.type = VIRTIO_WL_CMD_VFD_SEND;
 #ifdef SEND_VIRTGPU_RESOURCES
 	if (foreign_id) {
+		struct virtio_wl_ctrl_vfd_send_vfd *v1 = NULL;
+		struct virtio_wl_ctrl_vfd_send_vfd_v2 *v2 = NULL;
+
+		if (vi->use_send_vfd_v2)
+			v2 = (struct virtio_wl_ctrl_vfd_send_vfd_v2 *) vfd_ids;
+		else
+			v1 = (struct virtio_wl_ctrl_vfd_send_vfd *) vfd_ids;
+
 		ctrl_send->hdr.type = VIRTIO_WL_CMD_VFD_SEND_FOREIGN_ID;
-		ret = encode_vfd_ids_foreign(vfds, virtgpu_dma_bufs, vfd_count,
-			(struct virtio_wl_ctrl_vfd_send_vfd *)vfd_ids);
+		ret = encode_vfd_ids_foreign(vfds,
+			virtgpu_dma_bufs, virtgpu_dma_fence, vfd_count,
+			v1, v2);
 	} else {
 		ret = encode_vfd_ids(vfds, vfd_count, (__le32 *)vfd_ids);
 	}
@@ -865,6 +949,8 @@ put_files:
 #ifdef SEND_VIRTGPU_RESOURCES
 		if (virtgpu_dma_bufs[i])
 			dma_buf_put(virtgpu_dma_bufs[i]);
+		if (virtgpu_dma_fence[i])
+			dma_fence_put(virtgpu_dma_fence[i]);
 #endif
 	}
 	return ret;
@@ -1404,6 +1490,8 @@ static int probe_common(struct virtio_device *vdev)
 	mutex_init(&vi->vfds_lock);
 	idr_init(&vi->vfds);
 
+	vi->use_send_vfd_v2 = virtio_has_feature(vdev, VIRTIO_WL_F_SEND_FENCES);
+
 	/* lock is unneeded as we have unique ownership */
 	ret = vq_fill_locked(vi->vqs[VIRTWL_VQ_IN]);
 	if (ret) {
@@ -1465,7 +1553,8 @@ static unsigned int features_legacy[] = {
 };
 
 static unsigned int features[] = {
-	VIRTIO_WL_F_TRANS_FLAGS
+	VIRTIO_WL_F_TRANS_FLAGS,
+	VIRTIO_WL_F_SEND_FENCES,
 };
 
 static struct virtio_driver virtio_wl_driver = {

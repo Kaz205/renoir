@@ -96,7 +96,7 @@ static int ipq806x_lpass_exit(struct platform_device *pdev)
 	return 0;
 }
 
-static int ipq806x_lpass_alloc_dma_channel(struct lpass_data *drvdata, int dir)
+static int ipq806x_lpass_alloc_dma_channel(struct lpass_data *drvdata, int dir, unsigned int dai_id)
 {
 	if (dir == SNDRV_PCM_STREAM_PLAYBACK)
 		return IPQ806X_LPAIF_RDMA_CHAN_MI2S;
@@ -104,7 +104,7 @@ static int ipq806x_lpass_alloc_dma_channel(struct lpass_data *drvdata, int dir)
 		return -EINVAL;
 }
 
-static int ipq806x_lpass_free_dma_channel(struct lpass_data *drvdata, int chan)
+static int ipq806x_lpass_free_dma_channel(struct lpass_data *drvdata, int chan, unsigned int dai_id)
 {
 	return 0;
 }
@@ -131,7 +131,7 @@ static struct lpass_variant ipq806x_data = {
 	.micmode		= REG_FIELD_ID(0x0010, 4, 7, 5, 0x4),
 	.micmono		= REG_FIELD_ID(0x0010, 3, 3, 5, 0x4),
 	.wssrc			= REG_FIELD_ID(0x0010, 2, 2, 5, 0x4),
-	.bitwidth		= REG_FIELD_ID(0x0010, 0, 0, 5, 0x4),
+	.bitwidth		= REG_FIELD_ID(0x0010, 0, 1, 5, 0x4),
 
 	.rdma_dyncclk		= REG_FIELD_ID(0x6000, 12, 12, 4, 0x1000),
 	.rdma_bursten		= REG_FIELD_ID(0x6000, 11, 11, 4, 0x1000),

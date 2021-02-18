@@ -406,7 +406,7 @@ static int dwc3_qcom_resume(struct dwc3_qcom *qcom)
 
 	genpd = pd_to_genpd(qcom->dev->pm_domain);
 	if (genpd)
-		genpd->flags &= !GENPD_FLAG_ACTIVE_WAKEUP;
+		genpd->flags &= ~GENPD_FLAG_ACTIVE_WAKEUP;
 
 	if (!qcom->is_suspended)
 		return 0;

@@ -41,6 +41,10 @@ typedef irqreturn_t (*cros_ec_sensors_capture_t)(int irq, void *p);
  * @resp:			motion sensor response structure
  * @type:			type of motion sensor
  * @loc:			location where the motion sensor is placed
+ * @range_updated:		True if the range of the sensor has been
+ *				updated.
+ * @curr_range:			If updated, the current range value.
+ *				It will be reapplied at every resume.
  * @calib:			calibration parameters. Note that trigger
  *				captured data will always provide the calibrated
  *				data
@@ -63,6 +67,9 @@ struct cros_ec_sensors_core_state {
 
 	enum motionsensor_type type;
 	enum motionsensor_location loc;
+
+	bool range_updated;
+	int curr_range;
 
 	struct calib_data {
 		s16 offset;
@@ -87,6 +94,7 @@ int cros_ec_sensors_read_cmd(struct iio_dev *indio_dev, unsigned long scan_mask,
 struct platform_device;
 int cros_ec_sensors_core_init(struct platform_device *pdev,
 			      struct iio_dev *indio_dev, bool physical_device,
+			      bool send_to_device,
 			      cros_ec_sensors_capture_t trigger_capture,
 			      cros_ec_sensorhub_push_data_cb_t push_data);
 
@@ -113,7 +121,9 @@ int cros_ec_sensors_core_write(struct cros_ec_sensors_core_state *st,
 			       struct iio_chan_spec const *chan,
 			       int val, int val2, long mask);
 
-/* List of extended channel specification for all sensors */
+extern const struct dev_pm_ops cros_ec_sensors_pm_ops;
+
+/* List of extended channel specification for all sensors. */
 extern const struct iio_chan_spec_ext_info cros_ec_sensors_ext_info[];
 extern const struct iio_chan_spec_ext_info cros_ec_sensors_limited_info[];
 extern const struct attribute *cros_ec_sensor_fifo_attributes[];

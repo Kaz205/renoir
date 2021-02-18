@@ -630,9 +630,13 @@ static void virtio_gpu_cmd_get_capset_info_cb(struct virtio_gpu_device *vgdev,
 	int i = le32_to_cpu(cmd->capset_index);
 
 	spin_lock(&vgdev->display_info_lock);
-	vgdev->capsets[i].id = le32_to_cpu(resp->capset_id);
-	vgdev->capsets[i].max_version = le32_to_cpu(resp->capset_max_version);
-	vgdev->capsets[i].max_size = le32_to_cpu(resp->capset_max_size);
+	if (vgdev->capsets) {
+		vgdev->capsets[i].id = le32_to_cpu(resp->capset_id);
+		vgdev->capsets[i].max_version = le32_to_cpu(resp->capset_max_version);
+		vgdev->capsets[i].max_size = le32_to_cpu(resp->capset_max_size);
+	} else {
+		DRM_ERROR("invalid capset memory.");
+	}
 	spin_unlock(&vgdev->display_info_lock);
 	wake_up(&vgdev->resp_wq);
 }
@@ -920,14 +924,15 @@ static void virtio_gpu_cmd_resource_create_cb(struct virtio_gpu_device *vgdev,
 {
 	struct virtio_gpu_resp_resource_plane_info *resp =
 		(struct virtio_gpu_resp_resource_plane_info *)vbuf->resp_buf;
-	struct virtio_gpu_object *obj =
-		(struct virtio_gpu_object *)vbuf->data_buf;
+	struct virtio_gpu_vq_cb_target *target =
+		(struct virtio_gpu_vq_cb_target *)vbuf->data_buf;
+	struct virtio_gpu_object *obj = target->obj;
 	uint32_t resp_type = le32_to_cpu(resp->hdr.type);
 	int i;
 
 	/*
-	 * Keeps the data_buf, which points to this virtio_gpu_object, from
-	 * getting kfree'd after this cb returns.
+	 * target is freed on a workqueue, so keep it from being kfree'd
+	 * after this cb returns.
 	 */
 	vbuf->data_buf = NULL;
 
@@ -950,7 +955,7 @@ static void virtio_gpu_cmd_resource_create_cb(struct virtio_gpu_device *vgdev,
 
 finish_pending:
 	obj->create_callback_done = true;
-	drm_gem_object_put_unlocked(&obj->gem_base);
+	virtio_gpu_gem_object_put_free_delayed(vgdev, target);
 	wake_up_all(&vgdev->resp_wq);
 }
 
@@ -963,10 +968,17 @@ virtio_gpu_cmd_resource_create_3d(struct virtio_gpu_device *vgdev,
 	struct virtio_gpu_resource_create_3d *cmd_p;
 	struct virtio_gpu_vbuffer *vbuf;
 	struct virtio_gpu_resp_resource_plane_info *resp_buf;
+	struct virtio_gpu_vq_cb_target *target;
 
 	resp_buf = kzalloc(sizeof(*resp_buf), GFP_KERNEL);
 	if (!resp_buf)
 		return -ENOMEM;
+
+	target = kzalloc(sizeof(*target), GFP_KERNEL);
+	if (!target) {
+		kfree(resp_buf);
+		return -ENOMEM;
+	}
 
 	cmd_p = virtio_gpu_alloc_cmd_resp(vgdev,
 		virtio_gpu_cmd_resource_create_cb, &vbuf, sizeof(*cmd_p),
@@ -987,8 +999,8 @@ virtio_gpu_cmd_resource_create_3d(struct virtio_gpu_device *vgdev,
 	cmd_p->nr_samples = cpu_to_le32(params->nr_samples);
 	cmd_p->flags = cpu_to_le32(params->flags);
 
-	/* Reuse the data_buf pointer for the object pointer. */
-	vbuf->data_buf = bo;
+	target->obj = bo;
+	vbuf->data_buf = target;
 	bo->create_callback_done = false;
 	drm_gem_object_get(&bo->gem_base);
 
@@ -1102,8 +1114,9 @@ int virtio_gpu_object_attach(struct virtio_gpu_device *vgdev,
 	}
 
 	/* gets freed when the ring has consumed it */
-	ents = kmalloc_array(nents, sizeof(struct virtio_gpu_mem_entry),
-			     GFP_KERNEL);
+	ents = kvmalloc_array(nents,
+			      sizeof(struct virtio_gpu_mem_entry),
+			      GFP_KERNEL);
 	if (!ents) {
 		DRM_ERROR("failed to allocate ent list\n");
 		return -ENOMEM;
@@ -1162,13 +1175,14 @@ static void virtio_gpu_cmd_resource_uuid_cb(struct virtio_gpu_device *vgdev,
 {
 	struct virtio_gpu_resp_resource_uuid *resp =
 		(struct virtio_gpu_resp_resource_uuid *)vbuf->resp_buf;
-	struct virtio_gpu_object *obj =
-		(struct virtio_gpu_object *)vbuf->data_buf;
+	struct virtio_gpu_vq_cb_target *target =
+		(struct virtio_gpu_vq_cb_target *)vbuf->data_buf;
+	struct virtio_gpu_object *obj = target->obj;
 	uint32_t resp_type = le32_to_cpu(resp->hdr.type);
 
 	/*
-	 * Keeps the data_buf, which points to this virtio_gpu_object, from
-	 * getting kfree'd after this cb returns.
+	 * target is freed on a workqueue, so keep it from being kfree'd
+	 * after this cb returns.
 	 */
 	vbuf->data_buf = NULL;
 
@@ -1182,7 +1196,7 @@ static void virtio_gpu_cmd_resource_uuid_cb(struct virtio_gpu_device *vgdev,
 	}
 	spin_unlock(&vgdev->resource_export_lock);
 
-	drm_gem_object_put_unlocked(&obj->gem_base);
+	virtio_gpu_gem_object_put_free_delayed(vgdev, target);
 	wake_up_all(&vgdev->resp_wq);
 }
 
@@ -1193,12 +1207,19 @@ virtio_gpu_cmd_resource_assign_uuid(struct virtio_gpu_device *vgdev,
 	struct virtio_gpu_resource_assign_uuid *cmd_p;
 	struct virtio_gpu_vbuffer *vbuf;
 	struct virtio_gpu_resp_resource_uuid *resp_buf;
+	struct virtio_gpu_vq_cb_target *target;
 
 	resp_buf = kzalloc(sizeof(*resp_buf), GFP_KERNEL);
 	if (!resp_buf) {
 		spin_lock(&vgdev->resource_export_lock);
 		bo->uuid_state = UUID_INITIALIZATION_FAILED;
 		spin_unlock(&vgdev->resource_export_lock);
+		return -ENOMEM;
+	}
+
+	target = kzalloc(sizeof(*target), GFP_KERNEL);
+	if (!target) {
+		kfree(resp_buf);
 		return -ENOMEM;
 	}
 
@@ -1211,7 +1232,8 @@ virtio_gpu_cmd_resource_assign_uuid(struct virtio_gpu_device *vgdev,
 	cmd_p->resource_id = cpu_to_le32(bo->hw_res_handle);
 
 	/* Reuse the data_buf pointer for the object pointer. */
-	vbuf->data_buf = bo;
+	target->obj = bo;
+	vbuf->data_buf = target;
 	drm_gem_object_get(&bo->gem_base);
 	virtio_gpu_queue_ctrl_buffer(vgdev, vbuf);
 	return 0;
@@ -1280,9 +1302,27 @@ virtio_gpu_cmd_resource_create_blob(struct virtio_gpu_device *vgdev,
 {
 	struct virtio_gpu_resource_create_blob *cmd_p;
 	struct virtio_gpu_vbuffer *vbuf;
+	struct virtio_gpu_resp_resource_plane_info *resp_buf;
+	struct virtio_gpu_vq_cb_target *target;
+
+	/* freed after the response is processed */
+	resp_buf = kzalloc(sizeof(*resp_buf), GFP_KERNEL);
+	if (!resp_buf) {
+		DRM_ERROR("allocation failure\n");
+		return;
+	}
+
+	target = kzalloc(sizeof(*target), GFP_KERNEL);
+	if (!target) {
+		kfree(resp_buf);
+		DRM_ERROR("allocation failure\n");
+		return;
+	}
 
 	/* gets freed when the ring has consumed it */
-	cmd_p = virtio_gpu_alloc_cmd(vgdev, &vbuf, sizeof(*cmd_p));
+	cmd_p = virtio_gpu_alloc_cmd_resp(vgdev,
+		virtio_gpu_cmd_resource_create_cb, &vbuf, sizeof(*cmd_p),
+		sizeof(struct virtio_gpu_resp_resource_plane_info), resp_buf);
 	memset(cmd_p, 0, sizeof(*cmd_p));
 
 	cmd_p->hdr.type = cpu_to_le32(VIRTIO_GPU_CMD_RESOURCE_CREATE_BLOB);
@@ -1296,6 +1336,12 @@ virtio_gpu_cmd_resource_create_blob(struct virtio_gpu_device *vgdev,
 
 	vbuf->data_buf = ents;
 	vbuf->data_size = sizeof(*ents) * nents;
+
+	/* Reuse the data_buf pointer for the object pointer. */
+	target->obj = bo;
+	vbuf->data_buf = target;
+	bo->create_callback_done = false;
+	drm_gem_object_get(&bo->gem_base);
 
 	virtio_gpu_queue_ctrl_buffer(vgdev, vbuf);
 	bo->created = true;

@@ -125,6 +125,7 @@ struct tb_switch_tmu {
  * @rpm: The switch supports runtime PM
  * @authorized: Whether the switch is authorized by user or policy
  * @security_level: Switch supported security level
+ * @debugfs_dir: Pointer to the debugfs structure
  * @key: Contains the key used to challenge the device or %NULL if not
  *	 supported. Size of the key is %TB_SWITCH_KEY_SIZE.
  * @connection_id: Connection ID used with ICM messaging
@@ -166,6 +167,7 @@ struct tb_switch {
 	bool rpm;
 	unsigned int authorized;
 	enum tb_security_level security_level;
+	struct dentry *debugfs_dir;
 	u8 *key;
 	u8 connection_id;
 	u8 connection_key;
@@ -186,7 +188,7 @@ struct tb_switch {
  * @cap_adap: Offset of the adapter specific capability (%0 if not present)
  * @cap_usb4: Offset to the USB4 port capability (%0 if not present)
  * @port: Port number on switch
- * @disabled: Disabled by eeprom or enabled, but not implemented
+ * @disabled: Disabled by eeprom or enabled but not implemented
  * @bonded: true if the port is bonded (two lanes combined as one)
  * @dual_link_port: If the switch is connected using two ports, points
  *		    to the other port.
@@ -357,12 +359,21 @@ struct tb_path {
  * @handle_event: Handle thunderbolt event
  * @get_boot_acl: Get boot ACL list
  * @set_boot_acl: Set boot ACL list
+ * @disapprove_switch: Disapprove switch (disconnect PCIe tunnel)
  * @approve_switch: Approve switch
  * @add_switch_key: Add key to switch
  * @challenge_switch_key: Challenge switch using key
  * @disconnect_pcie_paths: Disconnects PCIe paths before NVM update
  * @approve_xdomain_paths: Approve (establish) XDomain DMA paths
  * @disconnect_xdomain_paths: Disconnect XDomain DMA paths
+ * @usb4_switch_op: Optional proxy for USB4 router operations. If set
+ *		    this will be called whenever USB4 router operation is
+ *		    performed. If this returns %-EOPNOTSUPP then the
+ *		    native USB4 router operation is called.
+ * @usb4_switch_nvm_authenticate_status: Optional callback that the CM
+ *					 implementation can be used to
+ *					 return status of USB4 NVM_AUTH
+ *					 router operation.
  */
 struct tb_cm_ops {
 	int (*driver_ready)(struct tb *tb);
@@ -380,6 +391,7 @@ struct tb_cm_ops {
 			     const void *buf, size_t size);
 	int (*get_boot_acl)(struct tb *tb, uuid_t *uuids, size_t nuuids);
 	int (*set_boot_acl)(struct tb *tb, const uuid_t *uuids, size_t nuuids);
+	int (*disapprove_switch)(struct tb *tb, struct tb_switch *sw);
 	int (*approve_switch)(struct tb *tb, struct tb_switch *sw);
 	int (*add_switch_key)(struct tb *tb, struct tb_switch *sw);
 	int (*challenge_switch_key)(struct tb *tb, struct tb_switch *sw,
@@ -387,6 +399,11 @@ struct tb_cm_ops {
 	int (*disconnect_pcie_paths)(struct tb *tb);
 	int (*approve_xdomain_paths)(struct tb *tb, struct tb_xdomain *xd);
 	int (*disconnect_xdomain_paths)(struct tb *tb, struct tb_xdomain *xd);
+	int (*usb4_switch_op)(struct tb_switch *sw, u16 opcode, u32 *metadata,
+			      u8 *status, const void *tx_data, size_t tx_data_len,
+			      void *rx_data, size_t rx_data_len);
+	int (*usb4_switch_nvm_authenticate_status)(struct tb_switch *sw,
+						   u32 *status);
 };
 
 static inline void *tb_priv(struct tb *tb)
@@ -462,6 +479,11 @@ static inline bool tb_port_has_remote(const struct tb_port *port)
 static inline bool tb_port_is_null(const struct tb_port *port)
 {
 	return port && port->port && port->config.type == TB_TYPE_PORT;
+}
+
+static inline bool tb_port_is_nhi(const struct tb_port *port)
+{
+	return port && port->config.type == TB_TYPE_NHI;
 }
 
 static inline bool tb_port_is_pcie_down(const struct tb_port *port)
@@ -603,6 +625,7 @@ int tb_domain_suspend(struct tb *tb);
 void tb_domain_complete(struct tb *tb);
 int tb_domain_runtime_suspend(struct tb *tb);
 int tb_domain_runtime_resume(struct tb *tb);
+int tb_domain_disapprove_switch(struct tb *tb, struct tb_switch *sw);
 int tb_domain_approve_switch(struct tb *tb, struct tb_switch *sw);
 int tb_domain_approve_switch_key(struct tb *tb, struct tb_switch *sw);
 int tb_domain_challenge_switch_key(struct tb *tb, struct tb_switch *sw);
@@ -639,7 +662,7 @@ struct tb_switch *tb_switch_alloc_safe_mode(struct tb *tb,
 int tb_switch_configure(struct tb_switch *sw);
 int tb_switch_add(struct tb_switch *sw);
 void tb_switch_remove(struct tb_switch *sw);
-void tb_switch_suspend(struct tb_switch *sw);
+void tb_switch_suspend(struct tb_switch *sw, bool runtime);
 int tb_switch_resume(struct tb_switch *sw);
 int tb_switch_reset(struct tb_switch *sw);
 void tb_sw_set_unplugged(struct tb_switch *sw);
@@ -692,76 +715,102 @@ static inline struct tb_switch *tb_switch_parent(struct tb_switch *sw)
 
 static inline bool tb_switch_is_light_ridge(const struct tb_switch *sw)
 {
-	return sw->config.device_id == PCI_DEVICE_ID_INTEL_LIGHT_RIDGE;
+	return sw->config.vendor_id == PCI_VENDOR_ID_INTEL &&
+	       sw->config.device_id == PCI_DEVICE_ID_INTEL_LIGHT_RIDGE;
 }
 
 static inline bool tb_switch_is_eagle_ridge(const struct tb_switch *sw)
 {
-	return sw->config.device_id == PCI_DEVICE_ID_INTEL_EAGLE_RIDGE;
+	return sw->config.vendor_id == PCI_VENDOR_ID_INTEL &&
+	       sw->config.device_id == PCI_DEVICE_ID_INTEL_EAGLE_RIDGE;
 }
 
 static inline bool tb_switch_is_cactus_ridge(const struct tb_switch *sw)
 {
-	switch (sw->config.device_id) {
-	case PCI_DEVICE_ID_INTEL_CACTUS_RIDGE_2C:
-	case PCI_DEVICE_ID_INTEL_CACTUS_RIDGE_4C:
-		return true;
-	default:
-		return false;
+	if (sw->config.vendor_id == PCI_VENDOR_ID_INTEL) {
+		switch (sw->config.device_id) {
+		case PCI_DEVICE_ID_INTEL_CACTUS_RIDGE_2C:
+		case PCI_DEVICE_ID_INTEL_CACTUS_RIDGE_4C:
+			return true;
+		}
 	}
+	return false;
 }
 
 static inline bool tb_switch_is_falcon_ridge(const struct tb_switch *sw)
 {
-	switch (sw->config.device_id) {
-	case PCI_DEVICE_ID_INTEL_FALCON_RIDGE_2C_BRIDGE:
-	case PCI_DEVICE_ID_INTEL_FALCON_RIDGE_4C_BRIDGE:
-		return true;
-	default:
-		return false;
+	if (sw->config.vendor_id == PCI_VENDOR_ID_INTEL) {
+		switch (sw->config.device_id) {
+		case PCI_DEVICE_ID_INTEL_FALCON_RIDGE_2C_BRIDGE:
+		case PCI_DEVICE_ID_INTEL_FALCON_RIDGE_4C_BRIDGE:
+			return true;
+		}
 	}
+	return false;
 }
 
 static inline bool tb_switch_is_alpine_ridge(const struct tb_switch *sw)
 {
-	switch (sw->config.device_id) {
-	case PCI_DEVICE_ID_INTEL_ALPINE_RIDGE_2C_BRIDGE:
-	case PCI_DEVICE_ID_INTEL_ALPINE_RIDGE_LP_BRIDGE:
-	case PCI_DEVICE_ID_INTEL_ALPINE_RIDGE_C_4C_BRIDGE:
-	case PCI_DEVICE_ID_INTEL_ALPINE_RIDGE_C_2C_BRIDGE:
-		return true;
-	default:
-		return false;
+	if (sw->config.vendor_id == PCI_VENDOR_ID_INTEL) {
+		switch (sw->config.device_id) {
+		case PCI_DEVICE_ID_INTEL_ALPINE_RIDGE_2C_BRIDGE:
+		case PCI_DEVICE_ID_INTEL_ALPINE_RIDGE_LP_BRIDGE:
+		case PCI_DEVICE_ID_INTEL_ALPINE_RIDGE_C_4C_BRIDGE:
+		case PCI_DEVICE_ID_INTEL_ALPINE_RIDGE_C_2C_BRIDGE:
+			return true;
+		}
 	}
+	return false;
 }
 
 static inline bool tb_switch_is_titan_ridge(const struct tb_switch *sw)
 {
-	switch (sw->config.device_id) {
-	case PCI_DEVICE_ID_INTEL_TITAN_RIDGE_2C_BRIDGE:
-	case PCI_DEVICE_ID_INTEL_TITAN_RIDGE_4C_BRIDGE:
-	case PCI_DEVICE_ID_INTEL_TITAN_RIDGE_DD_BRIDGE:
-		return true;
-	default:
-		return false;
+	if (sw->config.vendor_id == PCI_VENDOR_ID_INTEL) {
+		switch (sw->config.device_id) {
+		case PCI_DEVICE_ID_INTEL_TITAN_RIDGE_2C_BRIDGE:
+		case PCI_DEVICE_ID_INTEL_TITAN_RIDGE_4C_BRIDGE:
+		case PCI_DEVICE_ID_INTEL_TITAN_RIDGE_DD_BRIDGE:
+			return true;
+		}
 	}
+	return false;
 }
 
-static bool tb_switch_is_tgl_es(const struct tb_switch *sw)
+static inline bool tb_switch_is_ice_lake(const struct tb_switch *sw)
 {
-	return sw->config.thunderbolt_version != USB4_VERSION_1_0 &&
-	       (sw->config.device_id == PCI_DEVICE_ID_INTEL_TGL_NHI0 ||
-		sw->config.device_id == PCI_DEVICE_ID_INTEL_TGL_NHI1);
+	if (sw->config.vendor_id == PCI_VENDOR_ID_INTEL) {
+		switch (sw->config.device_id) {
+		case PCI_DEVICE_ID_INTEL_ICL_NHI0:
+		case PCI_DEVICE_ID_INTEL_ICL_NHI1:
+			return true;
+		}
+	}
+	return false;
+}
+
+static inline bool tb_switch_is_tiger_lake(const struct tb_switch *sw)
+{
+	if (sw->config.vendor_id == PCI_VENDOR_ID_INTEL) {
+		switch (sw->config.device_id) {
+		case PCI_DEVICE_ID_INTEL_TGL_NHI0:
+		case PCI_DEVICE_ID_INTEL_TGL_NHI1:
+		case PCI_DEVICE_ID_INTEL_TGL_H_NHI0:
+		case PCI_DEVICE_ID_INTEL_TGL_H_NHI1:
+			return true;
+		}
+	}
+	return false;
 }
 
 /**
-  * tb_switch_is_usb4() - Is the switch USB4 compliant
-  * @sw: Switch to check
-  */
+ * tb_switch_is_usb4() - Is the switch USB4 compliant
+ * @sw: Switch to check
+ *
+ * Returns true if the @sw is USB4 compliant router, false otherwise.
+ */
 static inline bool tb_switch_is_usb4(const struct tb_switch *sw)
 {
-	return sw->config.thunderbolt_version == USB4_VERSION_1_0 ||
-	       tb_switch_is_tgl_es(sw);
+	return sw->config.thunderbolt_version == USB4_VERSION_1_0;
 }
 
 /**
@@ -825,10 +874,16 @@ struct tb_port *tb_next_port_on_path(struct tb_port *start, struct tb_port *end,
 	     (p) = tb_next_port_on_path((src), (dst), (p)))
 
 int tb_port_get_link_speed(struct tb_port *port);
+int tb_port_get_link_width(struct tb_port *port);
+int tb_port_state(struct tb_port *port);
+int tb_port_lane_bonding_enable(struct tb_port *port);
+void tb_port_lane_bonding_disable(struct tb_port *port);
 
 int tb_switch_find_vse_cap(struct tb_switch *sw, enum tb_switch_vse_cap vsec);
 int tb_switch_find_cap(struct tb_switch *sw, enum tb_switch_cap cap);
+int tb_switch_next_cap(struct tb_switch *sw, unsigned int offset);
 int tb_port_find_cap(struct tb_port *port, enum tb_port_cap cap);
+int tb_port_next_cap(struct tb_port *port, unsigned int offset);
 bool tb_port_is_enabled(struct tb_port *port);
 
 bool tb_usb3_port_is_enabled(struct tb_port *port);
@@ -865,6 +920,7 @@ int tb_lc_configure_port(struct tb_port *port);
 void tb_lc_unconfigure_port(struct tb_port *port);
 int tb_lc_configure_xdomain(struct tb_port *port);
 void tb_lc_unconfigure_xdomain(struct tb_port *port);
+int tb_lc_start_lane_initialization(struct tb_port *port);
 int tb_lc_set_wake(struct tb_switch *sw, unsigned int flags);
 int tb_lc_set_sleep(struct tb_switch *sw);
 bool tb_lc_lane_bonding_possible(struct tb_switch *sw);
@@ -890,6 +946,8 @@ static inline u64 tb_downstream_route(struct tb_port *port)
 	return tb_route(port->sw)
 	       | ((u64) port->port << (port->sw->config.depth * 8));
 }
+
+extern bool tb_xdomain_enabled;
 
 bool tb_xdomain_handle_request(struct tb *tb, enum tb_cfg_pkg_type type,
 			       const void *buf, size_t size);
@@ -929,6 +987,7 @@ int usb4_switch_nvm_read(struct tb_switch *sw, unsigned int address, void *buf,
 int usb4_switch_nvm_write(struct tb_switch *sw, unsigned int address,
 			  const void *buf, size_t size);
 int usb4_switch_nvm_authenticate(struct tb_switch *sw);
+int usb4_switch_nvm_authenticate_status(struct tb_switch *sw, u32 *status);
 bool usb4_switch_query_dp_resource(struct tb_switch *sw, struct tb_port *in);
 int usb4_switch_alloc_dp_resource(struct tb_switch *sw, struct tb_port *in);
 int usb4_switch_dealloc_dp_resource(struct tb_switch *sw, struct tb_port *in);
@@ -977,6 +1036,30 @@ void tb_check_quirks(struct tb_switch *sw);
 void tb_acpi_add_links(struct tb_nhi *nhi);
 #else
 static inline void tb_acpi_add_links(struct tb_nhi *nhi) { }
+#endif
+
+#ifdef CONFIG_DEBUG_FS
+void tb_debugfs_init(void);
+void tb_debugfs_exit(void);
+void tb_switch_debugfs_init(struct tb_switch *sw);
+void tb_switch_debugfs_remove(struct tb_switch *sw);
+void tb_service_debugfs_init(struct tb_service *svc);
+void tb_service_debugfs_remove(struct tb_service *svc);
+#else
+static inline void tb_debugfs_init(void) { }
+static inline void tb_debugfs_exit(void) { }
+static inline void tb_switch_debugfs_init(struct tb_switch *sw) { }
+static inline void tb_switch_debugfs_remove(struct tb_switch *sw) { }
+static inline void tb_service_debugfs_init(struct tb_service *svc) { }
+static inline void tb_service_debugfs_remove(struct tb_service *svc) { }
+#endif
+
+#ifdef CONFIG_USB4_KUNIT_TEST
+int tb_test_init(void);
+void tb_test_exit(void);
+#else
+static inline int tb_test_init(void) { return 0; }
+static inline void tb_test_exit(void) { }
 #endif
 
 #endif

@@ -224,16 +224,6 @@ struct detailed_timing {
 				    DRM_EDID_YCBCR420_DC_36 | \
 				    DRM_EDID_YCBCR420_DC_30)
 
-#define DRM_EDID_CLRMETRY_xvYCC_601   (1 << 0)
-#define DRM_EDID_CLRMETRY_xvYCC_709   (1 << 1)
-#define DRM_EDID_CLRMETRY_sYCC_601    (1 << 2)
-#define DRM_EDID_CLRMETRY_ADBYCC_601  (1 << 3)
-#define DRM_EDID_CLRMETRY_ADB_RGB     (1 << 4)
-#define DRM_EDID_CLRMETRY_BT2020_CYCC (1 << 5)
-#define DRM_EDID_CLRMETRY_BT2020_YCC  (1 << 6)
-#define DRM_EDID_CLRMETRY_BT2020_RGB  (1 << 7)
-#define DRM_EDID_CLRMETRY_DCI_P3      (1 << 15)
-
 /* ELD Header Block */
 #define DRM_ELD_HEADER_BLOCK_SIZE	4
 
@@ -291,11 +281,6 @@ struct detailed_timing {
 #define DRM_ELD_MONITOR_NAME_STRING	20	/* offsets 20..(20+mnl-1) inclusive */
 
 #define DRM_ELD_CEA_SAD(mnl, sad)	(20 + (mnl) + 3 * (sad))
-
-/* HDMI 2.0 */
-#define DRM_EDID_3D_INDEPENDENT_VIEW	(1 << 2)
-#define DRM_EDID_3D_DUAL_VIEW		(1 << 1)
-#define DRM_EDID_3D_OSD_DISPARITY	(1 << 0)
 
 struct edid {
 	u8 header[8];
@@ -496,7 +481,6 @@ int drm_add_edid_modes(struct drm_connector *connector, struct edid *edid);
 int drm_add_override_edid_modes(struct drm_connector *connector);
 
 u8 drm_match_cea_mode(const struct drm_display_mode *to_match);
-enum hdmi_picture_aspect drm_get_cea_aspect_ratio(const u8 video_code);
 bool drm_detect_hdmi_monitor(struct edid *edid);
 bool drm_detect_monitor_audio(struct edid *edid);
 enum hdmi_quantization_range
@@ -515,4 +499,8 @@ void drm_edid_get_monitor_name(struct edid *edid, char *name,
 struct drm_display_mode *drm_mode_find_dmt(struct drm_device *dev,
 					   int hsize, int vsize, int fresh,
 					   bool rb);
+struct drm_display_mode *
+drm_display_mode_from_cea_vic(struct drm_device *dev,
+			      u8 video_code);
+
 #endif /* __DRM_EDID_H__ */

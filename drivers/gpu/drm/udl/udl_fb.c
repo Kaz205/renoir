@@ -244,6 +244,7 @@ static int udl_fb_open(struct fb_info *info, int user)
 	return 0;
 }
 
+static struct fb_ops udlfb_ops;
 
 /*
  * Assumes caller is holding info->lock mutex (for open and release at least)
@@ -259,7 +260,7 @@ static int udl_fb_release(struct fb_info *info, int user)
 		fb_deferred_io_cleanup(info);
 		kfree(info->fbdefio);
 		info->fbdefio = NULL;
-		info->fbops->fb_mmap = udl_fb_mmap;
+		udlfb_ops.fb_mmap = udl_fb_mmap;
 	}
 #endif
 
@@ -326,7 +327,7 @@ static void udl_user_framebuffer_destroy(struct drm_framebuffer *fb)
 	struct udl_framebuffer *ufb = to_udl_fb(fb);
 
 	if (ufb->obj)
-		drm_gem_object_put_unlocked(&ufb->obj->base);
+		drm_gem_object_put(&ufb->obj->base);
 
 	drm_framebuffer_cleanup(fb);
 	kfree(ufb);
@@ -416,7 +417,7 @@ static int udlfb_create(struct drm_fb_helper *helper,
 
 	return ret;
 out_gfree:
-	drm_gem_object_put_unlocked(&ufbdev->ufb.obj->base);
+	drm_gem_object_put(&ufbdev->ufb.obj->base);
 out:
 	return ret;
 }
@@ -433,7 +434,7 @@ static void udl_fbdev_destroy(struct drm_device *dev,
 	if (ufbdev->ufb.obj) {
 		drm_framebuffer_unregister_private(&ufbdev->ufb.base);
 		drm_framebuffer_cleanup(&ufbdev->ufb.base);
-		drm_gem_object_put_unlocked(&ufbdev->ufb.obj->base);
+		drm_gem_object_put(&ufbdev->ufb.obj->base);
 	}
 }
 
@@ -452,13 +453,9 @@ int udl_fbdev_init(struct drm_device *dev)
 
 	drm_fb_helper_prepare(dev, &ufbdev->helper, &udl_fb_helper_funcs);
 
-	ret = drm_fb_helper_init(dev, &ufbdev->helper, 1);
+	ret = drm_fb_helper_init(dev, &ufbdev->helper);
 	if (ret)
 		goto free;
-
-	ret = drm_fb_helper_single_add_all_connectors(&ufbdev->helper);
-	if (ret)
-		goto fini;
 
 	/* disable all the possible outputs/crtcs before entering KMS mode */
 	drm_helper_disable_unused_functions(dev);

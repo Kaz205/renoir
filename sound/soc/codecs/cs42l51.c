@@ -61,7 +61,7 @@ static int cs42l51_get_chan_mix(struct snd_kcontrol *kcontrol,
 			struct snd_ctl_elem_value *ucontrol)
 {
 	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
-	unsigned long value = snd_soc_component_read32(component, CS42L51_PCM_MIXER)&3;
+	unsigned long value = snd_soc_component_read(component, CS42L51_PCM_MIXER)&3;
 
 	switch (value) {
 	default:
@@ -247,8 +247,28 @@ static const struct snd_soc_dapm_widget cs42l51_dapm_widgets[] = {
 		&cs42l51_adcr_mux_controls),
 };
 
+static int mclk_event(struct snd_soc_dapm_widget *w,
+		      struct snd_kcontrol *kcontrol, int event)
+{
+	struct snd_soc_component *comp = snd_soc_dapm_to_component(w->dapm);
+	struct cs42l51_private *cs42l51 = snd_soc_component_get_drvdata(comp);
+
+	switch (event) {
+	case SND_SOC_DAPM_PRE_PMU:
+		return clk_prepare_enable(cs42l51->mclk_handle);
+	case SND_SOC_DAPM_POST_PMD:
+		/* Delay mclk shutdown to fulfill power-down sequence requirements */
+		msleep(20);
+		clk_disable_unprepare(cs42l51->mclk_handle);
+		break;
+	}
+
+	return 0;
+}
+
 static const struct snd_soc_dapm_widget cs42l51_dapm_mclk_widgets[] = {
-	SND_SOC_DAPM_CLOCK_SUPPLY("MCLK")
+	SND_SOC_DAPM_SUPPLY("MCLK", SND_SOC_NOPM, 0, 0, mclk_event,
+			    SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
 };
 
 static const struct snd_soc_dapm_route cs42l51_routes[] = {
@@ -403,8 +423,8 @@ static int cs42l51_hw_params(struct snd_pcm_substream *substream,
 		return -EINVAL;
 	}
 
-	intf_ctl = snd_soc_component_read32(component, CS42L51_INTF_CTL);
-	power_ctl = snd_soc_component_read32(component, CS42L51_MIC_POWER_CTL);
+	intf_ctl = snd_soc_component_read(component, CS42L51_INTF_CTL);
+	power_ctl = snd_soc_component_read(component, CS42L51_MIC_POWER_CTL);
 
 	intf_ctl &= ~(CS42L51_INTF_CTL_MASTER | CS42L51_INTF_CTL_ADC_I2S
 			| CS42L51_INTF_CTL_DAC_FORMAT(7));
@@ -480,13 +500,13 @@ static int cs42l51_hw_params(struct snd_pcm_substream *substream,
 	return 0;
 }
 
-static int cs42l51_dai_mute(struct snd_soc_dai *dai, int mute)
+static int cs42l51_dai_mute(struct snd_soc_dai *dai, int mute, int direction)
 {
 	struct snd_soc_component *component = dai->component;
 	int reg;
 	int mask = CS42L51_DAC_OUT_CTL_DACA_MUTE|CS42L51_DAC_OUT_CTL_DACB_MUTE;
 
-	reg = snd_soc_component_read32(component, CS42L51_DAC_OUT_CTL);
+	reg = snd_soc_component_read(component, CS42L51_DAC_OUT_CTL);
 
 	if (mute)
 		reg |= mask;
@@ -507,7 +527,8 @@ static const struct snd_soc_dai_ops cs42l51_dai_ops = {
 	.hw_params      = cs42l51_hw_params,
 	.set_sysclk     = cs42l51_set_dai_sysclk,
 	.set_fmt        = cs42l51_set_dai_fmt,
-	.digital_mute   = cs42l51_dai_mute,
+	.mute_stream    = cs42l51_dai_mute,
+	.no_capture_mute = 1,
 };
 
 static struct snd_soc_dai_driver cs42l51_dai = {

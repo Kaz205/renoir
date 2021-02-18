@@ -58,6 +58,10 @@ void rtw_tx_fill_tx_desc(struct rtw_tx_pkt_info *pkt_info, struct sk_buff *skb)
 	SET_TX_DESC_SPE_RPT(txdesc, pkt_info->report);
 	SET_TX_DESC_SW_DEFINE(txdesc, pkt_info->sn);
 	SET_TX_DESC_USE_RTS(txdesc, pkt_info->rts);
+	if (pkt_info->rts) {
+		SET_TX_DESC_RTSRATE(txdesc, DESC_RATE24M);
+		SET_TX_DESC_DATA_RTS_SHORT(txdesc, 1);
+	}
 	SET_TX_DESC_DISQSELSEQ(txdesc, pkt_info->dis_qselseq);
 	SET_TX_DESC_EN_HWSEQ(txdesc, pkt_info->en_hwseq);
 	SET_TX_DESC_HW_SSN_SEL(txdesc, pkt_info->hw_ssn_sel);
@@ -156,7 +160,7 @@ void rtw_tx_report_purge_timer(struct timer_list *t)
 	if (skb_queue_len(&tx_report->queue) == 0)
 		return;
 
-	WARN(1, "purge skb(s) not reported by firmware\n");
+	rtw_dbg(rtwdev, RTW_DBG_TX, "purge skb(s) not reported by firmware\n");
 
 	spin_lock_irqsave(&tx_report->q_lock, flags);
 	skb_queue_purge(&tx_report->queue);
@@ -196,7 +200,7 @@ static void rtw_tx_report_tx_status(struct rtw_dev *rtwdev,
 	ieee80211_tx_status_irqsafe(rtwdev->hw, skb);
 }
 
-void rtw_tx_report_handle(struct rtw_dev *rtwdev, struct sk_buff *skb)
+void rtw_tx_report_handle(struct rtw_dev *rtwdev, struct sk_buff *skb, int src)
 {
 	struct rtw_tx_report *tx_report = &rtwdev->tx_report;
 	struct rtw_c2h_cmd *c2h;
@@ -207,8 +211,13 @@ void rtw_tx_report_handle(struct rtw_dev *rtwdev, struct sk_buff *skb)
 
 	c2h = get_c2h_from_skb(skb);
 
-	sn = GET_CCX_REPORT_SEQNUM(c2h->payload);
-	st = GET_CCX_REPORT_STATUS(c2h->payload);
+	if (src == C2H_CCX_TX_RPT) {
+		sn = GET_CCX_REPORT_SEQNUM_V0(c2h->payload);
+		st = GET_CCX_REPORT_STATUS_V0(c2h->payload);
+	} else {
+		sn = GET_CCX_REPORT_SEQNUM_V1(c2h->payload);
+		st = GET_CCX_REPORT_STATUS_V1(c2h->payload);
+	}
 
 	spin_lock_irqsave(&tx_report->q_lock, flags);
 	skb_queue_walk_safe(&tx_report->queue, cur, tmp) {
@@ -243,6 +252,7 @@ static void rtw_tx_data_pkt_info_update(struct rtw_dev *rtwdev,
 	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)skb->data;
 	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
 	struct rtw_dm_info *dm_info = &rtwdev->dm_info;
+	struct ieee80211_hw *hw = rtwdev->hw;
 	struct rtw_sta_info *si;
 	u8 fix_rate;
 	u16 seq;
@@ -267,7 +277,7 @@ static void rtw_tx_data_pkt_info_update(struct rtw_dev *rtwdev,
 		ampdu_density = get_tx_ampdu_density(sta);
 	}
 
-	if (info->control.use_rts)
+	if (info->control.use_rts || skb->len > hw->wiphy->rts_threshold)
 		pkt_info->rts = true;
 
 	if (sta->vht_cap.vht_supported)
@@ -514,12 +524,33 @@ static int rtw_txq_push_skb(struct rtw_dev *rtwdev,
 static struct sk_buff *rtw_txq_dequeue(struct rtw_dev *rtwdev,
 				       struct rtw_txq *rtwtxq)
 {
+	struct rtw_chip_info *chip = rtwdev->chip;
 	struct ieee80211_txq *txq = rtwtxq_to_txq(rtwtxq);
 	struct sk_buff *skb;
+	int headroom_needed;
 
-	skb = ieee80211_tx_dequeue(rtwdev->hw, txq);
-	if (!skb)
-		return NULL;
+	do {
+		skb = ieee80211_tx_dequeue(rtwdev->hw, txq);
+		if (!skb)
+			return NULL;
+
+		headroom_needed = chip->tx_pkt_desc_sz - skb_headroom(skb);
+		if (WARN_ONCE(headroom_needed > 0,
+			      "Insufficient headroom (%d bytes, need %d)\n",
+			      skb_headroom(skb), chip->tx_pkt_desc_sz)) {
+			if (skb_cloned(skb)) {
+				netdev_warn(skb->dev, "skb is cloned\n");
+				skb = skb_unshare(skb, GFP_ATOMIC);
+				if (!skb)
+					continue;
+				headroom_needed = chip->tx_pkt_desc_sz - skb_headroom(skb);
+			}
+			if (pskb_expand_head(skb, headroom_needed, 0, GFP_ATOMIC) < 0) {
+				kfree_skb(skb);
+				continue;
+			}
+		}
+	} while (!skb);
 
 	return skb;
 }
@@ -549,9 +580,9 @@ static void rtw_txq_push(struct rtw_dev *rtwdev,
 	rcu_read_unlock();
 }
 
-void rtw_tx_tasklet(unsigned long data)
+void rtw_tx_work(struct work_struct *w)
 {
-	struct rtw_dev *rtwdev = (void *)data;
+	struct rtw_dev *rtwdev = container_of(w, struct rtw_dev, tx_work);
 	struct rtw_txq *rtwtxq, *tmp;
 
 	spin_lock_bh(&rtwdev->txq_lock);

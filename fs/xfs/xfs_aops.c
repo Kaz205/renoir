@@ -29,32 +29,6 @@ struct xfs_writepage_ctx {
 	struct xfs_ioend	*ioend;
 };
 
-struct block_device *
-xfs_find_bdev_for_inode(
-	struct inode		*inode)
-{
-	struct xfs_inode	*ip = XFS_I(inode);
-	struct xfs_mount	*mp = ip->i_mount;
-
-	if (XFS_IS_REALTIME_INODE(ip))
-		return mp->m_rtdev_targp->bt_bdev;
-	else
-		return mp->m_ddev_targp->bt_bdev;
-}
-
-struct dax_device *
-xfs_find_daxdev_for_inode(
-	struct inode		*inode)
-{
-	struct xfs_inode	*ip = XFS_I(inode);
-	struct xfs_mount	*mp = ip->i_mount;
-
-	if (XFS_IS_REALTIME_INODE(ip))
-		return mp->m_rtdev_targp->bt_daxdev;
-	else
-		return mp->m_ddev_targp->bt_daxdev;
-}
-
 static void
 xfs_finish_page_writeback(
 	struct inode		*inode,
@@ -763,7 +737,7 @@ xfs_add_to_ioend(
 {
 	struct xfs_inode	*ip = XFS_I(inode);
 	struct xfs_mount	*mp = ip->i_mount;
-	struct block_device	*bdev = xfs_find_bdev_for_inode(inode);
+	struct block_device *bdev = xfs_inode_buftarg(XFS_I(inode))->bt_bdev;
 	unsigned		len = i_blocksize(inode);
 	unsigned		poff = offset & (PAGE_SIZE - 1);
 	bool			merged, same_page = false;
@@ -1118,9 +1092,13 @@ xfs_dax_writepages(
 	struct address_space	*mapping,
 	struct writeback_control *wbc)
 {
-	xfs_iflags_clear(XFS_I(mapping->host), XFS_ITRUNCATED);
+	struct xfs_inode *ip = XFS_I(mapping->host);
+
+	xfs_iflags_clear(ip, XFS_ITRUNCATED);
+
 	return dax_writeback_mapping_range(mapping,
-			xfs_find_bdev_for_inode(mapping->host), wbc);
+					   xfs_inode_buftarg(ip)->bt_daxdev,
+					   wbc);
 }
 
 STATIC int
@@ -1181,7 +1159,7 @@ xfs_iomap_swapfile_activate(
 	struct file			*swap_file,
 	sector_t			*span)
 {
-	sis->bdev = xfs_find_bdev_for_inode(file_inode(swap_file));
+	sis->bdev = xfs_inode_buftarg(XFS_I(file_inode(swap_file)))->bt_bdev;
 	return iomap_swapfile_activate(sis, swap_file, span, &xfs_iomap_ops);
 }
 
