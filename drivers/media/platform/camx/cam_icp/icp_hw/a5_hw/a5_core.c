@@ -200,7 +200,9 @@ static int32_t cam_a5_download_fw(void *device_priv)
 	pdev = soc_info->pdev;
 	cam_a5_soc_info = soc_info->soc_private;
 
-	rc = request_firmware(&core_info->fw_elf, "CAMERA_ICP.elf", &pdev->dev);
+	rc = request_firmware(&core_info->fw_elf,
+			      "qcom/sc7180-trogdor/camera/CAMERA_ICP.elf",
+			      &pdev->dev);
 	if (rc) {
 		CAM_ERR(CAM_ICP, "Failed to locate fw: %d", rc);
 		return rc;
