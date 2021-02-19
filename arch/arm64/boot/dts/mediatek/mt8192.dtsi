@@ -2094,7 +2094,216 @@
 		mdpsys: syscon@1f000000 {
 			compatible = "mediatek,mt8192-mdpsys", "syscon";
 			reg = <0 0x1f000000 0 0x1000>;
+			mediatek,gce-client-reg = <&gce 0x1f000 0 0x1000>;
 			#clock-cells = <1>;
+		};
+
+		mdp_mutex: mdp_mutex@1f001000 {
+			compatible = "mediatek,mdp_mutex";
+			reg = <0 0x1f001000 0 0x1000>;
+			mediatek,gce-client-reg = <&gce 0x1f000 0x1000 0x1000>;
+			clocks = <&mdpsys CLK_MDP_MUTEX0>;
+			clock-names = "MDP_MUTEX0";
+		};
+
+		mdp_rdma0: mdp_rdma0@1f003000 {
+			compatible = "mediatek,mt8192-mdp-rdma",
+						"mediatek,mt8192-mdp3";
+			mediatek,scp = <&scp>;
+			mediatek,mdp-id = <0>;
+			mdp-comps = "mediatek,mt8192-mdp-dl", "mediatek,mt8192-mdp-dl";
+			mdp-comp-ids = <0 1>;
+			reg = <0 0x1f003000 0 0x1000>;
+			mediatek,gce-client-reg = <&gce 0x1f000 0x3000 0x1000>;
+			mediatek,larb = <&larb2>;
+			power-domains = <&spm MT8192_POWER_DOMAIN_MDP>;
+			clocks = <&mdpsys CLK_MDP_RDMA0>;
+			clock-names = "MDP_RDMA0";
+			iommus = <&iommu0 M4U_PORT_L2_MDP_RDMA0>;
+			mediatek,mmsys = <&mdpsys>;
+			mediatek,mm-mutex = <&mdp_mutex>;
+			mediatek,imgsys = <&imgsys>;
+			mediatek,mailbox-gce = <&gce>;
+			mboxes = <&gce 19 CMDQ_THR_PRIO_1 0>,
+					<&gce 20 CMDQ_THR_PRIO_1 0>,
+					<&gce 21 CMDQ_THR_PRIO_1 0>,
+					<&gce 22 CMDQ_THR_PRIO_1 0>;
+			mdp_rdma1  = <&mdp_rdma1>;
+			mdp_rsz0   = <&mdp_rsz0>;
+			mdp_rsz1   = <&mdp_rsz1>;
+			mdp_wrot0  = <&mdp_wrot0>;
+			mdp_wrot1  = <&mdp_wrot1>;
+			mdp_tdshp0 = <&mdp_tdshp0>;
+			mdp_tdshp1 = <&mdp_tdshp1>;
+			mdp_aal0   = <&mdp_aal0>;
+			mdp_aal1   = <&mdp_aal1>;
+			mdp_color0 = <&mdp_color0>;
+			mdp_color1 = <&mdp_color1>;
+			mdp_hdr0   = <&mdp_hdr0>;
+			mdp_hdr1   = <&mdp_hdr1>;
+			mediatek,gce-events = <CMDQ_EVENT_MDP_RDMA0_SOF>,
+								<CMDQ_EVENT_MDP_RDMA1_SOF>,
+								<CMDQ_EVENT_MDP_AAL0_SOF>,
+								<CMDQ_EVENT_MDP_AAL1_SOF>,
+								<CMDQ_EVENT_MDP_HDR0_SOF>,
+								<CMDQ_EVENT_MDP_HDR1_SOF>,
+								<CMDQ_EVENT_MDP_RSZ0_SOF>,
+								<CMDQ_EVENT_MDP_RSZ1_SOF>,
+								<CMDQ_EVENT_MDP_WROT0_SOF>,
+								<CMDQ_EVENT_MDP_WROT1_SOF>,
+								<CMDQ_EVENT_MDP_TDSHP0_SOF>,
+								<CMDQ_EVENT_MDP_TDSHP1_SOF>,
+								<CMDQ_EVENT_IMG_DL_RELAY0_SOF>,
+								<CMDQ_EVENT_IMG_DL_RELAY1_SOF>,
+								<CMDQ_EVENT_MDP_COLOR0_SOF>,
+								<CMDQ_EVENT_MDP_COLOR1_SOF>,
+								<CMDQ_EVENT_MDP_WROT1_FRAME_DONE>,
+								<CMDQ_EVENT_MDP_WROT0_FRAME_DONE>,
+								<CMDQ_EVENT_MDP_TDSHP1_FRAME_DONE>,
+								<CMDQ_EVENT_MDP_TDSHP0_FRAME_DONE>,
+								<CMDQ_EVENT_MDP_RSZ1_FRAME_DONE	>,
+								<CMDQ_EVENT_MDP_RSZ0_FRAME_DONE	>,
+								<CMDQ_EVENT_MDP_RDMA1_FRAME_DONE>,
+								<CMDQ_EVENT_MDP_RDMA0_FRAME_DONE>,
+								<CMDQ_EVENT_MDP_HDR1_FRAME_DONE>,
+								<CMDQ_EVENT_MDP_HDR0_FRAME_DONE>,
+								<CMDQ_EVENT_MDP_COLOR1_FRAME_DONE>,
+								<CMDQ_EVENT_MDP_COLOR0_FRAME_DONE>,
+								<CMDQ_EVENT_MDP_AAL1_FRAME_DONE>,
+								<CMDQ_EVENT_MDP_AAL0_FRAME_DONE>,
+								<CMDQ_EVENT_MDP_STREAM_DONE_ENG_EVENT_0>,
+								<CMDQ_EVENT_MDP_STREAM_DONE_ENG_EVENT_1>,
+								<CMDQ_EVENT_MDP_STREAM_DONE_ENG_EVENT_2>,
+								<CMDQ_EVENT_MDP_STREAM_DONE_ENG_EVENT_3>,
+								<CMDQ_EVENT_MDP_STREAM_DONE_ENG_EVENT_4>,
+								<CMDQ_EVENT_MDP_STREAM_DONE_ENG_EVENT_5>,
+								<CMDQ_EVENT_MDP_STREAM_DONE_ENG_EVENT_6>,
+								<CMDQ_EVENT_MDP_STREAM_DONE_ENG_EVENT_7>,
+								<CMDQ_EVENT_MDP_STREAM_DONE_ENG_EVENT_8>,
+								<CMDQ_EVENT_MDP_STREAM_DONE_ENG_EVENT_9>,
+								<CMDQ_EVENT_MDP_STREAM_DONE_ENG_EVENT_10>,
+								<CMDQ_EVENT_MDP_STREAM_DONE_ENG_EVENT_11>,
+								<CMDQ_EVENT_MDP_STREAM_DONE_ENG_EVENT_12>,
+								<CMDQ_EVENT_MDP_STREAM_DONE_ENG_EVENT_13>,
+								<CMDQ_EVENT_MDP_STREAM_DONE_ENG_EVENT_14>,
+								<CMDQ_EVENT_MDP_STREAM_DONE_ENG_EVENT_15>,
+								<CMDQ_EVENT_MDP_WROT1_SW_RST_DONE_ENG_EVENT>,
+								<CMDQ_EVENT_MDP_WROT0_SW_RST_DONE_ENG_EVENT>,
+								<CMDQ_EVENT_MDP_RDMA1_SW_RST_DONE_ENG_EVENT>,
+								<CMDQ_EVENT_MDP_RDMA0_SW_RST_DONE_ENG_EVENT>;
+		};
+
+		mdp_rdma1: mdp_rdma1@1f004000 {
+			compatible = "mediatek,mt8192-mdp-rdma";
+			mediatek,mdp-id = <1>;
+			reg = <0 0x1f004000 0 0x1000>;
+			mediatek,gce-client-reg = <&gce 0x1f000 0x4000 0x1000>;
+			clocks = <&mdpsys CLK_MDP_RDMA1>;
+			power-domains = <&spm MT8192_POWER_DOMAIN_MDP>;
+			mediatek,larb = <&larb2>;
+			iommus = <&iommu0 M4U_PORT_L2_MDP_RDMA1>;
+		};
+
+		mdp_aal0: mdp_aal0@1f005000 {
+			compatible = "mediatek,mt8192-mdp-aal";
+			mediatek,mdp-id = <0>;
+			reg = <0 0x1f005000 0 0x1000>;
+			mediatek,gce-client-reg = <&gce 0x1f000 0x5000 0x1000>;
+			clocks = <&mdpsys CLK_MDP_AAL0>;
+		};
+
+		mdp_aal1: mdp_aal0@1f006000 {
+			compatible = "mediatek,mt8192-mdp-aal";
+			mediatek,mdp-id = <1>;
+			reg = <0 0x1f006000 0 0x1000>;
+			mediatek,gce-client-reg = <&gce 0x1f000 0x6000 0x1000>;
+			clocks = <&mdpsys CLK_MDP_AAL1>;
+		};
+
+		mdp_hdr0: mdp_hdr0@1f007000 {
+			compatible = "mediatek,mt8192-mdp-hdr";
+			mediatek,mdp-id = <0>;
+			reg = <0 0x1f007000 0 0x1000>;
+			mediatek,gce-client-reg = <&gce 0x1f000 0x7000 0x1000>;
+			clocks = <&mdpsys CLK_MDP_HDR0>;
+		};
+
+		mdp_hdr1: mdp_hdr0@1f008000 {
+			compatible = "mediatek,mt8192-mdp-hdr";
+			mediatek,mdp-id = <1>;
+			reg = <0 0x1f008000 0 0x1000>;
+			mediatek,gce-client-reg = <&gce 0x1f000 0x8000 0x1000>;
+			clocks = <&mdpsys CLK_MDP_HDR1>;
+		};
+
+		mdp_rsz0: mdp_rsz0@1f009000 {
+			compatible = "mediatek,mt8192-mdp-rsz";
+			mediatek,mdp-id = <0>;
+			reg = <0 0x1f009000 0 0x1000>;
+			mediatek,gce-client-reg = <&gce 0x1f000 0x9000 0x1000>;
+			clocks = <&mdpsys CLK_MDP_RSZ0>;
+		};
+
+		mdp_rsz1: mdp_rsz1@1f00a000 {
+			compatible = "mediatek,mt8192-mdp-rsz";
+			mediatek,mdp-id = <1>;
+			reg = <0 0x1f00a000 0 0x1000>;
+			mediatek,gce-client-reg = <&gce 0x1f000 0xa000 0x1000>;
+			clocks = <&mdpsys CLK_MDP_RSZ1>;
+		};
+
+		mdp_wrot0: mdp_wrot0@1f00b000 {
+			compatible = "mediatek,mt8192-mdp-wrot";
+			mediatek,mdp-id = <0>;
+			reg = <0 0x1f00b000 0 0x1000>;
+			mediatek,gce-client-reg = <&gce 0x1f000 0xb000 0x1000>;
+			clocks = <&mdpsys CLK_MDP_WROT0>;
+			power-domains = <&spm MT8192_POWER_DOMAIN_MDP>;
+			mediatek,larb = <&larb2>;
+			iommus = <&iommu0 M4U_PORT_L2_MDP_WROT0>;
+		};
+
+		mdp_wrot1: mdp_wrot0@1f00c000 {
+			compatible = "mediatek,mt8192-mdp-wrot";
+			mediatek,mdp-id = <1>;
+			reg = <0 0x1f00c000 0 0x1000>;
+			mediatek,gce-client-reg = <&gce 0x1f000 0xc000 0x1000>;
+			clocks = <&mdpsys CLK_MDP_WROT1>;
+			power-domains = <&spm MT8192_POWER_DOMAIN_MDP>;
+			mediatek,larb = <&larb2>;
+			iommus = <&iommu0 M4U_PORT_L2_MDP_WROT1>;
+		};
+
+		mdp_tdshp0: mdp_tdshp0@1f00d000 {
+			compatible = "mediatek,mt8192-mdp-tdshp";
+			mediatek,mdp-id = <0>;
+			reg = <0 0x1f00d000 0 0x1000>;
+			mediatek,gce-client-reg = <&gce 0x1f000 0xd000 0x1000>;
+			clocks = <&mdpsys CLK_MDP_TDSHP0>;
+		};
+
+		mdp_tdshp1: mdp_tdshp1@1f00e000 {
+			compatible = "mediatek,mt8192-mdp-tdshp";
+			mediatek,mdp-id = <1>;
+			reg = <0 0x1f00e000 0 0x1000>;
+			mediatek,gce-client-reg = <&gce 0x1f000 0xe000 0x1000>;
+			clocks = <&mdpsys CLK_MDP_TDSHP1>;
+		};
+
+		mdp_color0: mdp_color0@1f00f000 {
+			compatible = "mediatek,mt8192-mdp-color";
+			mediatek,mdp-id = <0>;
+			reg = <0 0x1f00f000 0 0x1000>;
+			mediatek,gce-client-reg = <&gce 0x1f000 0xf000 0x1000>;
+			clocks = <&mdpsys CLK_MDP_COLOR0>;
+		};
+
+		mdp_color1: mdp_color1@1f010000 {
+			compatible = "mediatek,mt8192-mdp-color";
+			mediatek,mdp-id = <1>;
+			reg = <0 0x1f010000 0 0x1000>;
+			mediatek,gce-client-reg = <&gce 0x1f010 0 0x1000>;
+			clocks = <&mdpsys CLK_MDP_COLOR1>;
 		};
 
 		larb2: larb@1f002000 {
