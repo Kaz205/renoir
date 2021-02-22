@@ -291,7 +291,7 @@ static int evdi_add_device(struct evdi_context *ctx, struct device *parent)
 
 int evdi_driver_setup_early(struct drm_device *dev)
 {
-	struct platform_device *platdev = NULL;
+	struct platform_device *platdev;
 	struct evdi_device *evdi;
 	int ret;
 
@@ -303,20 +303,17 @@ int evdi_driver_setup_early(struct drm_device *dev)
 	evdi->ddev = dev;
 	dev->dev_private = evdi;
 
-	ret =	evdi_cursor_init(&evdi->cursor);
+	ret = evdi_cursor_init(&evdi->cursor);
 	if (ret)
-		goto err;
+		goto err_free;
 
 	EVDI_CHECKPT();
 	evdi_modeset_init(dev);
 
-	if (ret)
-		goto err;
-
 #ifdef CONFIG_FB
 	ret = evdi_fbdev_init(dev);
 	if (ret)
-		goto err;
+		goto err_cursor;
 #endif /* CONFIG_FB */
 
 	ret = drm_vblank_init(dev, 1);
@@ -337,55 +334,59 @@ int evdi_driver_setup_early(struct drm_device *dev)
 err_fb:
 #ifdef CONFIG_FB
 	evdi_fbdev_cleanup(dev);
+err_cursor:
 #endif /* CONFIG_FB */
-err:
-	kfree(evdi);
+	evdi_cursor_free(evdi->cursor);
+err_free:
 	EVDI_ERROR("%d\n", ret);
-	if (evdi->cursor)
-		evdi_cursor_free(evdi->cursor);
+	kfree(evdi);
 	return ret;
 }
 
 static int evdi_platform_probe(struct platform_device *pdev)
 {
-	int ret = 0;
-	struct drm_device *dev = NULL;
-	struct evdi_platform_device_data *data =
-		kzalloc(sizeof(struct evdi_platform_device_data), GFP_KERNEL);
+	int ret;
+	struct drm_device *dev;
+	struct evdi_platform_device_data *data;
 
 	EVDI_CHECKPT();
 
+	data = kzalloc(sizeof(struct evdi_platform_device_data), GFP_KERNEL);
+	if (!data)
+		return -ENOMEM;
+
 	dev = drm_dev_alloc(&driver, &pdev->dev);
-	if (IS_ERR(dev))
-		return PTR_ERR(dev);
+	if (IS_ERR(dev)) {
+		ret = PTR_ERR(dev);
+		goto err_free;
+	}
 
 	ret = evdi_driver_setup_early(dev);
 	if (ret)
-		goto err_free;
+		goto err_put_dev;
 
 	ret = drm_dev_register(dev, 0);
 	if (ret)
-		goto err_free;
-	else {
-		data->drm_dev = dev;
-		data->symlinked = false;
-		platform_set_drvdata(pdev, data);
-	}
+		goto err_put_dev;
+
+	data->drm_dev = dev;
+	data->symlinked = false;
+	platform_set_drvdata(pdev, data);
 
 	evdi_driver_setup_late(dev);
 
 	return 0;
 
-err_free:
+err_put_dev:
 	drm_dev_put(dev);
+err_free:
 	kfree(data);
 	return ret;
 }
 
 static int evdi_platform_remove(struct platform_device *pdev)
 {
-	struct evdi_platform_device_data *data =
-		(struct evdi_platform_device_data *)platform_get_drvdata(pdev);
+	struct evdi_platform_device_data *data = platform_get_drvdata(pdev);
 
 	EVDI_CHECKPT();
 
