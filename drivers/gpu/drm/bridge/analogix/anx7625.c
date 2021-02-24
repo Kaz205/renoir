@@ -1422,10 +1422,10 @@ static int anx7625_get_swing_setting(struct device *dev,
 static int anx7625_parse_dt(struct device *dev,
 			    struct anx7625_platform_data *pdata)
 {
-	struct device_node *np = dev->of_node;
+	struct device_node *np = dev->of_node, *ep0;
 	struct drm_panel *panel;
 	int ret;
-	int bus_type;
+	int bus_type = 0;
 
 	anx7625_get_swing_setting(dev, pdata);
 
@@ -1436,8 +1436,9 @@ static int anx7625_parse_dt(struct device *dev,
 		return -ENODEV;
 	}
 
-	if (of_property_read_u32(pdata->mipi_host_node, "bus-type", &bus_type))
-		bus_type = 0;
+	ep0 = of_graph_get_endpoint_by_regs(np, 0, 0);
+	if (ep0)
+		ret = of_property_read_u32(ep0, "bus-type", &bus_type);
 
 	if (bus_type == 5) /* bus type is Parallel(DSI) */
 		pdata->is_dpi = 0;
