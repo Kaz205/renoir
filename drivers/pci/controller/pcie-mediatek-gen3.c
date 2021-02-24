@@ -15,6 +15,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/msi.h>
+#include <linux/of_pci.h>
 #include <linux/pci.h>
 #include <linux/phy/phy.h>
 #include <linux/platform_device.h>
@@ -135,6 +136,7 @@ struct mtk_pcie_port {
 	struct phy *phy;
 	struct clk_bulk_data *clks;
 	int num_clks;
+	unsigned int busnr;
 
 	int irq;
 	raw_spinlock_t irq_lock;
@@ -813,8 +815,16 @@ static int mtk_pcie_setup(struct mtk_pcie_port *port)
 {
 	struct device *dev = port->dev;
 	struct platform_device *pdev = to_platform_device(dev);
-	struct resource *regs;
+	struct pci_host_bridge *host = pci_host_bridge_from_priv(port);
+	struct list_head *windows = &host->windows;
+	struct resource *regs, *bus;
 	int err;
+
+	err = pci_parse_request_of_pci_ranges(dev, windows, &bus);
+	if (err)
+		return err;
+
+	port->busnr = bus->start;
 
 	regs = platform_get_resource_byname(pdev, IORESOURCE_MEM, "pcie-mac");
 	port->base = devm_ioremap_resource(dev, regs);
@@ -849,6 +859,17 @@ err_setup:
 	return err;
 }
 
+static void release_io_range(struct device *dev)
+{
+	struct logic_pio_hwaddr *iorange = NULL;
+
+	iorange = find_io_range_by_fwnode(&dev->of_node->fwnode);
+	if (iorange) {
+		logic_pio_unregister_range(iorange);
+		kfree(iorange);
+	}
+}
+
 static int mtk_pcie_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -867,7 +888,12 @@ static int mtk_pcie_probe(struct platform_device *pdev)
 
 	err = mtk_pcie_setup(port);
 	if (err)
-		return err;
+		goto release_resource;
+
+	host->busnr = port->busnr;
+	host->dev.parent = port->dev;
+	host->map_irq = of_irq_parse_and_map_pci;
+	host->swizzle_irq = pci_common_swizzle;
 
 	host->ops = &mtk_pcie_ops;
 	host->sysdata = port;
@@ -876,10 +902,16 @@ static int mtk_pcie_probe(struct platform_device *pdev)
 	if (err) {
 		mtk_pcie_irq_teardown(port);
 		mtk_pcie_power_down(port);
-		return err;
+		goto release_resource;
 	}
 
 	return 0;
+
+release_resource:
+	release_io_range(dev);
+	pci_free_resource_list(&host->windows);
+
+	return err;
 }
 
 static int mtk_pcie_remove(struct platform_device *pdev)
