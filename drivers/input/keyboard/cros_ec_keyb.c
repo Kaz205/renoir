@@ -28,8 +28,6 @@
 
 #include <asm/unaligned.h>
 
-#define MAX_NUM_TOP_ROW_KEYS   15
-
 /**
  * struct cros_ec_keyb - Structure representing EC keyboard device
  *
@@ -45,9 +43,6 @@
  * @idev: The input device for the matrix keys.
  * @bs_idev: The input device for non-matrix buttons and switches (or NULL).
  * @notifier: interrupt event notifier for transport devices
- * @function_row_physmap: An array of the encoded rows/columns for the top
- *                        row function keys, in an order from left to right
- * @num_function_row_keys: The number of top row keys in a custom keyboard
  */
 struct cros_ec_keyb {
 	unsigned int rows;
@@ -68,9 +63,6 @@ struct cros_ec_keyb {
 	u32 switch_map;
 	u32 button_map;
 	struct notifier_block notifier;
-
-	u16 function_row_physmap[MAX_NUM_TOP_ROW_KEYS];
-	u8 num_function_row_keys;
 };
 
 /**
@@ -558,8 +550,6 @@ static int cros_ec_keyb_register_matrix(struct cros_ec_keyb *ckdev)
 	struct input_dev *idev;
 	const char *phys;
 	int err;
-	u32 top_row_key_pos[MAX_NUM_TOP_ROW_KEYS] = {0};
-	u8 i;
 
 	err = matrix_keypad_parse_properties(dev, &ckdev->rows, &ckdev->cols);
 	if (err)
@@ -611,22 +601,6 @@ static int cros_ec_keyb_register_matrix(struct cros_ec_keyb *ckdev)
 	ckdev->idev = idev;
 	cros_ec_keyb_compute_valid_keys(ckdev);
 
-	if (of_property_read_variable_u32_array(dev->of_node,
-						"function-row-physmap",
-						top_row_key_pos,
-						0,
-						MAX_NUM_TOP_ROW_KEYS) > 0) {
-		for (i = 0; i < MAX_NUM_TOP_ROW_KEYS; i++) {
-			if (!top_row_key_pos[i])
-				break;
-			ckdev->function_row_physmap[i] = MATRIX_SCAN_CODE(
-						KEY_ROW(top_row_key_pos[i]),
-						KEY_COL(top_row_key_pos[i]),
-						ckdev->row_shift);
-		}
-		ckdev->num_function_row_keys = i;
-	}
-
 	err = input_register_device(ckdev->idev);
 	if (err) {
 		dev_err(dev, "cannot register input device\n");
@@ -635,52 +609,6 @@ static int cros_ec_keyb_register_matrix(struct cros_ec_keyb *ckdev)
 
 	return 0;
 }
-
-static ssize_t function_row_physmap_show(struct device *dev,
-					 struct device_attribute *attr,
-					 char *buf)
-{
-	ssize_t size = 0;
-	u8 i;
-	struct cros_ec_keyb *ckdev = dev_get_drvdata(dev);
-
-	if (!ckdev->num_function_row_keys)
-		return 0;
-
-	for (i = 0; i < ckdev->num_function_row_keys; i++)
-		size += scnprintf(buf + size, PAGE_SIZE - size, "%02X ",
-				  ckdev->function_row_physmap[i]);
-	size += scnprintf(buf + size, PAGE_SIZE - size, "\n");
-
-	return size;
-}
-
-static DEVICE_ATTR_RO(function_row_physmap);
-
-static struct attribute *cros_ec_keyb_attrs[] = {
-	&dev_attr_function_row_physmap.attr,
-	NULL,
-};
-
-static umode_t cros_ec_keyb_attr_is_visible(struct kobject *kobj,
-					    struct attribute *attr,
-					    int n)
-{
-	struct device *dev = container_of(kobj, struct device, kobj);
-	struct cros_ec_keyb *ckdev = dev_get_drvdata(dev);
-
-	if (attr == &dev_attr_function_row_physmap.attr &&
-	    !ckdev->num_function_row_keys)
-		return 0;
-
-	return attr->mode;
-}
-
-static const struct attribute_group cros_ec_keyb_attr_group = {
-	.is_visible = cros_ec_keyb_attr_is_visible,
-	.attrs = cros_ec_keyb_attrs,
-};
-
 
 static int cros_ec_keyb_probe(struct platform_device *pdev)
 {
@@ -715,12 +643,6 @@ static int cros_ec_keyb_probe(struct platform_device *pdev)
 	err = cros_ec_keyb_register_bs(ckdev);
 	if (err) {
 		dev_err(dev, "cannot register non-matrix inputs: %d\n", err);
-		return err;
-	}
-
-	err = devm_device_add_group(dev, &cros_ec_keyb_attr_group);
-	if (err) {
-		dev_err(dev, "failed to create attributes. err=%d\n", err);
 		return err;
 	}
 
