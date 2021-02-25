@@ -1259,7 +1259,10 @@ static const struct panel_desc boe_nv116whm_t01 = {
 		.height = 144,
 	},
 	.delay = {
-		.hpd_absent_delay = 200,
+		/* Assume similar delays needed like boe_nv133fhm_n61. */
+		.prepare = 15,
+		.hpd_absent_delay = 185,
+
 		.unprepare = 500,
 	},
 	.bus_format = MEDIA_BUS_FMT_RGB666_1X18,
