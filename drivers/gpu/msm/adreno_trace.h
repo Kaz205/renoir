@@ -53,53 +53,6 @@ TRACE_EVENT(adreno_cmdbatch_queued,
 	)
 );
 
-TRACE_EVENT(adreno_cmdbatch_submitted,
-	TP_PROTO(struct kgsl_drawobj *drawobj, struct submission_info *info,
-		uint64_t ticks, unsigned long secs, unsigned long usecs,
-		int q_inflight),
-	TP_ARGS(drawobj, info, ticks, secs, usecs, q_inflight),
-	TP_STRUCT__entry(
-		__field(unsigned int, id)
-		__field(unsigned int, timestamp)
-		__field(int, inflight)
-		__field(unsigned int, flags)
-		__field(uint64_t, ticks)
-		__field(unsigned long, secs)
-		__field(unsigned long, usecs)
-		__field(int, prio)
-		__field(int, rb_id)
-		__field(unsigned int, rptr)
-		__field(unsigned int, wptr)
-		__field(int, q_inflight)
-		__field(int, dispatch_queue)
-	),
-	TP_fast_assign(
-		__entry->id = drawobj->context->id;
-		__entry->timestamp = drawobj->timestamp;
-		__entry->inflight = info->inflight;
-		__entry->flags = drawobj->flags;
-		__entry->ticks = ticks;
-		__entry->secs = secs;
-		__entry->usecs = usecs;
-		__entry->prio = drawobj->context->priority;
-		__entry->rb_id = info->rb_id;
-		__entry->rptr = info->rptr;
-		__entry->wptr = info->wptr;
-		__entry->q_inflight = q_inflight;
-		__entry->dispatch_queue = info->gmu_dispatch_queue;
-	),
-	TP_printk(
-		"ctx=%u ctx_prio=%d ts=%u inflight=%d flags=%s ticks=%lld time=%lu.%0lu rb_id=%d r/w=%x/%x, q_inflight=%d dq_id=%d",
-			__entry->id, __entry->prio, __entry->timestamp,
-			__entry->inflight,
-			__entry->flags ? __print_flags(__entry->flags, "|",
-				KGSL_DRAWOBJ_FLAGS) : "none",
-			__entry->ticks, __entry->secs, __entry->usecs,
-			__entry->rb_id, __entry->rptr, __entry->wptr,
-			__entry->q_inflight, __entry->dispatch_queue
-	)
-);
-
 TRACE_EVENT(adreno_cmdbatch_retired,
 		TP_PROTO(struct kgsl_context *context, struct retire_info *info,
 			unsigned int flags, int q_inflight,
