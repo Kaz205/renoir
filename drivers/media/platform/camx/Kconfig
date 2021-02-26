@@ -6,6 +6,8 @@ menuconfig SPECTRA_CAMERA
 	bool "Qualcomm Technologies, Inc. Spectra Camera"
 	depends on (ARCH_QCOM)
 	depends on (MEDIA_SUPPORT && MEDIA_CONTROLLER && V4L_PLATFORM_DRIVERS)
+	depends on (VIDEO_DEV && VIDEO_V4L2=y)
+	depends on ARM64
 	select SC_CAMCC_7180
 	help
 	  Say Y here to enable selecting the video adapters for
@@ -18,7 +20,6 @@ if SPECTRA_CAMERA
 config QTI_CAMERA_SYNC
         bool "Qualcomm camera SYNC driver"
 	default y
-	depends on (VIDEO_DEV && VIDEO_V4L2)
         help
 	  Say Y here to enable selecting module
           Support for camera drivers synchronization
@@ -35,7 +36,6 @@ config QTI_CAMERA_CRM
         bool "Qualcomm Camera Request Manager (CRM)"
 	default y
 	depends on (QTI_CAMERA_SYNC && QTI_CAMERA_SMMU)
-	depends on (VIDEO_DEV && VIDEO_V4L2)
 	select VIDEOBUF2_DMA_SG
         help
 	  Say Y here to enable selecting module
