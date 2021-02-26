@@ -342,6 +342,7 @@
 	pinctrl-0 = <&i2c2_pins>;
 	status = "okay";
 	clock-frequency = <400000>;
+	clock-stretch-ns = <12600>;
 
 	touchpad@15 {
 		compatible = "elan,ekth3000";
@@ -1107,7 +1108,6 @@
 			bias-pull-up;
 			mediatek,pull-up-adv = <3>;
 			mediatek,drive-strength-adv = <0>;
-			drive-strength = <1>;
 		};
 	};
 
