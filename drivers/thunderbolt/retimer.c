@@ -343,6 +343,7 @@ err_connect:
  * @sw: USB4 switch
  * @mux_mode: Returns the current USB4 retimer's mux mode
  * @typec_port_index: Type-C port index associated with the USB4 port
+ * @port: USB4 port associated with this retimer
  *
  * This function queries the support of this functionality and if present
  * suspends the PD and puts the retimer in TBT ALT mode as required.
@@ -351,17 +352,22 @@ err_connect:
  */
 static int __maybe_unused tb_retimer_start_io(struct tb_switch *sw,
 					      u32 *mux_mode,
-					      u8 typec_port_index)
+					      u8 typec_port_index,
+					      struct tb_port *port)
 {
 	u32 data = 0;
 	int ret;
 
-	if (!sw || !mux_mode || typec_port_index >= EC_USB_PD_MAX_PORTS)
+	if (!sw || !mux_mode || typec_port_index >= EC_USB_PD_MAX_PORTS ||
+	    !port)
 		return -EINVAL;
 
 	/* Limit this only to on-board retimers */
 	if (tb_route(sw))
 		return -ENOTSUPP;
+
+	if (port->rt_io_started)
+		return 0;
 
 	/* check for minimum supported functions */
 	ret = tb_retimer_acpi_dsm_query_fn(sw, &data);
@@ -384,7 +390,7 @@ static int __maybe_unused tb_retimer_start_io(struct tb_switch *sw,
 	 */
 	if (*mux_mode != USB_PD_MUX_NONE &&
 	    *mux_mode != USB_PD_MUX_POLARITY_INVERTED)
-		return 0;
+		goto out;
 
 	/* Suspend the PD */
 	ret = tb_retimer_acpi_dsm_suspend_pd(sw, true, typec_port_index);
@@ -398,7 +404,8 @@ static int __maybe_unused tb_retimer_start_io(struct tb_switch *sw,
 	ret = tb_retimer_enter_tbt_alt_mode(sw, typec_port_index);
 	if (ret)
 		goto err_force_power_off;
-
+out:
+	port->rt_io_started = true;
 	return 0;
 
 err_force_power_off:
@@ -433,9 +440,12 @@ static int __maybe_unused tb_retimer_stop_io(struct tb_switch *sw, u32 mux_mode,
 	if (tb_route(sw))
 		return 0;
 
+	if (!port->rt_io_started)
+		return 0;
+
 	if (mux_mode != USB_PD_MUX_NONE &&
 	    mux_mode != USB_PD_MUX_POLARITY_INVERTED)
-		return 0;
+		goto out;
 
 	for (i = 1; i <= TB_MAX_RETIMER_INDEX; i++)
 		usb4_port_set_inbound_sbtx(port, i, false);
@@ -451,7 +461,12 @@ static int __maybe_unused tb_retimer_stop_io(struct tb_switch *sw, u32 mux_mode,
 	if (ret)
 		return ret;
 
-	return tb_retimer_acpi_dsm_force_power(sw, false);
+	ret = tb_retimer_acpi_dsm_force_power(sw, false);
+	if (ret)
+		return ret;
+out:
+	port->rt_io_started = false;
+	return 0;
 }
 
 #else
@@ -463,7 +478,8 @@ static int tb_retimer_acpi_dsm_get_port_info(struct tb_switch *sw, u32 *result)
 
 static int __maybe_unused tb_retimer_start_io(struct tb_switch *sw,
 					      u32 *mux_mode,
-					      u8 typec_port_index)
+					      u8 typec_port_index,
+					      struct tb_port *port)
 {
 	return -EOPNOTSUPP;
 }
@@ -935,12 +951,14 @@ int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode,
 	u32 status[TB_MAX_RETIMER_INDEX] = {}, result = 0;
 	u32 mode = USB_RETIMER_FW_UPDATE_INVALID_MUX;
 	int ret, i, j = 0, last_idx = 0;
-	bool io_started = false;
 
 	if (!port->cap_usb4)
 		return 0;
 
 	if (enumerate && port->retimer_scan_done)
+		return 0;
+
+	if (!enumerate && port->rt_io_started)
 		return 0;
 
 	/* Start IO for onboard retimers */
@@ -962,7 +980,7 @@ int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode,
 		if (typec_port_index)
 			*typec_port_index = j;
 
-		io_started = !tb_retimer_start_io(port->sw, &mode, j);
+		tb_retimer_start_io(port->sw, &mode, j, port);
 		if (mux_mode)
 			*mux_mode = mode;
 
@@ -1032,8 +1050,7 @@ int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode,
 	}
 
 out_retimer_stop_io:
-	if (io_started)
-		tb_retimer_stop_io(port->sw, mode, j, port);
+	tb_retimer_stop_io(port->sw, mode, j, port);
 out:
 	return ret;
 }
