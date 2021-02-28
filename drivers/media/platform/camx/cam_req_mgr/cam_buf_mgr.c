@@ -5,6 +5,7 @@
  * Copyright 2020 Google LLC.
  */
 
+#include <linux/dma-mapping.h>
 #include <linux/slab.h>
 #include <linux/mm.h>
 #include <linux/scatterlist.h>
@@ -20,8 +21,17 @@
 struct cmm_dma_buf_attachment {
 	struct sg_table *table;
 	struct list_head list;
-	bool dma_mapped;
+};
+
+/**
+ * struct cmm_buf_context - camera buffer manager context
+ *
+ * @dev:         device context
+ * @dev_lock:    lock protecting the tree of nodes
+ */
+struct cmm_buf_context {
 	struct device *dev;
+	struct mutex dev_lock;	/* device lock */
 };
 
 /**
@@ -48,15 +58,14 @@ struct cmm_buffer {
 	struct page **pages;
 	size_t num_pages;
 	struct list_head attached;
-	bool needs_cpu_sync;
 };
 
+static struct cmm_buf_context *idev;
 static int _cmm_cbuf_sgt_alloc(struct cmm_buffer *cbuf)
 {
 	struct sg_table *sgt = &cbuf->sg_table;
 	int i, rc;
 
-	cbuf->needs_cpu_sync = true;
 	cbuf->num_pages = DIV_ROUND_UP(cbuf->size, PAGE_SIZE);
 	cbuf->pages = kcalloc(cbuf->num_pages, sizeof(*cbuf->pages),
 			      GFP_KERNEL);
@@ -81,8 +90,14 @@ static int _cmm_cbuf_sgt_alloc(struct cmm_buffer *cbuf)
 		goto err_free_pages;
 	}
 
+	sgt->nents = dma_map_sg(idev->dev, sgt->sgl, sgt->orig_nents, DMA_BIDIRECTIONAL);
+	if (!sgt->nents)
+		goto err_free_table;
+
 	return rc;
 
+err_free_table:
+	sg_free_table(sgt);
 err_free_pages:
 	for (i = 0; i < cbuf->num_pages && cbuf->pages[i]; ++i)
 		__free_pages(cbuf->pages[i], 0);
@@ -96,6 +111,9 @@ err_free_pages:
 static void _cmm_cbuf_sgt_free(struct cmm_buffer *cbuf)
 {
 	int i;
+
+	dma_unmap_sg(idev->dev, cbuf->sg_table.sgl,
+		     cbuf->sg_table.orig_nents, DMA_BIDIRECTIONAL);
 
 	sg_free_table(&cbuf->sg_table);
 
@@ -253,8 +271,6 @@ static int _op_dma_buf_attach(struct dma_buf *dmabuf,
 	}
 
 	new_att->table = sgt;
-	new_att->dma_mapped = false;
-	new_att->dev = attachment->dev;
 	INIT_LIST_HEAD(&new_att->list);
 
 	attachment->priv = new_att;
@@ -295,9 +311,7 @@ static struct sg_table *_op_dma_buf_map(struct dma_buf_attachment *attachment,
 
 	table = a->table;
 
-	map_attrs = attachment->dma_map_attrs;
-	if (!(buffer->flags & CAM_MEM_FLAG_CACHE) && !buffer->needs_cpu_sync)
-		map_attrs |= DMA_ATTR_SKIP_CPU_SYNC;
+	map_attrs = attachment->dma_map_attrs | DMA_ATTR_SKIP_CPU_SYNC;
 
 	mutex_lock(&buffer->b_lock);
 	table->nents = dma_map_sg_attrs(attachment->dev, table->sgl,
@@ -308,7 +322,6 @@ static struct sg_table *_op_dma_buf_map(struct dma_buf_attachment *attachment,
 		return ERR_PTR(-ENOMEM);
 	}
 
-	a->dma_mapped = true;
 	mutex_unlock(&buffer->b_lock);
 
 	return table;
@@ -320,17 +333,12 @@ static void _op_dma_buf_unmap(struct dma_buf_attachment *attachment,
 {
 	int map_attrs;
 	struct cmm_buffer *buffer = attachment->dmabuf->priv;
-	struct cmm_dma_buf_attachment *a = attachment->priv;
 
-	map_attrs = attachment->dma_map_attrs;
-	if (!(buffer->flags & CAM_MEM_FLAG_CACHE) && !buffer->needs_cpu_sync)
-		map_attrs |= DMA_ATTR_SKIP_CPU_SYNC;
+	map_attrs = attachment->dma_map_attrs | DMA_ATTR_SKIP_CPU_SYNC;
 
 	mutex_lock(&buffer->b_lock);
 	dma_unmap_sg_attrs(attachment->dev, table->sgl, table->orig_nents,
 			   direction, map_attrs);
-	a->dma_mapped = false;
-	buffer->needs_cpu_sync = false;
 	mutex_unlock(&buffer->b_lock);
 }
 
@@ -434,15 +442,13 @@ static int _op_dma_buf_beg_cpu_access(struct dma_buf *dmabuf,
 				      enum dma_data_direction direction)
 {
 	struct cmm_buffer *cbuf = dmabuf->priv;
-	struct cmm_dma_buf_attachment *att;
 	int ret = 0;
 
-	mutex_lock(&cbuf->b_lock);
-	list_for_each_entry(att, &cbuf->attached, list) {
-		dma_sync_sg_for_cpu(att->dev, att->table->sgl,
-				    att->table->orig_nents, direction);
-	}
-	mutex_unlock(&cbuf->b_lock);
+	if (!(cbuf->flags & CAM_MEM_FLAG_CACHE))
+		return 0;
+
+	dma_sync_sg_for_cpu(idev->dev, cbuf->sg_table.sgl,
+			    cbuf->sg_table.orig_nents, direction);
 
 	return ret;
 }
@@ -451,15 +457,13 @@ static int _op_dma_buf_end_cpu_access(struct dma_buf *dmabuf,
 				      enum dma_data_direction direction)
 {
 	struct cmm_buffer *cbuf = dmabuf->priv;
-	struct cmm_dma_buf_attachment *att;
 	int ret = 0;
 
-	mutex_lock(&cbuf->b_lock);
-	list_for_each_entry(att, &cbuf->attached, list) {
-		dma_sync_sg_for_device(att->dev, att->table->sgl,
-				       att->table->orig_nents, direction);
-	}
-	mutex_unlock(&cbuf->b_lock);
+	if (!(cbuf->flags & CAM_MEM_FLAG_CACHE))
+		return 0;
+
+	dma_sync_sg_for_device(idev->dev, cbuf->sg_table.sgl,
+			       cbuf->sg_table.orig_nents, direction);
 
 	return ret;
 }
@@ -541,9 +545,26 @@ void cmm_free_buffer(struct dma_buf *dmabuf)
 
 int cam_buf_mgr_init(struct platform_device *pdev)
 {
+	idev = kzalloc(sizeof(*idev), GFP_KERNEL);
+	if (IS_ERR_OR_NULL(idev)) {
+		CAM_ERR(CAM_MEM, "Cannot allocate memory");
+		return PTR_ERR(idev);
+	}
+
+	idev->dev = &pdev->dev;
+	dma_coerce_mask_and_coherent(idev->dev, DMA_BIT_MASK(64));
+	mutex_init(&idev->dev_lock);
+
 	return 0;
 }
 
 void cam_buf_mgr_exit(struct platform_device *pdev)
 {
+	if (IS_ERR_OR_NULL(idev)) {
+		CAM_ERR(CAM_MEM, "Invalid CBM context");
+		return;
+	}
+
+	mutex_destroy(&idev->dev_lock);
+	kfree(idev);
 }
