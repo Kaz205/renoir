@@ -217,8 +217,9 @@ static int cam_cpas_util_register_bus_client(
 {
 	bus_client->path = of_icc_get(soc_info->dev, path_name);
 	if (IS_ERR_OR_NULL(bus_client->path)) {
-		CAM_ERR(CAM_CPAS, "Failed to get icc_path for %s (%ld)",
-			path_name, PTR_ERR(bus_client->path));
+		if (PTR_ERR(bus_client->path) != -EPROBE_DEFER)
+			CAM_ERR(CAM_CPAS, "Failed to get icc_path for %s (%ld)",
+				path_name, PTR_ERR(bus_client->path));
 		return PTR_ERR(bus_client->path);
 	}
 
@@ -1657,7 +1658,7 @@ int cam_cpas_hw_probe(struct platform_device *pdev,
 		&cpas_core->ahb_bus_client, "cam_ahb",
 		ahb_bus_map, ARRAY_SIZE(ahb_bus_map));
 	if (rc) {
-		CAM_WARN(CAM_CPAS, "Cannot setup AHB");
+		CAM_INFO(CAM_CPAS, "Cannot setup AHB");
 		goto client_cleanup;
 	}
 
@@ -1734,7 +1735,7 @@ release_mem:
 	if (rc != -EPROBE_DEFER)
 		CAM_ERR(CAM_CPAS, "Failed in hw probe rc=%d", rc);
 	else
-		CAM_WARN(CAM_CPAS, "HW probe deferred");
+		CAM_DBG(CAM_CPAS, "HW probe deferred");
 
 	return rc;
 }

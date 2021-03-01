@@ -667,7 +667,7 @@ static int cam_req_mgr_probe(struct platform_device *pdev)
 	smmu_intf = of_parse_phandle(pdev->dev.of_node, "smmu_intf", 0);
 	smmu_pdev = of_find_device_by_node(smmu_intf);
 	if (!smmu_pdev || !smmu_pdev->dev.driver) {
-		CAM_WARN(CAM_CRM, "Probe deferred, until SMMU become ready");
+		CAM_DBG(CAM_CRM, "Probe deferred, until SMMU become ready");
 		return -EPROBE_DEFER;
 	}
 	put_device(&smmu_pdev->dev);

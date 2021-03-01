@@ -527,8 +527,9 @@ static int cam_cpas_dev_probe(struct platform_device *pdev)
 	g_cpas_intf->pdev = pdev;
 
 	rc = cam_cpas_hw_probe(pdev, &g_cpas_intf->hw_intf);
-	if (rc || (g_cpas_intf->hw_intf == NULL)) {
-		CAM_ERR(CAM_CPAS, "Failed in hw probe, rc=%d", rc);
+	if (rc) {
+		if (rc != -EPROBE_DEFER)
+			CAM_ERR(CAM_CPAS, "Failed in hw probe, rc=%d", rc);
 		goto error_destroy_mem;
 	}
 
@@ -571,7 +572,8 @@ error_destroy_mem:
 	mutex_destroy(&g_cpas_intf->intf_lock);
 	kfree(g_cpas_intf);
 	g_cpas_intf = NULL;
-	CAM_ERR(CAM_CPAS, "CPAS probe failed");
+	if (rc != -EPROBE_DEFER)
+		CAM_ERR(CAM_CPAS, "CPAS probe failed");
 	return rc;
 }
 
