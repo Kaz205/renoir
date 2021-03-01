@@ -938,41 +938,6 @@ static struct tb_retimer *tb_port_find_retimer(struct tb_port *port, u8 index)
 }
 
 /**
- * tb_retimer_scan_delayed() - scan onboard retimers when no devices
- * are connected
- * @work: work that needs to be done
- * Executes on tb->wq.
- */
-void tb_retimer_scan_delayed(struct work_struct *work)
-{
-	struct tb_port *port = container_of(work, typeof(*port),
-					    retimer_scan_work.work);
-
-	/* Only onboard retimers supported now */
-	if (!port || tb_route(port->sw))
-		return;
-
-	/* Bring the domain back from sleep if it was suspended */
-	pm_runtime_get_sync(&port->sw->tb->dev);
-
-	mutex_lock(&port->sw->tb->lock);
-	tb_switch_get(port->sw);
-
-	pm_runtime_get_sync(&port->sw->dev);
-
-	tb_retimer_scan(port, true, NULL, NULL);
-
-	pm_runtime_mark_last_busy(&port->sw->dev);
-	pm_runtime_put_autosuspend(&port->sw->dev);
-
-	tb_switch_put(port->sw);
-	mutex_unlock(&port->sw->tb->lock);
-
-	pm_runtime_mark_last_busy(&port->sw->tb->dev);
-	pm_runtime_put_autosuspend(&port->sw->tb->dev);
-}
-
-/**
  * tb_retimer_scan() - Scan for on-board retimers under port
  * @port: USB4 port to scan
  * @enumerate: Enumerate the retimer or just scan and prepare the retimer for IO
