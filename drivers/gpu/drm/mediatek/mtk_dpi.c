@@ -722,6 +722,7 @@ static const struct mtk_dpi_conf mt8183_conf = {
 static const struct mtk_dpi_conf mt8192_conf = {
 	.cal_factor = mt8183_calculate_factor,
 	.reg_h_fre_con = 0xe0,
+	.dual_edge = true,
 	.max_clock_khz = 150000,
 };
 
