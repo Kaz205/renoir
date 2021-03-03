@@ -1489,7 +1489,6 @@
 					      /bits/ 64 <358000000>;
 				opp-microvolt = <606250>,
 						<750000>;
-				opp-core-mask = /bits/ 64 <0x1f>;
 			};
 
 			opp-399000000 {
@@ -1498,7 +1497,6 @@
 					      /bits/ 64 <399000000>;
 				opp-microvolt = <618750>,
 						<750000>;
-				opp-core-mask = /bits/ 64 <0x1f>;
 			};
 
 			opp-440000000 {
@@ -1507,7 +1505,6 @@
 					      /bits/ 64 <440000000>;
 				opp-microvolt = <631250>,
 						<750000>;
-				opp-core-mask = /bits/ 64 <0x1f>;
 			};
 
 			opp-482000000 {
@@ -1516,7 +1513,6 @@
 					      /bits/ 64 <482000000>;
 				opp-microvolt = <643750>,
 						<750000>;
-				opp-core-mask = /bits/ 64 <0x1f>;
 			};
 
 			opp-523000000 {
@@ -1525,7 +1521,6 @@
 					      /bits/ 64 <523000000>;
 				opp-microvolt = <656250>,
 						<750000>;
-				opp-core-mask = /bits/ 64 <0x1f>;
 			};
 
 			opp-564000000 {
@@ -1534,7 +1529,6 @@
 					      /bits/ 64 <564000000>;
 				opp-microvolt = <668750>,
 						<750000>;
-				opp-core-mask = /bits/ 64 <0x1f>;
 			};
 
 			opp-605000000 {
@@ -1543,7 +1537,6 @@
 						/bits/ 64 <605000000>;
 				opp-microvolt = <681250>,
 						<750000>;
-				opp-core-mask = /bits/ 64 <0x1f>;
 			};
 
 			opp-647000000 {
@@ -1552,7 +1545,6 @@
 					      /bits/ 64 <647000000>;
 				opp-microvolt = <693750>,
 						<750000>;
-				opp-core-mask = /bits/ 64 <0x1f>;
 			};
 
 			opp-688000000 {
@@ -1561,7 +1553,6 @@
 					      /bits/ 64 <688000000>;
 				opp-microvolt = <706250>,
 						<750000>;
-				opp-core-mask = /bits/ 64 <0x1f>;
 			};
 
 			opp-724000000 {
@@ -1570,7 +1561,6 @@
 					      /bits/ 64 <724000000>;
 				opp-microvolt = <725000>,
 						<750000>;
-				opp-core-mask = /bits/ 64 <0x1f>;
 			};
 
 			opp-760000000 {
@@ -1579,7 +1569,6 @@
 					      /bits/ 64 <760000000>;
 				opp-microvolt = <743750>,
 						<750000>;
-				opp-core-mask = /bits/ 64 <0x1f>;
 			};
 
 			opp-795000000 {
@@ -1588,7 +1577,6 @@
 					      /bits/ 64 <795000000>;
 				opp-microvolt = <762500>,
 						<762500>;
-				opp-core-mask = /bits/ 64 <0x1f>;
 			};
 
 			opp-831000000 {
@@ -1597,7 +1585,6 @@
 					      /bits/ 64 <831000000>;
 				opp-microvolt = <781250>,
 						<781250>;
-				opp-core-mask = /bits/ 64 <0x1f>;
 			};
 
 			opp-855000000 {
@@ -1606,25 +1593,6 @@
 					      /bits/ 64 <855000000>;
 				opp-microvolt = <793750>,
 						<793750>;
-				opp-core-mask = /bits/ 64 <0x1f>;
-			};
-
-			opp-902000000 {
-				opp-hz = /bits/ 64 <902000000>;
-				opp-hz-real = /bits/ 64 <902000000>,
-					      /bits/ 64 <902000000>;
-				opp-microvolt = <818750>,
-						<818750>;
-				opp-core-mask = /bits/ 64 <0x1f>;
-			};
-
-			opp-950000000 {
-				opp-hz = /bits/ 64 <950000000>;
-				opp-hz-real = /bits/ 64 <950000000>,
-					      /bits/ 64 <950000000>;
-				opp-microvolt = <843750>,
-						<843750>;
-				opp-core-mask = /bits/ 64 <0x1f>;
 			};
 		};
 
