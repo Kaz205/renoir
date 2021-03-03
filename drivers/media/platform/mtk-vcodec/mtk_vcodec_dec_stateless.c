@@ -424,4 +424,5 @@ const struct mtk_vcodec_dec_pdata mtk_vdec_8183_pdata = {
 	.uses_stateless_api = true,
 	.worker = mtk_vdec_worker,
 	.flush_decoder = mtk_vdec_flush_decoder,
+	.hw_arch = MTK_VDEC_PURE_SIN_CORE,
 };
