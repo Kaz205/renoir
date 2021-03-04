@@ -7,7 +7,6 @@
 #include <linux/slab.h>
 #include <media/v4l2-mem2mem.h>
 #include <media/videobuf2-dma-contig.h>
-#include <media/vp8-ctrls.h>
 
 #include "../mtk_vcodec_dec.h"
 #include "../mtk_vcodec_intr.h"
@@ -232,7 +231,7 @@ static void vdec_vp8_slice_get_decode_parameters(
 {
 	const struct v4l2_ctrl_vp8_frame *frame =
 		vdec_vp8_slice_get_ctrl_ptr(inst->ctx,
-			V4L2_CID_MPEG_VIDEO_VP8_FRAME);
+			V4L2_CID_STATELESS_VP8_FRAME);
 	struct mtk_vcodec_ctx *ctx = inst->ctx;
 	struct vb2_queue *vq;
 	struct vb2_buffer *vb;

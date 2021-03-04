@@ -939,7 +939,6 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_MPEG_VIDEO_VP8_PROFILE:			return "VP8 Profile";
 	case V4L2_CID_MPEG_VIDEO_VP9_PROFILE:			return "VP9 Profile";
 	case V4L2_CID_MPEG_VIDEO_VP9_LEVEL:			return "VP9 Level";
-	case V4L2_CID_MPEG_VIDEO_VP8_FRAME:			return "VP8 Frame Parameters";
 	case V4L2_CID_MPEG_VIDEO_VP9_FRAME_DECODE_PARAMS:	return "VP9 Frame Decode Parameters";
 	case V4L2_CID_MPEG_VIDEO_VP9_FRAME_CONTEXT(0):		return "VP9 Frame Context 0";
 	case V4L2_CID_MPEG_VIDEO_VP9_FRAME_CONTEXT(1):		return "VP9 Frame Context 1";
@@ -1159,6 +1158,7 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_STATELESS_H264_PRED_WEIGHTS:		return "H264 Prediction Weight Table";
 	case V4L2_CID_STATELESS_H264_SLICE_PARAMS:		return "H264 Slice Parameters";
 	case V4L2_CID_STATELESS_H264_DECODE_PARAMS:		return "H264 Decode Parameters";
+	case V4L2_CID_STATELESS_VP8_FRAME:			return "VP8 Frame Parameters";
 	default:
 		return NULL;
 	}
@@ -1425,7 +1425,7 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 	case V4L2_CID_STATELESS_H264_PRED_WEIGHTS:
 		*type = V4L2_CTRL_TYPE_H264_PRED_WEIGHTS;
 		break;
-	case V4L2_CID_MPEG_VIDEO_VP8_FRAME:
+	case V4L2_CID_STATELESS_VP8_FRAME:
 		*type = V4L2_CTRL_TYPE_VP8_FRAME;
 		break;
 	case V4L2_CID_MPEG_VIDEO_VP9_FRAME_DECODE_PARAMS:
