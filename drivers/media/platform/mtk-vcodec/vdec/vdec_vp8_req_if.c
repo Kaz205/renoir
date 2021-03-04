@@ -244,7 +244,7 @@ static void vdec_vp8_slice_get_decode_parameters(
 		referenct_ts = vdec_vp8_slice_get_ref_by_ts(frame, index);
 		vb2_index = vb2_find_timestamp(vq, referenct_ts, 0);
 		if (vb2_index < 0) {
-			if (!VP8_FRAME_IS_KEY_FRAME(frame))
+			if (!V4L2_VP8_FRAME_IS_KEY_FRAME(frame))
 				mtk_vcodec_err(inst, "reference invalid: index(%d) ts(%lld)",
 					index, referenct_ts);
 			inst->vsi->vp8_dpb_info[index].reference_flag = 0;
