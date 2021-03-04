@@ -231,6 +231,11 @@
 			reg = <0 0x50000000 0 0x2900000>;
 			no-map;
 		};
+
+		wifi_restricted_dma_region: wifi_restricted_dma_region {
+			compatible = "restricted-dma-pool";
+			reg = <0 0xC0000000 0 0x4000000>;
+		};
 	};
 
 	usb_vbus_3v3: fixedregulator@1 {
@@ -558,6 +563,22 @@
 	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pcie_pinmux>;
+
+	pcie0: pcie@0,0 {
+		device_type = "pci";
+		reg = <0x0000 0 0 0 0>;
+		#address-cells = <3>;
+		#size-cells = <2>;
+		ranges;
+		num-lanes = <1>;
+		bus-range = <0x1 0x1>;
+
+		rtw_wifi: rtw_wifi@0,0 {
+			reg = <0x83010000 0x0 0x00000000 0x0 0x00100000
+			       0x83010000 0x0 0x00100000 0x0 0x00100000>;
+			memory-region = <&wifi_restricted_dma_region>;
+		};
+	};
 };
 
 &pio {
