@@ -202,8 +202,7 @@ static void *typec_mux_match(struct device_connection *con, int ep, void *data)
 
 	/* Accessory Mode muxes */
 	if (!desc) {
-		match = fwnode_property_present(con->fwnode, "accessory") ||
-			fwnode_is_compatible(con->fwnode, con->id);
+		match = fwnode_property_present(con->fwnode, "accessory");
 		if (match)
 			goto find_mux;
 		return NULL;
@@ -256,8 +255,8 @@ struct typec_mux *fwnode_typec_mux_get(struct fwnode_handle *fwnode,
 {
 	struct typec_mux *mux;
 
-	mux = fwnode_connection_find_match(fwnode, "typec-mode-switch",
-					   (void *)desc, typec_mux_match);
+	mux = fwnode_connection_find_match(fwnode, "mode-switch", (void *)desc,
+					   typec_mux_match);
 	if (!IS_ERR_OR_NULL(mux))
 		WARN_ON(!try_module_get(mux->dev.parent->driver->owner));
 
