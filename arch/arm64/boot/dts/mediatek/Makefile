@@ -15,3 +15,4 @@ dtb-$(CONFIG_ARCH_MEDIATEK) += mt8192-asurada-rev0.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8192-asurada-rev1.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8192-evb.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8192-hayato-rev1.dtb
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt8192-spherion-rev0.dtb
