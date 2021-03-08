@@ -451,6 +451,7 @@
 		anx_mux0 {
 			compatible = "typec-mode-switch";
 			reg = <0>;
+			accessory;
 
 			port {
 				anx_typec0: endpoint {
@@ -462,6 +463,7 @@
 		anx_mux1 {
 			compatible = "typec-mode-switch";
 			reg = <1>;
+			accessory;
 
 			port {
 				anx_typec1: endpoint {
