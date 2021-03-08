@@ -761,6 +761,7 @@
 	};
 
 	qcom,cam-icp {
+		status = "disable";
 		cpas_intf = <&cpas>;
 		compatible = "qcom,cam-icp";
 		compat-hw-name = "qcom,a5",
@@ -773,6 +774,7 @@
 	};
 
 	cam_a5: qcom,a5@ac00000 {
+		status = "disable";
 		cell-index = <0>;
 		cpas_intf = <&cpas>;
 		compatible = "qcom,cam-a5";
@@ -809,6 +811,7 @@
 	};
 
 	cam_bps: qcom,bps {
+		status = "disable";
 		cell-index = <0>;
 		cpas_intf = <&cpas>;
 		compatible = "qcom,cam-bps";
@@ -840,6 +843,7 @@
 	};
 
 	cam_ipe0: qcom,ipe0 {
+		status = "disable";
 		cell-index = <0>;
 		cpas_intf = <&cpas>;
 		compatible = "qcom,cam-ipe";
