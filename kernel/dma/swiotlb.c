@@ -881,9 +881,7 @@ static int rmem_swiotlb_device_init(struct reserved_mem *rmem,
 		if (!swiotlb)
 			return -ENOMEM;
 #ifdef CONFIG_ARM
-		unsigned long pfn = PHYS_PFN(rmem->base);
-
-		if (!PageHighMem(pfn_to_page(pfn))) {
+		if (!PageHighMem(pfn_to_page(PHYS_PFN(rmem->base)))) {
 			ret = -EINVAL;
 			goto cleanup;
 		}
