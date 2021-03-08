@@ -649,7 +649,7 @@ phys_addr_t swiotlb_tbl_map_single(struct device *hwdev,
 {
 	struct swiotlb *swiotlb = get_swiotlb(hwdev);
 	phys_addr_t tlb_addr;
-	unsigned int nslots, index;
+	int nslots, index;
 	int i;
 
 	if (mem_encrypt_active())
@@ -824,7 +824,7 @@ struct page *dev_swiotlb_alloc(struct device *dev, size_t size)
 {
 	struct swiotlb *swiotlb;
 	phys_addr_t tlb_addr;
-	unsigned int index;
+	int index;
 
 	if (!dev->dev_swiotlb)
 		return NULL;
