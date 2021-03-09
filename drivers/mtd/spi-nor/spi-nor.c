@@ -196,7 +196,7 @@ struct flash_info {
 	u16		page_size;
 	u16		addr_width;
 
-	u16		flags;
+	u32		flags;
 #define SECT_4K			BIT(0)	/* SPINOR_OP_BE_4K works uniformly */
 #define SPI_NOR_NO_ERASE	BIT(1)	/* No erase command needed */
 #define SST_WRITE		BIT(2)	/* use SST byte programming */
@@ -233,6 +233,11 @@ struct flash_info {
 #define SPI_NOR_SKIP_SFDP	BIT(13)	/* Skip parsing of SFDP tables */
 #define USE_CLSR		BIT(14)	/* use CLSR command */
 #define SPI_NOR_OCTAL_READ	BIT(15)	/* Flash supports Octal Read */
+#define SPI_NOR_SWP_IS_VOLATILE	BIT(22)	/*
+					 * Flash has volatile software write
+					 * protection bits. Usually these will
+					 * power-up in a write-protected state.
+					 */
 
 	/* Part specific fixup hooks. */
 	const struct spi_nor_fixups *fixups;
@@ -2110,6 +2115,105 @@ static struct spi_nor_fixups gd25q256_fixups = {
 	.default_init = gd25q256_default_init,
 };
 
+#define ATMEL_SR_GLOBAL_PROTECT_MASK GENMASK(5, 2)
+/**
+ * atmel_set_global_protection - Do a Global Protect or Unprotect command
+ * @nor:	pointer to 'struct spi_nor'
+ * @ofs:	offset in bytes
+ * @len:	len in bytes
+ * @is_protect:	if true do a Global Protect otherwise it is a Global Unprotect
+ *
+ * Return: 0 on success, -error otherwise.
+ */
+static int atmel_set_global_protection(struct spi_nor *nor, loff_t ofs,
+				       uint64_t len, bool is_protect)
+{
+	int ret;
+	u8 sr;
+
+	/* We only support locking the whole flash array */
+	if (ofs || len != nor->params.size)
+		return -EINVAL;
+
+	ret = spi_nor_read_sr(nor, nor->bouncebuf);
+	if (ret)
+		return ret;
+
+	sr = nor->bouncebuf[0];
+
+	/* SRWD bit needs to be cleared, otherwise the protection doesn't change */
+	if (sr & SR_SRWD) {
+		sr &= ~SR_SRWD;
+		ret = spi_nor_write_sr_and_check(nor, sr);
+		if (ret) {
+			dev_dbg(nor->dev, "unable to clear SRWD bit, WP# asserted?\n");
+			return ret;
+		}
+	}
+
+	if (is_protect) {
+		sr |= ATMEL_SR_GLOBAL_PROTECT_MASK;
+		/*
+		 * Set the SRWD bit again as soon as we are protecting
+		 * anything. This will ensure that the WP# pin is working
+		 * correctly. By doing this we also behave the same as
+		 * spi_nor_sr_lock(), which sets SRWD if any block protection
+		 * is active.
+		 */
+		sr |= SR_SRWD;
+	} else {
+		sr &= ~ATMEL_SR_GLOBAL_PROTECT_MASK;
+	}
+
+	nor->bouncebuf[0] = sr;
+
+	/*
+	 * We cannot use the spi_nor_write_sr_and_check() because this command
+	 * isn't really setting any bits, instead it is an pseudo command for
+	 * "Global Unprotect" or "Global Protect"
+	 */
+	return spi_nor_write_sr(nor, nor->bouncebuf[0]);
+}
+
+static int atmel_global_protect(struct spi_nor *nor, loff_t ofs, uint64_t len)
+{
+	return atmel_set_global_protection(nor, ofs, len, true);
+}
+
+static int atmel_global_unprotect(struct spi_nor *nor, loff_t ofs, uint64_t len)
+{
+	return atmel_set_global_protection(nor, ofs, len, false);
+}
+
+static int atmel_is_global_protected(struct spi_nor *nor, loff_t ofs, uint64_t len)
+{
+	int ret;
+
+	if (ofs >= nor->params.size || (ofs + len) > nor->params.size)
+		return -EINVAL;
+
+	ret = spi_nor_read_sr(nor, nor->bouncebuf);
+	if (ret)
+		return ret;
+
+	return ((nor->bouncebuf[0] & ATMEL_SR_GLOBAL_PROTECT_MASK) == ATMEL_SR_GLOBAL_PROTECT_MASK);
+}
+
+static const struct spi_nor_locking_ops atmel_global_protection_ops = {
+	.lock = atmel_global_protect,
+	.unlock = atmel_global_unprotect,
+	.is_locked = atmel_is_global_protected,
+};
+
+static void atmel_global_protection_default_init(struct spi_nor *nor)
+{
+	nor->params.locking_ops = &atmel_global_protection_ops;
+}
+
+static const struct spi_nor_fixups atmel_global_protection_fixups = {
+	.default_init = atmel_global_protection_default_init,
+};
+
 /* NOTE: double check command sets and memory organization when you add
  * more nor chips.  This current list focusses on newer chips, which
  * have been converging on command sets which including JEDEC ID.
@@ -2126,15 +2230,29 @@ static const struct flash_info spi_nor_ids[] = {
 	{ "at25fs010",  INFO(0x1f6601, 0, 32 * 1024,   4, SECT_4K | SPI_NOR_HAS_LOCK) },
 	{ "at25fs040",  INFO(0x1f6604, 0, 64 * 1024,   8, SECT_4K | SPI_NOR_HAS_LOCK) },
 
-	{ "at25df041a", INFO(0x1f4401, 0, 64 * 1024,   8, SECT_4K | SPI_NOR_HAS_LOCK) },
-	{ "at25df321",  INFO(0x1f4700, 0, 64 * 1024,  64, SECT_4K | SPI_NOR_HAS_LOCK) },
-	{ "at25df321a", INFO(0x1f4701, 0, 64 * 1024,  64, SECT_4K | SPI_NOR_HAS_LOCK) },
-	{ "at25df641",  INFO(0x1f4800, 0, 64 * 1024, 128, SECT_4K | SPI_NOR_HAS_LOCK) },
+	{ "at25df041a", INFO(0x1f4401, 0, 64 * 1024,   8,
+			     SECT_4K | SPI_NOR_HAS_LOCK | SPI_NOR_SWP_IS_VOLATILE)
+			.fixups = &atmel_global_protection_fixups },
+	{ "at25df321",  INFO(0x1f4700, 0, 64 * 1024,  64,
+			     SECT_4K | SPI_NOR_HAS_LOCK | SPI_NOR_SWP_IS_VOLATILE)
+			.fixups = &atmel_global_protection_fixups },
+	{ "at25df321a", INFO(0x1f4701, 0, 64 * 1024,  64,
+			     SECT_4K | SPI_NOR_HAS_LOCK | SPI_NOR_SWP_IS_VOLATILE)
+			.fixups = &atmel_global_protection_fixups },
+	{ "at25df641",  INFO(0x1f4800, 0, 64 * 1024, 128,
+			     SECT_4K | SPI_NOR_HAS_LOCK | SPI_NOR_SWP_IS_VOLATILE)
+			.fixups = &atmel_global_protection_fixups },
 
-	{ "at26f004",   INFO(0x1f0400, 0, 64 * 1024,  8, SECT_4K | SPI_NOR_HAS_LOCK) },
-	{ "at26df081a", INFO(0x1f4501, 0, 64 * 1024, 16, SECT_4K | SPI_NOR_HAS_LOCK) },
-	{ "at26df161a", INFO(0x1f4601, 0, 64 * 1024, 32, SECT_4K | SPI_NOR_HAS_LOCK) },
-	{ "at26df321",  INFO(0x1f4700, 0, 64 * 1024, 64, SECT_4K | SPI_NOR_HAS_LOCK) },
+	{ "at26f004",   INFO(0x1f0400, 0, 64 * 1024,  8, SECT_4K) },
+	{ "at26df081a", INFO(0x1f4501, 0, 64 * 1024, 16,
+			     SECT_4K | SPI_NOR_HAS_LOCK | SPI_NOR_SWP_IS_VOLATILE)
+			.fixups = &atmel_global_protection_fixups },
+	{ "at26df161a", INFO(0x1f4601, 0, 64 * 1024, 32,
+			     SECT_4K | SPI_NOR_HAS_LOCK | SPI_NOR_SWP_IS_VOLATILE)
+			.fixups = &atmel_global_protection_fixups },
+	{ "at26df321",  INFO(0x1f4700, 0, 64 * 1024, 64,
+			     SECT_4K | SPI_NOR_HAS_LOCK | SPI_NOR_SWP_IS_VOLATILE)
+			.fixups = &atmel_global_protection_fixups },
 
 	{ "at45db081d", INFO(0x1f2500, 0, 64 * 1024, 16, SECT_4K) },
 
@@ -2154,7 +2272,8 @@ static const struct flash_info spi_nor_ids[] = {
 	{ "en25s64",	INFO(0x1c3817, 0, 64 * 1024,  128, SECT_4K) },
 
 	/* ESMT */
-	{ "f25l32pa", INFO(0x8c2016, 0, 64 * 1024, 64, SECT_4K | SPI_NOR_HAS_LOCK) },
+	{ "f25l32pa", INFO(0x8c2016, 0, 64 * 1024, 64,
+				SECT_4K | SPI_NOR_HAS_LOCK | SPI_NOR_SWP_IS_VOLATILE) },
 	{ "f25l32qa", INFO(0x8c4116, 0, 64 * 1024, 64, SECT_4K | SPI_NOR_HAS_LOCK) },
 	{ "f25l64qa", INFO(0x8c4117, 0, 64 * 1024, 128, SECT_4K | SPI_NOR_HAS_LOCK) },
 
@@ -2206,9 +2325,12 @@ static const struct flash_info spi_nor_ids[] = {
 	},
 
 	/* Intel/Numonyx -- xxxs33b */
-	{ "160s33b",  INFO(0x898911, 0, 64 * 1024,  32, 0) },
-	{ "320s33b",  INFO(0x898912, 0, 64 * 1024,  64, 0) },
-	{ "640s33b",  INFO(0x898913, 0, 64 * 1024, 128, 0) },
+	{ "160s33b",  INFO(0x898911, 0, 64 * 1024,  32,
+			   SPI_NOR_HAS_LOCK | SPI_NOR_SWP_IS_VOLATILE) },
+	{ "320s33b",  INFO(0x898912, 0, 64 * 1024,  64,
+			   SPI_NOR_HAS_LOCK | SPI_NOR_SWP_IS_VOLATILE) },
+	{ "640s33b",  INFO(0x898913, 0, 64 * 1024, 128,
+			   SPI_NOR_HAS_LOCK | SPI_NOR_SWP_IS_VOLATILE) },
 
 	/* ISSI */
 	{ "is25cd512",  INFO(0x7f9d20, 0, 32 * 1024,   2, SECT_4K) },
@@ -2343,18 +2465,18 @@ static const struct flash_info spi_nor_ids[] = {
 	{ "s25fl256l",  INFO(0x016019,      0,  64 * 1024, 512, SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ | SPI_NOR_4B_OPCODES) },
 
 	/* SST -- large erase sizes are "overlays", "sectors" are 4K */
-	{ "sst25vf040b", INFO(0xbf258d, 0, 64 * 1024,  8, SECT_4K | SST_WRITE) },
-	{ "sst25vf080b", INFO(0xbf258e, 0, 64 * 1024, 16, SECT_4K | SST_WRITE) },
-	{ "sst25vf016b", INFO(0xbf2541, 0, 64 * 1024, 32, SECT_4K | SST_WRITE) },
-	{ "sst25vf032b", INFO(0xbf254a, 0, 64 * 1024, 64, SECT_4K | SST_WRITE) },
-	{ "sst25vf064c", INFO(0xbf254b, 0, 64 * 1024, 128, SECT_4K) },
-	{ "sst25wf512",  INFO(0xbf2501, 0, 64 * 1024,  1, SECT_4K | SST_WRITE) },
-	{ "sst25wf010",  INFO(0xbf2502, 0, 64 * 1024,  2, SECT_4K | SST_WRITE) },
-	{ "sst25wf020",  INFO(0xbf2503, 0, 64 * 1024,  4, SECT_4K | SST_WRITE) },
+	{ "sst25vf040b", INFO(0xbf258d, 0, 64 * 1024,  8, SECT_4K | SST_WRITE | SPI_NOR_SWP_IS_VOLATILE) },
+	{ "sst25vf080b", INFO(0xbf258e, 0, 64 * 1024, 16, SECT_4K | SST_WRITE | SPI_NOR_SWP_IS_VOLATILE) },
+	{ "sst25vf016b", INFO(0xbf2541, 0, 64 * 1024, 32, SECT_4K | SST_WRITE | SPI_NOR_SWP_IS_VOLATILE) },
+	{ "sst25vf032b", INFO(0xbf254a, 0, 64 * 1024, 64, SECT_4K | SST_WRITE | SPI_NOR_SWP_IS_VOLATILE) },
+	{ "sst25vf064c", INFO(0xbf254b, 0, 64 * 1024, 128, SECT_4K | SPI_NOR_SWP_IS_VOLATILE) },
+	{ "sst25wf512",  INFO(0xbf2501, 0, 64 * 1024,  1, SECT_4K | SST_WRITE | SPI_NOR_SWP_IS_VOLATILE) },
+	{ "sst25wf010",  INFO(0xbf2502, 0, 64 * 1024,  2, SECT_4K | SST_WRITE | SPI_NOR_SWP_IS_VOLATILE) },
+	{ "sst25wf020",  INFO(0xbf2503, 0, 64 * 1024,  4, SECT_4K | SST_WRITE | SPI_NOR_SWP_IS_VOLATILE) },
 	{ "sst25wf020a", INFO(0x621612, 0, 64 * 1024,  4, SECT_4K) },
 	{ "sst25wf040b", INFO(0x621613, 0, 64 * 1024,  8, SECT_4K) },
-	{ "sst25wf040",  INFO(0xbf2504, 0, 64 * 1024,  8, SECT_4K | SST_WRITE) },
-	{ "sst25wf080",  INFO(0xbf2505, 0, 64 * 1024, 16, SECT_4K | SST_WRITE) },
+	{ "sst25wf040",  INFO(0xbf2504, 0, 64 * 1024,  8, SECT_4K | SST_WRITE | SPI_NOR_SWP_IS_VOLATILE) },
+	{ "sst25wf080",  INFO(0xbf2505, 0, 64 * 1024, 16, SECT_4K | SST_WRITE | SPI_NOR_SWP_IS_VOLATILE) },
 	{ "sst26wf016b", INFO(0xbf2651, 0, 64 * 1024, 32, SECT_4K |
 			      SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
 	{ "sst26vf064b", INFO(0xbf2643, 0, 64 * 1024, 128, SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
@@ -4701,6 +4823,8 @@ static void spi_nor_try_unlock_all(struct spi_nor *nor)
 	if (!(nor->flags & SNOR_F_HAS_LOCK))
 		return;
 
+	dev_dbg(nor->dev, "Unprotecting entire flash array\n");
+
 	ret = spi_nor_unlock(&nor->mtd, 0, nor->params.size);
 	if (ret)
 		dev_dbg(nor->dev, "Failed to unlock the entire flash memory array\n");
@@ -4716,7 +4840,20 @@ static int spi_nor_init(struct spi_nor *nor)
 		return err;
 	}
 
-	spi_nor_try_unlock_all(nor);
+	/*
+	 * Some SPI NOR flashes are write protected by default after a power-on
+	 * reset cycle, in order to avoid inadvertent writes during power-up.
+	 * Backward compatibility imposes to unlock the entire flash memory
+	 * array at power-up by default. Depending on the kernel configuration
+	 * (1) do nothing, (2) always unlock the entire flash array or (3)
+	 * unlock the entire flash array only when the software write
+	 * protection bits are volatile. The latter is indicated by
+	 * SNOR_F_SWP_IS_VOLATILE.
+	 */
+	if (IS_ENABLED(CONFIG_MTD_SPI_NOR_SWP_DISABLE) ||
+	    (IS_ENABLED(CONFIG_MTD_SPI_NOR_SWP_DISABLE_ON_VOLATILE) &&
+	     nor->flags & SNOR_F_SWP_IS_VOLATILE))
+		spi_nor_try_unlock_all(nor);
 
 	if (nor->addr_width == 4 && !(nor->flags & SNOR_F_4B_OPCODES)) {
 		/*
@@ -4934,6 +5071,8 @@ int spi_nor_scan(struct spi_nor *nor, const char *name,
 		nor->flags |= SNOR_F_NO_OP_CHIP_ERASE;
 	if (info->flags & USE_CLSR)
 		nor->flags |= SNOR_F_USE_CLSR;
+	if (info->flags & SPI_NOR_SWP_IS_VOLATILE)
+		nor->flags |= SNOR_F_SWP_IS_VOLATILE;
 
 	if (info->flags & SPI_NOR_NO_ERASE)
 		mtd->flags |= MTD_NO_ERASE;
