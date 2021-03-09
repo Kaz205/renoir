@@ -32,35 +32,6 @@
 #define EP_BOFFSET(p)	((p) & 0x3fff)
 #define EP_BREPEAT(p)	(((p) & 0x7fff) << 16)
 
-enum mtk_sch_err_type {
-	SCH_SUCCESS = 0,
-	SCH_ERR_Y6,
-	SCH_SS_OVERLAP,
-	SCH_CS_OVERFLOW,
-	SCH_BW_OVERFLOW,
-	SCH_FIXME,
-};
-
-static char *sch_error_string(enum mtk_sch_err_type error)
-{
-	switch (error) {
-	case SCH_SUCCESS:
-		return "Success";
-	case SCH_ERR_Y6:
-		return "Can't schedule Start-Split in Y6";
-	case SCH_SS_OVERLAP:
-		return "Can't find a suitable Start-Split location";
-	case SCH_CS_OVERFLOW:
-		return "The last Complete-Split is greater than 7";
-	case SCH_BW_OVERFLOW:
-		return "Bandwidth exceeds the max limit";
-	case SCH_FIXME:
-		return "FIXME, to be resolved";
-	default:
-		return "Unknown error type";
-	}
-}
-
 static int is_fs_or_ls(enum usb_device_speed speed)
 {
 	return speed == USB_SPEED_FULL || speed == USB_SPEED_LOW;
@@ -110,22 +81,11 @@ static u32 get_esit(struct xhci_ep_ctx *ep_ctx)
 	return esit;
 }
 
-static u32 get_bw_boundary(enum usb_device_speed speed)
-{
-	switch (speed) {
-	case USB_SPEED_SUPER_PLUS:
-		return SSP_BW_BOUNDARY;
-	case USB_SPEED_SUPER:
-		return SS_BW_BOUNDARY;
-	default:
-		return HS_BW_BOUNDARY;
-	}
-}
-
 static struct mu3h_sch_tt *find_tt(struct usb_device *udev)
 {
 	struct usb_tt *utt = udev->tt;
 	struct mu3h_sch_tt *tt, **tt_index, **ptt;
+	unsigned int port;
 	bool allocated_index = false;
 
 	if (!utt)
@@ -147,9 +107,10 @@ static struct mu3h_sch_tt *find_tt(struct usb_device *udev)
 			utt->hcpriv = tt_index;
 			allocated_index = true;
 		}
-
-		ptt = &tt_index[udev->ttport - 1];
+		port = udev->ttport - 1;
+		ptt = &tt_index[port];
 	} else {
+		port = 0;
 		ptt = (struct mu3h_sch_tt **) &utt->hcpriv;
 	}
 
@@ -164,7 +125,8 @@ static struct mu3h_sch_tt *find_tt(struct usb_device *udev)
 			return ERR_PTR(-ENOMEM);
 		}
 		INIT_LIST_HEAD(&tt->ep_list);
-
+		tt->usb_tt = utt;
+		tt->tt_port = port;
 		*ptt = tt;
 	}
 
@@ -242,15 +204,6 @@ static struct mu3h_sch_ep_info *create_sch_ep(struct usb_device *udev,
 	INIT_LIST_HEAD(&sch_ep->tt_endpoint);
 
 	return sch_ep;
-}
-
-static void delete_sch_ep(struct usb_device *udev, struct mu3h_sch_ep_info *sch_ep)
-{
-	if (sch_ep->sch_tt)
-		drop_tt(udev);
-
-	list_del(&sch_ep->endpoint);
-	kfree(sch_ep);
 }
 
 static void setup_sch_info(struct usb_device *udev,
@@ -422,55 +375,21 @@ static void update_bus_bw(struct mu3h_sch_bw_info *sch_bw,
 					sch_ep->bw_budget_table[j];
 		}
 	}
+	sch_ep->allocated = used;
 }
 
-static int check_fs_bus_bw(struct mu3h_sch_ep_info *sch_ep, int offset)
-{
-	struct mu3h_sch_tt *tt = sch_ep->sch_tt;
-	u32 num_esit, base;
-	u32 i, j;
-	u32 tmp;
-
-	num_esit = XHCI_MTK_MAX_ESIT / sch_ep->esit;
-
-	for (i = 0; i < num_esit; i++) {
-		base = offset + i * sch_ep->esit;
-
-		/*
-		 * Compared with hs bus, no matter what ep type
-		 * The hub will always delay one uframe to send
-		 * data for us. As described in the figure below.
-		 */
-		if (sch_ep->ep_type == ISOC_OUT_EP) {
-			for (j = 0; j < sch_ep->num_budget_microframes; j++) {
-				tmp = tt->fs_bus_bw[base + 1 + j]
-					+ sch_ep->bw_cost_per_microframe;
-
-				if (tmp > FS_PAYLOAD_MAX)
-					return SCH_BW_OVERFLOW;
-			}
-		} else {
-			for (j = 0; j < sch_ep->cs_count; j++) {
-				tmp = tt->fs_bus_bw[base + 1 + j]
-					+ sch_ep->bw_cost_per_microframe;
-
-				if (tmp > FS_PAYLOAD_MAX)
-					return SCH_BW_OVERFLOW;
-			}
-		}
-	}
-	return SCH_SUCCESS;
-}
-
-static int check_sch_tt(struct mu3h_sch_ep_info *sch_ep, int offset)
+static int check_sch_tt(struct usb_device *udev,
+	struct mu3h_sch_ep_info *sch_ep, u32 offset)
 {
 	struct mu3h_sch_tt *tt = sch_ep->sch_tt;
 	u32 extra_cs_count;
+	u32 fs_budget_start;
 	u32 start_ss, last_ss;
 	u32 start_cs, last_cs;
-	u32 i;
+	int i;
 
 	start_ss = offset % 8;
+	fs_budget_start = (start_ss + 1) % 8;
 
 	if (sch_ep->ep_type == ISOC_OUT_EP) {
 		last_ss = start_ss + sch_ep->cs_count - 1;
@@ -480,12 +399,12 @@ static int check_sch_tt(struct mu3h_sch_ep_info *sch_ep, int offset)
 		 * must never schedule Start-Split in Y6
 		 */
 		if (!(start_ss == 7 || last_ss < 6))
-			return SCH_ERR_Y6;
+			return -ERANGE;
 
-		for (i = 0; i < sch_ep->cs_count; i++) {
-			if (test_bit(offset + i, tt->ss_bit_map))
-				return SCH_SS_OVERLAP;
-		}
+		for (i = 0; i < sch_ep->cs_count; i++)
+			if (test_bit(offset + i, tt->split_bit_map))
+				return -ERANGE;
+
 	} else {
 		u32 cs_count = DIV_ROUND_UP(sch_ep->maxpkt, FS_PAYLOAD_MAX);
 
@@ -494,36 +413,27 @@ static int check_sch_tt(struct mu3h_sch_ep_info *sch_ep, int offset)
 		 * must never schedule Start-Split in Y6
 		 */
 		if (start_ss == 6)
-			return SCH_ERR_Y6;
+			return -ERANGE;
 
 		/* one uframe for ss + one uframe for idle */
 		start_cs = (start_ss + 2) % 8;
 		last_cs = start_cs + cs_count - 1;
 
 		if (last_cs > 7)
-			return SCH_CS_OVERFLOW;
+			return -ERANGE;
 
-		/*
-		 * usb_20 spec section11.18, the bottom of page 378:
-		 * For interrupt endpoints, the maximum size of the LS/FS
-		 * transaction guarantees that it can never require more than
-		 * two complete-split transactions.
-		 */
 		if (sch_ep->ep_type == ISOC_IN_EP)
 			extra_cs_count = (last_cs == 7) ? 1 : 2;
 		else /*  ep_type : INTR IN / INTR OUT */
-			extra_cs_count = 1;
+			extra_cs_count = (fs_budget_start == 6) ? 1 : 2;
 
 		cs_count += extra_cs_count;
 		if (cs_count > 7)
 			cs_count = 7; /* HW limit */
 
-		if (test_bit(offset, tt->ss_bit_map))
-			return SCH_SS_OVERLAP;
-
-		if (sch_ep->ep_type == INT_OUT_EP) {
-			if (test_bit(offset, tt->idle_bit_map))
-				return SCH_FIXME;
+		for (i = 0; i < cs_count + 2; i++) {
+			if (test_bit(offset + i, tt->split_bit_map))
+				return -ERANGE;
 		}
 
 		sch_ep->cs_count = cs_count;
@@ -538,88 +448,41 @@ static int check_sch_tt(struct mu3h_sch_ep_info *sch_ep, int offset)
 			sch_ep->num_budget_microframes = sch_ep->esit;
 	}
 
-	return check_fs_bus_bw(sch_ep, offset);
+	return 0;
 }
 
-static void update_sch_tt(struct mu3h_sch_ep_info *sch_ep, bool used)
+static void update_sch_tt(struct usb_device *udev,
+	struct mu3h_sch_ep_info *sch_ep)
 {
 	struct mu3h_sch_tt *tt = sch_ep->sch_tt;
 	u32 base, num_esit;
-	u32 i, j;
+	int i, j;
 
 	num_esit = XHCI_MTK_MAX_ESIT / sch_ep->esit;
-
 	for (i = 0; i < num_esit; i++) {
 		base = sch_ep->offset + i * sch_ep->esit;
-
-		if (sch_ep->ep_type == ISOC_OUT_EP) {
-			for (j = 0; j < sch_ep->num_budget_microframes; j++) {
-				if (used) {
-					set_bit(base + j, tt->ss_bit_map);
-					tt->fs_bus_bw[base + 1 + j] +=
-						sch_ep->bw_cost_per_microframe;
-				} else {
-					clear_bit(base + j, tt->ss_bit_map);
-					tt->fs_bus_bw[base + 1 + j] -=
-						sch_ep->bw_cost_per_microframe;
-				}
-			}
-		} else {
-			if (used)
-				set_bit(base, tt->ss_bit_map);
-			else
-				clear_bit(base, tt->ss_bit_map);
-
-			if (sch_ep->ep_type == INT_OUT_EP) {
-				if (used)
-					set_bit(base + 1, tt->idle_bit_map);
-				else
-					clear_bit(base + 1, tt->idle_bit_map);
-			}
-
-			for (j = 0; j < sch_ep->cs_count; j++) {
-				if (used)
-					tt->fs_bus_bw[base + 1 + j] +=
-						sch_ep->bw_cost_per_microframe;
-				else
-					tt->fs_bus_bw[base + 1 + j] -=
-						sch_ep->bw_cost_per_microframe;
-			}
-		}
-	}
-}
-
-static int load_ep_bw(struct mu3h_sch_bw_info *sch_bw,
-		      struct mu3h_sch_ep_info *sch_ep, bool loaded)
-{
-	struct mu3h_sch_tt *tt = sch_ep->sch_tt;
-
-	if (sch_ep->sch_tt) {
-		update_sch_tt(sch_ep, loaded);
-		if (loaded)
-			list_add_tail(&sch_ep->tt_endpoint, &tt->ep_list);
-		else
-			list_del(&sch_ep->tt_endpoint);
+		for (j = 0; j < sch_ep->num_budget_microframes; j++)
+			set_bit(base + j, tt->split_bit_map);
 	}
 
-	/* update bus bandwidth info */
-	update_bus_bw(sch_bw, sch_ep, loaded);
-	sch_ep->allocated = loaded;
-	return 0;
+	list_add_tail(&sch_ep->tt_endpoint, &tt->ep_list);
 }
 
 static int check_sch_bw(struct usb_device *udev,
 	struct mu3h_sch_bw_info *sch_bw, struct mu3h_sch_ep_info *sch_ep)
 {
 	u32 offset;
+	u32 esit;
 	u32 min_bw;
 	u32 min_index;
 	u32 worst_bw;
 	u32 bw_boundary;
-	u32 boundary;
 	u32 min_num_budget;
 	u32 min_cs_count;
-	int ret = 0;
+	bool tt_offset_ok = false;
+	int ret;
+
+	esit = sch_ep->esit;
 
 	/*
 	 * Search through all possible schedule microframes.
@@ -629,20 +492,16 @@ static int check_sch_bw(struct usb_device *udev,
 	min_index = 0;
 	min_cs_count = sch_ep->cs_count;
 	min_num_budget = sch_ep->num_budget_microframes;
-
-	if (is_fs_or_ls(udev->speed) && sch_ep->ep_type != ISOC_OUT_EP)
-		boundary = sch_ep->esit + 1;
-	else
-		boundary = sch_ep->esit;
-
-	for (offset = 0; offset < sch_ep->esit; offset++) {
-		if (sch_ep->sch_tt) {
-			ret = check_sch_tt(sch_ep, offset);
-			if (ret != SCH_SUCCESS)
+	for (offset = 0; offset < esit; offset++) {
+		if (is_fs_or_ls(udev->speed)) {
+			ret = check_sch_tt(udev, sch_ep, offset);
+			if (ret)
 				continue;
+			else
+				tt_offset_ok = true;
 		}
 
-		if ((offset + sch_ep->num_budget_microframes) > boundary)
+		if ((offset + sch_ep->num_budget_microframes) > sch_ep->esit)
 			break;
 
 		worst_bw = get_max_bw(sch_bw, sch_ep, offset);
@@ -656,22 +515,33 @@ static int check_sch_bw(struct usb_device *udev,
 			break;
 	}
 
-	bw_boundary = get_bw_boundary(udev->speed);
-	/* check bandwidth */
-	if (min_bw > bw_boundary) {
-		if (ret) {
-			dev_err(&udev->dev, "%s %s\n", __func__,
-				sch_error_string(ret));
-			return -ret;
-		}
+	if (udev->speed == USB_SPEED_SUPER_PLUS)
+		bw_boundary = SSP_BW_BOUNDARY;
+	else if (udev->speed == USB_SPEED_SUPER)
+		bw_boundary = SS_BW_BOUNDARY;
+	else
+		bw_boundary = HS_BW_BOUNDARY;
 
+	/* check bandwidth */
+	if (min_bw > bw_boundary)
 		return -ERANGE;
-	}
 
 	sch_ep->offset = min_index;
 	sch_ep->cs_count = min_cs_count;
 	sch_ep->num_budget_microframes = min_num_budget;
-	return load_ep_bw(sch_bw, sch_ep, true);
+
+	if (is_fs_or_ls(udev->speed)) {
+		/* all offset for tt is not ok*/
+		if (!tt_offset_ok)
+			return -ERANGE;
+
+		update_sch_tt(udev, sch_ep);
+	}
+
+	/* update bus bandwidth info */
+	update_bus_bw(sch_bw, sch_ep, 1);
+
+	return 0;
 }
 
 static void destroy_sch_ep(struct usb_device *udev,
@@ -679,17 +549,23 @@ static void destroy_sch_ep(struct usb_device *udev,
 {
 	/* only release ep bw check passed by check_sch_bw() */
 	if (sch_ep->allocated)
-		load_ep_bw(sch_bw, sch_ep, false);
+		update_bus_bw(sch_bw, sch_ep, 0);
 
-	delete_sch_ep(udev, sch_ep);
+	list_del(&sch_ep->endpoint);
+
+	if (sch_ep->sch_tt) {
+		list_del(&sch_ep->tt_endpoint);
+		drop_tt(udev);
+	}
+	kfree(sch_ep);
 }
 
 static bool need_bw_sch(struct usb_host_endpoint *ep,
 	enum usb_device_speed speed, int has_tt)
 {
 	/* only for periodic endpoints */
-	if (usb_endpoint_xfer_control(&ep->desc) ||
-	    usb_endpoint_xfer_bulk(&ep->desc))
+	if (usb_endpoint_xfer_control(&ep->desc)
+		|| usb_endpoint_xfer_bulk(&ep->desc))
 		return false;
 
 	/*
