@@ -369,6 +369,13 @@ virtio_gpu_cmd_resource_create_3d(struct virtio_gpu_device *vgdev,
 				  struct virtio_gpu_object_params *params,
 				  struct virtio_gpu_fence *fence);
 void
+virtio_gpu_cmd_resource_create_blob_guest(struct virtio_gpu_device *vgdev,
+					  struct virtio_gpu_object *bo,
+					  uint32_t ctx_id, uint32_t blob_mem,
+					  uint32_t blob_flags, uint64_t blob_id,
+					  uint64_t size, uint32_t nents,
+					  struct virtio_gpu_mem_entry *ents);
+void
 virtio_gpu_cmd_resource_create_blob(struct virtio_gpu_device *vgdev,
 				    struct virtio_gpu_object *bo,
 				    uint32_t ctx_id, uint32_t blob_mem,

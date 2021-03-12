@@ -35,6 +35,10 @@
 
 #include "virtgpu_drv.h"
 
+#define VIRTGPU_BLOB_FLAG_MASK (VIRTGPU_BLOB_FLAG_MAPPABLE | \
+				VIRTGPU_BLOB_FLAG_SHAREABLE | \
+				VIRTGPU_BLOB_FLAG_CROSS_DEVICE)
+
 static void convert_to_hw_box(struct virtio_gpu_box *dst,
 			      const struct drm_virtgpu_3d_box *src)
 {
@@ -638,6 +642,15 @@ static int virtio_gpu_resource_create_blob_ioctl(struct drm_device *dev,
 	params.blob = true;
 	ctx_id = vfpriv ? vfpriv->ctx_id : 0;
 
+	if (rc_blob->blob_flags & ~VIRTGPU_BLOB_FLAG_MASK ||
+	    !rc_blob->blob_flags) {
+		return -EINVAL;
+	}
+
+	if (rc_blob->blob_flags & VIRTGPU_BLOB_FLAG_CROSS_DEVICE &&
+	    !vgdev->has_resource_assign_uuid)
+		return -EINVAL;
+
 	if (rc_blob->cmd_size) {
 		void *buf;
 	        /* gets freed when the ring has consumed it */
@@ -695,10 +708,21 @@ static int virtio_gpu_resource_create_blob_ioctl(struct drm_device *dev,
 		goto err_free_ents;
 	}
 
-	virtio_gpu_cmd_resource_create_blob(vgdev, obj, ctx_id,
-					    rc_blob->blob_mem, rc_blob->blob_flags,
-					    rc_blob->blob_id, rc_blob->size, nents,
-					    ents);
+	if (has_guest) {
+		virtio_gpu_cmd_resource_create_blob_guest(vgdev, obj, ctx_id,
+							  rc_blob->blob_mem,
+							  rc_blob->blob_flags,
+							  rc_blob->blob_id,
+							  rc_blob->size,
+							  nents, ents);
+	} else {
+		virtio_gpu_cmd_resource_create_blob(vgdev, obj, ctx_id,
+						    rc_blob->blob_mem,
+						    rc_blob->blob_flags,
+						    rc_blob->blob_id,
+						    rc_blob->size,
+						    nents, ents);
+	}
 
 	ret = drm_gem_handle_create(file, &obj->gem_base, &handle);
 	if (ret)
