@@ -32,6 +32,7 @@ struct mfg_base {
 
 /* Definition for MFG registers */
 #define MFG_QCHANNEL_CON 0xb4
+#define MFG_SYS_TIMER 0x130
 #define MFG_DEBUG_SEL 0x170
 #define MFG_DEBUG_TOP 0x178
 #define BUS_IDLE_BIT 0x4

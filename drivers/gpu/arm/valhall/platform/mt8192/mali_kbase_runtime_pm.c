@@ -129,6 +129,13 @@ static void check_bus_idle(struct kbase_device *kbdev)
 	} while ((val & BUS_IDLE_BIT) != BUS_IDLE_BIT);
 }
 
+static void enable_sys_timer(struct kbase_device *kbdev)
+{
+	struct mfg_base *mfg = kbdev->platform_context;
+
+	writel(0x3, mfg->g_mfg_base + MFG_SYS_TIMER);
+}
+
 static void *get_mfg_base(const char *node_name)
 {
 	struct device_node *node;
@@ -178,6 +185,8 @@ static int pm_callback_power_on(struct kbase_device *kbdev)
 			error);
 		return error;
 	}
+
+	enable_sys_timer(kbdev);
 
 	mfg->is_powered = true;
 
