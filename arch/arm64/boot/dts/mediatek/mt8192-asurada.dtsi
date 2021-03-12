@@ -845,6 +845,7 @@
 		pins_cmd_dat {
 			pinmux = <PINMUX_GPIO214__FUNC_AUD_CLK_MOSI>,
 				 <PINMUX_GPIO215__FUNC_AUD_SYNC_MOSI>;
+				 drive-strength = <MTK_DRIVE_4mA>;
 		};
 	};
 
@@ -871,6 +872,7 @@
 		pins_cmd_dat {
 			pinmux = <PINMUX_GPIO218__FUNC_AUD_DAT_MISO0>,
 				 <PINMUX_GPIO219__FUNC_AUD_DAT_MISO1>;
+				 drive-strength = <MTK_DRIVE_4mA>;
 		};
 	};
 
@@ -909,6 +911,7 @@
 		pins_cmd_dat {
 			pinmux = <PINMUX_GPIO216__FUNC_AUD_DAT_MOSI0>,
 				 <PINMUX_GPIO217__FUNC_AUD_DAT_MOSI1>;
+				 drive-strength = <MTK_DRIVE_4mA>;
 		};
 	};
 
