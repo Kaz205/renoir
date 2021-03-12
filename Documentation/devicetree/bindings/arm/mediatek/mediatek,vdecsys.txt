@@ -11,8 +11,11 @@ Required Properties:
 	- "mediatek,mt6779-vdecsys", "syscon"
 	- "mediatek,mt6797-vdecsys", "syscon"
 	- "mediatek,mt7623-vdecsys", "mediatek,mt2701-vdecsys", "syscon"
+	- "mediatek,mt8167-vdecsys", "syscon"
 	- "mediatek,mt8173-vdecsys", "syscon"
 	- "mediatek,mt8183-vdecsys", "syscon"
+	- "mediatek,mt8192-vdecsys", "syscon"
+	- "mediatek,mt8192-vdecsys_soc", "syscon"
 - #clock-cells: Must be 1
 
 The vdecsys controller uses the common clk binding from
@@ -24,5 +27,11 @@ Example:
 vdecsys: clock-controller@16000000 {
 	compatible = "mediatek,mt8173-vdecsys", "syscon";
 	reg = <0 0x16000000 0 0x1000>;
+	#clock-cells = <1>;
+};
+
+vdecsys_soc: syscon@1600f000 {
+	compatible = "mediatek,mt8192-vdecsys_soc", "syscon";
+	reg = <0 0x1600f000 0 0x1000>;
 	#clock-cells = <1>;
 };

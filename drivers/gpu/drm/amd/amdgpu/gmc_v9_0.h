@@ -37,6 +37,8 @@
 extern const struct amd_ip_funcs gmc_v9_0_ip_funcs;
 extern const struct amdgpu_ip_block_version gmc_v9_0_ip_block;
 
+void gmc_v9_0_restore_registers(struct amdgpu_device *adev);
+
 /* amdgpu_amdkfd*.c */
 void gfxhub_v1_0_setup_vm_pt_regs(struct amdgpu_device *adev, uint32_t vmid,
 				uint64_t value);

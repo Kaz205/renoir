@@ -21,6 +21,17 @@ endmenu
 
 menu "Proximity and distance sensors"
 
+config CROS_EC_MKBP_PROXIMITY
+	tristate "ChromeOS EC MKBP Proximity sensor"
+	depends on CROS_EC
+	help
+	  Say Y here to enable the proximity sensor implemented via the ChromeOS EC MKBP
+	  switches protocol. You must enable one bus option (CROS_EC_I2C or CROS_EC_SPI)
+	  to use this.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called cros_ec_mkbp_proximity.
+
 config ISL29501
 	tristate "Intersil ISL29501 Time Of Flight sensor"
 	depends on I2C
@@ -86,6 +97,19 @@ config SRF04
 	  To compile this driver as a module, choose M here: the
 	  module will be called srf04.
 
+config SRF08
+	tristate "Devantech SRF02/SRF08/SRF10 ultrasonic ranger sensor"
+	select IIO_BUFFER
+	select IIO_TRIGGERED_BUFFER
+	depends on I2C
+	help
+	  Say Y here to build a driver for Devantech SRF02/SRF08/SRF10
+	  ultrasonic ranger sensors with i2c interface.
+	  This driver can be used to measure the distance of objects.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called srf08.
+
 config SX9310
 	tristate "SX9310/SX9311 Semtech proximity sensor"
 	select IIO_BUFFER
@@ -99,6 +123,20 @@ config SX9310
 	  To compile this driver as a module, choose M here: the
 	  module will be called sx9310.
 
+config SX932X
+	tristate "sx932x Semtech proximity sensor"
+	select IIO_BUFFER
+	select IIO_TRIGGERED_BUFFER
+	select REGMAP_I2C
+	depends on I2C
+	help
+	  Say Y here to build a driver for Semtech's sx932x capacitive
+	  proximity/button sensor. This driver supports Semtech's
+	  sx9320, sx9321 and sx9324 sensors.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called sx932x.
+
 config SX9500
 	tristate "SX9500 Semtech proximity sensor"
 	select IIO_BUFFER
@@ -111,19 +149,6 @@ config SX9500
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called sx9500.
-
-config SRF08
-	tristate "Devantech SRF02/SRF08/SRF10 ultrasonic ranger sensor"
-	select IIO_BUFFER
-	select IIO_TRIGGERED_BUFFER
-	depends on I2C
-	help
-	  Say Y here to build a driver for Devantech SRF02/SRF08/SRF10
-	  ultrasonic ranger sensors with i2c interface.
-	  This driver can be used to measure the distance of objects.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called srf08.
 
 config VL53L0X_I2C
 	tristate "STMicroelectronics VL53L0X ToF ranger sensor (I2C)"

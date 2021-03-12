@@ -16,6 +16,9 @@
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
 #include <linux/regulator/consumer.h>
+#include <linux/workqueue.h>
+
+#include <asm/unaligned.h>
 
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
@@ -72,6 +75,7 @@
 #define SN_AUX_ADDR_19_16_REG			0x74
 #define SN_AUX_ADDR_15_8_REG			0x75
 #define SN_AUX_ADDR_7_0_REG			0x76
+#define SN_AUX_ADDR_MASK			GENMASK(19, 0)
 #define SN_AUX_LENGTH_REG			0x77
 #define SN_AUX_CMD_REG				0x78
 #define  AUX_CMD_SEND				BIT(0)
@@ -106,6 +110,8 @@
 #define SN_NUM_GPIOS			4
 #define SN_GPIO_PHYSICAL_OFFSET		1
 
+#define SN_LINK_TRAINING_TRIES		10
+
 /**
  * struct ti_sn_bridge - Platform data for ti-sn65dsi86 driver.
  * @dev:          Pointer to our device.
@@ -116,6 +122,7 @@
  * @debugfs:      Used for managing our debugfs.
  * @host_node:    Remote DSI node.
  * @dsi:          Our MIPI DSI source.
+ * @edid:         Detected EDID of eDP panel.
  * @refclk:       Our reference clock.
  * @panel:        Our panel.
  * @enable_gpio:  The GPIO we toggle to enable the bridge.
@@ -123,6 +130,12 @@
  * @dp_lanes:     Count of dp_lanes we're using.
  * @ln_assign:    Value to program to the LN_ASSIGN register.
  * @ln_polrs:     Value for the 4-bit LN_POLRS field of SN_ENH_FRAME_REG.
+ *
+ * @pre_enabled_early: If true we did an early pre_enable at attach.
+ * @pre_enable_timeout_work: Delayed work to undo the pre_enable from attach
+ *                           if a normal pre_enable never came.
+ * @pre_enable_mutex: Lock to synchronize between the pre_enable_timeout_work
+ *                    and normal mechanisms.
  *
  * @gchip:        If we expose our GPIOs, this is used.
  * @gchip_output: A cache of whether we've set GPIOs to output.  This
@@ -141,6 +154,7 @@ struct ti_sn_bridge {
 	struct drm_bridge		bridge;
 	struct drm_connector		connector;
 	struct dentry			*debugfs;
+	struct edid			*edid;
 	struct device_node		*host_node;
 	struct mipi_dsi_device		*dsi;
 	struct clk			*refclk;
@@ -150,6 +164,10 @@ struct ti_sn_bridge {
 	int				dp_lanes;
 	u8				ln_assign;
 	u8				ln_polrs;
+
+	bool				pre_enabled_early;
+	struct delayed_work		pre_enable_timeout_work;
+	struct mutex			pre_enable_mutex;
 
 #if defined(CONFIG_OF_GPIO)
 	struct gpio_chip		gchip;
@@ -262,6 +280,17 @@ connector_to_ti_sn_bridge(struct drm_connector *connector)
 static int ti_sn_bridge_connector_get_modes(struct drm_connector *connector)
 {
 	struct ti_sn_bridge *pdata = connector_to_ti_sn_bridge(connector);
+	struct edid *edid = pdata->edid;
+	int num, ret;
+
+	if (edid && drm_edid_is_valid(edid)) {
+		ret = drm_connector_update_edid_property(connector, edid);
+		if (!ret) {
+			num = drm_add_edid_modes(connector, edid);
+			if (num)
+				return num;
+		}
+	}
 
 	return drm_panel_get_modes(pdata->panel, connector);
 }
@@ -319,6 +348,134 @@ static int ti_sn_bridge_parse_regulators(struct ti_sn_bridge *pdata)
 
 	return devm_regulator_bulk_get(pdata->dev, SN_REGULATOR_SUPPLY_NUM,
 				       pdata->supplies);
+}
+
+static u32 ti_sn_bridge_get_dsi_freq(struct ti_sn_bridge *pdata)
+{
+	u32 bit_rate_khz, clk_freq_khz;
+	struct drm_display_mode *mode =
+		&pdata->bridge.encoder->crtc->state->adjusted_mode;
+
+	bit_rate_khz = mode->clock *
+			mipi_dsi_pixel_format_to_bpp(pdata->dsi->format);
+	clk_freq_khz = bit_rate_khz / (pdata->dsi->lanes * 2);
+
+	return clk_freq_khz;
+}
+
+/* clk frequencies supported by bridge in Hz in case derived from REFCLK pin */
+static const u32 ti_sn_bridge_refclk_lut[] = {
+	12000000,
+	19200000,
+	26000000,
+	27000000,
+	38400000,
+};
+
+/* clk frequencies supported by bridge in Hz in case derived from DACP/N pin */
+static const u32 ti_sn_bridge_dsiclk_lut[] = {
+	468000000,
+	384000000,
+	416000000,
+	486000000,
+	460800000,
+};
+
+static void ti_sn_bridge_set_refclk_freq(struct ti_sn_bridge *pdata)
+{
+	int i;
+	u32 refclk_rate;
+	const u32 *refclk_lut;
+	size_t refclk_lut_size;
+
+	if (pdata->refclk) {
+		refclk_rate = clk_get_rate(pdata->refclk);
+		refclk_lut = ti_sn_bridge_refclk_lut;
+		refclk_lut_size = ARRAY_SIZE(ti_sn_bridge_refclk_lut);
+		clk_prepare_enable(pdata->refclk);
+	} else {
+		refclk_rate = ti_sn_bridge_get_dsi_freq(pdata) * 1000;
+		refclk_lut = ti_sn_bridge_dsiclk_lut;
+		refclk_lut_size = ARRAY_SIZE(ti_sn_bridge_dsiclk_lut);
+	}
+
+	/* for i equals to refclk_lut_size means default frequency */
+	for (i = 0; i < refclk_lut_size; i++)
+		if (refclk_lut[i] == refclk_rate)
+			break;
+
+	regmap_update_bits(pdata->regmap, SN_DPPLL_SRC_REG, REFCLK_FREQ_MASK,
+			   REFCLK_FREQ(i));
+}
+
+static void ti_sn_bridge_post_disable(struct drm_bridge *bridge)
+{
+	struct ti_sn_bridge *pdata = bridge_to_ti_sn_bridge(bridge);
+
+	clk_disable_unprepare(pdata->refclk);
+
+	pm_runtime_put_sync(pdata->dev);
+}
+
+static void __ti_sn_bridge_pre_enable(struct ti_sn_bridge *pdata)
+{
+	pm_runtime_get_sync(pdata->dev);
+
+	/* configure bridge ref_clk */
+	ti_sn_bridge_set_refclk_freq(pdata);
+
+	/*
+	 * HPD on this bridge chip is a bit useless.  This is an eDP bridge
+	 * so the HPD is an internal signal that's only there to signal that
+	 * the panel is done powering up.  ...but the bridge chip debounces
+	 * this signal by between 100 ms and 400 ms (depending on process,
+	 * voltage, and temperate--I measured it at about 200 ms).  One
+	 * particular panel asserted HPD 84 ms after it was powered on meaning
+	 * that we saw HPD 284 ms after power on.  ...but the same panel said
+	 * that instead of looking at HPD you could just hardcode a delay of
+	 * 200 ms.  We'll assume that the panel driver will have the hardcoded
+	 * delay in its prepare and always disable HPD.
+	 *
+	 * If HPD somehow makes sense on some future panel we'll have to
+	 * change this to be conditional on someone specifying that HPD should
+	 * be used.
+	 */
+	regmap_update_bits(pdata->regmap, SN_HPD_DISABLE_REG, HPD_DISABLE,
+			   HPD_DISABLE);
+
+	drm_panel_prepare(pdata->panel);
+}
+
+static void ti_sn_bridge_pre_enable(struct drm_bridge *bridge)
+{
+	struct ti_sn_bridge *pdata = bridge_to_ti_sn_bridge(bridge);
+
+	mutex_lock(&pdata->pre_enable_mutex);
+	if (pdata->pre_enabled_early)
+		/* Already done! Just mark that normal pre_enable happened */
+		pdata->pre_enabled_early = false;
+	else
+		__ti_sn_bridge_pre_enable(pdata);
+	mutex_unlock(&pdata->pre_enable_mutex);
+}
+
+static void ti_sn_bridge_cancel_early_pre_enable(struct ti_sn_bridge *pdata)
+{
+	mutex_lock(&pdata->pre_enable_mutex);
+	if (pdata->pre_enabled_early) {
+		pdata->pre_enabled_early = false;
+		ti_sn_bridge_post_disable(&pdata->bridge);
+	}
+	mutex_unlock(&pdata->pre_enable_mutex);
+}
+
+static void ti_sn_bridge_pre_enable_timeout(struct work_struct *work)
+{
+	struct delayed_work *dwork = to_delayed_work(work);
+	struct ti_sn_bridge *pdata = container_of(dwork, struct ti_sn_bridge,
+						  pre_enable_timeout_work);
+
+	ti_sn_bridge_cancel_early_pre_enable(pdata);
 }
 
 static int ti_sn_bridge_attach(struct drm_bridge *bridge,
@@ -397,6 +554,34 @@ static int ti_sn_bridge_attach(struct drm_bridge *bridge,
 	/* attach panel to bridge */
 	drm_panel_attach(pdata->panel, &pdata->connector);
 
+	/*
+	 * If we have a refclk then we can support dynamic EDID.
+	 *
+	 * A few notes:
+	 * - From trial and error it appears that we need our clock setup in
+	 *   order to read the EDID. If we don't have refclk then we
+	 *   (presumably) need the MIPI clock on, but turning that on implies
+	 *   knowing the pixel clock / not needing the EDID. Maybe we could
+	 *   futz this if necessary, but for now we won't.
+	 * - In order to read the EDID we need power on to the bridge and
+	 *   the panel (and it has to finish booting up / assert HPD). This
+	 *   is slow so we leave the panel powered when we're done but setup a
+	 *   timeout so we don't leave it on forever.
+	 * - The rest of Linux assumes that it can read the EDID without
+	 *   (explicitly) enabling the power which is why this somewhat awkward
+	 *   step is needed.
+	 */
+	if (pdata->refclk) {
+		mutex_lock(&pdata->pre_enable_mutex);
+
+		pdata->pre_enabled_early = true;
+		__ti_sn_bridge_pre_enable(pdata);
+		pdata->edid = drm_get_edid(&pdata->connector, &pdata->aux.ddc);
+		schedule_delayed_work(&pdata->pre_enable_timeout_work, 30 * HZ);
+
+		mutex_unlock(&pdata->pre_enable_mutex);
+	}
+
 	return 0;
 
 err_dsi_attach:
@@ -404,6 +589,17 @@ err_dsi_attach:
 err_dsi_host:
 	drm_connector_cleanup(&pdata->connector);
 	return ret;
+}
+
+static void ti_sn_bridge_detach(struct drm_bridge *bridge)
+{
+	struct ti_sn_bridge *pdata = bridge_to_ti_sn_bridge(bridge);
+
+	cancel_delayed_work_sync(&pdata->pre_enable_timeout_work);
+	ti_sn_bridge_cancel_early_pre_enable(pdata);
+
+	kfree(pdata->edid);
+	pdata->edid = NULL;
 }
 
 static void ti_sn_bridge_disable(struct drm_bridge *bridge)
@@ -420,64 +616,6 @@ static void ti_sn_bridge_disable(struct drm_bridge *bridge)
 	regmap_write(pdata->regmap, SN_PLL_ENABLE_REG, 0);
 
 	drm_panel_unprepare(pdata->panel);
-}
-
-static u32 ti_sn_bridge_get_dsi_freq(struct ti_sn_bridge *pdata)
-{
-	u32 bit_rate_khz, clk_freq_khz;
-	struct drm_display_mode *mode =
-		&pdata->bridge.encoder->crtc->state->adjusted_mode;
-
-	bit_rate_khz = mode->clock *
-			mipi_dsi_pixel_format_to_bpp(pdata->dsi->format);
-	clk_freq_khz = bit_rate_khz / (pdata->dsi->lanes * 2);
-
-	return clk_freq_khz;
-}
-
-/* clk frequencies supported by bridge in Hz in case derived from REFCLK pin */
-static const u32 ti_sn_bridge_refclk_lut[] = {
-	12000000,
-	19200000,
-	26000000,
-	27000000,
-	38400000,
-};
-
-/* clk frequencies supported by bridge in Hz in case derived from DACP/N pin */
-static const u32 ti_sn_bridge_dsiclk_lut[] = {
-	468000000,
-	384000000,
-	416000000,
-	486000000,
-	460800000,
-};
-
-static void ti_sn_bridge_set_refclk_freq(struct ti_sn_bridge *pdata)
-{
-	int i;
-	u32 refclk_rate;
-	const u32 *refclk_lut;
-	size_t refclk_lut_size;
-
-	if (pdata->refclk) {
-		refclk_rate = clk_get_rate(pdata->refclk);
-		refclk_lut = ti_sn_bridge_refclk_lut;
-		refclk_lut_size = ARRAY_SIZE(ti_sn_bridge_refclk_lut);
-		clk_prepare_enable(pdata->refclk);
-	} else {
-		refclk_rate = ti_sn_bridge_get_dsi_freq(pdata) * 1000;
-		refclk_lut = ti_sn_bridge_dsiclk_lut;
-		refclk_lut_size = ARRAY_SIZE(ti_sn_bridge_dsiclk_lut);
-	}
-
-	/* for i equals to refclk_lut_size means default frequency */
-	for (i = 0; i < refclk_lut_size; i++)
-		if (refclk_lut[i] == refclk_rate)
-			break;
-
-	regmap_update_bits(pdata->regmap, SN_DPPLL_SRC_REG, REFCLK_FREQ_MASK,
-			   REFCLK_FREQ(i));
 }
 
 static void ti_sn_bridge_set_dsi_rate(struct ti_sn_bridge *pdata)
@@ -676,6 +814,7 @@ static int ti_sn_link_training(struct ti_sn_bridge *pdata, int dp_rate_idx,
 {
 	unsigned int val;
 	int ret;
+	int i;
 
 	/* set dp clk frequency value */
 	regmap_update_bits(pdata->regmap, SN_DATARATE_CONFIG_REG,
@@ -692,18 +831,33 @@ static int ti_sn_link_training(struct ti_sn_bridge *pdata, int dp_rate_idx,
 		goto exit;
 	}
 
-	/* Semi auto link training mode */
-	regmap_write(pdata->regmap, SN_ML_TX_MODE_REG, 0x0A);
-	ret = regmap_read_poll_timeout(pdata->regmap, SN_ML_TX_MODE_REG, val,
-				       val == ML_TX_MAIN_LINK_OFF ||
-				       val == ML_TX_NORMAL_MODE, 1000,
-				       500 * 1000);
-	if (ret) {
-		*last_err_str = "Training complete polling failed";
-	} else if (val == ML_TX_MAIN_LINK_OFF) {
-		*last_err_str = "Link training failed, link is off";
-		ret = -EIO;
+	/*
+	 * We'll try to link train several times.  As part of link training
+	 * the bridge chip will write DP_SET_POWER_D0 to DP_SET_POWER.  If
+	 * the panel isn't ready quite it might respond NAK here which means
+	 * we need to try again.
+	 */
+	for (i = 0; i < SN_LINK_TRAINING_TRIES; i++) {
+		/* Semi auto link training mode */
+		regmap_write(pdata->regmap, SN_ML_TX_MODE_REG, 0x0A);
+		ret = regmap_read_poll_timeout(pdata->regmap, SN_ML_TX_MODE_REG, val,
+					val == ML_TX_MAIN_LINK_OFF ||
+					val == ML_TX_NORMAL_MODE, 1000,
+					500 * 1000);
+		if (ret) {
+			*last_err_str = "Training complete polling failed";
+		} else if (val == ML_TX_MAIN_LINK_OFF) {
+			*last_err_str = "Link training failed, link is off";
+			ret = -EIO;
+			continue;
+		}
+
+		break;
 	}
+
+	/* If we saw quite a few retries, add a note about it */
+	if (!ret && i > SN_LINK_TRAINING_TRIES / 2)
+		DRM_DEV_INFO(pdata->dev, "Link training needed %d retries\n", i);
 
 exit:
 	/* Disable the PLL if we failed */
@@ -784,49 +938,9 @@ static void ti_sn_bridge_enable(struct drm_bridge *bridge)
 	drm_panel_enable(pdata->panel);
 }
 
-static void ti_sn_bridge_pre_enable(struct drm_bridge *bridge)
-{
-	struct ti_sn_bridge *pdata = bridge_to_ti_sn_bridge(bridge);
-
-	pm_runtime_get_sync(pdata->dev);
-
-	/* configure bridge ref_clk */
-	ti_sn_bridge_set_refclk_freq(pdata);
-
-	/*
-	 * HPD on this bridge chip is a bit useless.  This is an eDP bridge
-	 * so the HPD is an internal signal that's only there to signal that
-	 * the panel is done powering up.  ...but the bridge chip debounces
-	 * this signal by between 100 ms and 400 ms (depending on process,
-	 * voltage, and temperate--I measured it at about 200 ms).  One
-	 * particular panel asserted HPD 84 ms after it was powered on meaning
-	 * that we saw HPD 284 ms after power on.  ...but the same panel said
-	 * that instead of looking at HPD you could just hardcode a delay of
-	 * 200 ms.  We'll assume that the panel driver will have the hardcoded
-	 * delay in its prepare and always disable HPD.
-	 *
-	 * If HPD somehow makes sense on some future panel we'll have to
-	 * change this to be conditional on someone specifying that HPD should
-	 * be used.
-	 */
-	regmap_update_bits(pdata->regmap, SN_HPD_DISABLE_REG, HPD_DISABLE,
-			   HPD_DISABLE);
-
-	drm_panel_prepare(pdata->panel);
-}
-
-static void ti_sn_bridge_post_disable(struct drm_bridge *bridge)
-{
-	struct ti_sn_bridge *pdata = bridge_to_ti_sn_bridge(bridge);
-
-	if (pdata->refclk)
-		clk_disable_unprepare(pdata->refclk);
-
-	pm_runtime_put_sync(pdata->dev);
-}
-
 static const struct drm_bridge_funcs ti_sn_bridge_funcs = {
 	.attach = ti_sn_bridge_attach,
+	.detach = ti_sn_bridge_detach,
 	.pre_enable = ti_sn_bridge_pre_enable,
 	.enable = ti_sn_bridge_enable,
 	.disable = ti_sn_bridge_disable,
@@ -842,13 +956,15 @@ static ssize_t ti_sn_aux_transfer(struct drm_dp_aux *aux,
 				  struct drm_dp_aux_msg *msg)
 {
 	struct ti_sn_bridge *pdata = aux_to_ti_sn_bridge(aux);
-	u32 request = msg->request & ~DP_AUX_I2C_MOT;
+	u32 request = msg->request & ~(DP_AUX_I2C_MOT | DP_AUX_I2C_WRITE_STATUS_UPDATE);
 	u32 request_val = AUX_CMD_REQ(msg->request);
-	u8 *buf = (u8 *)msg->buffer;
+	u8 *buf = msg->buffer;
+	unsigned int len = msg->size;
 	unsigned int val;
-	int ret, i;
+	int ret;
+	u8 addr_len[SN_AUX_LENGTH_REG + 1 - SN_AUX_ADDR_19_16_REG];
 
-	if (msg->size > SN_AUX_MAX_PAYLOAD_BYTES)
+	if (len > SN_AUX_MAX_PAYLOAD_BYTES)
 		return -EINVAL;
 
 	switch (request) {
@@ -857,24 +973,21 @@ static ssize_t ti_sn_aux_transfer(struct drm_dp_aux *aux,
 	case DP_AUX_NATIVE_READ:
 	case DP_AUX_I2C_READ:
 		regmap_write(pdata->regmap, SN_AUX_CMD_REG, request_val);
+		/* Assume it's good */
+		msg->reply = 0;
 		break;
 	default:
 		return -EINVAL;
 	}
 
-	regmap_write(pdata->regmap, SN_AUX_ADDR_19_16_REG,
-		     (msg->address >> 16) & 0xF);
-	regmap_write(pdata->regmap, SN_AUX_ADDR_15_8_REG,
-		     (msg->address >> 8) & 0xFF);
-	regmap_write(pdata->regmap, SN_AUX_ADDR_7_0_REG, msg->address & 0xFF);
+	BUILD_BUG_ON(sizeof(addr_len) != sizeof(__be32));
+	put_unaligned_be32((msg->address & SN_AUX_ADDR_MASK) << 8 | len,
+			   addr_len);
+	regmap_bulk_write(pdata->regmap, SN_AUX_ADDR_19_16_REG, addr_len,
+			  ARRAY_SIZE(addr_len));
 
-	regmap_write(pdata->regmap, SN_AUX_LENGTH_REG, msg->size);
-
-	if (request == DP_AUX_NATIVE_WRITE || request == DP_AUX_I2C_WRITE) {
-		for (i = 0; i < msg->size; i++)
-			regmap_write(pdata->regmap, SN_AUX_WDATA_REG(i),
-				     buf[i]);
-	}
+	if (request == DP_AUX_NATIVE_WRITE || request == DP_AUX_I2C_WRITE)
+		regmap_bulk_write(pdata->regmap, SN_AUX_WDATA_REG(0), buf, len);
 
 	/* Clear old status bits before start so we don't get confused */
 	regmap_write(pdata->regmap, SN_AUX_CMD_STATUS_REG,
@@ -884,35 +997,52 @@ static ssize_t ti_sn_aux_transfer(struct drm_dp_aux *aux,
 
 	regmap_write(pdata->regmap, SN_AUX_CMD_REG, request_val | AUX_CMD_SEND);
 
+	/* Zero delay loop because i2c transactions are slow already */
 	ret = regmap_read_poll_timeout(pdata->regmap, SN_AUX_CMD_REG, val,
-				       !(val & AUX_CMD_SEND), 200,
-				       50 * 1000);
+				       !(val & AUX_CMD_SEND), 0, 50 * 1000);
 	if (ret)
 		return ret;
 
 	ret = regmap_read(pdata->regmap, SN_AUX_CMD_STATUS_REG, &val);
 	if (ret)
 		return ret;
-	else if ((val & AUX_IRQ_STATUS_NAT_I2C_FAIL)
-		 || (val & AUX_IRQ_STATUS_AUX_RPLY_TOUT)
-		 || (val & AUX_IRQ_STATUS_AUX_SHORT))
-		return -ENXIO;
 
-	if (request == DP_AUX_NATIVE_WRITE || request == DP_AUX_I2C_WRITE)
-		return msg->size;
-
-	for (i = 0; i < msg->size; i++) {
-		unsigned int val;
-		ret = regmap_read(pdata->regmap, SN_AUX_RDATA_REG(i),
-				  &val);
-		if (ret)
-			return ret;
-
-		WARN_ON(val & ~0xFF);
-		buf[i] = (u8)(val & 0xFF);
+	if (val & AUX_IRQ_STATUS_AUX_RPLY_TOUT) {
+		/*
+		 * The hardware tried the message seven times per the DP spec
+		 * but it hit a timeout. We ignore defers here because they're
+		 * handled in hardware.
+		 */
+		return -ETIMEDOUT;
 	}
 
-	return msg->size;
+	if (val & AUX_IRQ_STATUS_AUX_SHORT) {
+		ret = regmap_read(pdata->regmap, SN_AUX_LENGTH_REG, &len);
+		if (ret)
+			return ret;
+	} else if (val & AUX_IRQ_STATUS_NAT_I2C_FAIL) {
+		switch (request) {
+		case DP_AUX_I2C_WRITE:
+		case DP_AUX_I2C_READ:
+			msg->reply |= DP_AUX_I2C_REPLY_NACK;
+			break;
+		case DP_AUX_NATIVE_READ:
+		case DP_AUX_NATIVE_WRITE:
+			msg->reply |= DP_AUX_NATIVE_REPLY_NACK;
+			break;
+		}
+		return 0;
+	}
+
+	if (request == DP_AUX_NATIVE_WRITE || request == DP_AUX_I2C_WRITE ||
+	    len == 0)
+		return len;
+
+	ret = regmap_bulk_read(pdata->regmap, SN_AUX_RDATA_REG(0), buf, len);
+	if (ret)
+		return ret;
+
+	return len;
 }
 
 static int ti_sn_bridge_parse_dsi_host(struct ti_sn_bridge *pdata)
@@ -1175,6 +1305,10 @@ static int ti_sn_bridge_probe(struct i2c_client *client,
 	if (!pdata)
 		return -ENOMEM;
 
+	mutex_init(&pdata->pre_enable_mutex);
+	INIT_DELAYED_WORK(&pdata->pre_enable_timeout_work,
+			  ti_sn_bridge_pre_enable_timeout);
+
 	pdata->regmap = devm_regmap_init_i2c(client,
 					     &ti_sn_bridge_regmap_config);
 	if (IS_ERR(pdata->regmap)) {
@@ -1209,14 +1343,9 @@ static int ti_sn_bridge_probe(struct i2c_client *client,
 		return ret;
 	}
 
-	pdata->refclk = devm_clk_get(pdata->dev, "refclk");
-	if (IS_ERR(pdata->refclk)) {
-		ret = PTR_ERR(pdata->refclk);
-		if (ret == -EPROBE_DEFER)
-			return ret;
-		DRM_DEBUG_KMS("refclk not found\n");
-		pdata->refclk = NULL;
-	}
+	pdata->refclk = devm_clk_get_optional(pdata->dev, "refclk");
+	if (IS_ERR(pdata->refclk))
+		return PTR_ERR(pdata->refclk);
 
 	ret = ti_sn_bridge_parse_dsi_host(pdata);
 	if (ret)

@@ -214,7 +214,7 @@ static int cros_ec_accel_legacy_probe(struct platform_device *pdev)
 	if (!indio_dev)
 		return -ENOMEM;
 
-	ret = cros_ec_sensors_core_init(pdev, indio_dev, true,
+	ret = cros_ec_sensors_core_init(pdev, indio_dev, true, false,
 					cros_ec_sensors_capture, NULL);
 	if (ret)
 		return ret;

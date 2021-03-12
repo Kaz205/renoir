@@ -88,7 +88,7 @@ int mga_crtc_cursor_set(struct drm_crtc *crtc,
 	ret = drm_gem_vram_pin(gbo, 0);
 	if (ret) {
 		dev_err(&dev->pdev->dev, "failed to lock user bo\n");
-		goto err_drm_gem_object_put_unlocked;
+		goto err_drm_gem_object_put;
 	}
 	src = drm_gem_vram_kmap(gbo, true, NULL);
 	if (IS_ERR(src)) {
@@ -215,7 +215,7 @@ int mga_crtc_cursor_set(struct drm_crtc *crtc,
 	drm_gem_vram_kunmap(pixels_next);
 	drm_gem_vram_kunmap(gbo);
 	drm_gem_vram_unpin(gbo);
-	drm_gem_object_put_unlocked(obj);
+	drm_gem_object_put(obj);
 
 	return 0;
 
@@ -227,8 +227,8 @@ err_drm_gem_vram_kunmap_src:
 	drm_gem_vram_kunmap(gbo);
 err_drm_gem_vram_unpin_src:
 	drm_gem_vram_unpin(gbo);
-err_drm_gem_object_put_unlocked:
-	drm_gem_object_put_unlocked(obj);
+err_drm_gem_object_put:
+	drm_gem_object_put(obj);
 	return ret;
 }
 

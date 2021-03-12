@@ -7,7 +7,9 @@
  *	    Mika Westerberg <mika.westerberg@linux.intel.com>
  */
 
+#include <linux/acpi.h>
 #include <linux/delay.h>
+#include <linux/platform_data/cros_ec_commands.h>
 #include <linux/pm_runtime.h>
 #include <linux/sched/signal.h>
 
@@ -15,6 +17,465 @@
 #include "tb.h"
 
 #define TB_MAX_RETIMER_INDEX	6
+
+#ifdef CONFIG_ACPI
+
+static const guid_t retimer_dsm_guid =
+	GUID_INIT(0x61788900, 0xC470, 0x42BB,
+		  0x80, 0xF0, 0x23, 0xA3, 0x13, 0x86, 0x45, 0x93);
+
+#define RETIMER_DSM_REVID			1
+#define RETIMER_DSM_FN_QUERY			0
+#define RETIMER_DSM_FN_QUERY_POWER_STATE	1
+#define RETIMER_DSM_FN_SET_POWER_STATE		2
+#define RETIMER_DSM_FN_GET_RETIMER_INFO		3
+#define RETIMER_DSM_FN_SET_RETIMER_INFO		4
+
+#define RETIMER_DSM_FN_MINIMUM	(BIT(RETIMER_DSM_FN_QUERY) | \
+				 BIT(RETIMER_DSM_FN_QUERY_POWER_STATE) | \
+				 BIT(RETIMER_DSM_FN_SET_POWER_STATE) | \
+				 BIT(RETIMER_DSM_FN_GET_RETIMER_INFO) | \
+				 BIT(RETIMER_DSM_FN_SET_RETIMER_INFO))
+
+#define RETIMER_OP_DELAY_MS	250
+
+static int tb_retimer_acpi_dsm_query_fn(struct tb_switch *sw, u32 *data)
+{
+	union acpi_object *obj;
+
+	/* Only onboard retimers supported now */
+	if (!sw || tb_route(sw) || !data)
+		return -EINVAL;
+
+	obj = acpi_evaluate_dsm(ACPI_HANDLE(&sw->tb->nhi->pdev->dev),
+				&retimer_dsm_guid, RETIMER_DSM_REVID,
+				RETIMER_DSM_FN_QUERY, NULL);
+	if (!obj)
+		return -EIO;
+
+	*data = (u32)obj->buffer.pointer[0];
+	ACPI_FREE(obj);
+
+	return 0;
+}
+
+static int tb_retimer_acpi_dsm_get_power_state(struct tb_switch *sw, u8 *data)
+{
+	union acpi_object *obj;
+
+	/* Only onboard retimers supported now */
+	if (!sw || tb_route(sw) || !data)
+		return -EINVAL;
+
+	obj = acpi_evaluate_dsm(ACPI_HANDLE(&sw->tb->nhi->pdev->dev),
+				&retimer_dsm_guid, RETIMER_DSM_REVID,
+				RETIMER_DSM_FN_QUERY_POWER_STATE, NULL);
+	if (!obj)
+		return -EIO;
+
+	*data = (u8)obj->integer.value;
+	ACPI_FREE(obj);
+	return 0;
+}
+
+static int tb_retimer_acpi_dsm_set_power_state(struct tb_switch *sw, bool on)
+{
+	union acpi_object *obj, tmp, argv4 = ACPI_INIT_DSM_ARGV4(1, &tmp);
+
+	tmp.type = ACPI_TYPE_INTEGER;
+	tmp.integer.value = on;
+
+	/* Only onboard retimers supported now */
+	if (!sw || tb_route(sw))
+		return -EINVAL;
+
+	obj = acpi_evaluate_dsm(ACPI_HANDLE(&sw->tb->nhi->pdev->dev),
+				&retimer_dsm_guid, RETIMER_DSM_REVID,
+				RETIMER_DSM_FN_SET_POWER_STATE, &argv4);
+	if (!obj)
+		return -EIO;
+
+	ACPI_FREE(obj);
+	return 0;
+}
+
+static int tb_retimer_acpi_dsm_get_retimer_info(struct tb_switch *sw, u8 *data)
+{
+	union acpi_object *obj;
+
+	/* Only onboard retimers supported now */
+	if (!sw || tb_route(sw) || !data)
+		return -EINVAL;
+
+	obj = acpi_evaluate_dsm(ACPI_HANDLE(&sw->tb->nhi->pdev->dev),
+				&retimer_dsm_guid, RETIMER_DSM_REVID,
+				RETIMER_DSM_FN_GET_RETIMER_INFO, NULL);
+	if (!obj)
+		return -EIO;
+
+	*data = (u8)obj->integer.value;
+
+	ACPI_FREE(obj);
+	return 0;
+}
+
+static int tb_retimer_acpi_dsm_set_retimer_info(struct tb_switch *sw, u8 data)
+{
+	union acpi_object *obj, tmp, argv4 = ACPI_INIT_DSM_ARGV4(1, &tmp);
+
+	tmp.type = ACPI_TYPE_INTEGER;
+	tmp.integer.value = data;
+
+	/* Only onboard retimers supported now */
+	if (!sw || tb_route(sw))
+		return -EINVAL;
+
+	obj = acpi_evaluate_dsm(ACPI_HANDLE(&sw->tb->nhi->pdev->dev),
+				&retimer_dsm_guid, RETIMER_DSM_REVID,
+				RETIMER_DSM_FN_SET_RETIMER_INFO, &argv4);
+	if (!obj)
+		return -EIO;
+
+	ACPI_FREE(obj);
+	return 0;
+}
+
+static int tb_retimer_wait_for_value(struct tb_switch *sw, u32 value, u32 *result,
+			      int timeout_msec, bool match)
+{
+	ktime_t timeout = ktime_add_ms(ktime_get(), timeout_msec);
+	u8 data;
+	int ret;
+
+	/* Only onboard retimers supported now */
+	if (!sw || tb_route(sw) || !result)
+		return -EINVAL;
+
+	*result = 0;
+
+	do {
+		data = 0;
+
+		usleep_range(20000, 21000);
+
+		/* Return if unsupported or supplied with invalid parameters */
+		ret = tb_retimer_acpi_dsm_get_retimer_info(sw, &data);
+		if (ret)
+			return ret;
+
+		if (match && data != USB_RETIMER_FW_UPDATE_INVALID_MUX) {
+			/*
+			 * If the expected value is 0, check bit 0 for a match.
+			 * If it is non-zero, then do the normal check
+			 */
+			if ((!value && !(data & BIT(0))) ||
+			    (value && ((data & value) == value))) {
+				*result = data;
+				return 0;
+			}
+		} else if (!match && data != value) {
+			*result = data;
+			return 0;
+		}
+
+	} while (ktime_before(ktime_get(), timeout));
+
+	return -ETIMEDOUT;
+}
+
+static int tb_retimer_acpi_dsm_force_power(struct tb_switch *sw, bool on)
+{
+	u8 data = 0;
+	int ret;
+
+	/* Only onboard retimers supported now */
+	if (!sw || tb_route(sw))
+		return -EINVAL;
+
+	ret = tb_retimer_acpi_dsm_set_power_state(sw, on);
+	if (ret)
+		return ret;
+
+	/* This delay is required for the retimer to power on and be ready */
+	if (on)
+		msleep(50);
+
+	ret = tb_retimer_acpi_dsm_get_power_state(sw, &data);
+	if (ret)
+		return ret;
+
+	return on == data ? 0 : -EIO;
+}
+
+static int __maybe_unused tb_retimer_acpi_dsm_suspend_pd(struct tb_switch *sw,
+							 bool suspend,
+							 u8 typec_port_index)
+{
+	u32 result;
+	u8 data;
+	int ret;
+
+	/* Only onboard retimers supported now */
+	if (!sw || tb_route(sw))
+		return -EINVAL;
+
+	/* suspend / resume the PD */
+	data = ((suspend ? USB_RETIMER_FW_UPDATE_SUSPEND_PD :
+		USB_RETIMER_FW_UPDATE_RESUME_PD)
+		<< USB_RETIMER_FW_UPDATE_OP_SHIFT) |
+		typec_port_index;
+	ret = tb_retimer_acpi_dsm_set_retimer_info(sw, data);
+	if (ret)
+		return ret;
+
+	/* Check status */
+	return tb_retimer_wait_for_value(sw, !suspend, &result,
+					 RETIMER_OP_DELAY_MS, true);
+}
+
+static int __maybe_unused tb_retimer_acpi_dsm_get_mux(struct tb_switch *sw,
+						      u32 *result,
+						      u8 typec_port_index)
+{
+	u8 data;
+	int ret;
+
+	/* Only onboard retimers supported now */
+	if (!sw || tb_route(sw) || !result)
+		return -EINVAL;
+
+	data = (USB_RETIMER_FW_UPDATE_GET_MUX << USB_RETIMER_FW_UPDATE_OP_SHIFT) |
+	       typec_port_index;
+	ret = tb_retimer_acpi_dsm_set_retimer_info(sw, data);
+	if (ret)
+		return ret;
+
+	/* Check status */
+	*result = USB_RETIMER_FW_UPDATE_INVALID_MUX;
+	return tb_retimer_wait_for_value(sw, USB_RETIMER_FW_UPDATE_INVALID_MUX,
+					 result, RETIMER_OP_DELAY_MS, false);
+}
+
+static int tb_retimer_acpi_dsm_set_mux(struct tb_switch *sw, u8 mux_mode,
+				       u32 match, u8 typec_port_index)
+{
+	u32 result;
+	u8 data;
+	int ret;
+
+	/* Only onboard retimers supported now */
+	if (!sw || tb_route(sw))
+		return -EINVAL;
+
+	if (mux_mode > USB_RETIMER_FW_UPDATE_DISCONNECT)
+		return -EINVAL;
+
+	data = (mux_mode << USB_RETIMER_FW_UPDATE_OP_SHIFT) | typec_port_index;
+	ret = tb_retimer_acpi_dsm_set_retimer_info(sw, data);
+	if (ret)
+		return ret;
+
+	return tb_retimer_wait_for_value(sw, match, &result,
+					 RETIMER_OP_DELAY_MS, true);
+}
+
+static int __maybe_unused tb_retimer_acpi_dsm_get_port_info(struct tb_switch *sw,
+							    u32 *result)
+{
+	u8 data;
+	int ret;
+
+	/* Only onboard retimers supported now */
+	if (!sw || tb_route(sw) || !result)
+		return -EINVAL;
+
+	data = USB_RETIMER_FW_UPDATE_QUERY_PORT << USB_RETIMER_FW_UPDATE_OP_SHIFT;
+	ret = tb_retimer_acpi_dsm_set_retimer_info(sw, data);
+	if (ret)
+		return ret;
+
+	/* Check status */
+	return tb_retimer_wait_for_value(sw, 0, result,
+					 RETIMER_OP_DELAY_MS, false);
+}
+
+static int __maybe_unused tb_retimer_enter_tbt_alt_mode(struct tb_switch *sw,
+							u8 typec_port_index)
+{
+	int ret;
+
+	/* Only onboard retimers supported now */
+	if (!sw || tb_route(sw))
+		return -EINVAL;
+
+	/* CONNECT mode */
+	ret = tb_retimer_acpi_dsm_set_mux(sw, USB_RETIMER_FW_UPDATE_SET_USB,
+					  USB_PD_MUX_USB_ENABLED,
+					  typec_port_index);
+	if (ret)
+		goto err_connect;
+
+	/* SAFE mode */
+	ret = tb_retimer_acpi_dsm_set_mux(sw, USB_RETIMER_FW_UPDATE_SET_SAFE,
+					  USB_PD_MUX_SAFE_MODE,
+					  typec_port_index);
+	if (ret)
+		goto err_disconnect;
+
+	/* TBT ALT mode */
+	ret = tb_retimer_acpi_dsm_set_mux(sw, USB_RETIMER_FW_UPDATE_SET_TBT,
+					  USB_PD_MUX_TBT_COMPAT_ENABLED,
+					  typec_port_index);
+	if (ret)
+		goto err_disconnect;
+
+	return 0;
+
+err_disconnect:
+	tb_retimer_acpi_dsm_set_mux(sw, USB_RETIMER_FW_UPDATE_DISCONNECT,
+				    USB_PD_MUX_NONE, typec_port_index);
+err_connect:
+	return ret;
+}
+
+/**
+ * tb_retimer_start_io() - Prepare the USB4 retimer to start IO
+ * @sw: USB4 switch
+ * @mux_mode: Returns the current USB4 retimer's mux mode
+ * @typec_port_index: Type-C port index associated with the USB4 port
+ *
+ * This function queries the support of this functionality and if present
+ * suspends the PD and puts the retimer in TBT ALT mode as required.
+ * Also powers on the retimer, if no devices are connected.
+ * Returns the result of this operation
+ */
+static int __maybe_unused tb_retimer_start_io(struct tb_switch *sw,
+					      u32 *mux_mode,
+					      u8 typec_port_index)
+{
+	u32 data = 0;
+	int ret;
+
+	if (!sw || !mux_mode || typec_port_index >= EC_USB_PD_MAX_PORTS)
+		return -EINVAL;
+
+	/* Limit this only to on-board retimers */
+	if (tb_route(sw))
+		return -ENOTSUPP;
+
+	/* check for minimum supported functions */
+	ret = tb_retimer_acpi_dsm_query_fn(sw, &data);
+	if (ret)
+		return ret;
+
+	if (data != RETIMER_DSM_FN_MINIMUM)
+		return -ENOTSUPP;
+
+	/* Read the current mux mode */
+	ret = tb_retimer_acpi_dsm_get_mux(sw, mux_mode, typec_port_index);
+	if (ret)
+		return ret;
+
+	/*
+	 * For all device attached cases, exit.
+	 * When the Type-C charger is connected in reverse,
+	 * USB_PD_MUX_POLARITY_INVERTED bit will be set. Otherwise, it
+	 * is just USB_PD_MUX_NONE.
+	 */
+	if (*mux_mode != USB_PD_MUX_NONE &&
+	    *mux_mode != USB_PD_MUX_POLARITY_INVERTED)
+		return 0;
+
+	/* Suspend the PD */
+	ret = tb_retimer_acpi_dsm_suspend_pd(sw, true, typec_port_index);
+	if (ret)
+		return ret;
+
+	ret = tb_retimer_acpi_dsm_force_power(sw, true);
+	if (ret)
+		goto err_pd_resume;
+
+	ret = tb_retimer_enter_tbt_alt_mode(sw, typec_port_index);
+	if (ret)
+		goto err_force_power_off;
+
+	return 0;
+
+err_force_power_off:
+	tb_retimer_acpi_dsm_force_power(sw, false);
+err_pd_resume:
+	tb_retimer_acpi_dsm_suspend_pd(sw, false, typec_port_index);
+	return ret;
+}
+
+/**
+ * tb_retimer_stop_io() - Prepare the USB4 retimer to start IO
+ * @sw: USB4 switch
+ * @mux_mode: USB4 retimer's mux mode before starting IO
+ * @typec_port_index: Type-C port index associated with the USB4 port
+ * @port: USB4 port associated with this retimer
+ *
+ * This function undoes what was done inside tb_retimer_start_io().
+ * Additionally unsets the sbtx and exits router offline mode, if the
+ * originally no devices were connected prior to tb_retimer_start_io().
+ * Returns the result of this operation
+ */
+static int __maybe_unused tb_retimer_stop_io(struct tb_switch *sw, u32 mux_mode,
+					     u8 typec_port_index,
+					     struct tb_port *port)
+{
+	int ret, i;
+
+	if (!sw || !port || typec_port_index >= EC_USB_PD_MAX_PORTS)
+		return -EINVAL;
+
+	/* Limit this only to on-board retimers */
+	if (tb_route(sw))
+		return 0;
+
+	if (mux_mode != USB_PD_MUX_NONE &&
+	    mux_mode != USB_PD_MUX_POLARITY_INVERTED)
+		return 0;
+
+	for (i = 1; i <= TB_MAX_RETIMER_INDEX; i++)
+		usb4_port_set_inbound_sbtx(port, i, false);
+
+	ret = usb4_port_router_offline(port, true);
+
+	ret = tb_retimer_acpi_dsm_set_mux(sw, USB_RETIMER_FW_UPDATE_DISCONNECT,
+					  USB_PD_MUX_NONE, typec_port_index);
+	if (ret)
+		return ret;
+
+	ret = tb_retimer_acpi_dsm_suspend_pd(sw, false, typec_port_index);
+	if (ret)
+		return ret;
+
+	return tb_retimer_acpi_dsm_force_power(sw, false);
+}
+
+#else
+
+static int tb_retimer_acpi_dsm_get_port_info(struct tb_switch *sw, u32 *result)
+{
+	return -EOPNOTSUPP;
+}
+
+static int __maybe_unused tb_retimer_start_io(struct tb_switch *sw,
+					      u32 *mux_mode,
+					      u8 typec_port_index)
+{
+	return -EOPNOTSUPP;
+}
+
+static int __maybe_unused tb_retimer_stop_io(struct tb_switch *sw, u32 mux_mode,
+					     u8 typec_port_index,
+					     struct tb_port *port)
+{
+	return -EOPNOTSUPP;
+}
+
+#endif /* CONFIG_ACPI */
 
 static int tb_retimer_nvm_read(void *priv, unsigned int offset, void *val,
 			       size_t bytes)
@@ -56,6 +517,25 @@ static int tb_retimer_nvm_write(void *priv, unsigned int offset, void *val,
 	return ret;
 }
 
+static int tb_retimer_nvm_read_version(struct tb_retimer *rt)
+{
+	u32 val = 0;
+	int ret;
+
+	if (!rt || !rt->nvm)
+		return -EINVAL;
+
+	ret = usb4_port_retimer_nvm_read(rt->port, rt->index, NVM_VERSION, &val,
+					 sizeof(val));
+	if (ret)
+		return ret;
+
+	rt->nvm->major = val >> 16;
+	rt->nvm->minor = val >> 8;
+
+	return 0;
+}
+
 static int tb_retimer_nvm_add(struct tb_retimer *rt)
 {
 	struct tb_nvm *nvm;
@@ -66,13 +546,11 @@ static int tb_retimer_nvm_add(struct tb_retimer *rt)
 	if (IS_ERR(nvm))
 		return PTR_ERR(nvm);
 
-	ret = usb4_port_retimer_nvm_read(rt->port, rt->index, NVM_VERSION, &val,
-					 sizeof(val));
+	rt->nvm = nvm;
+
+	ret = tb_retimer_nvm_read_version(rt);
 	if (ret)
 		goto err_nvm;
-
-	nvm->major = val >> 16;
-	nvm->minor = val >> 8;
 
 	ret = usb4_port_retimer_nvm_read(rt->port, rt->index, NVM_FLASH_SIZE,
 					 &val, sizeof(val));
@@ -90,11 +568,11 @@ static int tb_retimer_nvm_add(struct tb_retimer *rt)
 	if (ret)
 		goto err_nvm;
 
-	rt->nvm = nvm;
 	return 0;
 
 err_nvm:
 	tb_nvm_free(nvm);
+	rt->nvm = NULL;
 	return ret;
 }
 
@@ -176,7 +654,9 @@ static ssize_t nvm_authenticate_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct tb_retimer *rt = tb_to_retimer(dev);
+	u8 port_index = 0;
 	bool val;
+	u32 mux_mode = 0;
 	int ret;
 
 	pm_runtime_get_sync(&rt->dev);
@@ -204,13 +684,20 @@ static ssize_t nvm_authenticate_store(struct device *dev,
 			goto exit_unlock;
 		}
 
+		tb_retimer_scan(rt->port, false, &mux_mode, &port_index);
 		ret = tb_retimer_nvm_validate_and_write(rt);
 		if (ret)
-			goto exit_unlock;
+			goto exit_stop_io;
 
 		ret = usb4_port_retimer_nvm_authenticate(rt->port, rt->index);
+		if (ret)
+			goto exit_stop_io;
+
+		tb_retimer_nvm_read_version(rt);
 	}
 
+exit_stop_io:
+	tb_retimer_stop_io(rt->port->sw, mux_mode, port_index, rt->port);
 exit_unlock:
 	mutex_unlock(&rt->tb->lock);
 exit_rpm:
@@ -397,20 +884,95 @@ static struct tb_retimer *tb_port_find_retimer(struct tb_port *port, u8 index)
 }
 
 /**
+ * tb_retimer_scan_delayed() - scan onboard retimers when no devices
+ * are connected
+ * @work: work that needs to be done
+ * Executes on tb->wq.
+ */
+void tb_retimer_scan_delayed(struct work_struct *work)
+{
+	struct tb_port *port = container_of(work, typeof(*port),
+					    retimer_scan_work.work);
+
+	/* Only onboard retimers supported now */
+	if (!port || tb_route(port->sw))
+		return;
+
+	/* Bring the domain back from sleep if it was suspended */
+	pm_runtime_get_sync(&port->sw->tb->dev);
+
+	mutex_lock(&port->sw->tb->lock);
+	tb_switch_get(port->sw);
+
+	pm_runtime_get_sync(&port->sw->dev);
+
+	tb_retimer_scan(port, true, NULL, NULL);
+
+	pm_runtime_mark_last_busy(&port->sw->dev);
+	pm_runtime_put_autosuspend(&port->sw->dev);
+
+	tb_switch_put(port->sw);
+	mutex_unlock(&port->sw->tb->lock);
+
+	pm_runtime_mark_last_busy(&port->sw->tb->dev);
+	pm_runtime_put_autosuspend(&port->sw->tb->dev);
+}
+
+/**
  * tb_retimer_scan() - Scan for on-board retimers under port
  * @port: USB4 port to scan
+ * @enumerate: Enumerate the retimer or just scan and prepare the retimer for IO
+ * @mux_mode: stores the mux mode
+ * @typec_port_index: stores the Type-C port index
  *
  * Tries to enumerate on-board retimers connected to @port. Found
  * retimers are registered as children of @port. Does not scan for cable
  * retimers for now.
  */
-int tb_retimer_scan(struct tb_port *port)
+int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode,
+		    u8 *typec_port_index)
 {
-	u32 status[TB_MAX_RETIMER_INDEX] = {};
-	int ret, i, last_idx = 0;
+	u32 status[TB_MAX_RETIMER_INDEX] = {}, result = 0;
+	u32 mode = USB_RETIMER_FW_UPDATE_INVALID_MUX;
+	int ret, i, j = 0, last_idx = 0;
+	bool io_started = false;
 
 	if (!port->cap_usb4)
 		return 0;
+
+	if (enumerate && port->retimer_scan_done)
+		return 0;
+
+	/* Start IO for onboard retimers */
+	ret = tb_retimer_acpi_dsm_get_port_info(port->sw, &result);
+	if (!ret && result) {
+		/* Get the Type-C port index in j */
+		for_each_set_bit(j, (const unsigned long *)&result,
+				 BITS_PER_BYTE) {
+			/*
+			 * Skip non-matching USB4 ports given the Type-C
+			 * port info
+			 */
+			if (port->port != (BIT(j + 1) - 1))
+				continue;
+			/* Match found */
+			break;
+		}
+
+		if (typec_port_index)
+			*typec_port_index = j;
+
+		io_started = !tb_retimer_start_io(port->sw, &mode, j);
+		if (mux_mode)
+			*mux_mode = mode;
+
+		if (mode == USB_PD_MUX_NONE ||
+		    mode == USB_PD_MUX_POLARITY_INVERTED) {
+			usb4_port_router_offline(port, false);
+			/* This delay helps router handle further operations */
+			msleep(100);
+		}
+	}
 
 	/*
 	 * Send broadcast RT to make sure retimer indices facing this
@@ -418,15 +980,22 @@ int tb_retimer_scan(struct tb_port *port)
 	 */
 	ret = usb4_port_enumerate_retimers(port);
 	if (ret)
-		return ret;
+		goto out_retimer_stop_io;
 
 	/*
 	 * Before doing anything else, read the authentication status.
 	 * If the retimer has it set, store it for the new retimer
 	 * device instance.
 	 */
-	for (i = 1; i <= TB_MAX_RETIMER_INDEX; i++)
+	for (i = 1; i <= TB_MAX_RETIMER_INDEX; i++) {
+		if (!tb_route(port->sw) &&
+		    (mode & USB_PD_MUX_TBT_COMPAT_ENABLED ||
+		     mode & USB_PD_MUX_USB4_ENABLED ||
+		     mode == USB_PD_MUX_NONE ||
+		     mode == USB_PD_MUX_POLARITY_INVERTED))
+			ret = usb4_port_set_inbound_sbtx(port, i, true);
 		usb4_port_retimer_nvm_authenticate_status(port, i, &status[i]);
+	}
 
 	for (i = 1; i <= TB_MAX_RETIMER_INDEX; i++) {
 		/*
@@ -441,8 +1010,12 @@ int tb_retimer_scan(struct tb_port *port)
 			break;
 	}
 
+	port->retimer_scan_done = true;
 	if (!last_idx)
-		return 0;
+		goto out_retimer_stop_io;
+
+	if (!enumerate)
+		goto out;
 
 	/* Add on-board retimers if they do not exist already */
 	for (i = 1; i <= last_idx; i++) {
@@ -454,11 +1027,15 @@ int tb_retimer_scan(struct tb_port *port)
 		} else {
 			ret = tb_retimer_add(port, i, status[i]);
 			if (ret && ret != -EOPNOTSUPP)
-				return ret;
+				goto out_retimer_stop_io;
 		}
 	}
 
-	return 0;
+out_retimer_stop_io:
+	if (io_started)
+		tb_retimer_stop_io(port->sw, mode, j, port);
+out:
+	return ret;
 }
 
 static int remove_retimer(struct device *dev, void *data)
@@ -474,12 +1051,24 @@ static int remove_retimer(struct device *dev, void *data)
 /**
  * tb_retimer_remove_all() - Remove all retimers under port
  * @port: USB4 port whose retimers to remove
+ * @sw: USB4 switch whose retimers to remove
  *
- * This removes all previously added retimers under @port.
+ * This removes all previously added retimers under @port
+ * under a given switch.
  */
-void tb_retimer_remove_all(struct tb_port *port)
+void tb_retimer_remove_all(struct tb_port *port, struct tb_switch *sw)
 {
-	if (port->cap_usb4)
+	struct tb_retimer *rt;
+
+	if (!port || !port->sw || !sw)
+		return;
+
+	rt = tb_to_retimer(&port->sw->dev);
+	if (!rt)
+		return;
+
+	/* remove the retimers that belong to the switch being removed */
+	if (port->cap_usb4 && sw == rt->port->sw)
 		device_for_each_child_reverse(&port->sw->dev, port,
 					      remove_retimer);
 }

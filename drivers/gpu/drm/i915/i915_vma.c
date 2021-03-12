@@ -293,6 +293,7 @@ struct i915_vma_work {
 	struct dma_fence_work base;
 	struct i915_vma *vma;
 	struct drm_i915_gem_object *pinned;
+	struct i915_sw_dma_fence_cb cb;
 	enum i915_cache_level cache_level;
 	unsigned int flags;
 };
@@ -336,6 +337,25 @@ struct i915_vma_work *i915_vma_work(void)
 	vw->base.dma.error = -EAGAIN; /* disable the worker by default */
 
 	return vw;
+}
+
+int i915_vma_wait_for_bind(struct i915_vma *vma)
+{
+	int err = 0;
+
+	if (rcu_access_pointer(vma->active.excl.fence)) {
+		struct dma_fence *fence;
+
+		rcu_read_lock();
+		fence = dma_fence_get_rcu_safe(&vma->active.excl.fence);
+		rcu_read_unlock();
+		if (fence) {
+			err = dma_fence_wait(fence, MAX_SCHEDULE_TIMEOUT);
+			dma_fence_put(fence);
+		}
+	}
+
+	return err;
 }
 
 /**
@@ -385,6 +405,8 @@ int i915_vma_bind(struct i915_vma *vma,
 
 	trace_i915_vma_bind(vma, bind_flags);
 	if (work && (bind_flags & ~vma_flags) & vma->vm->bind_async_flags) {
+		struct dma_fence *prev;
+
 		work->vma = vma;
 		work->cache_level = cache_level;
 		work->flags = bind_flags | I915_VMA_ALLOC;
@@ -398,8 +420,14 @@ int i915_vma_bind(struct i915_vma *vma,
 		 * part of the obj->resv->excl_fence as it only affects
 		 * execution and not content or object's backing store lifetime.
 		 */
-		GEM_BUG_ON(i915_active_has_exclusive(&vma->active));
-		i915_active_set_exclusive(&vma->active, &work->base.dma);
+		prev = i915_active_set_exclusive(&vma->active, &work->base.dma);
+		if (prev) {
+			__i915_sw_fence_await_dma_fence(&work->base.chain,
+							prev,
+							&work->cb);
+			dma_fence_put(prev);
+		}
+
 		work->base.dma.error = 0; /* enable the queue_work() */
 
 		if (vma->obj) {
@@ -407,7 +435,6 @@ int i915_vma_bind(struct i915_vma *vma,
 			work->pinned = vma->obj;
 		}
 	} else {
-		GEM_BUG_ON((bind_flags & ~vma_flags) & vma->vm->bind_async_flags);
 		ret = vma->ops->bind_vma(vma, cache_level, bind_flags);
 		if (ret)
 			return ret;
@@ -948,7 +975,7 @@ err_unlock:
 	mutex_unlock(&vma->vm->mutex);
 err_fence:
 	if (work)
-		dma_fence_work_commit(&work->base);
+		dma_fence_work_commit_imm(&work->base);
 	if (wakeref)
 		intel_runtime_pm_put(&vma->vm->i915->runtime_pm, wakeref);
 err_pages:
@@ -976,8 +1003,14 @@ int i915_ggtt_pin(struct i915_vma *vma, u32 align, unsigned int flags)
 
 	do {
 		err = i915_vma_pin(vma, 0, align, flags | PIN_GLOBAL);
-		if (err != -ENOSPC)
+		if (err != -ENOSPC) {
+			if (!err) {
+				err = i915_vma_wait_for_bind(vma);
+				if (err)
+					i915_vma_unpin(vma);
+			}
 			return err;
+		}
 
 		/* Unlike i915_vma_pin, we don't take no for an answer! */
 		flush_idle_contexts(vm->gt);
@@ -1059,6 +1092,7 @@ void i915_vma_release(struct kref *ref)
 void i915_vma_parked(struct intel_gt *gt)
 {
 	struct i915_vma *vma, *next;
+	LIST_HEAD(closed);
 
 	spin_lock_irq(&gt->closed_lock);
 	list_for_each_entry_safe(vma, next, &gt->closed_vma, closed_link) {
@@ -1070,28 +1104,26 @@ void i915_vma_parked(struct intel_gt *gt)
 		if (!kref_get_unless_zero(&obj->base.refcount))
 			continue;
 
-		if (i915_vm_tryopen(vm)) {
-			list_del_init(&vma->closed_link);
-		} else {
+		if (!i915_vm_tryopen(vm)) {
 			i915_gem_object_put(obj);
-			obj = NULL;
+			continue;
 		}
 
-		spin_unlock_irq(&gt->closed_lock);
-
-		if (obj) {
-			__i915_vma_put(vma);
-			i915_gem_object_put(obj);
-		}
-
-		i915_vm_close(vm);
-
-		/* Restart after dropping lock */
-		spin_lock_irq(&gt->closed_lock);
-		next = list_first_entry(&gt->closed_vma,
-					typeof(*next), closed_link);
+		list_move(&vma->closed_link, &closed);
 	}
 	spin_unlock_irq(&gt->closed_lock);
+
+	/* As the GT is held idle, no vma can be reopened as we destroy them */
+	list_for_each_entry_safe(vma, next, &closed, closed_link) {
+		struct drm_i915_gem_object *obj = vma->obj;
+		struct i915_address_space *vm = vma->vm;
+
+		INIT_LIST_HEAD(&vma->closed_link);
+		__i915_vma_put(vma);
+
+		i915_gem_object_put(obj);
+		i915_vm_close(vm);
+	}
 }
 
 static void __i915_vma_iounmap(struct i915_vma *vma)
@@ -1135,7 +1167,7 @@ int __i915_vma_move_to_active(struct i915_vma *vma, struct i915_request *rq)
 	GEM_BUG_ON(!i915_vma_is_pinned(vma));
 
 	/* Wait for the vma to be bound before we start! */
-	err = i915_request_await_active(rq, &vma->active);
+	err = i915_request_await_active(rq, &vma->active, 0);
 	if (err)
 		return err;
 

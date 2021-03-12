@@ -19,6 +19,7 @@
 
 #include <drm/drm.h>
 #include <drm/drm_drv.h>
+#include <drm/drm_fb_helper.h>
 #include <drm/drm_file.h>
 #include <drm/drm_ioctl.h>
 #include <drm/drm_irq.h>
@@ -312,6 +313,8 @@ static int psb_driver_load(struct drm_device *dev, unsigned long flags)
 	ret = psb_gtt_init(dev, 0);
 	if (ret)
 		goto out_err;
+
+	ret = -ENOMEM;
 
 	dev_priv->mmu = psb_mmu_driver_init(dev, 1, 0, 0);
 	if (!dev_priv->mmu)

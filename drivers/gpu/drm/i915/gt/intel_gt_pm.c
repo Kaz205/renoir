@@ -12,6 +12,7 @@
 #include "intel_context.h"
 #include "intel_engine_pm.h"
 #include "intel_gt.h"
+#include "intel_gt_clock_utils.h"
 #include "intel_gt_pm.h"
 #include "intel_gt_requests.h"
 #include "intel_llc.h"
@@ -19,6 +20,7 @@
 #include "intel_rc6.h"
 #include "intel_rps.h"
 #include "intel_wakeref.h"
+#include "pxp/intel_pxp_pm.h"
 
 static void user_forcewake(struct intel_gt *gt, bool suspend)
 {
@@ -138,6 +140,8 @@ static void gt_sanitize(struct intel_gt *gt, bool force)
 	wakeref = intel_runtime_pm_get(gt->uncore->rpm);
 	intel_uncore_forcewake_get(gt->uncore, FORCEWAKE_ALL);
 
+	intel_gt_check_clock_frequency(gt);
+
 	/*
 	 * As we have just resumed the machine and woken the device up from
 	 * deep PCI sleep (presumably D3_cold), assume the HW has been reset
@@ -155,6 +159,10 @@ static void gt_sanitize(struct intel_gt *gt, bool force)
 
 	intel_uc_reset_prepare(&gt->uc);
 
+	for_each_engine(engine, gt, id)
+		if (engine->sanitize)
+			engine->sanitize(engine);
+
 	if (reset_engines(gt) || force) {
 		for_each_engine(engine, gt, id)
 			__intel_engine_reset(engine, false);
@@ -163,6 +171,8 @@ static void gt_sanitize(struct intel_gt *gt, bool force)
 	for_each_engine(engine, gt, id)
 		if (engine->reset.finish)
 			engine->reset.finish(engine);
+
+	intel_rps_sanitize(&gt->rps);
 
 	intel_uncore_forcewake_put(gt->uncore, FORCEWAKE_ALL);
 	intel_runtime_pm_put(gt->uncore->rpm, wakeref);
@@ -204,7 +214,7 @@ int intel_gt_resume(struct intel_gt *gt)
 	/* Only when the HW is re-initialised, can we replay the requests */
 	err = intel_gt_init_hw(gt);
 	if (err) {
-		dev_err(gt->i915->drm.dev,
+		drm_err(&gt->i915->drm,
 			"Failed to initialize GPU, declaring it wedged!\n");
 		goto err_wedged;
 	}
@@ -220,7 +230,7 @@ int intel_gt_resume(struct intel_gt *gt)
 
 		intel_engine_pm_put(engine);
 		if (err) {
-			dev_err(gt->i915->drm.dev,
+			drm_err(&gt->i915->drm,
 				"Failed to restart %s (%d)\n",
 				engine->name, err);
 			goto err_wedged;
@@ -230,6 +240,8 @@ int intel_gt_resume(struct intel_gt *gt)
 	intel_rc6_enable(&gt->rc6);
 
 	intel_uc_resume(&gt->uc);
+
+	intel_pxp_pm_resume(&gt->pxp);
 
 	user_forcewake(gt, false);
 
@@ -265,6 +277,7 @@ void intel_gt_suspend_prepare(struct intel_gt *gt)
 	user_forcewake(gt, true);
 	wait_for_suspend(gt);
 
+	intel_pxp_pm_prepare_suspend(&gt->pxp);
 	intel_uc_suspend(&gt->uc);
 }
 

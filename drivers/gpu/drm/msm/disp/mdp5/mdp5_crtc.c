@@ -15,6 +15,7 @@
 #include <drm/drm_vblank.h>
 
 #include "mdp5_kms.h"
+#include "msm_gem.h"
 
 #define CURSOR_WIDTH	64
 #define CURSOR_HEIGHT	64
@@ -166,7 +167,7 @@ static void unref_cursor_worker(struct drm_flip_work *work, void *val)
 	struct msm_kms *kms = &mdp5_kms->base.base;
 
 	msm_gem_unpin_iova(val, kms->aspace);
-	drm_gem_object_put_unlocked(val);
+	drm_gem_object_put(val);
 }
 
 static void mdp5_crtc_destroy(struct drm_crtc *crtc)
@@ -1096,7 +1097,7 @@ static void mdp5_crtc_pp_done_irq(struct mdp_irq *irq, uint32_t irqstatus)
 	struct mdp5_crtc *mdp5_crtc = container_of(irq, struct mdp5_crtc,
 								pp_done);
 
-	complete(&mdp5_crtc->pp_completion);
+	complete_all(&mdp5_crtc->pp_completion);
 }
 
 static void mdp5_crtc_wait_for_pp_done(struct drm_crtc *crtc)

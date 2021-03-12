@@ -523,7 +523,7 @@ struct xhci_ep_ctx *xhci_get_ep_ctx(struct xhci_hcd *xhci,
 	return (struct xhci_ep_ctx *)
 		(ctx->bytes + (ep_index * CTX_SIZE(xhci->hcc_params)));
 }
-
+EXPORT_SYMBOL_GPL(xhci_get_ep_ctx);
 
 /***************** Streams structures manipulation *************************/
 
@@ -581,23 +581,6 @@ struct xhci_ring *xhci_dma_to_transfer_ring(
 		return radix_tree_lookup(&ep->stream_info->trb_address_map,
 				address >> TRB_SEGMENT_SHIFT);
 	return ep->ring;
-}
-
-struct xhci_ring *xhci_stream_id_to_ring(
-		struct xhci_virt_device *dev,
-		unsigned int ep_index,
-		unsigned int stream_id)
-{
-	struct xhci_virt_ep *ep = &dev->eps[ep_index];
-
-	if (stream_id == 0)
-		return ep->ring;
-	if (!ep->stream_info)
-		return NULL;
-
-	if (stream_id >= ep->stream_info->num_streams)
-		return NULL;
-	return ep->stream_info->stream_rings[stream_id];
 }
 
 /*
@@ -985,6 +968,8 @@ int xhci_alloc_virt_device(struct xhci_hcd *xhci, int slot_id,
 	if (!dev)
 		return 0;
 
+	dev->slot_id = slot_id;
+
 	/* Allocate the (output) device context that will be used in the HC. */
 	dev->out_ctx = xhci_alloc_container_ctx(xhci, XHCI_CTX_TYPE_DEVICE, flags);
 	if (!dev->out_ctx)
@@ -1003,6 +988,8 @@ int xhci_alloc_virt_device(struct xhci_hcd *xhci, int slot_id,
 
 	/* Initialize the cancellation list and watchdog timers for each ep */
 	for (i = 0; i < 31; i++) {
+		dev->eps[i].ep_index = i;
+		dev->eps[i].vdev = dev;
 		xhci_init_endpoint_timer(xhci, &dev->eps[i]);
 		INIT_LIST_HEAD(&dev->eps[i].cancelled_td_list);
 		INIT_LIST_HEAD(&dev->eps[i].bw_endpoint_list);

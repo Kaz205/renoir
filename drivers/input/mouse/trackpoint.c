@@ -17,10 +17,12 @@
 #include "trackpoint.h"
 
 static const char * const trackpoint_variants[] = {
-	[TP_VARIANT_IBM]	= "IBM",
-	[TP_VARIANT_ALPS]	= "ALPS",
-	[TP_VARIANT_ELAN]	= "Elan",
-	[TP_VARIANT_NXP]	= "NXP",
+	[TP_VARIANT_IBM]		= "IBM",
+	[TP_VARIANT_ALPS]		= "ALPS",
+	[TP_VARIANT_ELAN]		= "Elan",
+	[TP_VARIANT_NXP]		= "NXP",
+	[TP_VARIANT_JYT_SYNAPTICS]	= "JYT_Synaptics",
+	[TP_VARIANT_SYNAPTICS]		= "Synaptics",
 };
 
 /*
@@ -280,6 +282,8 @@ static int trackpoint_start_protocol(struct psmouse *psmouse,
 	case TP_VARIANT_ALPS:
 	case TP_VARIANT_ELAN:
 	case TP_VARIANT_NXP:
+	case TP_VARIANT_JYT_SYNAPTICS:
+	case TP_VARIANT_SYNAPTICS:
 		if (variant_id)
 			*variant_id = param[0];
 		if (firmware_id)
@@ -389,6 +393,20 @@ static int trackpoint_reconnect(struct psmouse *psmouse)
 	return 0;
 }
 
+static void trackpoint_cleanup(struct psmouse *psmouse)
+{
+	struct trackpoint_data *tp = psmouse->private;
+	u8 param[3] = { TP_TOGGLE, TP_TOGGLE_BURST, TP_TOGGLE_ELAN_SLEEP };
+
+	if (tp->variant_id == TP_VARIANT_ELAN) {
+		if (ps2_command(&psmouse->ps2dev, param,
+				MAKE_PS2_CMD(3, 0, TP_COMMAND))) {
+			psmouse_err(psmouse,
+				    "failed to suspend trackpont.\n");
+		}
+	}
+}
+
 int trackpoint_detect(struct psmouse *psmouse, bool set_properties)
 {
 	struct ps2dev *ps2dev = &psmouse->ps2dev;
@@ -420,6 +438,8 @@ int trackpoint_detect(struct psmouse *psmouse, bool set_properties)
 
 	psmouse->reconnect = trackpoint_reconnect;
 	psmouse->disconnect = trackpoint_disconnect;
+
+	psmouse->cleanup = trackpoint_cleanup;
 
 	if (variant_id != TP_VARIANT_IBM) {
 		/* Newer variants do not support extended button query. */

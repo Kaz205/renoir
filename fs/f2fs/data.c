@@ -348,7 +348,7 @@ static inline void __submit_bio(struct f2fs_sb_info *sbi,
 		if (test_opt(sbi, LFS) && current->plug)
 			blk_finish_plug(current->plug);
 
-		if (F2FS_IO_ALIGNED(sbi))
+		if (!F2FS_IO_ALIGNED(sbi))
 			goto submit_io;
 
 		start = bio->bi_iter.bi_size >> F2FS_BLKSIZE_BITS;
@@ -2824,6 +2824,9 @@ static int check_direct_IO(struct inode *inode, struct iov_iter *iter,
 	unsigned blocksize_mask = (1 << blkbits) - 1;
 	unsigned long align = offset | iov_iter_alignment(iter);
 	struct block_device *bdev = inode->i_sb->s_bdev;
+
+	if (iov_iter_rw(iter) == READ && offset >= i_size_read(inode))
+		return 1;
 
 	if (align & blocksize_mask) {
 		if (bdev)

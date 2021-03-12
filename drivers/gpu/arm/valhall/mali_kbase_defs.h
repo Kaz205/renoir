@@ -101,6 +101,8 @@
  */
 #define BASE_MAX_NR_AS              16
 
+#define MAX_PM_DOMAINS 5
+
 /* mmu */
 #define MIDGARD_MMU_LEVEL(x) (x)
 
@@ -350,6 +352,10 @@ struct kbase_pm_device_data {
 #endif /* CONFIG_MALI_VALHALL_ARBITER_SUPPORT */
 	/* Wait queue set when active_count == 0 */
 	wait_queue_head_t zero_active_count_wait;
+	/* Wait queue to block the termination of a Kbase context until the
+	 * system resume of GPU device.
+	 */
+	wait_queue_head_t resume_wait;
 
 	/**
 	 * Bit masks identifying the available shader cores that are specified
@@ -827,6 +833,9 @@ struct kbase_device {
 
 	struct clk *clocks[BASE_MAX_NR_CLOCKS_REGULATORS];
 	unsigned int nr_clocks;
+	/* pm_domains for devices with more than one. */
+	struct device *pm_domain_devs[MAX_PM_DOMAINS];
+	int num_pm_domains;
 #ifdef CONFIG_REGULATOR
 	struct regulator *regulators[BASE_MAX_NR_CLOCKS_REGULATORS];
 	unsigned int nr_regulators;
@@ -921,6 +930,18 @@ struct kbase_device {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0)
 	struct kbase_devfreq_queue_info devfreq_queue;
 #endif
+
+	struct {
+		void (*voltage_range_check)(struct kbase_device *kbdev,
+					    unsigned long *voltages);
+#ifdef CONFIG_REGULATOR
+		int (*set_voltages)(struct kbase_device *kbdev,
+				    unsigned long *voltages,
+				    bool inc);
+#endif
+		int (*set_frequency)(struct kbase_device *kbdev,
+				     unsigned long freq);
+	} devfreq_ops;
 
 #ifdef CONFIG_DEVFREQ_THERMAL
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 4, 0)
@@ -1435,7 +1456,8 @@ struct kbase_sub_alloc {
  *                        for context scheduling, protected by hwaccess_lock.
  * @atoms_count:          Number of GPU atoms currently in use, per priority
  * @create_flags:         Flags used in context creation.
- *
+ * @tl_kctx_list_node:    List item into the device timeline's list of
+ * 			  contexts, for timeline summarization.
  * A kernel base context is an entity among which the GPU is scheduled.
  * Each context has its own GPU address space.
  * Up to one context can be created for each client that opens the device file
@@ -1567,6 +1589,7 @@ struct kbase_context {
 #endif
 
 	base_context_create_flags create_flags;
+	struct list_head tl_kctx_list_node;
 };
 
 #ifdef CONFIG_MALI_VALHALL_CINSTR_GWT

@@ -17,6 +17,7 @@
 
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_drv.h>
+#include <drm/drm_fb_helper.h>
 #include <drm/drm_gem_vram_helper.h>
 #include <drm/drm_irq.h>
 #include <drm/drm_print.h>
@@ -251,8 +252,6 @@ static int hibmc_unload(struct drm_device *dev)
 {
 	struct hibmc_drm_private *priv = dev->dev_private;
 
-	hibmc_fbdev_fini(priv);
-
 	drm_atomic_helper_shutdown(dev);
 
 	if (dev->irq_enabled)
@@ -311,7 +310,7 @@ static int hibmc_load(struct drm_device *dev)
 	/* reset all the states of crtc/plane/encoder/connector */
 	drm_mode_config_reset(dev);
 
-	ret = hibmc_fbdev_init(priv);
+	ret = drm_fbdev_generic_setup(dev, 16);
 	if (ret) {
 		DRM_ERROR("failed to initialize fbdev: %d\n", ret);
 		goto err;
@@ -376,7 +375,6 @@ static void hibmc_pci_remove(struct pci_dev *pdev)
 
 	drm_dev_unregister(dev);
 	hibmc_unload(dev);
-	drm_dev_put(dev);
 }
 
 static struct pci_device_id hibmc_pci_table[] = {

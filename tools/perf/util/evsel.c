@@ -446,6 +446,7 @@ const char *perf_evsel__sw_names[PERF_COUNT_SW_MAX] = {
 	"alignment-faults",
 	"emulation-faults",
 	"dummy",
+	"speculative-faults",
 };
 
 static const char *__perf_evsel__sw_name(u64 config)
@@ -1254,6 +1255,9 @@ void perf_evsel__exit(struct evsel *evsel)
 	perf_thread_map__put(evsel->core.threads);
 	zfree(&evsel->group_name);
 	zfree(&evsel->name);
+	zfree(&evsel->pmu_name);
+	zfree(&evsel->per_pkg_mask);
+	zfree(&evsel->metric_events);
 	perf_evsel__object.fini(evsel);
 }
 
@@ -2356,6 +2360,10 @@ bool perf_evsel__fallback(struct evsel *evsel, int err,
 		const char *name = perf_evsel__name(evsel);
 		char *new_name;
 		const char *sep = ":";
+
+		/* If event has exclude user then don't exclude kernel. */
+		if (evsel->core.attr.exclude_user)
+			return false;
 
 		/* Is there already the separator in the name. */
 		if (strchr(name, '/') ||

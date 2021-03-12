@@ -97,7 +97,7 @@ static void remote_function(void *data)
  * retry due to any failures in smp_call_function_single(), such as if the
  * task_cpu() goes offline concurrently.
  *
- * returns @func return value or -ESRCH when the process isn't running
+ * returns @func return value or -ESRCH or -ENXIO when the process isn't running
  */
 static int
 task_function_call(struct task_struct *p, remote_function_f func, void *info)
@@ -113,7 +113,8 @@ task_function_call(struct task_struct *p, remote_function_f func, void *info)
 	for (;;) {
 		ret = smp_call_function_single(task_cpu(p), remote_function,
 					       &data, 1);
-		ret = !ret ? data.ret : -EAGAIN;
+		if (!ret)
+			ret = data.ret;
 
 		if (ret != -EAGAIN)
 			break;
@@ -1258,7 +1259,7 @@ static void put_ctx(struct perf_event_context *ctx)
  * function.
  *
  * Lock order:
- *    cred_guard_mutex
+ *    exec_update_lock
  *	task_struct::perf_event_mutex
  *	  perf_event_context::mutex
  *	    perf_event::child_mutex;
@@ -3183,10 +3184,12 @@ static void perf_event_context_sched_out(struct task_struct *task, int ctxn,
 	struct perf_event_context *parent, *next_parent;
 	struct perf_cpu_context *cpuctx;
 	int do_switch = 1;
+	struct pmu *pmu;
 
 	if (likely(!ctx))
 		return;
 
+	pmu = ctx->pmu;
 	cpuctx = __get_cpu_context(ctx);
 	if (!cpuctx->task_ctx)
 		return;
@@ -3216,10 +3219,27 @@ static void perf_event_context_sched_out(struct task_struct *task, int ctxn,
 		raw_spin_lock(&ctx->lock);
 		raw_spin_lock_nested(&next_ctx->lock, SINGLE_DEPTH_NESTING);
 		if (context_equiv(ctx, next_ctx)) {
+
 			WRITE_ONCE(ctx->task, next);
 			WRITE_ONCE(next_ctx->task, task);
 
-			swap(ctx->task_ctx_data, next_ctx->task_ctx_data);
+			perf_pmu_disable(pmu);
+
+			if (cpuctx->sched_cb_usage && pmu->sched_task)
+				pmu->sched_task(ctx, false);
+
+			/*
+			 * PMU specific parts of task perf context can require
+			 * additional synchronization. As an example of such
+			 * synchronization see implementation details of Intel
+			 * LBR call stack data profiling;
+			 */
+			if (pmu->swap_task_ctx)
+				pmu->swap_task_ctx(ctx, next_ctx);
+			else
+				swap(ctx->task_ctx_data, next_ctx->task_ctx_data);
+
+			perf_pmu_enable(pmu);
 
 			/*
 			 * RCU_INIT_POINTER here is safe because we've not
@@ -3243,7 +3263,13 @@ unlock:
 
 	if (do_switch) {
 		raw_spin_lock(&ctx->lock);
+		perf_pmu_disable(pmu);
+
+		if (cpuctx->sched_cb_usage && pmu->sched_task)
+			pmu->sched_task(ctx, false);
 		task_ctx_sched_out(cpuctx, ctx, EVENT_ALL);
+
+		perf_pmu_enable(pmu);
 		raw_spin_unlock(&ctx->lock);
 	}
 }
@@ -3279,29 +3305,39 @@ void perf_sched_cb_inc(struct pmu *pmu)
  * PEBS requires this to provide PID/TID information. This requires we flush
  * all queued PEBS records before we context switch to a new task.
  */
+static void __perf_pmu_sched_task(struct perf_cpu_context *cpuctx, bool sched_in)
+{
+	struct pmu *pmu;
+
+	pmu = cpuctx->ctx.pmu; /* software PMUs will not have sched_task */
+
+	if (WARN_ON_ONCE(!pmu->sched_task))
+		return;
+
+	perf_ctx_lock(cpuctx, cpuctx->task_ctx);
+	perf_pmu_disable(pmu);
+
+	pmu->sched_task(cpuctx->task_ctx, sched_in);
+
+	perf_pmu_enable(pmu);
+	perf_ctx_unlock(cpuctx, cpuctx->task_ctx);
+}
+
 static void perf_pmu_sched_task(struct task_struct *prev,
 				struct task_struct *next,
 				bool sched_in)
 {
 	struct perf_cpu_context *cpuctx;
-	struct pmu *pmu;
 
 	if (prev == next)
 		return;
 
 	list_for_each_entry(cpuctx, this_cpu_ptr(&sched_cb_list), sched_cb_entry) {
-		pmu = cpuctx->ctx.pmu; /* software PMUs will not have sched_task */
-
-		if (WARN_ON_ONCE(!pmu->sched_task))
+		/* will be handled in perf_event_context_sched_in/out */
+		if (cpuctx->task_ctx)
 			continue;
 
-		perf_ctx_lock(cpuctx, cpuctx->task_ctx);
-		perf_pmu_disable(pmu);
-
-		pmu->sched_task(cpuctx->task_ctx, sched_in);
-
-		perf_pmu_enable(pmu);
-		perf_ctx_unlock(cpuctx, cpuctx->task_ctx);
+		__perf_pmu_sched_task(cpuctx, sched_in);
 	}
 }
 
@@ -3525,10 +3561,14 @@ static void perf_event_context_sched_in(struct perf_event_context *ctx,
 					struct task_struct *task)
 {
 	struct perf_cpu_context *cpuctx;
+	struct pmu *pmu = ctx->pmu;
 
 	cpuctx = __get_cpu_context(ctx);
-	if (cpuctx->task_ctx == ctx)
+	if (cpuctx->task_ctx == ctx) {
+		if (cpuctx->sched_cb_usage)
+			__perf_pmu_sched_task(cpuctx, true);
 		return;
+	}
 
 	perf_ctx_lock(cpuctx, ctx);
 	/*
@@ -3538,7 +3578,7 @@ static void perf_event_context_sched_in(struct perf_event_context *ctx,
 	if (!ctx->nr_events)
 		goto unlock;
 
-	perf_pmu_disable(ctx->pmu);
+	perf_pmu_disable(pmu);
 	/*
 	 * We want to keep the following priority order:
 	 * cpu pinned (that don't need to move), task pinned,
@@ -3550,7 +3590,11 @@ static void perf_event_context_sched_in(struct perf_event_context *ctx,
 	if (!RB_EMPTY_ROOT(&ctx->pinned_groups.tree))
 		cpu_ctx_sched_out(cpuctx, EVENT_FLEXIBLE);
 	perf_event_sched_in(cpuctx, ctx, task);
-	perf_pmu_enable(ctx->pmu);
+
+	if (cpuctx->sched_cb_usage && pmu->sched_task)
+		pmu->sched_task(cpuctx->task_ctx, true);
+
+	perf_pmu_enable(pmu);
 
 unlock:
 	perf_ctx_unlock(cpuctx, ctx);
@@ -4419,7 +4463,7 @@ static void unaccount_event(struct perf_event *event)
 	if (event->parent)
 		return;
 
-	if (event->attach_state & PERF_ATTACH_TASK)
+	if (event->attach_state & (PERF_ATTACH_TASK | PERF_ATTACH_SCHED_CB))
 		dec = true;
 	if (event->attr.mmap || event->attr.mmap_data)
 		atomic_dec(&nr_mmap_events);
@@ -5600,11 +5644,11 @@ static void perf_pmu_output_stop(struct perf_event *event);
 static void perf_mmap_close(struct vm_area_struct *vma)
 {
 	struct perf_event *event = vma->vm_file->private_data;
-
 	struct ring_buffer *rb = ring_buffer_get(event);
 	struct user_struct *mmap_user = rb->mmap_user;
 	int mmap_locked = rb->mmap_locked;
 	unsigned long size = perf_data_size(rb);
+	bool detach_rest = false;
 
 	if (event->pmu->event_unmapped)
 		event->pmu->event_unmapped(event, vma->vm_mm);
@@ -5635,7 +5679,8 @@ static void perf_mmap_close(struct vm_area_struct *vma)
 		mutex_unlock(&event->mmap_mutex);
 	}
 
-	atomic_dec(&rb->mmap_count);
+	if (atomic_dec_and_test(&rb->mmap_count))
+		detach_rest = true;
 
 	if (!atomic_dec_and_mutex_lock(&event->mmap_count, &event->mmap_mutex))
 		goto out_put;
@@ -5644,7 +5689,7 @@ static void perf_mmap_close(struct vm_area_struct *vma)
 	mutex_unlock(&event->mmap_mutex);
 
 	/* If there's still other mmap()s of this buffer, we're done. */
-	if (atomic_read(&rb->mmap_count))
+	if (!detach_rest)
 		goto out_put;
 
 	/*
@@ -9419,6 +9464,7 @@ perf_event_parse_addr_filter(struct perf_event *event, char *fstr,
 			if (token == IF_SRC_FILE || token == IF_SRC_FILEADDR) {
 				int fpos = token == IF_SRC_FILE ? 2 : 1;
 
+				kfree(filename);
 				filename = match_strdup(&args[fpos]);
 				if (!filename) {
 					ret = -ENOMEM;
@@ -9465,16 +9511,13 @@ perf_event_parse_addr_filter(struct perf_event *event, char *fstr,
 				 */
 				ret = -EOPNOTSUPP;
 				if (!event->ctx->task)
-					goto fail_free_name;
+					goto fail;
 
 				/* look up the path and grab its inode */
 				ret = kern_path(filename, LOOKUP_FOLLOW,
 						&filter->path);
 				if (ret)
-					goto fail_free_name;
-
-				kfree(filename);
-				filename = NULL;
+					goto fail;
 
 				ret = -EINVAL;
 				if (!filter->path.dentry ||
@@ -9494,13 +9537,13 @@ perf_event_parse_addr_filter(struct perf_event *event, char *fstr,
 	if (state != IF_STATE_ACTION)
 		goto fail;
 
+	kfree(filename);
 	kfree(orig);
 
 	return 0;
 
-fail_free_name:
-	kfree(filename);
 fail:
+	kfree(filename);
 	free_filters_list(filters);
 	kfree(orig);
 
@@ -10368,7 +10411,7 @@ static void account_event(struct perf_event *event)
 	if (event->parent)
 		return;
 
-	if (event->attach_state & PERF_ATTACH_TASK)
+	if (event->attach_state & (PERF_ATTACH_TASK | PERF_ATTACH_SCHED_CB))
 		inc = true;
 	if (event->attr.mmap || event->attr.mmap_data)
 		atomic_inc(&nr_mmap_events);
@@ -11008,24 +11051,6 @@ int ksys_perf_event_open(struct perf_event_attr __user * attr_uptr, pid_t pid,
 		goto err_task;
 	}
 
-	if (task) {
-		err = mutex_lock_interruptible(&task->signal->cred_guard_mutex);
-		if (err)
-			goto err_task;
-
-		/*
-		 * Reuse ptrace permission checks for now.
-		 *
-		 * We must hold cred_guard_mutex across this and any potential
-		 * perf_install_in_context() call for this new event to
-		 * serialize against exec() altering our credentials (and the
-		 * perf_event_exit_task() that could imply).
-		 */
-		err = -EACCES;
-		if (!ptrace_may_access(task, PTRACE_MODE_READ_REALCREDS))
-			goto err_cred;
-	}
-
 	if (flags & PERF_FLAG_PID_CGROUP)
 		cgroup_fd = pid;
 
@@ -11033,7 +11058,7 @@ int ksys_perf_event_open(struct perf_event_attr __user * attr_uptr, pid_t pid,
 				 NULL, NULL, cgroup_fd);
 	if (IS_ERR(event)) {
 		err = PTR_ERR(event);
-		goto err_cred;
+		goto err_task;
 	}
 
 	if (is_sampling_event(event)) {
@@ -11150,6 +11175,24 @@ int ksys_perf_event_open(struct perf_event_attr __user * attr_uptr, pid_t pid,
 		err = PTR_ERR(event_file);
 		event_file = NULL;
 		goto err_context;
+	}
+
+	if (task) {
+		err = down_read_interruptible(&task->signal->exec_update_lock);
+		if (err)
+			goto err_file;
+
+		/*
+		 * Preserve ptrace permission check for backwards compatibility.
+		 *
+		 * We must hold exec_update_lock across this and any potential
+		 * perf_install_in_context() call for this new event to
+		 * serialize against exec() altering our credentials (and the
+		 * perf_event_exit_task() that could imply).
+		 */
+		err = -EACCES;
+		if (!ptrace_may_access(task, PTRACE_MODE_READ_REALCREDS))
+			goto err_cred;
 	}
 
 	if (move_group) {
@@ -11305,7 +11348,7 @@ int ksys_perf_event_open(struct perf_event_attr __user * attr_uptr, pid_t pid,
 	mutex_unlock(&ctx->mutex);
 
 	if (task) {
-		mutex_unlock(&task->signal->cred_guard_mutex);
+		up_read(&task->signal->exec_update_lock);
 		put_task_struct(task);
 	}
 
@@ -11327,7 +11370,10 @@ err_locked:
 	if (move_group)
 		perf_event_ctx_unlock(group_leader, gctx);
 	mutex_unlock(&ctx->mutex);
-/* err_file: */
+err_cred:
+	if (task)
+		up_read(&task->signal->exec_update_lock);
+err_file:
 	fput(event_file);
 err_context:
 	perf_unpin_context(ctx);
@@ -11339,9 +11385,6 @@ err_alloc:
 	 */
 	if (!event_file)
 		free_event(event);
-err_cred:
-	if (task)
-		mutex_unlock(&task->signal->cred_guard_mutex);
 err_task:
 	if (task)
 		put_task_struct(task);
@@ -11653,7 +11696,7 @@ static void perf_event_exit_task_context(struct task_struct *child, int ctxn)
 /*
  * When a child task exits, feed back event values to parent events.
  *
- * Can be called with cred_guard_mutex held when called from
+ * Can be called with exec_update_lock held when called from
  * install_exec_creds().
  */
 void perf_event_exit_task(struct task_struct *child)

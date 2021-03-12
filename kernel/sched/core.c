@@ -16,6 +16,7 @@
 #include <asm/tlb.h>
 
 #include "../workqueue_internal.h"
+#include "../../fs/io-wq.h"
 #include "../smpboot.h"
 
 #include "pelt.h"
@@ -36,7 +37,7 @@ EXPORT_TRACEPOINT_SYMBOL_GPL(sched_overutilized_tp);
 
 DEFINE_PER_CPU_SHARED_ALIGNED(struct rq, runqueues);
 
-#if defined(CONFIG_SCHED_DEBUG) && defined(CONFIG_JUMP_LABEL)
+#ifdef CONFIG_SCHED_DEBUG
 /*
  * Debugging: various feature bits
  *
@@ -327,8 +328,12 @@ static void __sched_core_disable(void)
 	static_branch_disable(&__sched_core_enabled);
 }
 
+DEFINE_STATIC_KEY_TRUE(sched_coresched_supported);
+
 static void sched_core_get(void)
 {
+	if (!static_branch_likely(&sched_coresched_supported))
+		return;
 	mutex_lock(&sched_core_mutex);
 	if (!sched_core_count++)
 		__sched_core_enable();
@@ -337,6 +342,8 @@ static void sched_core_get(void)
 
 static void sched_core_put(void)
 {
+	if (!static_branch_likely(&sched_coresched_supported))
+		return;
 	mutex_lock(&sched_core_mutex);
 	if (!--sched_core_count)
 		__sched_core_disable();
@@ -650,8 +657,9 @@ static enum hrtimer_restart hrtick(struct hrtimer *timer)
 static void __hrtick_restart(struct rq *rq)
 {
 	struct hrtimer *timer = &rq->hrtick_timer;
+	ktime_t time = rq->hrtick_time;
 
-	hrtimer_start_expires(timer, HRTIMER_MODE_ABS_PINNED_HARD);
+	hrtimer_start(timer, time, HRTIMER_MODE_ABS_PINNED_HARD);
 }
 
 /*
@@ -676,7 +684,6 @@ static void __hrtick_start(void *arg)
 void hrtick_start(struct rq *rq, u64 delay)
 {
 	struct hrtimer *timer = &rq->hrtick_timer;
-	ktime_t time;
 	s64 delta;
 
 	/*
@@ -684,9 +691,7 @@ void hrtick_start(struct rq *rq, u64 delay)
 	 * doesn't make sense and can cause timer DoS.
 	 */
 	delta = max_t(s64, delay, 10000LL);
-	time = ktime_add_ns(timer->base->get_time(), delta);
-
-	hrtimer_set_expires(timer, time);
+	rq->hrtick_time = ktime_add_ns(timer->base->get_time(), delta);
 
 	if (rq == this_rq()) {
 		__hrtick_restart(rq);
@@ -3509,8 +3514,9 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 	 * If task is using prctl(2) for tagging, do the prctl(2)-style tagging
 	 * for the child as well.
 	 */
-	if (current->core_cookie && ((unsigned long)current == current->core_cookie))
-		task_set_core_sched(1, p);
+	if (current->core_cookie)
+		task_set_core_sched(1, p, (clone_flags & CLONE_THREAD) ?
+						current->core_cookie : 0);
 #endif
 	return 0;
 }
@@ -4788,6 +4794,7 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	const struct cpumask *smt_mask;
 	int i, j, cpu, occ = 0;
 	bool need_sync = false;
+	bool fi_before = false;
 
 	cpu = cpu_of(rq);
 	if (cpu_is_offline(cpu))
@@ -4846,11 +4853,21 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 
 		if (rq_i->core_forceidle) {
 			need_sync = true;
+			fi_before = true;
 			rq_i->core_forceidle = false;
 		}
 
 		if (i != cpu)
 			update_rq_clock(rq_i);
+	}
+
+	if (!fi_before) {
+		for_each_cpu(i, smt_mask) {
+			struct rq *rq_i = cpu_rq(i);
+
+			/* Reset the snapshot if core is no longer in force-idle. */
+			rq_i->cfs.min_vruntime_fi = rq_i->cfs.min_vruntime;
+		}
 	}
 
 	/*
@@ -4882,8 +4899,15 @@ again:
 				/*
 				 * If there weren't no cookies; we don't need
 				 * to bother with the other siblings.
+				 * If the rest of the core is not running a
+				 * tagged task, i.e.  need_sync == 0, and the
+				 * current CPU which called into the schedule()
+				 * loop does not have any tasks for this class,
+				 * skip selecting for other siblings since
+				 * there's no point. We don't skip for RT/DL
+				 * because that could make CFS force-idle RT.
 				 */
-				if (i == cpu && !need_sync)
+				if (i == cpu && !need_sync && class == &fair_sched_class)
 					goto next_class;
 
 				continue;
@@ -4955,6 +4979,7 @@ next_class:;
 	 * their task. This ensures there is no inter-sibling overlap between
 	 * non-matching user state.
 	 */
+	need_sync = false;
 	for_each_cpu(i, smt_mask) {
 		struct rq *rq_i = cpu_rq(i);
 
@@ -4963,8 +4988,10 @@ next_class:;
 
 		WARN_ON_ONCE(!rq_i->core_pick);
 
-		if (is_idle_task(rq_i->core_pick) && rq_i->nr_running)
+		if (is_idle_task(rq_i->core_pick) && rq_i->nr_running) {
 			rq_i->core_forceidle = true;
+			need_sync = true;
+		}
 
 		rq_i->core_pick->core_occupation = occ;
 
@@ -4978,6 +5005,14 @@ next_class:;
 		WARN_ON_ONCE(!cookie_match(next, rq_i->core_pick));
 	}
 
+	if (!fi_before && need_sync) {
+		for_each_cpu(i, smt_mask) {
+			struct rq *rq_i = cpu_rq(i);
+
+			/* Snapshot if core is in force-idle. */
+			rq_i->cfs.min_vruntime_fi = rq_i->cfs.min_vruntime;
+		}
+	}
 done:
 	set_next_task(rq, next);
 	return next;
@@ -5255,11 +5290,15 @@ static inline void sched_submit_work(struct task_struct *tsk)
 	 * it wants to wake up a task to maintain concurrency.
 	 * As this function is called inside the schedule() context,
 	 * we disable preemption to avoid it calling schedule() again
-	 * in the possible wakeup of a kworker.
+	 * in the possible wakeup of a kworker and because wq_worker_sleeping()
+	 * requires it.
 	 */
-	if (tsk->flags & PF_WQ_WORKER) {
+	if (tsk->flags & (PF_WQ_WORKER | PF_IO_WORKER)) {
 		preempt_disable();
-		wq_worker_sleeping(tsk);
+		if (tsk->flags & PF_WQ_WORKER)
+			wq_worker_sleeping(tsk);
+		else
+			io_wq_worker_sleeping(tsk);
 		preempt_enable_no_resched();
 	}
 
@@ -5276,8 +5315,12 @@ static inline void sched_submit_work(struct task_struct *tsk)
 
 static void sched_update_worker(struct task_struct *tsk)
 {
-	if (tsk->flags & PF_WQ_WORKER)
-		wq_worker_running(tsk);
+	if (tsk->flags & (PF_WQ_WORKER | PF_IO_WORKER)) {
+		if (tsk->flags & PF_WQ_WORKER)
+			wq_worker_running(tsk);
+		else
+			io_wq_worker_running(tsk);
+	}
 }
 
 asmlinkage __visible void __sched schedule(void)
@@ -6184,6 +6227,8 @@ static int _sched_setscheduler(struct task_struct *p, int policy,
  * @policy: new policy.
  * @param: structure containing the new RT priority.
  *
+ * Use sched_set_fifo(), read its comment.
+ *
  * Return: 0 on success. An error code otherwise.
  *
  * NOTE that the task may be already dead.
@@ -6225,6 +6270,51 @@ int sched_setscheduler_nocheck(struct task_struct *p, int policy,
 	return _sched_setscheduler(p, policy, param, false);
 }
 EXPORT_SYMBOL_GPL(sched_setscheduler_nocheck);
+
+/*
+ * SCHED_FIFO is a broken scheduler model; that is, it is fundamentally
+ * incapable of resource management, which is the one thing an OS really should
+ * be doing.
+ *
+ * This is of course the reason it is limited to privileged users only.
+ *
+ * Worse still; it is fundamentally impossible to compose static priority
+ * workloads. You cannot take two correctly working static prio workloads
+ * and smash them together and still expect them to work.
+ *
+ * For this reason 'all' FIFO tasks the kernel creates are basically at:
+ *
+ *   MAX_RT_PRIO / 2
+ *
+ * The administrator _MUST_ configure the system, the kernel simply doesn't
+ * know enough information to make a sensible choice.
+ */
+int sched_set_fifo(struct task_struct *p)
+{
+	struct sched_param sp = { .sched_priority = MAX_RT_PRIO / 2 };
+	return sched_setscheduler_nocheck(p, SCHED_FIFO, &sp);
+}
+EXPORT_SYMBOL_GPL(sched_set_fifo);
+
+/*
+ * For when you don't much care about FIFO, but want to be above SCHED_NORMAL.
+ */
+int sched_set_fifo_low(struct task_struct *p)
+{
+	struct sched_param sp = { .sched_priority = 1 };
+	return sched_setscheduler_nocheck(p, SCHED_FIFO, &sp);
+}
+EXPORT_SYMBOL_GPL(sched_set_fifo_low);
+
+int sched_set_normal(struct task_struct *p, int nice)
+{
+	struct sched_attr attr = {
+		.sched_policy = SCHED_NORMAL,
+		.sched_nice = nice,
+	};
+	return sched_setattr_nocheck(p, &attr);
+}
+EXPORT_SYMBOL_GPL(sched_set_normal);
 
 static int
 do_sched_setscheduler(pid_t pid, int policy, struct sched_param __user *param)
@@ -6739,12 +6829,8 @@ static void do_sched_yield(void)
 	schedstat_inc(rq->yld_count);
 	current->sched_class->yield_task(rq);
 
-	/*
-	 * Since we are going to call schedule() anyway, there's
-	 * no need to preempt or enable interrupts:
-	 */
 	preempt_disable();
-	rq_unlock(rq, &rf);
+	rq_unlock_irq(rq, &rf);
 	sched_preempt_enable_no_resched();
 
 	schedule();
@@ -7321,6 +7407,11 @@ void sched_setnuma(struct task_struct *p, int nid)
 	task_rq_unlock(rq, p, &rf);
 }
 #endif /* CONFIG_NUMA_BALANCING */
+
+int wake_up_process_prefer_current_cpu(struct task_struct *next)
+{
+	return try_to_wake_up(next, TASK_NORMAL, WF_CURRENT_CPU);
+}
 
 #ifdef CONFIG_HOTPLUG_CPU
 /*
@@ -8033,7 +8124,8 @@ static int task_set_core_sched_stopper(void *data)
 	return 0;
 }
 
-int task_set_core_sched(int set, struct task_struct *tsk)
+int task_set_core_sched(int set, struct task_struct *tsk,
+			unsigned long cookie)
 {
 	if (!tsk)
 		tsk = current;
@@ -8070,15 +8162,15 @@ int task_set_core_sched(int set, struct task_struct *tsk)
 	if (set)
 		sched_core_get();
 
-	tsk->core_cookie = set ? (unsigned long)tsk : 0;
+	if (cookie)
+		tsk->core_cookie = cookie;
+	else
+		tsk->core_cookie = set ? (unsigned long)tsk : 0;
 
 	stop_machine(task_set_core_sched_stopper, (void *)tsk, NULL);
 
 	if (!set)
 		sched_core_put();
-
-	pr_alert("coresched: prctl success: %s/%d %lx (fork: %d)\n", tsk->comm,
-		 tsk->pid, tsk->core_cookie, tsk != current);
 	return 0;
 }
 #endif

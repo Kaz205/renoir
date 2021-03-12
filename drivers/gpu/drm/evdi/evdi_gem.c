@@ -73,15 +73,38 @@ evdi_gem_create(struct drm_file *file,
 		return ret;
 	}
 
-	drm_gem_object_put_unlocked(&obj->base);
+	drm_gem_object_put(&obj->base);
 	*handle_p = handle;
 	return 0;
+}
+
+static int evdi_align_pitch(int width, int cpp)
+{
+	int aligned = width;
+	int pitch_mask = 0;
+
+	switch (cpp) {
+	case 1:
+		pitch_mask = 255;
+		break;
+	case 2:
+		pitch_mask = 127;
+		break;
+	case 3:
+	case 4:
+		pitch_mask = 63;
+		break;
+	}
+
+	aligned += pitch_mask;
+	aligned &= ~pitch_mask;
+	return aligned * cpp;
 }
 
 int evdi_dumb_create(struct drm_file *file,
 		     struct drm_device *dev, struct drm_mode_create_dumb *args)
 {
-	args->pitch = args->width * DIV_ROUND_UP(args->bpp, 8);
+	args->pitch = evdi_align_pitch(args->width, DIV_ROUND_UP(args->bpp, 8));
 	args->size = args->pitch * args->height;
 	return evdi_gem_create(file, dev, args->size, &args->handle);
 }
@@ -250,7 +273,7 @@ int evdi_gem_mmap(struct drm_file *file,
 	*offset = drm_vma_node_offset_addr(&gobj->base.vma_node);
 
  out:
-	drm_gem_object_put(&gobj->base);
+	drm_gem_object_put_locked(&gobj->base);
  unlock:
 	mutex_unlock(&dev->struct_mutex);
 	return ret;

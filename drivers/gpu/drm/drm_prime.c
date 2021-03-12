@@ -268,7 +268,7 @@ void drm_gem_dmabuf_release(struct dma_buf *dma_buf)
 	struct drm_device *dev = obj->dev;
 
 	/* drop the reference on the export fd holds */
-	drm_gem_object_put_unlocked(obj);
+	drm_gem_object_put(obj);
 
 	drm_dev_put(dev);
 }
@@ -327,7 +327,7 @@ int drm_gem_prime_fd_to_handle(struct drm_device *dev,
 
 	/* _handle_create_tail unconditionally unlocks dev->object_name_lock. */
 	ret = drm_gem_handle_create_tail(file_priv, obj, handle);
-	drm_gem_object_put_unlocked(obj);
+	drm_gem_object_put(obj);
 	if (ret)
 		goto out_put;
 
@@ -498,7 +498,7 @@ out_have_handle:
 fail_put_dmabuf:
 	dma_buf_put(dmabuf);
 out:
-	drm_gem_object_put_unlocked(obj);
+	drm_gem_object_put(obj);
 out_unlock:
 	mutex_unlock(&file_priv->prime.lock);
 
@@ -767,28 +767,6 @@ int drm_gem_dmabuf_mmap(struct dma_buf *dma_buf, struct vm_area_struct *vma)
 }
 EXPORT_SYMBOL(drm_gem_dmabuf_mmap);
 
-/**
- * drm_gem_dmabuf_get_uuid - dma_buf get_uuid implementation for GEM
- * @dma_buf: buffer to query
- * @uuid: uuid outparam
- *
- * Queries the buffer's virtio UUID. This can be used as the
- * &dma_buf_ops.get_uuid callback. Calls into &drm_driver.gem_prime_get_uuid.
- *
- * Returns 0 on success or a negative error code on failure.
- */
-int drm_gem_dmabuf_get_uuid(struct dma_buf *dma_buf, uuid_t *uuid)
-{
-	struct drm_gem_object *obj = dma_buf->priv;
-	struct drm_device *dev = obj->dev;
-
-	if (!dev->driver->gem_prime_get_uuid)
-		return -ENODEV;
-
-	return dev->driver->gem_prime_get_uuid(obj, uuid);
-}
-EXPORT_SYMBOL(drm_gem_dmabuf_get_uuid);
-
 static const struct dma_buf_ops drm_gem_prime_dmabuf_ops =  {
 	.cache_sgt_mapping = true,
 	.attach = drm_gem_map_attach,
@@ -799,7 +777,6 @@ static const struct dma_buf_ops drm_gem_prime_dmabuf_ops =  {
 	.mmap = drm_gem_dmabuf_mmap,
 	.vmap = drm_gem_dmabuf_vmap,
 	.vunmap = drm_gem_dmabuf_vunmap,
-	.get_uuid = drm_gem_dmabuf_get_uuid,
 };
 
 /**
