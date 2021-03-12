@@ -28,6 +28,7 @@
 #include "atombios.h"
 #include "processpptables.h"
 #include "cgs_common.h"
+#include "dal_asic_id.h"
 #include "smumgr.h"
 #include "hwmgr.h"
 #include "hardwaremanager.h"
@@ -1114,8 +1115,20 @@ static int smu10_read_sensor(struct pp_hwmgr *hwmgr, int idx,
 			  void *value, int *size)
 {
 	struct smu10_hwmgr *smu10_data = (struct smu10_hwmgr *)(hwmgr->backend);
-	uint32_t sclk, mclk;
+	struct amdgpu_device *adev = hwmgr->adev;
+	uint32_t sclk, mclk, activity_percent;
+	bool has_gfx_busy;
 	int ret = 0;
+
+	/* GetGfxBusy support was added on RV SMU FW 30.85.00 and PCO 4.30.59 */
+	if (ASICREV_IS_PICASSO(adev->external_rev_id) &&
+	    (hwmgr->smu_version >= 0x41e3b))
+		has_gfx_busy = true;
+	else if (ASICREV_IS_RAVEN(adev->external_rev_id) &&
+		 (hwmgr->smu_version >= 0x1e5500))
+		has_gfx_busy = true;
+	else
+		has_gfx_busy = false;
 
 	switch (idx) {
 	case AMDGPU_PP_SENSOR_GFX_SCLK:
@@ -1139,6 +1152,16 @@ static int smu10_read_sensor(struct pp_hwmgr *hwmgr, int idx,
 		*(uint32_t *)value =  smu10_data->vcn_power_gated ? 0 : 1;
 		*size = 4;
 		break;
+	case AMDGPU_PP_SENSOR_GPU_LOAD:
+		if (has_gfx_busy) {
+			smum_send_msg_to_smc(hwmgr, PPSMC_MSG_GetGfxBusy);
+			activity_percent = smum_get_argument(hwmgr);
+			activity_percent = activity_percent > 100 ? 100 : activity_percent;
+			*((uint32_t *)value) = activity_percent;
+			return 0;
+		} else {
+			return -EINVAL;
+		}
 	default:
 		ret = -EINVAL;
 		break;
