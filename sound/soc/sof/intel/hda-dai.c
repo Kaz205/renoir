@@ -422,8 +422,10 @@ static int ssp_dai_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, SOF_AUDIO_PCM_DRV_NAME);
 	struct snd_sof_dev *sdev = snd_soc_component_get_drvdata(component);
 	struct sof_ipc_fw_version *v = &sdev->fw_ready.version;
-	struct sof_ipc_dai_config *config;
+	struct snd_soc_dapm_widget *w;
+	struct snd_sof_widget *swidget;
 	struct snd_sof_dai *sof_dai;
+	struct sof_ipc_dai_config *config;
 	struct sof_ipc_reply reply;
 	int ret;
 
@@ -431,30 +433,77 @@ static int ssp_dai_hw_params(struct snd_pcm_substream *substream,
 	if (v->abi_version < SOF_ABI_VER(3, 18, 0))
 		return 0;
 
-	list_for_each_entry(sof_dai, &sdev->dai_list, list) {
-		if (!sof_dai->cpu_dai_name || !sof_dai->dai_config)
-			continue;
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
+		w = dai->playback_widget;
+	else
+		w = dai->capture_widget;
 
-		if (!strcmp(dai->name, sof_dai->cpu_dai_name) &&
-		    substream->stream == sof_dai->comp_dai.direction) {
-			config = &sof_dai->dai_config[sof_dai->current_config];
+	swidget = w->dobj.private;
+	sof_dai = swidget->private;
 
-			/* send IPC */
-			ret = sof_ipc_tx_message(sdev->ipc, config->hdr.cmd, config,
-						 config->hdr.size, &reply, sizeof(reply));
-
-			if (ret < 0)
-				dev_err(sdev->dev, "error: failed to set DAI config for %s\n",
-					sof_dai->name);
-			return ret;
-		}
+	if (!sof_dai || !sof_dai->dai_config) {
+		dev_err(sdev->dev, "No config for DAI %s\n", w->name);
+		return -EINVAL;
 	}
 
-	return 0;
+	config = &sof_dai->dai_config[sof_dai->current_config];
+
+	/* send DAI_CONFIG IPC */
+	ret = sof_ipc_tx_message(sdev->ipc, config->hdr.cmd, config,
+				 config->hdr.size, &reply, sizeof(reply));
+	if (ret < 0)
+		dev_err(sdev->dev, "error: failed to set DAI config for %s\n",
+			sof_dai->name);
+
+	return ret;
+}
+
+static int ssp_dai_hw_free(struct snd_pcm_substream *substream,
+			   struct snd_soc_dai *dai)
+{
+	struct snd_soc_pcm_runtime *rtd = asoc_substream_to_rtd(substream);
+	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, SOF_AUDIO_PCM_DRV_NAME);
+	struct snd_sof_dev *sdev = snd_soc_component_get_drvdata(component);
+	struct sof_ipc_fw_version *v = &sdev->fw_ready.version;
+	struct snd_soc_dapm_widget *w;
+	struct snd_sof_widget *swidget;
+	struct snd_sof_dai *sof_dai;
+	struct sof_ipc_dai_config *config;
+	struct sof_ipc_reply reply;
+	int ret;
+
+	/* DAI_CONFIG IPC during hw_params is not supported in older firmware */
+	if (v->abi_version < SOF_ABI_VER(3, 18, 0))
+		return 0;
+
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
+		w = dai->playback_widget;
+	else
+		w = dai->capture_widget;
+
+	swidget = w->dobj.private;
+	sof_dai = swidget->private;
+
+	if (!sof_dai || !sof_dai->dai_config) {
+		dev_err(sdev->dev, "No config for DAI %s\n", w->name);
+		return -EINVAL;
+	}
+
+	config = &sof_dai->dai_config[sof_dai->current_config];
+
+	/* send DAI_CONFIG IPC */
+	ret = sof_ipc_tx_message(sdev->ipc, config->hdr.cmd, config,
+				 config->hdr.size, &reply, sizeof(reply));
+	if (ret < 0)
+		dev_err(sdev->dev, "error: failed to set DAI config for %s\n",
+			sof_dai->name);
+
+	return ret;
 }
 
 static const struct snd_soc_dai_ops ssp_dai_ops = {
 	.hw_params = ssp_dai_hw_params,
+	.hw_free = ssp_dai_hw_free,
 };
 
 /*
