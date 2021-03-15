@@ -276,7 +276,6 @@ config QTI_SENSORS
 			config QTI_CCI
 				bool "Qualcomm CCI driver"
 				default y
-				depends on I2C_QUP
 				help
 				  Say Y here to enable selecting module
 				  Support for the synchronous QUP based I2C interface
@@ -284,7 +283,6 @@ config QTI_SENSORS
 			config QTI_I2C
 				bool "Qualcomm I2C driver"
 				default y
-				depends on I2C_QCOM_GENI
 				help
 				  Say Y here to enable selecting module
 				  Support for the synchronous GENI based I2C interface
@@ -292,8 +290,6 @@ config QTI_SENSORS
 			config QTI_SPI
 				bool "Qualcomm SPI_GENI driver"
 				default y
-				depends on SPI_QCOM_QSPI
-				depends on SPI_QCOM_GENI
 				help
 				  Say Y here to enable selecting module
 				  Support for the GENI based Serial Peripheral Interface
