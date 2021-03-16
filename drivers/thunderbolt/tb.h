@@ -185,6 +185,7 @@ struct tb_switch {
 };
 
 #define TB_RETIMER_SCAN_DELAY		(15 * 1000)
+#define TB_RETIMER_STOP_IO_DELAY	1000
 
 /**
  * struct tb_port - a thunderbolt port, part of a tb_switch
@@ -210,6 +211,7 @@ struct tb_switch {
  * @out_hopids: Currently allocated output HopIDs
  * @list: Used to link ports to DP resources list
  * @retimer_scan_work: work to scan onboard retimers if no devices connected
+ * @retimer_stop_io_work: work to stop retimer io
  */
 struct tb_port {
 	struct tb_regs_port_header config;
@@ -233,6 +235,7 @@ struct tb_port {
 	struct ida out_hopids;
 	struct list_head list;
 	struct delayed_work retimer_scan_work;
+	struct delayed_work retimer_stop_io_work;
 };
 
 /**
