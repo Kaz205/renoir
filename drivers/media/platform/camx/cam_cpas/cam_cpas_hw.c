@@ -200,14 +200,10 @@ static int _cpas_vote_bus_bw(
 			ib = CAM_CPAS_AXI_MIN_MNOC_IB_BW;
 	}
 
-
 	CAM_DBG(CAM_CPAS, "Bus client=[%s] :ab[%llu] ib[%llu]",
 		bus_client->name, ab, ib);
 
-	if (ab && ib)
-		return icc_set_bw(bus_client->path, ab, ib);
-
-	return 0;
+	return icc_set_bw(bus_client->path, ab, ib);
 }
 
 static int cam_cpas_util_register_bus_client(
