@@ -1825,22 +1825,6 @@ validate_vp9_seg_params(struct v4l2_vp9_segmentation *seg)
 	    !(seg->flags & V4L2_VP9_SEGMENTATION_FLAG_ENABLED))
 		return -EINVAL;
 
-	/*
-	 * V4L2_VP9_SEGMENTATION_FLAG_TEMPORAL_UPDATE implies
-	 * V4L2_VP9_SEGMENTATION_FLAG_UPDATE_MAP.
-	 */
-	if (seg->flags & V4L2_VP9_SEGMENTATION_FLAG_TEMPORAL_UPDATE &&
-	    !(seg->flags & V4L2_VP9_SEGMENTATION_FLAG_UPDATE_MAP))
-		return -EINVAL;
-
-	/*
-	 * V4L2_VP9_SEGMENTATION_FLAG_ABS_OR_DELTA_UPDATE implies
-	 * V4L2_VP9_SEGMENTATION_FLAG_UPDATE_DATA.
-	 */
-	if (seg->flags & V4L2_VP9_SEGMENTATION_FLAG_ABS_OR_DELTA_UPDATE &&
-	    !(seg->flags & V4L2_VP9_SEGMENTATION_FLAG_UPDATE_DATA))
-		return -EINVAL;
-
 	for (i = 0; i < ARRAY_SIZE(seg->feature_enabled); i++) {
 		if (seg->feature_enabled[i] &
 		    ~(V4L2_VP9_SEGMENT_FEATURE_QP_DELTA |
@@ -1885,12 +1869,17 @@ validate_vp9_frame_decode_params(struct v4l2_ctrl_vp9_frame_decode_params *dec_p
 
 	/*
 	 * The refresh context and error resilient flags are mutually exclusive.
-	 * Same goes for parallel decoding and error resilient modes.
 	 */
 	if (dec_params->flags & V4L2_VP9_FRAME_FLAG_ERROR_RESILIENT &&
-	    dec_params->flags &
-	    (V4L2_VP9_FRAME_FLAG_REFRESH_FRAME_CTX |
-	     V4L2_VP9_FRAME_FLAG_PARALLEL_DEC_MODE))
+	    dec_params->flags & V4L2_VP9_FRAME_FLAG_REFRESH_FRAME_CTX)
+		return -EINVAL;
+
+	/*
+	 * error resilient mode and parallel decoding mode
+	 * are not mutually exclusive.
+	 */
+	if (dec_params->flags & V4L2_VP9_FRAME_FLAG_ERROR_RESILIENT &&
+	    !(dec_params->flags & V4L2_VP9_FRAME_FLAG_PARALLEL_DEC_MODE))
 		return -EINVAL;
 
 	if (dec_params->profile > V4L2_VP9_PROFILE_MAX)
