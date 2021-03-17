@@ -473,13 +473,6 @@ int mdp_cmdq_send(struct mdp_dev *mdp, struct mdp_cmdq_param *param)
 		return ret;
 	}
 
-    // TODO: engine conflict dispatch
-	pm_runtime_get_sync(&mdp->pdev->dev);
-	mdp_comp_clock_on(&mdp->pdev->dev, &mdp->mm_mutex);
-
-	for (i = 0; i < param->config->num_components; i++)
-		mdp_comp_clock_on(&mdp->pdev->dev, path.comps[i].comp);
-
 	ret = mdp_path_config(mdp, &cmd, &path);
 	if (ret) {
 		atomic_dec(&mdp->job_count);
@@ -488,6 +481,10 @@ int mdp_cmdq_send(struct mdp_dev *mdp, struct mdp_cmdq_param *param)
 	}
 
 	if (param->wait) {
+	    pm_runtime_get_sync(&mdp->pdev->dev);
+	    mdp_comp_clock_on(&mdp->pdev->dev, &mdp->mm_mutex);
+		for (i = 0; i < param->config->num_components; i++)
+			mdp_comp_clock_on(&mdp->pdev->dev, path.comps[i].comp);
 		ret = cmdq_pkt_flush(cmd.pkt);
 #ifdef MDP_DEBUG
         if (ret) {
@@ -530,6 +527,9 @@ int mdp_cmdq_send(struct mdp_dev *mdp, struct mdp_cmdq_param *param)
 		cb_param->comps = comps;
 		cb_param->num_comps = param->config->num_components;
 		cb_param->mdp_ctx = param->mdp_ctx;
+
+		mdp_comp_clocks_on(&mdp->pdev->dev, cb_param->comps,
+				   cb_param->num_comps);
 
 		ret = cmdq_pkt_flush_async(cmd.pkt,
 					   mdp_handle_cmdq_callback,
