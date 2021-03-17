@@ -1176,11 +1176,13 @@ void tb_retimer_remove_all(struct tb_port *port, struct tb_switch *sw)
 		cancel_delayed_work_sync(&port->retimer_stop_io_work);
 
 	rt = tb_to_retimer(&port->sw->dev);
-	if (!rt)
-		return;
 
-	/* remove the retimers that belong to the switch being removed */
-	if (port->cap_usb4 && sw == rt->port->sw)
+	/*
+	 * Remove the retimers that belong to the switch being removed.
+	 * Allow for the removal of non-onboard retimers.
+	 */
+	if (port->cap_usb4 && ((rt && sw == rt->port->sw) ||
+			       (!rt && tb_route(sw))))
 		device_for_each_child_reverse(&port->sw->dev, port,
 					      remove_retimer);
 }
