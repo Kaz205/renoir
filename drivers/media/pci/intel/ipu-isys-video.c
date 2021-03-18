@@ -674,19 +674,16 @@ static int get_external_facing_format(struct ipu_isys_pipeline *ip,
 static void short_packet_queue_destroy(struct ipu_isys_pipeline *ip)
 {
 	struct ipu_isys_video *av = container_of(ip, struct ipu_isys_video, ip);
-	unsigned long attrs;
 	unsigned int i;
 
-	attrs = DMA_ATTR_NON_CONSISTENT;
 	if (!ip->short_packet_bufs)
 		return;
 	for (i = 0; i < IPU_ISYS_SHORT_PACKET_BUFFER_NUM; i++) {
 		if (ip->short_packet_bufs[i].buffer)
-			dma_free_attrs(&av->isys->adev->dev,
-				       ip->short_packet_buffer_size,
-				       ip->short_packet_bufs[i].buffer,
-				       ip->short_packet_bufs[i].dma_addr,
-				       attrs);
+			dma_free_coherent(&av->isys->adev->dev,
+					  ip->short_packet_buffer_size,
+					  ip->short_packet_bufs[i].buffer,
+					  ip->short_packet_bufs[i].dma_addr);
 	}
 	kfree(ip->short_packet_bufs);
 	ip->short_packet_bufs = NULL;
@@ -696,7 +693,6 @@ static int short_packet_queue_setup(struct ipu_isys_pipeline *ip)
 {
 	struct ipu_isys_video *av = container_of(ip, struct ipu_isys_video, ip);
 	struct v4l2_subdev_format source_fmt = { 0 };
-	unsigned long attrs;
 	unsigned int i;
 	int rval;
 	size_t buf_size;
@@ -720,7 +716,6 @@ static int short_packet_queue_setup(struct ipu_isys_pipeline *ip)
 	/* Initialize short packet queue. */
 	INIT_LIST_HEAD(&ip->short_packet_incoming);
 	INIT_LIST_HEAD(&ip->short_packet_active);
-	attrs = DMA_ATTR_NON_CONSISTENT;
 
 	ip->short_packet_bufs =
 	    kzalloc(sizeof(struct ipu_isys_private_buffer) *
@@ -735,9 +730,8 @@ static int short_packet_queue_setup(struct ipu_isys_pipeline *ip)
 		buf->ip = ip;
 		buf->ib.type = IPU_ISYS_SHORT_PACKET_BUFFER;
 		buf->bytesused = buf_size;
-		buf->buffer = dma_alloc_attrs(&av->isys->adev->dev, buf_size,
-					      &buf->dma_addr, GFP_KERNEL,
-					      attrs);
+		buf->buffer = dma_alloc_coherent(&av->isys->adev->dev, buf_size,
+						 &buf->dma_addr, GFP_KERNEL);
 		if (!buf->buffer) {
 			short_packet_queue_destroy(ip);
 			return -ENOMEM;

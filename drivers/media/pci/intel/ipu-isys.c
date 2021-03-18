@@ -825,12 +825,10 @@ static void isys_remove(struct ipu_bus_device *adev)
 
 	if (isys->short_packet_source == IPU_ISYS_SHORT_PACKET_FROM_TUNIT) {
 		u32 trace_size = IPU_ISYS_SHORT_PACKET_TRACE_BUFFER_SIZE;
-		unsigned long attrs;
 
-		attrs = DMA_ATTR_NON_CONSISTENT;
-		dma_free_attrs(&adev->dev, trace_size,
-			       isys->short_packet_trace_buffer,
-			       isys->short_packet_trace_buffer_dma_addr, attrs);
+		dma_free_coherent(&adev->dev, trace_size,
+				  isys->short_packet_trace_buffer,
+				  isys->short_packet_trace_buffer_dma_addr);
 	}
 }
 
