@@ -10,3 +10,19 @@
 	model = "MediaTek Spherion rev0 board";
 	compatible = "google,spherion-rev0", "google,spherion", "mediatek,mt8192";
 };
+
+&i2c2 {
+	touchpad@2c {
+		compatible = "hid-over-i2c";
+		reg = <0x2c>;
+		hid-descr-addr = <0x20>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&touchpad_pins>;
+
+		interrupt-parent = <&pio>;
+		interrupts = <15 IRQ_TYPE_LEVEL_LOW>;
+
+		wakeup-source;
+	};
+};
