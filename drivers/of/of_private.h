@@ -171,7 +171,7 @@ static inline int of_dma_get_range(struct device_node *np, u64 *dma_addr,
 {
 	return -ENODEV;
 }
-static inline int of_dma_get_restricted_buffer(struct device *dev)
+static inline int of_dma_set_restricted_buffer(struct device *dev)
 {
 	return -ENODEV;
 }
