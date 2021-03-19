@@ -311,8 +311,10 @@ int virtio_gpu_driver_open(struct drm_device *dev, struct drm_file *file)
 	get_task_comm(dbgname, current);
 
 	handle = ida_alloc(&vgdev->ctx_id_ida, GFP_KERNEL);
-	if (handle < 0)
+	if (handle < 0) {
+		kfree(vfpriv);
 		return handle;
+	}
 
 	vfpriv->ctx_id = handle + 1;
 
