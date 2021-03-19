@@ -233,14 +233,14 @@ int virtio_gpu_init(struct drm_device *dev)
 	}
 	DRM_INFO("number of scanouts: %d\n", num_scanouts);
 
-	virtio_cread(vgdev->vdev, struct virtio_gpu_config,
-		     num_capsets, &num_capsets);
-	DRM_INFO("number of cap sets: %d\n", num_capsets);
-
 	virtio_gpu_modeset_init(vgdev);
 
 	virtio_device_ready(vgdev->vdev);
 	vgdev->vqs_ready = true;
+
+	virtio_cread(vgdev->vdev, struct virtio_gpu_config,
+		     num_capsets, &num_capsets);
+	DRM_INFO("number of cap sets: %d\n", num_capsets);
 
 	if (num_capsets)
 		virtio_gpu_get_capsets(vgdev, num_capsets);
