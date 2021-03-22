@@ -1153,15 +1153,14 @@ static int smu10_read_sensor(struct pp_hwmgr *hwmgr, int idx,
 		*size = 4;
 		break;
 	case AMDGPU_PP_SENSOR_GPU_LOAD:
-		if (has_gfx_busy) {
+		if (!has_gfx_busy)
+			ret = -EINVAL;
+		else {
 			smum_send_msg_to_smc(hwmgr, PPSMC_MSG_GetGfxBusy);
 			activity_percent = smum_get_argument(hwmgr);
-			activity_percent = activity_percent > 100 ? 100 : activity_percent;
-			*((uint32_t *)value) = activity_percent;
-			return 0;
-		} else {
-			return -EINVAL;
+			*((uint32_t *)value) = min(activity_percent, (u32)100);
 		}
+		break;
 	default:
 		ret = -EINVAL;
 		break;
