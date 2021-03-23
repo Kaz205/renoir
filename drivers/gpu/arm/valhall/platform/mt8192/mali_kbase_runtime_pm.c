@@ -111,6 +111,16 @@ err:
 	return err;
 }
 
+static void disable_acp(struct kbase_device *kbdev)
+{
+	unsigned int val;
+	struct mfg_base *mfg = kbdev->platform_context;
+
+	/* disable acp */
+	val = readl(mfg->g_infracfg_base + INFRA_CTL) | BIT(DIS_MFG2ACP_BIT);
+	writel(val, mfg->g_infracfg_base + INFRA_CTL);
+}
+
 static void check_bus_idle(struct kbase_device *kbdev)
 {
 	struct mfg_base *mfg = kbdev->platform_context;
@@ -329,6 +339,12 @@ int mali_mfgsys_init(struct kbase_device *kbdev, struct mfg_base *mfg)
 		return -ENODEV;
 	}
 
+	mfg->g_infracfg_base = get_mfg_base("mediatek,mt8192-infracfg");
+	if (!mfg->g_infracfg_base) {
+		dev_err(kbdev->dev, "Cannot find infracfg node\n");
+		return -ENODEV;
+	}
+
 	mfg->is_powered = false;
 
 	return 0;
@@ -415,6 +431,8 @@ static int platform_init(struct kbase_device *kbdev)
 
 	kbdev->devfreq_ops.set_frequency = set_frequency;
 	kbdev->devfreq_ops.voltage_range_check = voltage_range_check;
+
+	disable_acp(kbdev);
 
 	return 0;
 }
