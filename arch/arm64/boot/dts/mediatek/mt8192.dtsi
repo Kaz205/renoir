@@ -1459,7 +1459,6 @@
 				"clk_sub_parent",
 				"subsys_mfg_cg";
 
-			ipa-model = "mali-simple-power-model";
 			power-domains =
 				<&spm MT8192_POWER_DOMAIN_MFG2>,
 				<&spm MT8192_POWER_DOMAIN_MFG3>,
