@@ -572,7 +572,7 @@ static void get_pic_info(struct vdec_h264_slice_inst *inst,
 	inst->vsi_ctx.dec.cap_num_planes =
 		ctx->q_data[MTK_Q_DATA_DST].fmt->num_planes;
 
-	pic = &ctx->picinfo;
+	*pic = ctx->picinfo;
 	mtk_vcodec_debug(inst, "pic(%d, %d), buf(%d, %d)",
 			 ctx->picinfo.pic_w, ctx->picinfo.pic_h,
 			 ctx->picinfo.buf_w, ctx->picinfo.buf_h);
