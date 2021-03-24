@@ -1260,13 +1260,38 @@ static void anx7625_hpd_polling(struct anx7625_data *ctx)
 				 5000 * 100);
 	if (ret) {
 		DRM_DEV_ERROR(dev, "HPD polling timeout!\n");
-	} else {
-		DRM_DEV_DEBUG_DRIVER(dev, "HPD raise up.\n");
-		anx7625_reg_write(ctx, ctx->i2c.tcpc_client,
-				  INTR_ALERT_1, 0xFF);
-		anx7625_reg_write(ctx, ctx->i2c.rx_p0_client,
-				  INTERFACE_CHANGE_INT, 0);
+		return;
 	}
+
+	DRM_DEV_DEBUG_DRIVER(dev, "HPD raise up.\n");
+	anx7625_reg_write(ctx, ctx->i2c.tcpc_client,
+			  INTR_ALERT_1, 0xFF);
+	anx7625_reg_write(ctx, ctx->i2c.rx_p0_client,
+			  INTERFACE_CHANGE_INT, 0);
+
+	anx7625_start_dp_work(ctx);
+}
+
+static void anx7625_hpd_checking(struct anx7625_data *ctx)
+{
+	int ret, val;
+	struct device *dev = &ctx->client->dev;
+
+	DRM_DEV_DEBUG_DRIVER(dev, "hpd check.\n");
+	if (!atomic_read(&ctx->power_status))
+		return;
+
+	ret = readx_poll_timeout(anx7625_read_hpd_status_p0,
+				 ctx, val,
+				 ((val & HPD_STATUS) || (val < 0)),
+				 5000,
+				 5000 * 20);
+	if (ret) {
+		DRM_DEV_DEBUG_DRIVER(dev, "no hpd.\n");
+		return;
+	}
+
+	DRM_DEV_DEBUG_DRIVER(dev, "system status:%x.\n", val);
 
 	anx7625_start_dp_work(ctx);
 }
@@ -1484,9 +1509,11 @@ static int anx7625_usb_mux_set(struct typec_mux *mux,
 
 	new_has_dp = ctx->typec_ports[0].has_dp || ctx->typec_ports[1].has_dp;
 
-	/* dp on, power on first */
-	if (!old_has_dp && new_has_dp)
+	// dp on, power on first
+	if (!old_has_dp && new_has_dp) {
 		anx7625_chip_control(ctx, true);
+		anx7625_hpd_checking(ctx);
+	}
 
 	anx7625_usb_two_ports_update(ctx);
 
