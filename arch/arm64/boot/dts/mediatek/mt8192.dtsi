@@ -983,7 +983,8 @@
 				 <&infracfg CLK_INFRA_SSUSB_XHCI>,
 				 <&apmixedsys CLK_APMIXED_USBPLL>;
 			clock-names = "sys_ck", "xhci_ck", "ref_ck";
-			mediatek,syscon-wakeup = <&pericfg 0x420 3>;
+			wakeup-source;
+			mediatek,syscon-wakeup = <&pericfg 0x420 102>;
 			#address-cells = <2>;
 			#size-cells = <2>;
 		};
