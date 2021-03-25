@@ -66,8 +66,8 @@ int mtk_vcodec_init_enc_pm(struct mtk_vcodec_dev *mtkdev)
 
 void mtk_vcodec_release_enc_pm(struct mtk_vcodec_dev *mtkdev)
 {
+	pm_runtime_disable(mtkdev->pm.dev);
 }
-
 
 void mtk_vcodec_enc_clock_on(struct mtk_vcodec_pm *pm)
 {
