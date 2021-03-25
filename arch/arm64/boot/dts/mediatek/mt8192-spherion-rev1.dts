@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2021 Google LLC
+ */
+/dts-v1/;
+#include "mt8192-asurada.dtsi"
+#include "mt8192-asurada-audio-rt1015p-rt5682.dtsi"
+
+/ {
+	model = "MediaTek Spherion rev1 board";
+	compatible = "google,spherion-rev1", "google,spherion", "mediatek,mt8192";
+};
+
+&i2c0 {
+	/* elan touchscreen */
+	touchscreen: touchscreen@10 {
+		compatible =  "elan,ekth3500";
+		reg = <0x10>;
+		interrupt-parent = <&pio>;
+		interrupts = <21 IRQ_TYPE_LEVEL_LOW>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&touchscreen_pins>;
+	};
+};
+
+&i2c2 {
+	/* synaptics touchpad */
+	touchpad@2c {
+		compatible = "hid-over-i2c";
+		reg = <0x2c>;
+		hid-descr-addr = <0x20>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&touchpad_pins>;
+
+		interrupt-parent = <&pio>;
+		interrupts = <15 IRQ_TYPE_LEVEL_LOW>;
+
+		wakeup-source;
+	};
+};
