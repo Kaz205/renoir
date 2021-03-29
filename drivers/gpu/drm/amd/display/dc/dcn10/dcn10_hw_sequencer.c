@@ -2999,6 +2999,10 @@ static bool dcn10_can_pipe_disable_cursor(struct pipe_ctx *pipe_ctx)
 	const struct rect *r1 = &pipe_ctx->plane_res.scl_data.recout, *r2;
 	int r1_r = r1->x + r1->width, r1_b = r1->y + r1->height, r2_r, r2_b;
 
+	struct dc_cursor_position pos_cpy = pipe_ctx->stream->cursor_position;
+	int cp_x = pos_cpy.x;
+	int cp_y = pos_cpy.y;
+
 	/**
 	 * Disable the cursor if there's another pipe above this with a
 	 * plane that contains this pipe's viewport to prevent double cursor
@@ -3013,7 +3017,8 @@ static bool dcn10_can_pipe_disable_cursor(struct pipe_ctx *pipe_ctx)
 		r2_r = r2->x + r2->width;
 		r2_b = r2->y + r2->height;
 
-		if (r1->x >= r2->x && r1->y >= r2->y && r1_r <= r2_r && r1_b <= r2_b)
+		if ((cp_x >= r1->x && cp_y >= r1->y && cp_x <= r1_r && cp_y <= r1_b)
+		   && (cp_x >= r2->x && cp_y >= r2->y && cp_x <= r2_r && cp_y <= r2_b))
 			return true;
 	}
 
@@ -3034,15 +3039,30 @@ static void dcn10_set_cursor_position(struct pipe_ctx *pipe_ctx)
 		.rotation = pipe_ctx->plane_state->rotation,
 		.mirror = pipe_ctx->plane_state->horizontal_mirror
 	};
-	uint32_t x_plane = pipe_ctx->plane_state->dst_rect.x;
-	uint32_t y_plane = pipe_ctx->plane_state->dst_rect.y;
-	uint32_t x_offset = min(x_plane, pos_cpy.x);
-	uint32_t y_offset = min(y_plane, pos_cpy.y);
 
-	pos_cpy.x -= x_offset;
-	pos_cpy.y -= y_offset;
-	pos_cpy.x_hotspot += (x_plane - x_offset);
-	pos_cpy.y_hotspot += (y_plane - y_offset);
+	int x_plane = pipe_ctx->plane_state->dst_rect.x;
+	int y_plane = pipe_ctx->plane_state->dst_rect.y;
+	int x_pos = pos_cpy.x;
+	int y_pos = pos_cpy.y;
+
+	// translate cursor from stream space to plane space
+	x_pos = (x_pos - x_plane) * pipe_ctx->plane_state->src_rect.width /
+			pipe_ctx->plane_state->dst_rect.width;
+	y_pos = (y_pos - y_plane) * pipe_ctx->plane_state->src_rect.height /
+			pipe_ctx->plane_state->dst_rect.height;
+
+	if (x_pos < 0) {
+		pos_cpy.x_hotspot -= x_pos;
+		x_pos = 0;
+	}
+
+	if (y_pos < 0) {
+		pos_cpy.y_hotspot -= y_pos;
+		y_pos = 0;
+	}
+
+	pos_cpy.x = (uint32_t)x_pos;
+	pos_cpy.y = (uint32_t)y_pos;
 
 	if (pipe_ctx->plane_state->address.type
 			== PLN_ADDR_TYPE_VIDEO_PROGRESSIVE)
