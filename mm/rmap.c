@@ -379,6 +379,8 @@ void unlink_anon_vmas(struct vm_area_struct *vma)
 	struct anon_vma_chain *avc, *next;
 	struct anon_vma *root = NULL;
 
+	vm_raw_write_begin(vma);
+
 	/*
 	 * Unlink each anon_vma chained to the VMA.  This list is ordered
 	 * from newest to oldest, ensuring the root anon_vma gets freed last.
@@ -419,6 +421,8 @@ void unlink_anon_vmas(struct vm_area_struct *vma)
 		list_del(&avc->same_vma);
 		anon_vma_chain_free(avc);
 	}
+
+	vm_raw_write_end(vma);
 }
 
 static void anon_vma_ctor(void *data)
