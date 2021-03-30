@@ -258,4 +258,4 @@ ap_ts_pen_1v8: &i2c4 {
 			  "EC_IN_RW_ODL";
 };
 
-#include "sc7180-trogdor-coachz-camera.dtsi"
+#include "sc7180-trogdor-mipi-camera.dtsi"
