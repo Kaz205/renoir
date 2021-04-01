@@ -425,6 +425,8 @@ struct anx7625_data {
 	struct drm_bridge bridge;
 	u8 bridge_attached;
 	struct mipi_dsi_device *dsi;
+	wait_queue_head_t queue;
+	bool power_handled;
 
 	struct anx7625_port_data typec_ports[2];
 };

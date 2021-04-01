@@ -1128,7 +1128,7 @@ static void anx7625_power_on_init(struct anx7625_data *ctx)
 	}
 }
 
-static void anx7625_chip_control(struct anx7625_data *ctx, int state)
+static void anx7625_chip_control(struct anx7625_data *ctx, bool state)
 {
 	struct device *dev = &ctx->client->dev;
 
@@ -1139,17 +1139,12 @@ static void anx7625_chip_control(struct anx7625_data *ctx, int state)
 		return;
 
 	if (state) {
-		atomic_inc(&ctx->power_status);
-		if (atomic_read(&ctx->power_status) == 1) {
+		if (atomic_inc_return(&ctx->power_status) == 1)
 			anx7625_power_on_init(ctx);
-		}
-	} else {
-		if (atomic_read(&ctx->power_status)) {
-			atomic_dec(&ctx->power_status);
 
-			if (atomic_read(&ctx->power_status) == 0)
-				anx7625_power_standby(ctx);
-		}
+	} else {
+		if (atomic_dec_if_positive(&ctx->power_status) == 0)
+			anx7625_power_standby(ctx);
 	}
 
 	DRM_DEV_DEBUG_DRIVER(dev, "after set, power_state(%d).\n",
@@ -1236,7 +1231,7 @@ static void anx7625_hpd_polling(struct anx7625_data *ctx)
 	if (ctx->pdata.intp_irq)
 		return;
 
-	if (atomic_read(&ctx->power_status) != 1) {
+	if (!atomic_read(&ctx->power_status)) {
 		DRM_DEV_DEBUG_DRIVER(dev, "No need to poling HPD status.\n");
 		return;
 	}
@@ -1368,9 +1363,19 @@ static int anx7625_hpd_change_detect(struct anx7625_data *ctx)
 
 static void anx7625_work_func(struct work_struct *work)
 {
-	int event;
+	int event, ret;
 	struct anx7625_data *ctx = container_of(work,
 						struct anx7625_data, work);
+
+	ret = wait_event_timeout(ctx->queue,
+				 ctx->power_handled,
+				 msecs_to_jiffies(60));
+	ctx->power_handled = false;
+	if (ret)
+		DRM_WARN("power handle time out\n");
+
+	if (!atomic_read(&ctx->power_status))
+		return;
 
 	mutex_lock(&ctx->lock);
 	event = anx7625_hpd_change_detect(ctx);
@@ -1385,9 +1390,6 @@ static void anx7625_work_func(struct work_struct *work)
 static irqreturn_t anx7625_intr_hpd_isr(int irq, void *data)
 {
 	struct anx7625_data *ctx = (struct anx7625_data *)data;
-
-	if (atomic_read(&ctx->power_status) != 1)
-		return IRQ_NONE;
 
 	queue_work(ctx->workqueue, &ctx->work);
 
@@ -1455,11 +1457,29 @@ static int anx7625_usb_mux_set(struct typec_mux *mux,
 			       struct typec_mux_state *state)
 {
 	struct anx7625_port_data *data = typec_mux_get_drvdata(mux);
+	struct anx7625_data *ctx = data->ctx;
+
+	bool old_has_dp = ctx->typec_ports[0].has_dp || ctx->typec_ports[1].has_dp;
+	bool new_has_dp;
 
 	data->has_dp = (state->alt && state->alt->svid == USB_TYPEC_DP_SID &&
 			state->alt->mode == USB_TYPEC_DP_MODE);
 
-	anx7625_usb_two_ports_update(data->ctx);
+	new_has_dp = ctx->typec_ports[0].has_dp || ctx->typec_ports[1].has_dp;
+
+	/* dp on, power on first */
+	if (!old_has_dp && new_has_dp)
+		anx7625_chip_control(ctx, true);
+
+	anx7625_usb_two_ports_update(ctx);
+
+	/* dp off, power off last */
+	if (old_has_dp && !new_has_dp)
+		anx7625_chip_control(ctx, false);
+
+	ctx->power_handled = true;
+	wake_up(&ctx->queue);
+
 	return 0;
 }
 
@@ -2040,6 +2060,43 @@ static void anx7625_unregister_i2c_dummy_clients(struct anx7625_data *ctx)
 	i2c_unregister_device(ctx->i2c.tcpc_client);
 }
 
+static int __maybe_unused anx7625_resume(struct device *dev)
+{
+	struct anx7625_data *ctx = dev_get_drvdata(dev);
+
+	if (!ctx->pdata.intp_irq)
+		return 0;
+
+	DRM_DEV_DEBUG_DRIVER(dev, "resume");
+
+	if (ctx->typec_ports[0].has_dp || ctx->typec_ports[1].has_dp) {
+		anx7625_chip_control(ctx, true);
+		anx7625_usb_two_ports_update(ctx);
+	}
+
+	return 0;
+}
+
+static int __maybe_unused anx7625_suspend(struct device *dev)
+{
+	struct anx7625_data *ctx = dev_get_drvdata(dev);
+
+	if (!ctx->pdata.intp_irq)
+		return 0;
+
+	DRM_DEV_DEBUG_DRIVER(dev, "suspend");
+
+	/* power off if typec is inserted before suspend */
+	if (ctx->typec_ports[0].has_dp || ctx->typec_ports[1].has_dp) {
+		dp_hpd_change_handler(ctx, false);
+		anx7625_chip_control(ctx, false);
+	}
+
+	return 0;
+}
+
+static SIMPLE_DEV_PM_OPS(anx7625_pm_ops, anx7625_suspend, anx7625_resume);
+
 static int anx7625_i2c_probe(struct i2c_client *client,
 			     const struct i2c_device_id *id)
 {
@@ -2090,6 +2147,7 @@ static int anx7625_i2c_probe(struct i2c_client *client,
 	platform->pdata.intp_irq = client->irq;
 	if (platform->pdata.intp_irq) {
 		INIT_WORK(&platform->work, anx7625_work_func);
+		init_waitqueue_head(&platform->queue);
 		platform->workqueue = create_workqueue("anx7625_work");
 		if (!platform->workqueue) {
 			DRM_DEV_ERROR(dev, "fail to create work queue\n");
@@ -2189,6 +2247,7 @@ static struct i2c_driver anx7625_driver = {
 	.driver = {
 		.name = "anx7625",
 		.of_match_table = anx_match_table,
+		.pm = &anx7625_pm_ops,
 	},
 	.probe = anx7625_i2c_probe,
 	.remove = anx7625_i2c_remove,
