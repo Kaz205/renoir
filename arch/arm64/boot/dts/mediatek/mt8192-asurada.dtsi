@@ -1456,11 +1456,11 @@
 		};
 		pins_cts {
 			pinmux = <PINMUX_GPIO166__FUNC_UCTS1>;
-			output-enable;
+			input-enable;
 		};
 		pins_rts {
 			pinmux = <PINMUX_GPIO167__FUNC_URTS1>;
-			input-enable;
+			output-enable;
 		};
 	};
 
@@ -1475,11 +1475,11 @@
 		};
 		pins_cts {
 			pinmux = <PINMUX_GPIO166__FUNC_UCTS1>;
-			output-enable;
+			input-enable;
 		};
 		pins_rts {
 			pinmux = <PINMUX_GPIO167__FUNC_URTS1>;
-			input-enable;
+			output-enable;
 		};
 	};
 
