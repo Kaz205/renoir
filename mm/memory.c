@@ -71,6 +71,7 @@
 #include <linux/dax.h>
 #include <linux/oom.h>
 #include <linux/numa.h>
+#include <linux/mm_inline.h>
 
 #include <trace/events/kmem.h>
 
@@ -3014,6 +3015,19 @@ void unmap_mapping_range(struct address_space *mapping,
 }
 EXPORT_SYMBOL(unmap_mapping_range);
 
+static void lru_gen_swap_refault(struct page *page, swp_entry_t entry)
+{
+	if (lru_gen_enabled()) {
+		void *item;
+		struct address_space *mapping = swap_address_space(entry);
+		pgoff_t index = swp_offset(entry);
+
+		item = xa_load(&mapping->i_pages, index);
+		if (xa_is_value(item))
+			lru_gen_refault(page, item);
+	}
+}
+
 /*
  * We enter with non-exclusive mmap_sem (to exclude vma changes,
  * but allow concurrent faults), and pte mapped but not yet locked.
@@ -3080,6 +3094,7 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 				__SetPageLocked(page);
 				__SetPageSwapBacked(page);
 				set_page_private(page, entry.val);
+				lru_gen_swap_refault(page, entry);
 				lru_cache_add_anon(page);
 				swap_readpage(page, true);
 			}
@@ -4516,9 +4531,9 @@ int __handle_speculative_fault(struct mm_struct *mm, unsigned long address,
 	if (read_seqcount_retry(&vmf.vma->vm_sequence, seq))
 		return VM_FAULT_RETRY;
 
-	mem_cgroup_enter_user_fault();
+	task_enter_user_fault();
 	ret = handle_pte_fault(&vmf);
-	mem_cgroup_exit_user_fault();
+	task_exit_user_fault();
 
 	/*
 	 * If there is no need to retry, don't return the vma to the caller.
@@ -4605,7 +4620,7 @@ vm_fault_t handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
 	 * space.  Kernel faults are handled more gracefully.
 	 */
 	if (flags & FAULT_FLAG_USER)
-		mem_cgroup_enter_user_fault();
+		task_enter_user_fault();
 
 	if (unlikely(is_vm_hugetlb_page(vma)))
 		ret = hugetlb_fault(vma->vm_mm, vma, address, flags);
@@ -4613,7 +4628,7 @@ vm_fault_t handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
 		ret = __handle_mm_fault(vma, address, flags);
 
 	if (flags & FAULT_FLAG_USER) {
-		mem_cgroup_exit_user_fault();
+		task_exit_user_fault();
 		/*
 		 * The task may have entered a memcg OOM situation but
 		 * if the allocation error was handled gracefully (no
