@@ -461,11 +461,9 @@ static void get_vdec_decode_parameters(struct vdec_h264_slice_inst *inst)
 		get_ctrl_ptr(inst->ctx, V4L2_CID_STATELESS_H264_SCALING_MATRIX);
 	struct mtk_h264_dec_slice_param *slice_param = &inst->h264_slice_param;
 	struct v4l2_h264_reflist_builder reflist_builder;
-	enum v4l2_field dpb_fields[V4L2_H264_NUM_DPB_ENTRIES];
 	u8 *p0_reflist = slice_param->decode_params.ref_pic_list_p0;
 	u8 *b0_reflist = slice_param->decode_params.ref_pic_list_b0;
 	u8 *b1_reflist = slice_param->decode_params.ref_pic_list_b1;
-	int i;
 
 	update_dpb(dec_params, inst->dpb);
 
@@ -476,9 +474,6 @@ static void get_vdec_decode_parameters(struct vdec_h264_slice_inst *inst)
 				   inst->dpb);
 	get_h264_dpb_list(inst, slice_param);
 
-	/* Prepare the fields for our reference lists */
-	for (i = 0; i < V4L2_H264_NUM_DPB_ENTRIES; i++)
-		dpb_fields[i] = slice_param->h264_dpb_info[i].field;
 	/* Build the reference lists */
 	v4l2_h264_init_reflist_builder(&reflist_builder, dec_params, sps,
 				       inst->dpb);
@@ -698,7 +693,6 @@ static int vdec_h264_slice_decode(void *h_vdec, struct mtk_vcodec_mem *bs,
 	struct vdec_h264_slice_inst *inst =
 		(struct vdec_h264_slice_inst *)h_vdec;
 	struct vdec_vpu_inst *vpu = &inst->vpu;
-	struct mtk_video_dec_buf *src_buf_info;
 	int nal_start_idx = 0, err = 0;
 	uint32_t nal_type, data[2];
 	unsigned char *buf;
@@ -711,8 +705,6 @@ static int vdec_h264_slice_decode(void *h_vdec, struct mtk_vcodec_mem *bs,
 	/* bs NULL means flush decoder */
 	if (bs == NULL)
 		return vpu_dec_reset(vpu);
-
-	src_buf_info = container_of(bs, struct mtk_video_dec_buf, bs_buffer);
 
 	y_fb_dma = fb ? (u64)fb->base_y.dma_addr : 0;
 	c_fb_dma = fb ? (u64)fb->base_c.dma_addr : 0;
