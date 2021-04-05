@@ -186,7 +186,6 @@ static int cam_req_mgr_close(struct file *filep)
 	spin_unlock_bh(&g_dev.cam_eventq_lock);
 
 	cam_req_mgr_util_free_hdls();
-	cam_mem_mgr_close();
 	mutex_unlock(&g_dev.cam_lock);
 
 	return 0;
