@@ -164,7 +164,7 @@ struct msm_gem_stats {
 	struct {
 		unsigned count;
 		size_t size;
-	} all, active, purgable, purged;
+	} all, active, purgeable, purged;
 };
 
 void msm_gem_describe(struct drm_gem_object *obj, struct seq_file *m,
@@ -208,8 +208,8 @@ static inline bool is_active(struct msm_gem_object *msm_obj)
 	return msm_obj->active_count;
 }
 
-/* imported/exported objects are not purgable: */
-static inline bool is_unpurgable(struct msm_gem_object *msm_obj)
+/* imported/exported objects are not purgeable: */
+static inline bool is_unpurgeable(struct msm_gem_object *msm_obj)
 {
 	return msm_obj->base.dma_buf && msm_obj->base.import_attach;
 }
@@ -217,7 +217,7 @@ static inline bool is_unpurgable(struct msm_gem_object *msm_obj)
 static inline bool is_purgeable(struct msm_gem_object *msm_obj)
 {
 	return (msm_obj->madv == MSM_MADV_DONTNEED) && msm_obj->sgt &&
-			!is_unpurgable(msm_obj);
+			!is_unpurgeable(msm_obj);
 }
 
 static inline bool is_vunmapable(struct msm_gem_object *msm_obj)
@@ -226,13 +226,13 @@ static inline bool is_vunmapable(struct msm_gem_object *msm_obj)
 	return (msm_obj->vmap_count == 0) && msm_obj->vaddr;
 }
 
-static inline void mark_purgable(struct msm_gem_object *msm_obj)
+static inline void mark_purgeable(struct msm_gem_object *msm_obj)
 {
 	struct msm_drm_private *priv = msm_obj->base.dev->dev_private;
 
 	WARN_ON(!mutex_is_locked(&priv->mm_lock));
 
-	if (is_unpurgable(msm_obj))
+	if (is_unpurgeable(msm_obj))
 		return;
 
 	if (WARN_ON(msm_obj->dontneed))
@@ -242,13 +242,13 @@ static inline void mark_purgable(struct msm_gem_object *msm_obj)
 	msm_obj->dontneed = true;
 }
 
-static inline void mark_unpurgable(struct msm_gem_object *msm_obj)
+static inline void mark_unpurgeable(struct msm_gem_object *msm_obj)
 {
 	struct msm_drm_private *priv = msm_obj->base.dev->dev_private;
 
 	WARN_ON(!mutex_is_locked(&priv->mm_lock));
 
-	if (is_unpurgable(msm_obj))
+	if (is_unpurgeable(msm_obj))
 		return;
 
 	if (WARN_ON(!msm_obj->dontneed))
