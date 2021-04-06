@@ -493,35 +493,6 @@ static int __maybe_unused tb_retimer_stop_io(struct tb_switch *sw, u32 mux_mode,
 
 #endif /* CONFIG_ACPI */
 
-static void tb_retimer_get_devs(struct tb_port *port)
-{
-	if (!port)
-		return;
-
-	/* Bring the domain back from sleep if it was suspended */
-	pm_runtime_get_sync(&port->sw->tb->dev);
-
-	mutex_lock(&port->sw->tb->lock);
-	tb_switch_get(port->sw);
-
-	pm_runtime_get_sync(&port->sw->dev);
-}
-
-static void tb_retimer_put_devs(struct tb_port *port)
-{
-	if (!port)
-		return;
-
-	pm_runtime_mark_last_busy(&port->sw->dev);
-	pm_runtime_put_autosuspend(&port->sw->dev);
-
-	tb_switch_put(port->sw);
-	mutex_unlock(&port->sw->tb->lock);
-
-	pm_runtime_mark_last_busy(&port->sw->tb->dev);
-	pm_runtime_put_autosuspend(&port->sw->tb->dev);
-}
-
 static int tb_retimer_nvm_read(void *priv, unsigned int offset, void *val,
 			       size_t bytes)
 {
@@ -964,9 +935,24 @@ void tb_retimer_scan_delayed(struct work_struct *work)
 	if (!port || tb_route(port->sw))
 		return;
 
-	tb_retimer_get_devs(port);
+	/* Bring the domain back from sleep if it was suspended */
+	pm_runtime_get_sync(&port->sw->tb->dev);
+
+	mutex_lock(&port->sw->tb->lock);
+	tb_switch_get(port->sw);
+
+	pm_runtime_get_sync(&port->sw->dev);
+
 	tb_retimer_scan(port, true, NULL, NULL);
-	tb_retimer_put_devs(port);
+
+	pm_runtime_mark_last_busy(&port->sw->dev);
+	pm_runtime_put_autosuspend(&port->sw->dev);
+
+	tb_switch_put(port->sw);
+	mutex_unlock(&port->sw->tb->lock);
+
+	pm_runtime_mark_last_busy(&port->sw->tb->dev);
+	pm_runtime_put_autosuspend(&port->sw->tb->dev);
 }
 
 /**
