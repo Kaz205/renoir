@@ -522,25 +522,6 @@ static void tb_retimer_put_devs(struct tb_port *port)
 	pm_runtime_put_autosuspend(&port->sw->tb->dev);
 }
 
-/**
- * tb_retimer_stop_io_delayed() - stop retimer io
- * @work: work that needs to be done
- * Executes on tb->wq.
- */
-static void tb_retimer_stop_io_delayed(struct work_struct *work)
-{
-	struct tb_port *port = container_of(work, typeof(*port),
-					    retimer_stop_io_work.work);
-
-	/* Only onboard retimers supported now */
-	if (!port || tb_route(port->sw))
-		return;
-
-	tb_retimer_get_devs(port);
-	tb_retimer_stop_io(port->sw, port->mux_mode, port->port_index, port);
-	tb_retimer_put_devs(port);
-}
-
 static int tb_retimer_nvm_read(void *priv, unsigned int offset, void *val,
 			       size_t bytes)
 {
@@ -559,41 +540,13 @@ static int tb_retimer_nvm_read(void *priv, unsigned int offset, void *val,
 
 	/* Prepare the retimer for IO */
 	tb_retimer_scan(rt->port, false, &mux_mode, &port_index);
-
-	if (!delayed_work_pending(&rt->port->retimer_stop_io_work)) {
-		/*
-		 * It is possible for the read operation to be incomplete
-		 * in some cases such as user canceling the read operation
-		 * or the user space application (doing the read) itself
-		 * crashes. Having a delayed work to check and stop the IO
-		 * becomes useful in these cases, so the USB4 port can
-		 * continue to be used.
-		 */
-		INIT_DELAYED_WORK(&rt->port->retimer_stop_io_work,
-				  tb_retimer_stop_io_delayed);
-		queue_delayed_work(rt->port->sw->tb->wq,
-				   &rt->port->retimer_stop_io_work,
-				   msecs_to_jiffies(TB_RETIMER_STOP_IO_DELAY));
-	}
-
 	ret = usb4_port_retimer_nvm_read(rt->port, rt->index, offset, val, bytes);
 	/* Stop the IO on error or when the entire nvm is read */
-	if (ret || offset + bytes == nvm->active_size) {
-		if (delayed_work_pending(&rt->port->retimer_stop_io_work))
-			cancel_delayed_work_sync(&rt->port->retimer_stop_io_work);
+	if (ret || offset + bytes == nvm->active_size)
+		tb_retimer_stop_io(rt->port->sw, mux_mode, rt->port->port_index, rt->port);
 
-		tb_retimer_stop_io(rt->port->sw, rt->port->mux_mode,
-				   rt->port->port_index, rt->port);
-		goto out_unlock;
-	}
-
-	if (delayed_work_pending(&rt->port->retimer_stop_io_work))
-		mod_delayed_work(rt->port->sw->tb->wq,
-				 &rt->port->retimer_stop_io_work,
-				 msecs_to_jiffies(TB_RETIMER_STOP_IO_DELAY));
-
-out_unlock:
 	mutex_unlock(&rt->tb->lock);
+
 out:
 	pm_runtime_mark_last_busy(&rt->dev);
 	pm_runtime_put_autosuspend(&rt->dev);
@@ -1172,8 +1125,6 @@ void tb_retimer_remove_all(struct tb_port *port, struct tb_switch *sw)
 	 */
 	if (!tb_route(sw) && delayed_work_pending(&port->retimer_scan_work))
 		cancel_delayed_work_sync(&port->retimer_scan_work);
-	if (!tb_route(sw) && delayed_work_pending(&port->retimer_stop_io_work))
-		cancel_delayed_work_sync(&port->retimer_stop_io_work);
 
 	rt = tb_to_retimer(&port->sw->dev);
 	if (!rt)
