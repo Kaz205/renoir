@@ -12282,4 +12282,7 @@ enum skl_power_gate {
 #define PXP_REG_02_LOWERBOUND		_MMIO(0x32670)
 #define PXP_REG_02_UPPERBOUND		_MMIO(0x32678)
 
+#define CLKREQ_POLICY			_MMIO(0x101038)
+#define  CLKREQ_POLICY_MEM_UP_OVRD	REG_BIT(1)
+
 #endif /* _I915_REG_H_ */
