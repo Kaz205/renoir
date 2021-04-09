@@ -2189,9 +2189,9 @@ static void anx7625_unregister_i2c_dummy_clients(struct anx7625_data *ctx)
 	i2c_unregister_device(ctx->i2c.tcpc_client);
 }
 
-int anx7625_audio_hw_params(struct device *dev, void *data,
-			   struct hdmi_codec_daifmt *fmt,
-			   struct hdmi_codec_params *params)
+static int anx7625_audio_hw_params(struct device *dev, void *data,
+				   struct hdmi_codec_daifmt *fmt,
+				   struct hdmi_codec_params *params)
 {
 	struct anx7625_data *ctx = dev_get_drvdata(dev);
 	int wl, ch, rate;
