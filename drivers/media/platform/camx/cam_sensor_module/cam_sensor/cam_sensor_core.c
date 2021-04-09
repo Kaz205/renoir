@@ -717,6 +717,11 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			goto free_power_settings;
 		}
 
+		if (s_ctrl->sensor_state != CAM_SENSOR_ACQUIRE) {
+			s_ctrl->is_dummy_probe = TRUE;
+			goto dummy_probe;
+		}
+
 		/* Power up and probe sensor */
 		rc = cam_sensor_power_up(s_ctrl);
 		if (rc < 0) {
@@ -732,21 +737,24 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			goto free_power_settings;
 		}
 
-		CAM_INFO(CAM_SENSOR,
-			"Probe done, slot:%d, slave_addr:0x%x, sensor_id:0x%x",
-			s_ctrl->soc_info.index,
-			s_ctrl->sensordata->slave_info.sensor_slave_addr,
-			s_ctrl->sensordata->slave_info.sensor_id);
-
 		rc = cam_sensor_power_down(s_ctrl);
 		if (rc < 0) {
 			CAM_ERR(CAM_SENSOR, "fail in Sensor Power Down");
 			goto free_power_settings;
 		}
+
+dummy_probe:
+
 		/*
 		 * Set probe succeeded flag to 1 so that no other camera shall
 		 * probed on this slot
 		 */
+		CAM_DBG(CAM_SENSOR,
+			"Dummy probe done, slot:%d, slave_addr:0x%x, sensor_id:0x%x",
+			s_ctrl->soc_info.index,
+			s_ctrl->sensordata->slave_info.sensor_slave_addr,
+			s_ctrl->sensordata->slave_info.sensor_id);
+
 		s_ctrl->is_probe_succeed = 1;
 		s_ctrl->sensor_state = CAM_SENSOR_INIT;
 	}
@@ -803,7 +811,22 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			CAM_ERR(CAM_SENSOR, "Sensor Power up failed");
 			goto release_mutex;
 		}
-
+		if (s_ctrl->is_dummy_probe) {
+			/* Match sensor ID */
+			rc = cam_sensor_match_id(s_ctrl);
+			if (rc < 0) {
+				CAM_ERR(CAM_SENSOR,
+					"Probe failed for %s slot:%d, slave_addr:0x%x, sensor_id:0x%x",
+					s_ctrl->device_name,
+					s_ctrl->soc_info.index,
+					s_ctrl->sensordata->slave_info.sensor_slave_addr,
+					s_ctrl->sensordata->slave_info.sensor_id);
+				cam_sensor_power_down(s_ctrl);
+				goto release_mutex;
+			}
+			s_ctrl->is_dummy_probe = FALSE;
+			CAM_DBG(CAM_SENSOR, "Defer probe success");
+		}
 		s_ctrl->sensor_state = CAM_SENSOR_ACQUIRE;
 		s_ctrl->last_flush_req = 0;
 		CAM_DBG(CAM_SENSOR,
