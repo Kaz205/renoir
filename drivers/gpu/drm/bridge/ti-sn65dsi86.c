@@ -23,6 +23,7 @@
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_bridge.h>
+#include <drm/drm_dp_aux_backlight.h>
 #include <drm/drm_dp_aux_bus.h>
 #include <drm/drm_dp_helper.h>
 #include <drm/drm_mipi_dsi.h>
@@ -130,6 +131,7 @@
  * @panel:        Our panel.
  * @enable_gpio:  The GPIO we toggle to enable the bridge.
  * @supplies:     Data for bulk enabling/disabling our regulators.
+ * @backlight:    The DP aux backlight device.
  * @dp_lanes:     Count of dp_lanes we're using.
  * @ln_assign:    Value to program to the LN_ASSIGN register.
  * @ln_polrs:     Value for the 4-bit LN_POLRS field of SN_ENH_FRAME_REG.
@@ -162,6 +164,7 @@ struct ti_sn65dsi86 {
 	struct drm_panel		*panel;
 	struct gpio_desc		*enable_gpio;
 	struct regulator_bulk_data	supplies[SN_REGULATOR_SUPPLY_NUM];
+	struct drm_dp_aux_backlight	*backlight;
 	int				dp_lanes;
 	u8				ln_assign;
 	u8				ln_polrs;
@@ -552,6 +555,8 @@ static void ti_sn_bridge_disable(struct drm_bridge *bridge)
 {
 	struct ti_sn65dsi86 *pdata = bridge_to_ti_sn65dsi86(bridge);
 
+	drm_dp_aux_backlight_disable(pdata->backlight);
+
 	drm_panel_disable(pdata->panel);
 
 	/* disable video stream */
@@ -880,6 +885,8 @@ static void ti_sn_bridge_enable(struct drm_bridge *bridge)
 			   VSTREAM_ENABLE);
 
 	drm_panel_enable(pdata->panel);
+
+	drm_dp_aux_backlight_enable(pdata->backlight);
 }
 
 static void ti_sn_bridge_pre_enable(struct drm_bridge *bridge)
@@ -1406,12 +1413,30 @@ static int ti_sn_aux_probe(struct auxiliary_device *adev,
 			   const struct auxiliary_device_id *id)
 {
 	struct ti_sn65dsi86 *pdata = dev_get_drvdata(adev->dev.parent);
+	struct drm_dp_aux_backlight *aux_bl;
 	int ret;
 
 	pdata->aux.name = "ti-sn65dsi86-aux";
 	pdata->aux.dev = &adev->dev;
 	pdata->aux.transfer = ti_sn_aux_transfer;
 	drm_dp_aux_init(&pdata->aux);
+
+	if (of_find_property(pdata->dev->of_node, "use-aux-backlight", NULL)) {
+		aux_bl = devm_kzalloc(pdata->dev, sizeof(*aux_bl), GFP_KERNEL);
+		if (!aux_bl)
+			return -ENOMEM;
+
+		aux_bl->dev = pdata->dev;
+		aux_bl->aux = &pdata->aux;
+		ret = drm_dp_aux_backlight_register("ti-sn-aux-backlight",
+						    aux_bl);
+		if (ret) {
+			DRM_ERROR("failed to register dp aux backlight %d\n",
+				  ret);
+			return ret;
+		}
+		pdata->backlight = aux_bl;
+	}
 
 	ret = devm_of_dp_aux_populate_ep_devices(&pdata->aux);
 	if (ret)
