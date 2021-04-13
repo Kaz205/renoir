@@ -750,8 +750,8 @@ int mdp_m2m_device_register(struct mdp_dev *mdp)
 		ret = -ENOMEM;
 		goto err_video_alloc;
 	}
-	//mdp->m2m_vdev->device_caps = V4L2_CAP_VIDEO_M2M_MPLANE |
-	//	V4L2_CAP_STREAMING;
+	mdp->m2m_vdev->device_caps = V4L2_CAP_VIDEO_M2M_MPLANE |
+		V4L2_CAP_STREAMING;
 	mdp->m2m_vdev->fops = &mdp_m2m_fops;
 	mdp->m2m_vdev->ioctl_ops = &mdp_m2m_ioctl_ops;
 	mdp->m2m_vdev->release = video_device_release;

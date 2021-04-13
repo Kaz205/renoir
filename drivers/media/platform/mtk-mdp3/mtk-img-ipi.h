@@ -174,6 +174,7 @@ struct mdp_rdma_subfrm {
 
 struct mdp_rdma_data {
 	u32 src_ctrl;
+	u32 comp_ctrl;
 	u32 control;
 	u32 iova[IMG_MAX_PLANES];
 	u32 iova_end[IMG_MAX_PLANES];

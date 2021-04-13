@@ -160,7 +160,7 @@ static const struct mdp_format mdp_formats[] = {
 		.flags		= MDP_FMT_FLAG_OUTPUT,
 	}, {
 		.pixelformat	= V4L2_PIX_FMT_MT21C,
-		.mdp_color	= MDP_COLOR_420_BLK_UFO,
+		.mdp_color	= MDP_COLOR_420_BLKP_UFO,
 		.depth		= { 8, 4 },
 		.row_depth	= { 8, 8 },
 		.num_planes	= 2,
@@ -169,7 +169,7 @@ static const struct mdp_format mdp_formats[] = {
 		.flags		= MDP_FMT_FLAG_OUTPUT,
 	}, {
 		.pixelformat	= V4L2_PIX_FMT_MM21,
-		.mdp_color	= MDP_COLOR_420_BLK,
+		.mdp_color	= MDP_COLOR_420_BLKP,
 		.depth		= { 8, 4 },
 		.row_depth	= { 8, 8 },
 		.num_planes	= 2,
@@ -377,6 +377,7 @@ const struct mdp_format *mdp_try_fmt_mplane(struct v4l2_format *f,
 	const struct mdp_pix_limit *pix_limit;
 	u32 wmin, wmax, hmin, hmax, org_w, org_h;
 	unsigned int i;
+	u32 exsize;
 
 	if (!V4L2_TYPE_IS_MULTIPLANAR(f->type))
 		return NULL;
@@ -433,6 +434,21 @@ const struct mdp_format *mdp_try_fmt_mplane(struct v4l2_format *f,
 		if (bpl < min_bpl)
 			bpl = min_bpl;
 		si = (bpl * pix_mp->height * fmt->depth[i]) / fmt->row_depth[i];
+		if(MDP_COLOR_IS_UFP(fmt->mdp_color))
+	    {
+	        if(i == 0)
+	        {
+	            exsize = ((si>>8) + 128);
+	            exsize = (exsize + 63) & (~63);
+	        }
+
+	        if(i == 1)
+	        {
+	            exsize = exsize / 2 + 128;
+	            exsize = (exsize + 15) & (~15);
+	        }
+	        si += exsize;
+	    }
 
 		pix_mp->plane_fmt[i].bytesperline = bpl;
 		if (pix_mp->plane_fmt[i].sizeimage < si)
@@ -603,6 +619,7 @@ static void mdp_prepare_buffer(struct img_image_buffer *b,
 {
 	struct v4l2_pix_format_mplane *pix_mp = &frame->format.fmt.pix_mp;
 	unsigned int i;
+	u32 exsize;
 
 	b->format.colorformat = frame->mdp_fmt->mdp_color;
 	b->format.ycbcr_prof = frame->ycbcr_prof;
@@ -622,6 +639,20 @@ static void mdp_prepare_buffer(struct img_image_buffer *b,
 			mdp_fmt_get_plane_size(frame->mdp_fmt, stride,
 					       pix_mp->height, i) -
 					       vb->planes[i].data_offset;
+	    if(MDP_COLOR_IS_UFP(b->format.colorformat))
+	    {
+	        exsize = ((b->format.plane_fmt[0].size>>8) + 128);
+	        if(i == 0)
+	            exsize = (exsize + 63) & (~63);
+
+	        if(i == 1)
+	        {
+	            exsize = exsize / 2 + 128;
+	            exsize = (exsize + 15) & (~15);
+	        }
+	        b->format.plane_fmt[i].size += exsize;
+	    }
+
 		b->iova[i] = vb2_dma_contig_plane_dma_addr(vb, i) +
 			     vb->planes[i].data_offset;
 	}
@@ -633,6 +664,19 @@ static void mdp_prepare_buffer(struct img_image_buffer *b,
 		b->format.plane_fmt[i].size =
 			mdp_fmt_get_plane_size(frame->mdp_fmt, stride,
 					       pix_mp->height, i);
+	    if(MDP_COLOR_IS_UFP(b->format.colorformat))
+	    {
+	        exsize = ((b->format.plane_fmt[0].size>>8) + 128);
+	        if(i == 0)
+	            exsize = (exsize + 63) & (~63);
+
+	        if(i == 1)
+	        {
+	            exsize = exsize / 2 + 128;
+	            exsize = (exsize + 15) & (~15);
+	        }
+	        b->format.plane_fmt[i].size += exsize;
+	    }
 		b->iova[i] = b->iova[i - 1] + b->format.plane_fmt[i - 1].size;
 	}
 	b->usage = frame->usage;

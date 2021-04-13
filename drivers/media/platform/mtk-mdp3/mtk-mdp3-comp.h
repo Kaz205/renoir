@@ -23,6 +23,7 @@ enum mdp_comp_type {
 	MDP_COMP_TYPE_DRE,
 	MDP_COMP_TYPE_CCORR,
 	MDP_COMP_TYPE_HDR,
+	MDP_COMP_TYPE_AAL,
 
 	MDP_COMP_TYPE_IMGI,
 	MDP_COMP_TYPE_WPEI,
@@ -37,70 +38,88 @@ enum mdp_comp_id {
 
 	/* ISP */
 	MDP_COMP_WPEI = 0,
-	MDP_COMP_WPEO,		/* 1 */
-	MDP_COMP_WPEI2,		/* 2 */
-	MDP_COMP_WPEO2,		/* 3 */
-	MDP_COMP_ISP_IMGI,	/* 4 */
-	MDP_COMP_ISP_IMGO,	/* 5 */
-	MDP_COMP_ISP_IMG2O,	/* 6 */
-
-	/* IPU */
-	MDP_COMP_IPUI,		/* 7 */
-	MDP_COMP_IPUO,		/* 8 */
+	MDP_COMP_WPEO,			/* 1 */
+	MDP_COMP_WPEI2,			/* 2 */
+	MDP_COMP_WPEO2,			/* 3 */
+	MDP_COMP_ISP_IMGI,		/* 4 */
+	MDP_COMP_ISP_IMG2O,		/* 5 */
 
 	/* MDP */
-	MDP_COMP_CAMIN,		/* 9 */
-	MDP_COMP_CAMIN2,	/* 10 */
-	MDP_COMP_RDMA0,		/* 11 */
-	MDP_COMP_AAL0,		/* 12 */
-	MDP_COMP_CCORR0,	/* 13 */
-	MDP_COMP_RSZ0,		/* 14 */
-	MDP_COMP_RSZ1,		/* 15 */
-	MDP_COMP_TDSHP0,	/* 16 */
-	MDP_COMP_COLOR0,	/* 17 */
-	MDP_COMP_PATH0_SOUT,	/* 18 */
-	MDP_COMP_PATH1_SOUT,	/* 19 */
-	MDP_COMP_WROT0,		/* 20 */
-	MDP_COMP_WDMA,		/* 21 */
+	MDP_COMP_CAMIN,		    /* 6 */
+	MDP_COMP_CAMIN2,	    /* 7 */
+	MDP_COMP_RDMA0,		    /* 8 */
+	MDP_COMP_RDMA1,		    /* 9 */
+	MDP_COMP_AAL0,          /* 10 */
+    MDP_COMP_AAL1,          /* 11 */
+	MDP_COMP_HDR0,		    /* 12 */
+	MDP_COMP_HDR1,		    /* 13 */
+	MDP_COMP_COLOR0,	    /* 14 */
+	MDP_COMP_COLOR1,	    /* 15 */
+	MDP_COMP_RSZ0,		    /* 16 */
+	MDP_COMP_RSZ1,		    /* 17 */
+	MDP_COMP_TDSHP0,	    /* 18 */
+    MDP_COMP_TDSHP1,        /* 19 */
+	MDP_COMP_WROT0,		    /* 20 */
+	MDP_COMP_WROT1,		    /* 21 */
 
 	/* Dummy Engine */
-	MDP_COMP_RDMA1,		/* 22 */
-	MDP_COMP_RSZ2,		/* 23 */
-	MDP_COMP_TDSHP1,	/* 24 */
-	MDP_COMP_WROT1,		/* 25 */
+    MDP_COMP_RSZ2,
+    MDP_COMP_WDMA,
 
 	MDP_MAX_COMP_COUNT	/* ALWAYS keep at the end */
 };
 
 enum mdp_comp_event {
-	RDMA0_SOF,
-	RDMA0_DONE,
-	RSZ0_SOF,
-	RSZ1_SOF,
-	TDSHP0_SOF,
-	WROT0_SOF,
-	WROT0_DONE,
-	WDMA0_SOF,
-	WDMA0_DONE,
-
-	ISP_P2_0_DONE,
-	ISP_P2_1_DONE,
-	ISP_P2_2_DONE,
-	ISP_P2_3_DONE,
-	ISP_P2_4_DONE,
-	ISP_P2_5_DONE,
-	ISP_P2_6_DONE,
-	ISP_P2_7_DONE,
-	ISP_P2_8_DONE,
-	ISP_P2_9_DONE,
-	ISP_P2_10_DONE,
-	ISP_P2_11_DONE,
-	ISP_P2_12_DONE,
-	ISP_P2_13_DONE,
-	ISP_P2_14_DONE,
-
-	WPE_DONE,
-	WPE_B_DONE,
+    RDMA0_SOF,
+    RDMA1_SOF,
+    AAL0_SOF,
+    AAL1_SOF,
+    HDR0_SOF,
+    HDR1_SOF,
+    RSZ0_SOF,
+    RSZ1_SOF,
+    WROT0_SOF,
+    WROT1_SOF,
+    TDSHP0_SOF,
+    TDSHP1_SOF,
+    DL_RELAY0_SOF,
+    DL_RELAY1_SOF,
+    COLOR0_SOF,
+    COLOR1_SOF,    
+    WROT1_FRAME_DONE,
+    WROT0_FRAME_DONE,
+    TDSHP1_FRAME_DONE,
+    TDSHP0_FRAME_DONE,
+    RSZ1_FRAME_DONE,
+    RSZ0_FRAME_DONE,
+	RDMA1_FRAME_DONE,
+    RDMA0_FRAME_DONE,
+    HDR1_FRAME_DONE,
+    HDR0_FRAME_DONE,
+    COLOR1_FRAME_DONE,
+    COLOR0_FRAME_DONE,
+    AAL1_FRAME_DONE,
+    AAL0_FRAME_DONE,
+    STREAM_DONE_0,
+    STREAM_DONE_1,
+    STREAM_DONE_2,
+    STREAM_DONE_3,
+    STREAM_DONE_4,
+    STREAM_DONE_5,
+    STREAM_DONE_6,
+    STREAM_DONE_7,
+    STREAM_DONE_8,
+    STREAM_DONE_9,
+    STREAM_DONE_10,
+    STREAM_DONE_11,
+    STREAM_DONE_12,
+    STREAM_DONE_13,
+    STREAM_DONE_14,
+    STREAM_DONE_15,
+    WROT1_SW_RST_DONE,
+    WROT0_SW_RST_DONE,
+    RDMA1_SW_RST_DONE,
+    RDMA0_SW_RST_DONE,
 
 	MDP_MAX_EVENT_COUNT	/* ALWAYS keep at the end */
 };
@@ -111,9 +130,9 @@ struct mdp_comp {
 	struct mdp_dev			*mdp_dev;
 	void __iomem			*regs;
 	phys_addr_t			reg_base;
-	u8				subsys_id;
-	struct clk			*clks[2];
-	struct device			*comp_dev;
+	u16				subsys_id;
+	struct clk			*clks[4];
+	struct device			*larb_dev;
 	enum mdp_comp_type		type;
 	enum mdp_comp_id		id;
 	u32				alias_id;

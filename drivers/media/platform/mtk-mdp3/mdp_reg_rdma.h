@@ -16,6 +16,7 @@
 #define MDP_RDMA_CON                    0x020
 #define MDP_RDMA_GMCIF_CON              0x028
 #define MDP_RDMA_SRC_CON                0x030
+#define MDP_RDMA_COMP_CON               0x038
 #define MDP_RDMA_SRC_BASE_0             0xf00
 #define MDP_RDMA_SRC_BASE_1             0xf08
 #define MDP_RDMA_SRC_BASE_2             0xf10
@@ -56,12 +57,12 @@
 #define MDP_RDMA_TRANSFORM_7            0x238
 #define MDP_RDMA_DMABUF_CON_0           0x240
 #define MDP_RDMA_DMAULTRA_CON_0         0x248
-#define MDP_RDMA_DMABUF_CON_1           0x250
+#define MDP_RDMA_DMABUF_CON_1           0x258
 #define MDP_RDMA_DMAULTRA_CON_1         0x258
-#define MDP_RDMA_DMABUF_CON_2           0x260
+#define MDP_RDMA_DMABUF_CON_2           0x270
 #define MDP_RDMA_DMAULTRA_CON_2         0x268
-#define MDP_RDMA_DITHER_CON             0x288
-#define MDP_RDMA_RESV_DUMMY_0           0x2a0
+#define MDP_RDMA_DITHER_CON             0x2a0
+#define MDP_RDMA_RESV_DUMMY_0           0x2a8
 #define MDP_RDMA_CHKS_EXTR              0x300
 #define MDP_RDMA_CHKS_INTW              0x308
 #define MDP_RDMA_CHKS_INTR              0x310
@@ -158,7 +159,7 @@
 #define MDP_RDMA_DMABUF_CON_2_MASK          0x071f001f
 #define MDP_RDMA_DMAULTRA_CON_2_MASK        0x1f1f1f1f
 
-#define MDP_RDMA_DITHER_CON_MASK            0xffffffff
+#define MDP_RDMA_DITHER_CON_MASK            0x0337
 #define MDP_RDMA_RESV_DUMMY_0_MASK          0xffffffff
 #define MDP_RDMA_CHKS_EXTR_MASK             0xffffff01
 #define MDP_RDMA_CHKS_INTW_MASK             0xffffff01
@@ -172,7 +173,7 @@
 #define MDP_RDMA_CHKS_SROV_MASK             0xffffff01
 #define MDP_RDMA_CHKS_VUPI_MASK             0xffffff01
 #define MDP_RDMA_CHKS_VUPO_MASK             0xffffff01
-#define MDP_RDMA_DEBUG_CON_MASK             0x00001f11
+#define MDP_RDMA_DEBUG_CON_MASK             0x07ff3f
 #define MDP_RDMA_MON_STA_0_MASK             0xffffffff
 #define MDP_RDMA_MON_STA_1_MASK             0xffffffff
 #define MDP_RDMA_MON_STA_2_MASK             0xffffffff

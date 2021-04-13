@@ -24,15 +24,20 @@
 
 struct mdp_module_base_va {
 	void __iomem *MDP_RDMA0;
+	void __iomem *MDP_RDMA1;
+	void __iomem *MDP_AAL0;
+	void __iomem *MDP_AAL1;
+	void __iomem *MDP_HDR0;
+	void __iomem *MDP_HDR1;
 	void __iomem *MDP_RSZ0;
 	void __iomem *MDP_RSZ1;
-	void __iomem *MDP_TDSHP;
-	void __iomem *MDP_COLOR;
-	void __iomem *MDP_AAL;
-	void __iomem *MDP_CCORR;
 	void __iomem *MDP_WROT0;
-	void __iomem *MDP_WDMA;
-	void __iomem *SMI_LARB0;
+	void __iomem *MDP_WROT1;
+	void __iomem *MDP_TDSHP0;
+	void __iomem *MDP_TDSHP1;
+	void __iomem *MDP_COLOR0;
+	void __iomem *MDP_COLOR1;
+	void __iomem *SMI_LARB2;
 };
 
 struct RegDef {
@@ -51,14 +56,19 @@ static struct mdp_debug_context g_mdp_debug;
 
 #define MMSYS_CONFIG_BASE	g_mdp_debug.mdp_mmsys_base_va
 #define MDP_RDMA0_BASE		g_mdp_debug.mdp_mod_base_va.MDP_RDMA0
+#define MDP_RDMA1_BASE		g_mdp_debug.mdp_mod_base_va.MDP_RDMA1
+#define MDP_AAL0_BASE		g_mdp_debug.mdp_mod_base_va.MDP_AAL0
+#define MDP_AAL1_BASE		g_mdp_debug.mdp_mod_base_va.MDP_AAL1
+#define MDP_HDR0_BASE		g_mdp_debug.mdp_mod_base_va.MDP_HDR0
+#define MDP_HDR1_BASE		g_mdp_debug.mdp_mod_base_va.MDP_HDR1
 #define MDP_RSZ0_BASE		g_mdp_debug.mdp_mod_base_va.MDP_RSZ0
 #define MDP_RSZ1_BASE		g_mdp_debug.mdp_mod_base_va.MDP_RSZ1
-#define MDP_TDSHP_BASE		g_mdp_debug.mdp_mod_base_va.MDP_TDSHP
-#define MDP_COLOR_BASE		g_mdp_debug.mdp_mod_base_va.MDP_COLOR
-#define MDP_AAL_BASE		g_mdp_debug.mdp_mod_base_va.MDP_AAL
-#define MDP_CCORR_BASE		g_mdp_debug.mdp_mod_base_va.MDP_CCORR
 #define MDP_WROT0_BASE		g_mdp_debug.mdp_mod_base_va.MDP_WROT0
-#define MDP_WDMA_BASE		g_mdp_debug.mdp_mod_base_va.MDP_WDMA
+#define MDP_WROT1_BASE		g_mdp_debug.mdp_mod_base_va.MDP_WROT1
+#define MDP_TDSHP0_BASE		g_mdp_debug.mdp_mod_base_va.MDP_TDSHP0
+#define MDP_TDSHP1_BASE		g_mdp_debug.mdp_mod_base_va.MDP_TDSHP1
+#define MDP_COLOR0_BASE		g_mdp_debug.mdp_mod_base_va.MDP_COLOR0
+#define MDP_COLOR1_BASE		g_mdp_debug.mdp_mod_base_va.MDP_COLOR1
 
 #define MDP_REG_GET32(addr)	(readl((void *)addr) & 0xffffffff)
 #define MDP_REG_SET32(addr, val)	writel(val, addr)
@@ -108,15 +118,20 @@ static void mdp_init_module_base_VA(void)
 	} else
 		mdp_err("%s:MDP_RDMA node missing!\n", __func__);
 
+    mod_base_va->MDP_RDMA1 = mdp_alloc_reference_VA_by_name("mdp_rdma1");
+	mod_base_va->MDP_AAL0 = mdp_alloc_reference_VA_by_name("mdp_aal0");
+	mod_base_va->MDP_AAL1 = mdp_alloc_reference_VA_by_name("mdp_aal1");
+	mod_base_va->MDP_HDR0 = mdp_alloc_reference_VA_by_name("mdp_hdr0");
+	mod_base_va->MDP_HDR1 = mdp_alloc_reference_VA_by_name("mdp_hdr1");
 	mod_base_va->MDP_RSZ0 = mdp_alloc_reference_VA_by_name("mdp_rsz0");
 	mod_base_va->MDP_RSZ1 = mdp_alloc_reference_VA_by_name("mdp_rsz1");
 	mod_base_va->MDP_WROT0 = mdp_alloc_reference_VA_by_name("mdp_wrot0");
-	mod_base_va->MDP_WDMA = mdp_alloc_reference_VA_by_name("mdp_wdma0");
-	mod_base_va->MDP_TDSHP = mdp_alloc_reference_VA_by_name("mdp_tdshp0");
-	mod_base_va->MDP_COLOR = mdp_alloc_reference_VA_by_name("mdp_color0");
-	mod_base_va->MDP_AAL = mdp_alloc_reference_VA_by_name("mdp_aal0");
-	mod_base_va->MDP_CCORR = mdp_alloc_reference_VA_by_name("mdp_ccorr0");
-	mod_base_va->SMI_LARB0 =
+	mod_base_va->MDP_WROT1 = mdp_alloc_reference_VA_by_name("mdp_wrot1");
+	mod_base_va->MDP_TDSHP0 = mdp_alloc_reference_VA_by_name("mdp_tdshp0");
+	mod_base_va->MDP_TDSHP1 = mdp_alloc_reference_VA_by_name("mdp_tdshp1");
+	mod_base_va->MDP_COLOR0 = mdp_alloc_reference_VA_by_name("mdp_color0");
+	mod_base_va->MDP_COLOR1 = mdp_alloc_reference_VA_by_name("mdp_color1");
+	mod_base_va->SMI_LARB2 =
 		mdp_alloc_reference_VA_by_name("mediatek,larb");
 }
 
@@ -124,16 +139,20 @@ static void mdp_deinit_module_base_VA(void)
 {
 	struct mdp_module_base_va *mod_base_va = &(g_mdp_debug.mdp_mod_base_va);
 
-	mdp_free_module_base_VA(mod_base_va->MDP_RDMA0);
-	mdp_free_module_base_VA(mod_base_va->MDP_RSZ0);
-	mdp_free_module_base_VA(mod_base_va->MDP_RSZ1);
-	mdp_free_module_base_VA(mod_base_va->MDP_WROT0);
-	mdp_free_module_base_VA(mod_base_va->MDP_WDMA);
-	mdp_free_module_base_VA(mod_base_va->MDP_TDSHP);
-	mdp_free_module_base_VA(mod_base_va->MDP_COLOR);
-	mdp_free_module_base_VA(mod_base_va->MDP_AAL);
-	mdp_free_module_base_VA(mod_base_va->MDP_CCORR);
-	mdp_free_module_base_VA(mod_base_va->SMI_LARB0);
+	mdp_free_module_base_VA(mod_base_va->MDP_RDMA1);
+    mdp_free_module_base_VA(mod_base_va->MDP_AAL0);
+    mdp_free_module_base_VA(mod_base_va->MDP_AAL1);
+    mdp_free_module_base_VA(mod_base_va->MDP_HDR0);
+    mdp_free_module_base_VA(mod_base_va->MDP_HDR1);
+    mdp_free_module_base_VA(mod_base_va->MDP_RSZ0);
+    mdp_free_module_base_VA(mod_base_va->MDP_RSZ1);
+    mdp_free_module_base_VA(mod_base_va->MDP_WROT0);
+    mdp_free_module_base_VA(mod_base_va->MDP_WROT1);
+    mdp_free_module_base_VA(mod_base_va->MDP_TDSHP0);
+    mdp_free_module_base_VA(mod_base_va->MDP_TDSHP1);
+    mdp_free_module_base_VA(mod_base_va->MDP_COLOR0);
+    mdp_free_module_base_VA(mod_base_va->MDP_COLOR1);
+    mdp_free_module_base_VA(mod_base_va->SMI_LARB2);
 	memset(mod_base_va, 0, sizeof(struct mdp_module_base_va));
 }
 
@@ -270,77 +289,208 @@ static void mdp_dump_mmsys_config(void)
 	int i;
 	uint32_t value;
 	static const struct RegDef configRegisters[] = {
-		{0xF80, "ISP_MOUT_EN"},
-		{0xF84, "MDP_RDMA0_MOUT_EN"},
-		{0xF8C, "MDP_PRZ0_MOUT_EN"},
-		{0xF90, "MDP_PRZ1_MOUT_EN"},
-		{0xF94, "MDP_COLOR_MOUT_EN"},
-		{0xF98, "IPU_MOUT_EN"},
-		{0xFE8, "MDP_AAL_MOUT_EN"},
-		/* {0x02C, "MDP_TDSHP_MOUT_EN"}, */
-		{0xF00, "DISP_OVL0_MOUT_EN"},
-		{0xF04, "DISP_OVL0_2L_MOUT_EN"},
-		{0xF08, "DISP_OVL1_2L_MOUT_EN"},
-		{0xF0C, "DISP_DITHER0_MOUT_EN"},
-		{0xF10, "DISP_RSZ_MOUT_EN"},
-		/* {0x040, "DISP_UFOE_MOUT_EN"}, */
-		/* {0x040, "MMSYS_MOUT_RST"}, */
-		{0xFA0, "DISP_TO_WROT_SOUT_SEL"},
-		{0xFA4, "MDP_COLOR_IN_SOUT_SEL"},
-		{0xFA8, "MDP_PATH0_SOUT_SEL"},
-		{0xFAC, "MDP_PATH1_SOUT_SEL"},
-		{0xFB0, "MDP_TDSHP_SOUT_SEL"},
-		{0xFC0, "MDP_PRZ0_SEL_IN"},
-		{0xFC4, "MDP_PRZ1_SEL_IN"},
-		{0xFC8, "MDP_TDSHP_SEL_IN"},
-		{0xFCC, "DISP_WDMA0_SEL_IN"},
-		{0xFDC, "MDP_COLOR_SEL_IN"},
-		{0xF20, "DISP_COLOR_OUT_SEL_IN"},
-		{0xFD0, "MDP_WROT0_SEL_IN"},
-		{0xFD4, "MDP_WDMA_SEL_IN"},
-		{0xFD8, "MDP_COLOR_OUT_SEL_IN"},
-		{0xFDC, "MDP_COLOR_SEL_IN "},
-		/* {0xFDC, "DISP_COLOR_SEL_IN"}, */
-		{0xFE0, "MDP_PATH0_SEL_IN"},
-		{0xFE4, "MDP_PATH1_SEL_IN"},
-		{0xFEC, "MDP_AAL_SEL_IN"},
-		{0xFF0, "MDP_CCORR_SEL_IN"},
-		{0xFF4, "MDP_CCORR_SOUT_SEL"},
-		/* {0x070, "DISP_WDMA1_SEL_IN"}, */
-		/* {0x074, "DISP_UFOE_SEL_IN"}, */
-		{0xF2C, "DSI0_SEL_IN"},
-		{0xF30, "DSI1_SEL_IN"},
-		{0xF50, "DISP_RDMA0_SOUT_SEL_IN"},
-		{0xF54, "DISP_RDMA1_SOUT_SEL_IN"},
-		{0x0F0, "MMSYS_MISC"},
-		/* ACK and REQ related */
-		{0x8B4, "DISP_DL_VALID_0"},
-		{0x8B8, "DISP_DL_VALID_1"},
-		{0x8C0, "DISP_DL_READY_0"},
-		{0x8C4, "DISP_DL_READY_1"},
-		{0x8CC, "MDP_DL_VALID_0"},
-		{0x8D0, "MDP_DL_VALID_1"},
-		{0x8D4, "MDP_DL_READY_0"},
-		{0x8D8, "MDP_DL_READY_1"},
-		{0x8E8, "MDP_MOUT_MASK"},
-		{0x948, "MDP_DL_VALID_2"},
-		{0x94C, "MDP_DL_READY_2"},
-		{0x950, "DISP_DL_VALID_2"},
-		{0x954, "DISP_DL_READY_2"},
-		{0x100, "MMSYS_CG_CON0"},
-		{0x110, "MMSYS_CG_CON1"},
-		/* Async DL related */
-		{0x960, "TOP_RELAY_FSM_RD"},
-		{0x934, "MDP_ASYNC_CFG_WD"},
-		{0x938, "MDP_ASYNC_CFG_RD"},
-		{0x958, "MDP_ASYNC_CFG_OUT_RD"},
-		{0x95C, "MDP_ASYNC_IPU_CFG_OUT_RD"},
-		{0x994, "ISP_RELAY_CFG_WD"},
-		{0x998, "ISP_RELAY_CNT_RD"},
-		{0x99C, "ISP_RELAY_CNT_LATCH_RD"},
-		{0x9A0, "IPU_RELAY_CFG_WD"},
-		{0x9A4, "IPU_RELAY_CNT_RD"},
-		{0x9A8, "IPU_RELAY_CNT_LATCH_RD"}
+		{0x000, "MMSYS_INTEN"},
+        {0x004, "MMSYS_INTSTA"},
+        {0x0F0, "MMSYS_MISC"},
+        {0x0F4, "MMSYS_MODULE_DBG"},
+        {0x0F8, "MMSYS_EMI_REQ_CTL"},
+        {0x0FC, "MMSYS_RPT"},
+        {0x100, "MMSYS_CG_CON0"},
+        {0x104, "MMSYS_CG_SET0"},
+        {0x108, "MMSYS_CG_CLR0"},
+        {0x110, "MMSYS_CG_CON1"},
+        {0x114, "MMSYS_CG_SET1"},
+        {0x118, "MMSYS_CG_CLR1"},
+        {0x120, "MMSYS_CG_CON2"},
+        {0x124, "MMSYS_CG_SET2"},
+        {0x128, "MMSYS_CG_CLR2"},
+        {0x130, "MMSYS_CG_CON3"},
+        {0x134, "MMSYS_CG_SET3"},
+        {0x138, "MMSYS_CG_CLR3"},
+        {0x140, "MMSYS_CG_CON4"},
+        {0x144, "MMSYS_CG_SET4"},
+        {0x148, "MMSYS_CG_CLR4"},
+        {0x150, "MMSYS_HW_DCM_1ST_DIS0"},
+        {0x154, "MMSYS_HW_DCM_1ST_DIS_SET0"},
+        {0x158, "MMSYS_HW_DCM_1ST_DIS_CLR0"},
+        {0x160, "MMSYS_HW_DCM_1ST_DIS1"},
+        {0x164, "MMSYS_HW_DCM_1ST_DIS_SET1"},
+        {0x168, "MMSYS_HW_DCM_1ST_DIS_CLR1"},
+        {0x170, "MMSYS_HW_DCM_1ST_DIS2"},
+        {0x174, "MMSYS_HW_DCM_1ST_DIS_SET2"},
+        {0x178, "MMSYS_HW_DCM_1ST_DIS_CLR2"},
+        {0x180, "MMSYS_HW_DCM_1ST_DIS3"},
+        {0x184, "MMSYS_HW_DCM_1ST_DIS_SET3"},
+        {0x188, "MMSYS_HW_DCM_1ST_DIS_CLR3"},
+        {0x190, "MMSYS_HW_DCM_1ST_DIS4"},
+        {0x194, "MMSYS_HW_DCM_1ST_DIS_SET4"},
+        {0x198, "MMSYS_HW_DCM_1ST_DIS_CLR4"},
+        {0x1a0, "MMSYS_HW_DCM_2ND_DIS0"},
+        {0x1a4, "MMSYS_HW_DCM_2ND_DIS_SET0"},
+        {0x1a8, "MMSYS_HW_DCM_2ND_DIS_CLR0"},
+        {0x1b0, "MMSYS_HW_DCM_2ND_DIS1"},
+        {0x1b4, "MMSYS_HW_DCM_2ND_DIS_SET1"},
+        {0x1b8, "MMSYS_HW_DCM_2ND_DIS_CLR1"},
+        {0x1c0, "MMSYS_HW_DCM_2ND_DIS2"},
+        {0x1c4, "MMSYS_HW_DCM_2ND_DIS_SET2"},
+        {0x1c8, "MMSYS_HW_DCM_2ND_DIS_CLR2"},
+        {0x1d0, "MMSYS_HW_DCM_2ND_DIS3"},
+        {0x1d4, "MMSYS_HW_DCM_2ND_DIS_SET3"},
+        {0x1d8, "MMSYS_HW_DCM_2ND_DIS_CLR3"},
+        {0x1e0, "MMSYS_HW_DCM_2ND_DIS4"},
+        {0x1e4, "MMSYS_HW_DCM_2ND_DIS_SET4"},
+        {0x1e8, "MMSYS_HW_DCM_2ND_DIS_CLR4"},
+        {0x700, "MMSYS_SW0_RST_B"},
+        {0x704, "MMSYS_SW1_RST_B"},
+        {0x708, "MMSYS_SW2_RST_B"},
+        {0x70c, "MMSYS_SW3_RST_B"},
+        {0x710, "MMSYS_SW4_RST_B"},
+        {0x1f0, "MMSYS_LCM_RST_B"},
+        {0x1f4, "MMSYS_PROC_TRACK_EMI_BUSY_CON"},
+        {0x200, "MDP_FAKE_ENG0_EN"},
+        {0x204, "MDP_FAKE_ENG0_RST"},
+        {0x208, "MDP_FAKE_ENG0_CON0"},
+        {0x20C, "MDP_FAKE_ENG0_CON1"},
+        {0x210, "MDP_FAKE_ENG0_RD_ADDR"},
+        {0x214, "MDP_FAKE_ENG0_WR_ADDR"},
+        {0x218, "MDP_FAKE_ENG0_STATE"},
+        {0x220, "MDP_FAKE_ENG1_EN"},
+        {0x224, "MDP_FAKE_ENG1_RST"},
+        {0x228, "MDP_FAKE_ENG1_CON0"},
+        {0x22C, "MDP_FAKE_ENG1_CON1"},
+        {0x230, "MDP_FAKE_ENG1_RD_ADDR"},
+        {0x234, "MDP_FAKE_ENG1_WR_ADDR"},
+        {0x238, "MDP_FAKE_ENG1_STATE"},
+        {0x240, "MMSYS_APMCU_GALS_ctrl"},
+        {0x300, "MMSYS_DEBUG_OUT_SEL"},
+        {0x400, "MMSYS_DUMMY0"},
+        {0x404, "MMSYS_DUMMY1"},
+        {0x408, "MMSYS_DUMMY2"},
+        {0x40C, "MMSYS_DUMMY3"},
+        {0x600, "MMSYS_MBIST_CON"},
+        {0x604, "MMSYS_MBIST_DONE0"},
+        {0x608, "MMSYS_MBIST_DONE1"},
+        {0x60C, "MMSYS_MBIST_HOLDB"},
+        {0x610, "MMSYS_MBIST_MODE0"},
+        {0x614, "MMSYS_MBIST_MODE1"},
+        {0x618, "MMSYS_MBIST_DIAG_SCANOUT0"},
+        {0x61C, "MMSYS_MBIST_DIAG_SCANOUT1"},
+        {0x620, "MMSYS_MBIST_FAIL0"},
+        {0x624, "MMSYS_MBIST_FAIL1"},
+        {0x628, "MMSYS_MBIST_FAIL2"},
+        {0x62C, "MMSYS_MBIST_FAIL3"},
+        {0x630, "MMSYS_MBIST_DEBUG"},
+        {0x638, "MMSYS_MBIST_PRE_FUSE"},
+        {0x640, "MMSYS_MBIST_BSEL0"},
+        {0x644, "MMSYS_MBIST_BSEL1"},
+        {0x660, "MMSYS_MBIST_HDEN0"},
+        {0x664, "MMSYS_MBIST_HDEN1"},
+        {0x668, "MMSYS_MBIST_HDEN2"},
+        {0x66C, "MMSYS_MBIST_HDEN3"},
+        {0x670, "MMSYS_MBIST_DREQ0"},
+        {0x674, "MMSYS_MBIST_DREQ1"},
+        {0x678, "MMSYS_MBIST_DREQ2"},
+        {0x67C, "MMSYS_MBIST_DREQ3"},
+        {0x680, "MMSYS_MBIST_DELSEL0"},
+        {0x684, "MMSYS_MBIST_DELSEL1"},
+        {0x688, "MMSYS_MBIST_DELSEL2"},
+        {0x68C, "MMSYS_MBIST_DELSEL3"},
+        {0x690, "MMSYS_MBIST_DELSEL4"},
+        {0x694, "MMSYS_MBIST_DELSEL5"},
+        {0x698, "MMSYS_MBIST_DELSEL6"},
+        {0x69C, "MMSYS_MBIST_DELSEL7"},
+        {0x6A0, "MMSYS_MBIST_DELSEL8"},
+        {0x6B0, "MMSYS_MBIST_DELSEL9"},
+        {0x6B4, "MMSYS_MBIST_DELSEL10"},
+        {0x6B8, "MMSYS_MBIST_DELSEL11"},
+        {0x6BC, "MMSYS_MBIST_DELSEL12"},
+        {0x6C0, "MMSYS_MBIST_DELSEL13"},
+        {0x6C4, "MMSYS_MBIST_DELSEL14"},
+        {0x6C8, "MMSYS_MBIST_DELSEL15"},
+        {0x720, "MMSYS_MBIST_DELSEL16"},
+        {0x724, "MMSYS_MBIST_DELSEL17"},
+        {0x728, "MMSYS_MBIST_DELSEL18"},
+        {0x72C, "MMSYS_MBIST_DELSEL19"},
+        {0x730, "MMSYS_MBIST_DELSEL20"},
+        {0x734, "MMSYS_MBIST_DELSEL21"},
+        {0x738, "MMSYS_MBIST_DELSEL22"},
+        {0x73C, "MMSYS_MBIST_DELSEL23"},
+        {0x740, "MMSYS_MBIST_DELSEL24"},
+        {0x744, "MMSYS_MBIST_DELSEL25"},
+        {0x748, "MMSYS_MBIST_DELSEL26"},
+        {0x74C, "MMSYS_MBIST_DELSEL27"},
+        {0x750, "MMSYS_MBIST_DELSEL28"},
+        {0x754, "MMSYS_MBIST_DELSEL29"},
+        {0x6D0, "MMSYS_MBIST_RP_RST_B"},
+        {0x6E0, "MMSYS_MBIST_RP_FAIL0"},
+        {0x6E4, "MMSYS_MBIST_RP_FAIL1"},
+        {0x6E8, "MMSYS_MBIST_RP_FAIL2"},
+        {0x6EC, "MMSYS_MBIST_RP_FAIL3"},
+        {0x6F0, "MMSYS_MBIST_RP_OK0"},
+        {0x6F4, "MMSYS_MBIST_RP_OK1"},
+        {0x6F8, "MMSYS_MBIST_RP_OK2"},
+        {0x6FC, "MMSYS_MBIST_RP_OK3"},
+        {0x804, "MMSYS_SMI_BIST"},
+        {0x808, "MMSYS_SMI_TX_IDLE"},
+        {0x8DC, "MMSYS_SMI_LARB_GREQ"},
+        {0x8F0, "MMSYS_HRT_WEIGHT_READ"},
+        {0x900, "MMSYS_PWR_METER_CTL0"},
+        {0x904, "MMSYS_PWR_METER_CTL1"},
+        {0x920, "MDP_DL_RELAY0_CFG_WD"},
+        {0x924, "MDP_DL_RELAY1_CFG_WD"},
+        {0x928, "MDP_DL_RELAY2_CFG_WD"},
+        {0x92c, "MDP_DL_RELAY3_CFG_WD"},
+        {0x930, "MDP_DL_RELAY0_CFG_RD"},
+        {0x934, "MDP_DL_RELAY1_CFG_RD"},
+        {0x938, "MDP_DL_RELAY2_CFG_RD"},
+        {0x93C, "MDP_DL_RELAY3_CFG_RD"},
+        {0x940, "MDP_DL_ASYNC_CFG_RD0"},
+        {0x948, "MDP_DL_ASYNC_CFG_RD1"},
+        {0x950, "MDP_DL_ASYNC1_CFG_RD0"},
+        {0x954, "MDP_DL_ASYNC1_CFG_RD1"},
+        {0x960, "MDP_DL_ASYNC2_CFG_RD0"},
+        {0x964, "MDP_DL_ASYNC2_CFG_RD1"},
+        {0x970, "MDP_DL_ASYNC3_CFG_RD0"},
+        {0x974, "MDP_DL_ASYNC3_CFG_RD1"},
+        {0xE00, "MMSYS_BUF_UNDERRUN"},
+        {0xE04, "MMSYS_BUF_UNDERRUN_ID"},
+        {0xF00, "MMSYS_MOUT_RST"},
+        {0xF10, "ISP0_MOUT_EN"},
+        {0xF14, "ISP1_MOUT_EN"},
+        {0xF20, "MDP_RDMA0_MOUT_EN"},
+        {0xF24, "MDP_RDMA1_MOUT_EN"},
+        {0xF30, "MDP_PQ0_SEL_IN"},
+        {0xF34, "MDP_PQ1_SEL_IN"},
+        {0xF70, "MDP_WROT0_SEL_IN"},
+        {0xF74, "MDP_WROT1_SEL_IN"},
+        {0xFD0, "MMSYS_MOUT_MASK0"},
+        {0xFD4, "MMSYS_MOUT_MASK1"},
+        {0xFD8, "MMSYS_MOUT_MASK2"},
+        {0xFE0, "MMSYS_DL_VALID0"},
+        {0xFE4, "MMSYS_DL_VALID1"},
+        {0xFE8, "MMSYS_DL_VALID2"},
+        {0xFF0, "MMSYS_DL_READY0"},
+        {0xFF4, "MMSYS_DL_READY1"},
+        {0xFF8, "MMSYS_DL_READY2"},
+        {0x770, "MMSYS_FUSE_0"},
+        {0x774, "MMSYS_FUSE_1"},
+        {0x778, "MMSYS_FUSE_2"},
+        {0x77C, "MMSYS_FUSE_3"},
+        {0x780, "MMSYS_FUSE_4"},
+        {0x784, "MMSYS_FUSE_5"},
+        {0x788, "MMSYS_FUSE_6"},
+        {0x78C, "MMSYS_FUSE_7"},
+        {0x790, "MMSYS_FUSE_8"},
+        {0x794, "MMSYS_FUSE_9"},
+        {0x798, "MMSYS_FUSE_10"},
+        {0x79C, "MMSYS_FUSE_11"},
+        {0x7A0, "MMSYS_FUSE_12"},
+        {0x7A4, "MMSYS_FUSE_13"},
+        {0x7A8, "MMSYS_FUSE_14"},
+        {0x7AC, "MMSYS_FUSE_15"},
+        {0x7B0, "MMSYS_FUSE_16"},
+        {0x7B4, "MMSYS_FUSE_CTRL"},
+        {0x6D4, "MMSYS_USE_DEFAULT_DELSEL"}
 	};
 
 	if (!MMSYS_CONFIG_BASE) {
@@ -397,37 +547,9 @@ static const char *mdp_get_rsz_state(const uint32_t state)
 	}
 }
 
-static const char *mdp_get_wdma_state(uint32_t state)
-{
-	switch (state) {
-	case 0x1:
-		return "idle";
-	case 0x2:
-		return "clear";
-	case 0x4:
-		return "prepare";
-	case 0x8:
-		return "prepare";
-	case 0x10:
-		return "data running";
-	case 0x20:
-		return "eof wait";
-	case 0x40:
-		return "soft reset wait";
-	case 0x80:
-		return "eof done";
-	case 0x100:
-		return "sof reset done";
-	case 0x200:
-		return "frame complete";
-	default:
-		return "";
-	}
-}
-
 static void mdp_dump_rdma_common(void __iomem *base, const char *label)
 {
-	uint32_t value[17];
+	uint32_t value[18];
 	uint32_t state;
 	uint32_t grep;
 
@@ -456,6 +578,7 @@ static void mdp_dump_rdma_common(void __iomem *base, const char *label)
 	value[14] = MDP_REG_GET32(base + 0x440);
 	value[15] = MDP_REG_GET32(base + 0x4D0);
 	value[16] = MDP_REG_GET32(base + 0x0);
+	value[17] = MDP_REG_GET32(base + 0x038);
 
 	mdp_err("=============== [MDP] %s Status ===============\n",
 		label);
@@ -477,8 +600,8 @@ static void mdp_dump_rdma_common(void __iomem *base, const char *label)
 		 value[12], value[13]);
 	mdp_err("RDMA_MON_STA_8: 0x%08x, RDMA_MON_STA_26: 0x%08x\n",
 		 value[14], value[15]);
-	mdp_err("RDMA_EN: 0x%08x\n",
-		 value[16]);
+	mdp_err("RDMA_EN: 0x%08x, MDP_RDMA_COMP_CON: 0x%08x\n",
+		 value[16], value[17]);
 
 	/* parse state */
 	mdp_err("RDMA ack:%d req:%d\n", (value[9] & (1 << 11)) >> 11,
@@ -680,80 +803,6 @@ static void mdp_dump_color_common(void __iomem *base, const char *label)
 	     value[11], value[12]);
 }
 
-static void mdp_dump_wdma_common(void __iomem *base, const char *label)
-{
-	uint32_t value[56];
-	uint32_t state;
-	/* grep bit = 1, WDMA has sent request to SMI,
-	 *and not receive done yet
-	 */
-	uint32_t grep;
-	uint32_t isFIFOFull;	/* 1 for WDMA FIFO full */
-	int i;
-
-	if (!base) {
-		mdp_err("=============== [MDP] %s Status ===============\n",
-			label);
-		mdp_err("%s:base=0!\n", __func__);
-		return;
-	}
-
-	value[0] = MDP_REG_GET32(base + 0x014);
-	value[1] = MDP_REG_GET32(base + 0x018);
-	value[2] = MDP_REG_GET32(base + 0x028);
-	value[3] = MDP_REG_GET32(base +
-		   mdp_get_func()->mdp_wdma_get_reg_offset_dst_addr());
-	value[4] = MDP_REG_GET32(base + 0x078);
-	value[5] = MDP_REG_GET32(base + 0x080);
-	value[6] = MDP_REG_GET32(base + 0x0A0);
-	value[7] = MDP_REG_GET32(base + 0x0A8);
-
-	for (i = 0; i < 16; i++) {
-		MDP_REG_SET32(base + 0x014, (0x10000000 * i) |
-			      (value[0] & (0x0FFFFFFF)));
-		value[8 + (3 * i)] = MDP_REG_GET32(base + 0x014);
-		value[9 + (3 * i)] = MDP_REG_GET32(base + 0x0AC);
-		value[10 + (3 * i)] = MDP_REG_GET32(base + 0x0B8);
-	}
-
-	mdp_err("=============== [MDP] %s Status ===============\n",
-		label);
-	mdp_err("[MDP]WDMA_CFG: 0x%08x, WDMA_SRC_SIZE: 0x%08x\n",
-		 value[0], value[1]);
-	mdp_err("WDMA_DST_W_IN_BYTE = 0x%08x, [MDP]WDMA_DST_ADDR0: 0x%08x\n",
-		 value[2], value[3]);
-	mdp_err
-	    ("WDMA_DST_UV_PITCH: 0x%08x, WDMA_DST_ADDR_OFFSET0 = 0x%08x\n",
-	     value[4], value[5]);
-	mdp_err("[MDP]WDMA_STATUS: 0x%08x, WDMA_INPUT_CNT: 0x%08x\n",
-		value[6], value[7]);
-
-	/* Dump Addtional WDMA debug info */
-	for (i = 0; i < 16; i++) {
-		mdp_err("WDMA_DEBUG_%x 014:0x%08x, 0ac:0x%08x, 0b8:0x%08x\n",
-			i, value[8 + (3 * i)], value[9 + (3 * i)],
-			value[10 + (3 * i)]);
-	}
-
-	/* parse WDMA state */
-	state = value[6] & 0x3FF;
-	grep = (value[6] >> 13) & 0x1;
-	isFIFOFull = (value[6] >> 12) & 0x1;
-
-	mdp_err("WDMA state:0x%x (%s)\n", state, mdp_get_wdma_state(state));
-	mdp_err("WDMA in_req:%d in_ack:%d\n", (value[6] >> 15) & 0x1,
-		(value[6] >> 14) & 0x1);
-
-	/* note WDMA send request(i.e command) to SMI first,
-	 * then SMI takes request data from WDMA FIFO
-	 */
-	/* if SMI dose not process request and upstream HWs */
-	/* such as MDP_RSZ send data to WDMA, WDMA FIFO will full finally */
-	mdp_err("WDMA grep:%d, FIFO full:%d\n", grep, isFIFOFull);
-	mdp_err("WDMA suggest: Need SMI help:%d, Need check WDMA config:%d\n",
-		(grep), ((grep == 0) && (isFIFOFull == 1)));
-}
-
 static void mdp_dump_rsz(void __iomem *base, const char *label)
 {
 	uint32_t value[11];
@@ -873,32 +922,6 @@ static void mdp_dump_aal(void __iomem *base, const char *label)
 		value[7], value[8]);
 }
 
-static void mdp_dump_ccorr(void __iomem *base, const char *label)
-{
-	uint32_t value[5];
-
-	if (!base) {
-		mdp_err("=============== [MDP] %s Status ===============\n",
-			label);
-		mdp_err("%s:base=0!\n", __func__);
-		return;
-	}
-
-	value[0] = MDP_REG_GET32(base + 0x00C);/* MDP_CCORR_INTSTA         */
-	value[1] = MDP_REG_GET32(base + 0x010);/* MDP_CCORR_STATUS         */
-	value[2] = MDP_REG_GET32(base + 0x024);/* MDP_CCORR_INPUT_COUNT    */
-	value[3] = MDP_REG_GET32(base + 0x028);/* MDP_CCORR_OUTPUT_COUNT   */
-	value[4] = MDP_REG_GET32(base + 0x030);/* MDP_CCORR_SIZE       */
-	mdp_err("=============== [MDP] %s Status ===============\n",
-		label);
-	mdp_err("CCORR_INTSTA: 0x%08x, CCORR_STATUS: 0x%08x\n",
-		value[0], value[1]);
-	mdp_err("CCORR_INPUT_COUNT: 0x%08x, CCORR_OUTPUT_COUNT: 0x%08x\n",
-		value[2], value[3]);
-	mdp_err("CCORR_SIZE: 0x%08x\n",
-		value[4]);
-}
-
 static uint32_t mdp_rdma_get_reg_offset_src_addr(void)
 {
 	return 0xF00;
@@ -933,21 +956,17 @@ int32_t mdp_dump_info(uint64_t comp_flag, int log_level)
 	if (comp_flag & (1LL << MDP_COMP_RDMA0))
 		mdp_dump_rdma_common(MDP_RDMA0_BASE, "RDMA0");
 	if (comp_flag & (1LL << MDP_COMP_AAL0))
-		mdp_dump_aal(MDP_AAL_BASE, "AAL0");
-	if (comp_flag & (1LL << MDP_COMP_CCORR0))
-		mdp_dump_ccorr(MDP_CCORR_BASE, "CCORR0");
+		mdp_dump_aal(MDP_AAL0_BASE, "AAL0");
 	if (comp_flag & (1LL << MDP_COMP_RSZ0))
 		mdp_get_func()->mdp_dump_rsz(MDP_RSZ0_BASE, "RSZ0");
 	if (comp_flag & (1LL << MDP_COMP_RSZ1))
 		mdp_get_func()->mdp_dump_rsz(MDP_RSZ1_BASE, "RSZ1");
 	if (comp_flag & (1LL << MDP_COMP_TDSHP0))
-		mdp_get_func()->mdp_dump_tdshp(MDP_TDSHP_BASE, "TDSHP");
+		mdp_get_func()->mdp_dump_tdshp(MDP_TDSHP0_BASE, "TDSHP");
 	if (comp_flag & (1LL << MDP_COMP_COLOR0))
-		mdp_dump_color_common(MDP_COLOR_BASE, "COLOR0");
+		mdp_dump_color_common(MDP_COLOR0_BASE, "COLOR0");
 	if (comp_flag & (1LL << MDP_COMP_WROT0))
 		mdp_dump_rot_common(MDP_WROT0_BASE, "WROT0");
-	if (comp_flag & (1LL << MDP_COMP_WDMA))
-		mdp_dump_wdma_common(MDP_WDMA_BASE, "WDMA");
 
 	return 0;
 }
