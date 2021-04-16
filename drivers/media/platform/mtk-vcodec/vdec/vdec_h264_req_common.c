@@ -43,7 +43,7 @@ void mtk_vdec_h264_fill_dpb_info(struct mtk_vcodec_ctx *ctx,
 		vb2_index = vb2_find_timestamp(vq, dpb->reference_ts, 0);
 		if (vb2_index < 0) {
 			dev_err(&ctx->dev->plat_dev->dev,
-				"Reference invalid: dpb_index(%lld) reference_ts(%lld)",
+				"Reference invalid: dpb_index(%d) reference_ts(%lld)",
 				index, dpb->reference_ts);
 			continue;
 		}
