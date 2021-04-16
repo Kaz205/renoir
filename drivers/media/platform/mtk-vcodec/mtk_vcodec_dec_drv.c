@@ -67,7 +67,7 @@ static const struct component_master_ops mtk_vdec_ops = {
 	.unbind = mtk_vdec_unbind,
 };
 
-struct component_match *mtk_vdec_match_add(struct mtk_vcodec_dev *vdec_dev)
+static struct component_match *mtk_vdec_match_add(struct mtk_vcodec_dev *vdec_dev)
 {
 	struct platform_device *pdev = vdec_dev->plat_dev;
 	struct component_match *match = NULL;
