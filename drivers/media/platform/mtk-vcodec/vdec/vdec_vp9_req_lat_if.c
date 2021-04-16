@@ -1103,7 +1103,7 @@ static int vdec_vp9_slice_setup_tile_buffer(
 	offset = uh->uncompressed_header_size +
 		uh->header_size_in_bytes;
 	if (bs->size <= offset) {
-		mtk_vcodec_err(instance, "bs size %lu tile offset %u\n",
+		mtk_vcodec_err(instance, "bs size %zu tile offset %u\n",
 			bs->size, offset);
 		return -EINVAL;
 	}
