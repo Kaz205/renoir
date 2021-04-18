@@ -1483,9 +1483,6 @@ void mt7921_mac_work(struct work_struct *work)
 					       mac_work.work);
 	phy = mphy->priv;
 
-	if (test_bit(MT76_STATE_PM, &mphy->state))
-		goto out;
-
 	mt7921_mutex_acquire(phy->dev);
 
 	mt76_update_survey(mphy->dev);
@@ -1500,8 +1497,6 @@ void mt7921_mac_work(struct work_struct *work)
 	}
 
 	mt7921_mutex_release(phy->dev);
-
-out:
 	ieee80211_queue_delayed_work(phy->mt76->hw, &mphy->mac_work,
 				     MT7921_WATCHDOG_TIME);
 }
