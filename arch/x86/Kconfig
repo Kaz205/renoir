@@ -2970,6 +2970,7 @@ config HAVE_ATOMIC_IOMAP
 	depends on X86_32
 
 config X86_DEV_DMA_OPS
+	select DMA_OPS
 	bool
 
 source "drivers/firmware/Kconfig"
