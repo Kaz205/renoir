@@ -57,7 +57,8 @@ static void handle_init_ack_msg(const struct vdec_vpu_ipi_init_ack *msg)
 static void handle_get_param_msg_ack(
 	const struct vdec_vpu_ipi_get_param_ack *msg)
 {
-	struct vdec_vpu_inst *vpu = (struct vdec_vpu_inst *)msg->ap_inst_addr;
+	struct vdec_vpu_inst *vpu = (struct vdec_vpu_inst *)
+					(unsigned long)msg->ap_inst_addr;
 
 	mtk_vcodec_debug(vpu, "+ ap_inst_addr = 0x%llx", msg->ap_inst_addr);
 
