@@ -55,7 +55,7 @@ static void mtk_vdec_hw_unbind(struct device *dev, struct device *master,
 {
 	struct mtk_vcodec_dev *comp_priv = dev_get_drvdata(dev);
 
-	comp_priv->reg_base[VDEC_SYS] = 0;
+	comp_priv->reg_base[VDEC_SYS] = NULL;
 }
 
 static const struct component_ops mtk_vdec_hw_component_ops = {
