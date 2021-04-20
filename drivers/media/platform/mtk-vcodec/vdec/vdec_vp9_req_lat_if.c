@@ -16,6 +16,12 @@
 #include "../vdec_msg_queue.h"
 #include "../vdec_vpu_if.h"
 
+/* reset_frame_context defined in VP9 spec */
+#define VP9_RESET_FRAME_CONTEXT_NONE0 0
+#define VP9_RESET_FRAME_CONTEXT_NONE1 1
+#define VP9_RESET_FRAME_CONTEXT_SPEC 2
+#define VP9_RESET_FRAME_CONTEXT_ALL 3
+
 #define VP9_TILE_BUF_SIZE 4096
 #define VP9_PROB_BUF_SIZE 2560
 #define VP9_COUNTS_BUF_SIZE 16384
@@ -746,12 +752,21 @@ static void vdec_vp9_slice_setup_hdr(
 	uh->frame_width = hdr->frame_width_minus_1 + 1;
 	uh->frame_height = hdr->frame_height_minus_1 + 1;
 	uh->intra_only = HDR_FLAG(INTRA_ONLY);
-	if (hdr->reset_frame_context == V4L2_VP9_RESET_FRAME_CTX_SPEC)
-		uh->reset_frame_context = 2;
-	else if (hdr->reset_frame_context == V4L2_VP9_RESET_FRAME_CTX_SPEC)
-		uh->reset_frame_context = 3;
-	else
-		uh->reset_frame_context = 0;
+	/* map v4l2 enum to values defined in VP9 spec for firmware */
+	switch (hdr->reset_frame_context) {
+	case V4L2_VP9_RESET_FRAME_CTX_NONE:
+		uh->reset_frame_context = VP9_RESET_FRAME_CONTEXT_NONE0;
+		break;
+	case V4L2_VP9_RESET_FRAME_CTX_SPEC:
+		uh->reset_frame_context = VP9_RESET_FRAME_CONTEXT_SPEC;
+		break;
+	case V4L2_VP9_RESET_FRAME_CTX_ALL:
+		uh->reset_frame_context = VP9_RESET_FRAME_CONTEXT_ALL;
+		break;
+	default:
+		uh->reset_frame_context = VP9_RESET_FRAME_CONTEXT_NONE0;
+		break;
+	}
 	/*
 	 * ref_frame_sign_bias specifies the intended direction
 	 * of the motion vector in time for each reference frame.
