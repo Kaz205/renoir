@@ -4325,13 +4325,12 @@ static void intel_ddi_set_link_train(struct intel_dp *intel_dp,
 {
 	struct intel_encoder *encoder = &dp_to_dig_port(intel_dp)->base;
 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
-	u8 train_pat_mask = drm_dp_training_pattern_mask(intel_dp->dpcd);
 	u32 temp;
 
 	temp = intel_de_read(dev_priv, dp_tp_ctl_reg(encoder, crtc_state));
 
 	temp &= ~DP_TP_CTL_LINK_TRAIN_MASK;
-	switch (dp_train_pat & train_pat_mask) {
+	switch (intel_dp_training_pattern_symbol(dp_train_pat)) {
 	case DP_TRAINING_PATTERN_DISABLE:
 		temp |= DP_TP_CTL_LINK_TRAIN_NORMAL;
 		break;
@@ -4628,6 +4627,22 @@ void intel_ddi_get_config(struct intel_encoder *encoder,
 
 	intel_read_dp_sdp(encoder, pipe_config, HDMI_PACKET_TYPE_GAMUT_METADATA);
 	intel_read_dp_sdp(encoder, pipe_config, DP_SDP_VSC);
+}
+
+static void intel_ddi_sync_state(struct intel_encoder *encoder,
+				 const struct intel_crtc_state *crtc_state)
+{
+	if (intel_crtc_has_dp_encoder(crtc_state))
+		intel_dp_sync_state(encoder, crtc_state);
+}
+
+static bool intel_ddi_initial_fastset_check(struct intel_encoder *encoder,
+					    struct intel_crtc_state *crtc_state)
+{
+	if (intel_crtc_has_dp_encoder(crtc_state))
+		return intel_dp_initial_fastset_check(encoder, crtc_state);
+
+	return true;
 }
 
 static enum intel_output_type
@@ -5242,6 +5257,8 @@ void intel_ddi_init(struct drm_i915_private *dev_priv, enum port port)
 	encoder->update_pipe = intel_ddi_update_pipe;
 	encoder->get_hw_state = intel_ddi_get_hw_state;
 	encoder->get_config = intel_ddi_get_config;
+	encoder->sync_state = intel_ddi_sync_state;
+	encoder->initial_fastset_check = intel_ddi_initial_fastset_check;
 	encoder->suspend = intel_dp_encoder_suspend;
 	encoder->shutdown = intel_dp_encoder_shutdown;
 	encoder->get_power_domains = intel_ddi_get_power_domains;

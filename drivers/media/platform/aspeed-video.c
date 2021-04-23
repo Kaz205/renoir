@@ -1529,12 +1529,12 @@ static int aspeed_video_setup_video(struct aspeed_video *video)
 			       V4L2_JPEG_CHROMA_SUBSAMPLING_420, mask,
 			       V4L2_JPEG_CHROMA_SUBSAMPLING_444);
 
-	if (video->ctrl_handler.error) {
+	rc = video->ctrl_handler.error;
+	if (rc) {
 		v4l2_ctrl_handler_free(&video->ctrl_handler);
 		v4l2_device_unregister(v4l2_dev);
 
-		dev_err(video->dev, "Failed to init controls: %d\n",
-			video->ctrl_handler.error);
+		dev_err(video->dev, "Failed to init controls: %d\n", rc);
 		return rc;
 	}
 
@@ -1575,7 +1575,6 @@ static int aspeed_video_setup_video(struct aspeed_video *video)
 	video_set_drvdata(vdev, video);
 	rc = video_register_device(vdev, VFL_TYPE_GRABBER, 0);
 	if (rc) {
-		vb2_queue_release(vbq);
 		v4l2_ctrl_handler_free(&video->ctrl_handler);
 		v4l2_device_unregister(v4l2_dev);
 
@@ -1701,9 +1700,7 @@ static int aspeed_video_remove(struct platform_device *pdev)
 	clk_unprepare(video->vclk);
 	clk_unprepare(video->eclk);
 
-	video_unregister_device(&video->vdev);
-
-	vb2_queue_release(&video->queue);
+	vb2_video_unregister_device(&video->vdev);
 
 	v4l2_ctrl_handler_free(&video->ctrl_handler);
 

@@ -11,14 +11,9 @@
 #ifdef CONFIG_DRM_I915_PXP
 void intel_pxp_pm_prepare_suspend(struct intel_pxp *pxp);
 
-void intel_pxp_pm_resume_early(struct intel_pxp *pxp);
 int intel_pxp_pm_resume(struct intel_pxp *pxp);
 #else
 static inline void intel_pxp_pm_prepare_suspend(struct intel_pxp *pxp)
-{
-}
-
-static inline void intel_pxp_pm_resume_early(struct intel_pxp *pxp)
 {
 }
 

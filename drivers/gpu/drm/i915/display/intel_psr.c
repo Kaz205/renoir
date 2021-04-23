@@ -642,6 +642,13 @@ tgl_dc3co_exitline_compute_config(struct intel_dp *intel_dp,
 	struct drm_i915_private *dev_priv = dp_to_i915(intel_dp);
 	u32 exit_scanlines;
 
+	/*
+	 * FIXME: Due to the changed sequence of activating/deactivating DC3CO,
+	 * disable DC3CO until the changed dc3co activating/deactivating sequence
+	 * is applied. B.Specs:49196
+	 */
+	return;
+
 	if (!(dev_priv->csr.allowed_dc_mask & DC_STATE_EN_DC3CO))
 		return;
 

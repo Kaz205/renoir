@@ -6,6 +6,8 @@
 */
 
 #include <linux/module.h>
+#include <linux/of.h>
+#include <linux/of_device.h>
 
 #include "mtk_vcodec_drv.h"
 #include "mtk_vcodec_util.h"
@@ -81,25 +83,71 @@ void mtk_vcodec_mem_free(struct mtk_vcodec_ctx *data,
 }
 EXPORT_SYMBOL(mtk_vcodec_mem_free);
 
-void mtk_vcodec_set_curr_ctx(struct mtk_vcodec_dev *dev,
-	struct mtk_vcodec_ctx *ctx)
+struct mtk_vcodec_dev *mtk_vcodec_get_hw_dev(struct mtk_vcodec_dev *dev, int comp_idx)
+{
+	struct platform_device *hw_pdev;
+	struct device_node *node;
+	struct mtk_vcodec_dev *hw_dev;
+
+	if (comp_idx >= MTK_VDEC_HW_MAX || comp_idx < 0) {
+		mtk_v4l2_err("Comp idx is out of range:%d", comp_idx);
+		return NULL;
+	}
+
+	if (dev->hw_dev[comp_idx])
+		return dev->hw_dev[comp_idx];
+
+	node = dev->component_node[comp_idx];
+	if (!node) {
+		mtk_v4l2_err("Get lat node fail:%d", comp_idx);
+		return NULL;
+	}
+
+	hw_pdev = of_find_device_by_node(node);
+	of_node_put(node);
+
+	if (WARN_ON(!hw_pdev)) {
+		mtk_v4l2_err("Get hw id(%d) node fail", comp_idx);
+		return NULL;
+	}
+
+	hw_dev = platform_get_drvdata(hw_pdev);
+	if (!hw_dev) {
+		mtk_v4l2_err("Get hw id(%d) pdev fail", comp_idx);
+		return NULL;
+	}
+
+	dev->hw_dev[hw_dev->comp_idx] = hw_dev;
+	return hw_dev;
+}
+EXPORT_SYMBOL(mtk_vcodec_get_hw_dev);
+
+void mtk_vcodec_set_curr_ctx(struct mtk_vcodec_dev *vdec_dev,
+	struct mtk_vcodec_ctx *ctx, int comp_idx)
 {
 	unsigned long flags;
+	struct mtk_vcodec_dev *comp_dev;
 
-	spin_lock_irqsave(&dev->irqlock, flags);
-	dev->curr_ctx = ctx;
-	spin_unlock_irqrestore(&dev->irqlock, flags);
+	spin_lock_irqsave(&vdec_dev->irqlock, flags);
+	comp_dev = mtk_vcodec_get_hw_dev(vdec_dev, comp_idx);
+	if (!comp_dev) {
+		mtk_v4l2_err("Failed to get hw dev");
+		spin_unlock_irqrestore(&vdec_dev->irqlock, flags);
+		return;
+	}
+	comp_dev->curr_ctx = ctx;
+	spin_unlock_irqrestore(&vdec_dev->irqlock, flags);
 }
 EXPORT_SYMBOL(mtk_vcodec_set_curr_ctx);
 
-struct mtk_vcodec_ctx *mtk_vcodec_get_curr_ctx(struct mtk_vcodec_dev *dev)
+struct mtk_vcodec_ctx *mtk_vcodec_get_curr_ctx(struct mtk_vcodec_dev *vdec_dev)
 {
 	unsigned long flags;
 	struct mtk_vcodec_ctx *ctx;
 
-	spin_lock_irqsave(&dev->irqlock, flags);
-	ctx = dev->curr_ctx;
-	spin_unlock_irqrestore(&dev->irqlock, flags);
+	spin_lock_irqsave(&vdec_dev->irqlock, flags);
+	ctx = vdec_dev->curr_ctx;
+	spin_unlock_irqrestore(&vdec_dev->irqlock, flags);
 	return ctx;
 }
 EXPORT_SYMBOL(mtk_vcodec_get_curr_ctx);

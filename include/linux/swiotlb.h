@@ -35,6 +35,7 @@ int swiotlb_init_with_tbl(char *tlb, unsigned long nslabs, int verbose);
 extern unsigned long swiotlb_nr_tbl(void);
 unsigned long swiotlb_size_or_default(void);
 extern int swiotlb_late_init_with_tbl(char *tlb, unsigned long nslabs);
+extern int swiotlb_late_init_with_default_size(size_t default_size);
 extern void __init swiotlb_update_mem_attributes(void);
 
 /*
@@ -67,22 +68,42 @@ extern void swiotlb_tbl_sync_single(struct device *hwdev,
 
 #ifdef CONFIG_SWIOTLB
 extern enum swiotlb_force swiotlb_force;
-extern phys_addr_t io_tlb_start, io_tlb_end;
 
-static inline bool is_swiotlb_buffer(phys_addr_t paddr)
+#ifdef CONFIG_DMA_RESTRICTED_POOL
+bool is_swiotlb_force(struct device *dev);
+bool is_dev_swiotlb_force(struct device *dev);
+struct page *dev_swiotlb_alloc(struct device *dev, size_t size);
+bool dev_swiotlb_free(struct device *dev, struct page *page, size_t size);
+#else
+static inline bool is_swiotlb_force(struct device *dev)
 {
-	return paddr >= io_tlb_start && paddr < io_tlb_end;
+	return unlikely(swiotlb_force == SWIOTLB_FORCE);
 }
+static inline bool is_dev_swiotlb_force(struct device *dev)
+{
+	return false;
+}
+#endif /* CONFIG_DMA_RESTRICTED_POOL */
 
 bool swiotlb_map(struct device *dev, phys_addr_t *phys, dma_addr_t *dma_addr,
 		size_t size, enum dma_data_direction dir, unsigned long attrs);
+bool is_swiotlb_buffer(struct device *dev, phys_addr_t paddr);
 void __init swiotlb_exit(void);
 unsigned int swiotlb_max_segment(void);
 size_t swiotlb_max_mapping_size(struct device *dev);
-bool is_swiotlb_active(void);
+bool is_swiotlb_active(struct device *dev);
+phys_addr_t get_swiotlb_start(struct device *dev);
 #else
 #define swiotlb_force SWIOTLB_NO_FORCE
-static inline bool is_swiotlb_buffer(phys_addr_t paddr)
+static inline bool is_swiotlb_force(struct device *dev)
+{
+	return false;
+}
+static inline bool is_dev_swiotlb_force(struct device *dev)
+{
+	return false;
+}
+static inline bool is_swiotlb_buffer(struct device *dev, phys_addr_t paddr)
 {
 	return false;
 }
@@ -104,7 +125,7 @@ static inline size_t swiotlb_max_mapping_size(struct device *dev)
 	return SIZE_MAX;
 }
 
-static inline bool is_swiotlb_active(void)
+static inline bool is_swiotlb_active(struct device *dev)
 {
 	return false;
 }

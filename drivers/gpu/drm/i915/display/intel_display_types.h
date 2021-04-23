@@ -186,6 +186,21 @@ struct intel_encoder {
 	 * be set correctly before calling this function. */
 	void (*get_config)(struct intel_encoder *,
 			   struct intel_crtc_state *pipe_config);
+
+	/*
+	 * Optional hook called during init/resume to sync any state
+	 * stored in the encoder (eg. DP link parameters) wrt. the HW state.
+	 */
+	void (*sync_state)(struct intel_encoder *encoder,
+			   const struct intel_crtc_state *crtc_state);
+
+	/*
+	 * Optional hook, returning true if this encoder allows a fastset
+	 * during the initial commit, false otherwise.
+	 */
+	bool (*initial_fastset_check)(struct intel_encoder *encoder,
+				      struct intel_crtc_state *crtc_state);
+
 	/*
 	 * Acquires the power domains needed for an active encoder during
 	 * hardware state readout.
@@ -767,7 +782,6 @@ struct intel_crtc_wm_state {
 };
 
 enum intel_output_format {
-	INTEL_OUTPUT_FORMAT_INVALID,
 	INTEL_OUTPUT_FORMAT_RGB,
 	INTEL_OUTPUT_FORMAT_YCBCR420,
 	INTEL_OUTPUT_FORMAT_YCBCR444,
@@ -1270,6 +1284,8 @@ struct intel_dp {
 	u8 downstream_ports[DP_MAX_DOWNSTREAM_PORTS];
 	u8 edp_dpcd[EDP_DISPLAY_CTL_CAP_SIZE];
 	u8 dsc_dpcd[DP_DSC_RECEIVER_CAP_SIZE];
+	u8 lttpr_common_caps[DP_LTTPR_COMMON_CAP_SIZE];
+	u8 lttpr_phy_caps[DP_MAX_LTTPR_COUNT][DP_LTTPR_PHY_CAP_SIZE];
 	u8 fec_capable;
 	/* source rates */
 	int num_source_rates;

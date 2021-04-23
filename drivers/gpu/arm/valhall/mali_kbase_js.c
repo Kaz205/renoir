@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2011-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2011-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -1192,6 +1192,7 @@ void kbase_js_update_ctx_priority(struct kbase_context *kctx)
 
 	kbase_js_set_ctx_priority(kctx, new_priority);
 }
+KBASE_EXPORT_TEST_API(kbase_js_update_ctx_priority);
 
 /**
  * js_add_start_rp() - Add an atom that starts a renderpass to the job scheduler

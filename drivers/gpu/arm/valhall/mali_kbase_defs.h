@@ -352,6 +352,10 @@ struct kbase_pm_device_data {
 #endif /* CONFIG_MALI_VALHALL_ARBITER_SUPPORT */
 	/* Wait queue set when active_count == 0 */
 	wait_queue_head_t zero_active_count_wait;
+	/* Wait queue to block the termination of a Kbase context until the
+	 * system resume of GPU device.
+	 */
+	wait_queue_head_t resume_wait;
 
 	/**
 	 * Bit masks identifying the available shader cores that are specified
@@ -1452,7 +1456,8 @@ struct kbase_sub_alloc {
  *                        for context scheduling, protected by hwaccess_lock.
  * @atoms_count:          Number of GPU atoms currently in use, per priority
  * @create_flags:         Flags used in context creation.
- *
+ * @tl_kctx_list_node:    List item into the device timeline's list of
+ * 			  contexts, for timeline summarization.
  * A kernel base context is an entity among which the GPU is scheduled.
  * Each context has its own GPU address space.
  * Up to one context can be created for each client that opens the device file
@@ -1584,6 +1589,7 @@ struct kbase_context {
 #endif
 
 	base_context_create_flags create_flags;
+	struct list_head tl_kctx_list_node;
 };
 
 #ifdef CONFIG_MALI_VALHALL_CINSTR_GWT

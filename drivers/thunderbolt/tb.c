@@ -138,6 +138,10 @@ static void tb_discover_tunnels(struct tb_switch *sw)
 				parent->boot = true;
 				parent = tb_switch_parent(parent);
 			}
+		} else if (tb_tunnel_is_dp(tunnel)) {
+			/* Keep the domain from powering down */
+			pm_runtime_get_sync(&tunnel->src_port->sw->dev);
+			pm_runtime_get_sync(&tunnel->dst_port->sw->dev);
 		}
 
 		list_add_tail(&tunnel->list, &tcm->tunnel_list);
@@ -574,14 +578,31 @@ static void tb_scan_port(struct tb_port *port)
 			 * Downstream switch is reachable through two ports.
 			 * Only scan on the primary port (link_nr == 0).
 			 */
-	if (tb_wait_for_port(port, false) <= 0)
+
+	if (tb_wait_for_port(port, false) <= 0) {
+		if (tb_route(port->sw))
+			return;
+
+		/*
+		 * For cases, where no devices are attached, push out the
+		 * retimer scan 15 seconds into the future. This is required
+		 * for cases, where immediate communication to the retimer soon
+		 * after boot is not possible. This gives enough time for all
+		 * drivers to load.
+		 */
+		INIT_DELAYED_WORK(&port->retimer_scan_work,
+				  tb_retimer_scan_delayed);
+		queue_delayed_work(port->sw->tb->wq, &port->retimer_scan_work,
+				   msecs_to_jiffies(TB_RETIMER_SCAN_DELAY));
 		return;
+	}
+
 	if (port->remote) {
 		tb_port_dbg(port, "port already has a remote\n");
 		return;
 	}
 
-	tb_retimer_scan(port);
+	tb_retimer_scan(port, true, NULL, NULL);
 
 	sw = tb_switch_alloc(port->sw->tb, &port->sw->dev,
 			     tb_downstream_route(port));
@@ -648,7 +669,7 @@ static void tb_scan_port(struct tb_port *port)
 		tb_sw_warn(sw, "failed to enable TMU\n");
 
 	/* Scan upstream retimers */
-	tb_retimer_scan(upstream_port);
+	tb_retimer_scan(upstream_port, true, NULL, NULL);
 
 	/*
 	 * Create USB 3.x tunnels only when the switch is plugged to the
@@ -734,7 +755,7 @@ static void tb_free_unplugged_children(struct tb_switch *sw)
 			continue;
 
 		if (port->remote->sw->is_unplugged) {
-			tb_retimer_remove_all(port);
+			tb_retimer_remove_all(port, sw);
 			tb_remove_dp_resources(port->remote->sw);
 			tb_switch_unconfigure_link(port->remote->sw);
 			tb_switch_lane_bonding_disable(port->remote->sw);
@@ -1166,7 +1187,7 @@ static void tb_handle_hotplug(struct work_struct *work)
 	pm_runtime_get_sync(&sw->dev);
 
 	if (ev->unplug) {
-		tb_retimer_remove_all(port);
+		tb_retimer_remove_all(port, sw);
 
 		if (tb_port_has_remote(port)) {
 			tb_port_dbg(port, "switch unplugged\n");
@@ -1433,7 +1454,7 @@ static int tb_free_unplugged_xdomains(struct tb_switch *sw)
 		if (tb_is_upstream_port(port))
 			continue;
 		if (port->xdomain && port->xdomain->is_unplugged) {
-			tb_retimer_remove_all(port);
+			tb_retimer_remove_all(port, sw);
 			tb_xdomain_remove(port->xdomain);
 			tb_port_unconfigure_xdomain(port);
 			port->xdomain = NULL;

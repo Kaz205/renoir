@@ -364,13 +364,19 @@ static const struct usb_device_id blacklist_table[] = {
 	{ USB_DEVICE(0x0bda, 0xb00c), .driver_info = BTUSB_REALTEK |
 						     BTUSB_WIDEBAND_SPEECH },
 
+	/* Realtek 8852AE Bluetooth devices */
+	{ USB_DEVICE(0x0bda, 0xc852), .driver_info = BTUSB_REALTEK |
+						     BTUSB_WIDEBAND_SPEECH },
+
 	/* Realtek Bluetooth devices */
 	{ USB_VENDOR_AND_INTERFACE_INFO(0x0bda, 0xe0, 0x01, 0x01),
 	  .driver_info = BTUSB_REALTEK },
 
 	/* MediaTek Bluetooth devices */
 	{ USB_VENDOR_AND_INTERFACE_INFO(0x0e8d, 0xe0, 0x01, 0x01),
-	  .driver_info = BTUSB_MEDIATEK },
+	  .driver_info = BTUSB_MEDIATEK |
+			 BTUSB_WIDEBAND_SPEECH |
+			 BTUSB_VALID_LE_STATES },
 
 	/* Additional Realtek 8723AE Bluetooth devices */
 	{ USB_DEVICE(0x0930, 0x021d), .driver_info = BTUSB_REALTEK },
@@ -2749,6 +2755,12 @@ static int btusb_shutdown_intel_new(struct hci_dev *hdev)
 #define FIRMWARE_MT7668		"mediatek/mt7668pr2h.bin"
 
 #define HCI_WMT_MAX_EVENT_SIZE		64
+/* It is for mt79xx download rom patch*/
+#define MTK_FW_ROM_PATCH_HEADER_SIZE	32
+#define MTK_FW_ROM_PATCH_GD_SIZE	64
+#define MTK_FW_ROM_PATCH_SEC_MAP_SIZE	64
+#define MTK_SEC_MAP_COMMON_SIZE	12
+#define MTK_SEC_MAP_NEED_SEND_SIZE	52
 
 enum {
 	BTMTK_WMT_PATCH_DWNLD = 0x1,
@@ -2760,6 +2772,7 @@ enum {
 enum {
 	BTMTK_WMT_INVALID,
 	BTMTK_WMT_PATCH_UNDONE,
+	BTMTK_WMT_PATCH_PROGRESS,
 	BTMTK_WMT_PATCH_DONE,
 	BTMTK_WMT_ON_UNDONE,
 	BTMTK_WMT_ON_DONE,
@@ -2775,7 +2788,7 @@ struct btmtk_wmt_hdr {
 
 struct btmtk_hci_wmt_cmd {
 	struct btmtk_wmt_hdr hdr;
-	u8 data[256];
+	u8 data[];
 } __packed;
 
 struct btmtk_hci_wmt_evt {
@@ -2804,6 +2817,40 @@ struct btmtk_hci_wmt_params {
 	u32 *status;
 };
 
+struct btmtk_patch_header {
+	u8 datetime[16];
+	u8 platform[4];
+	__le16 hwver;
+	__le16 swver;
+	__le32 magicnum;
+} __packed;
+
+struct btmtk_global_desc {
+	__le32 patch_ver;
+	__le32 sub_sys;
+	__le32 feature_opt;
+	__le32 section_num;
+} __packed;
+
+struct btmtk_section_map {
+	__le32 sectype;
+	__le32 secoffset;
+	__le32 secsize;
+	union {
+		__le32 u4SecSpec[13];
+		struct {
+			__le32 dlAddr;
+			__le32 dlsize;
+			__le32 seckeyidx;
+			__le32 alignlen;
+			__le32 sectype;
+			__le32 dlmodecrctype;
+			__le32 crc;
+			__le32 reserved[6];
+		} bin_info_spec;
+	};
+} __packed;
+
 static void btusb_mtk_wmt_recv(struct urb *urb)
 {
 	struct hci_dev *hdev = urb->context;
@@ -2821,7 +2868,7 @@ static void btusb_mtk_wmt_recv(struct urb *urb)
 		skb = bt_skb_alloc(HCI_WMT_MAX_EVENT_SIZE, GFP_ATOMIC);
 		if (!skb) {
 			hdev->stat.err_rx++;
-			goto err_out;
+			return;
 		}
 
 		hci_skb_pkt_type(skb) = HCI_EVENT_PKT;
@@ -2839,13 +2886,18 @@ static void btusb_mtk_wmt_recv(struct urb *urb)
 		 */
 		if (test_bit(BTUSB_TX_WAIT_VND_EVT, &data->flags)) {
 			data->evt_skb = skb_clone(skb, GFP_ATOMIC);
-			if (!data->evt_skb)
-				goto err_out;
+			if (!data->evt_skb) {
+				kfree_skb(skb);
+				return;
+			}
 		}
 
 		err = hci_recv_frame(hdev, skb);
-		if (err < 0)
-			goto err_free_skb;
+		if (err < 0) {
+			kfree_skb(data->evt_skb);
+			data->evt_skb = NULL;
+			return;
+		}
 
 		if (test_and_clear_bit(BTUSB_TX_WAIT_VND_EVT,
 				       &data->flags)) {
@@ -2854,11 +2906,6 @@ static void btusb_mtk_wmt_recv(struct urb *urb)
 			wake_up_bit(&data->flags,
 				    BTUSB_TX_WAIT_VND_EVT);
 		}
-err_out:
-		return;
-err_free_skb:
-		kfree_skb(data->evt_skb);
-		data->evt_skb = NULL;
 		return;
 	} else if (urb->status == -ENOENT) {
 		/* Avoid suspend failed when usb_kill_urb */
@@ -2874,7 +2921,7 @@ err_free_skb:
 	 * to generate the event. Otherwise, the WMT event cannot return from
 	 * the device successfully.
 	 */
-	udelay(100);
+	udelay(500);
 
 	usb_anchor_urb(urb, &data->ctrl_anchor);
 	err = usb_submit_urb(urb, GFP_ATOMIC);
@@ -2949,7 +2996,7 @@ static int btusb_mtk_hci_wmt_sync(struct hci_dev *hdev,
 	struct btmtk_hci_wmt_evt_funcc *wmt_evt_funcc;
 	u32 hlen, status = BTMTK_WMT_INVALID;
 	struct btmtk_hci_wmt_evt *wmt_evt;
-	struct btmtk_hci_wmt_cmd wc;
+	struct btmtk_hci_wmt_cmd *wc;
 	struct btmtk_wmt_hdr *hdr;
 	int err;
 
@@ -2963,20 +3010,24 @@ static int btusb_mtk_hci_wmt_sync(struct hci_dev *hdev,
 	if (hlen > 255)
 		return -EINVAL;
 
-	hdr = (struct btmtk_wmt_hdr *)&wc;
+	wc = kzalloc(hlen, GFP_KERNEL);
+	if (!wc)
+		return -ENOMEM;
+
+	hdr = &wc->hdr;
 	hdr->dir = 1;
 	hdr->op = wmt_params->op;
 	hdr->dlen = cpu_to_le16(wmt_params->dlen + 1);
 	hdr->flag = wmt_params->flag;
-	memcpy(wc.data, wmt_params->data, wmt_params->dlen);
+	memcpy(wc->data, wmt_params->data, wmt_params->dlen);
 
 	set_bit(BTUSB_TX_WAIT_VND_EVT, &data->flags);
 
-	err = __hci_cmd_send(hdev, 0xfc6f, hlen, &wc);
+	err = __hci_cmd_send(hdev, 0xfc6f, hlen, wc);
 
 	if (err < 0) {
 		clear_bit(BTUSB_TX_WAIT_VND_EVT, &data->flags);
-		return err;
+		goto err_free_wc;
 	}
 
 	/* The vendor specific WMT commands are all answered by a vendor
@@ -2993,13 +3044,14 @@ static int btusb_mtk_hci_wmt_sync(struct hci_dev *hdev,
 	if (err == -EINTR) {
 		bt_dev_err(hdev, "Execution of wmt command interrupted");
 		clear_bit(BTUSB_TX_WAIT_VND_EVT, &data->flags);
-		return err;
+		goto err_free_wc;
 	}
 
 	if (err) {
 		bt_dev_err(hdev, "Execution of wmt command timed out");
 		clear_bit(BTUSB_TX_WAIT_VND_EVT, &data->flags);
-		return -ETIMEDOUT;
+		err = -ETIMEDOUT;
+		goto err_free_wc;
 	}
 
 	/* Parse and handle the return WMT event */
@@ -3027,6 +3079,14 @@ static int btusb_mtk_hci_wmt_sync(struct hci_dev *hdev,
 		else
 			status = BTMTK_WMT_ON_UNDONE;
 		break;
+	case BTMTK_WMT_PATCH_DWNLD:
+		if (wmt_evt->whdr.flag == 2)
+			status = BTMTK_WMT_PATCH_DONE;
+		else if (wmt_evt->whdr.flag == 1)
+			status = BTMTK_WMT_PATCH_PROGRESS;
+		else
+			status = BTMTK_WMT_PATCH_UNDONE;
+		break;
 	}
 
 	if (wmt_params->status)
@@ -3035,6 +3095,119 @@ static int btusb_mtk_hci_wmt_sync(struct hci_dev *hdev,
 err_free_skb:
 	kfree_skb(data->evt_skb);
 	data->evt_skb = NULL;
+err_free_wc:
+	kfree(wc);
+	return err;
+}
+
+static int btusb_mtk_setup_firmware_79xx(struct hci_dev *hdev, const char *fwname)
+{
+	struct btmtk_hci_wmt_params wmt_params;
+	struct btmtk_global_desc *globaldesc = NULL;
+	struct btmtk_section_map *sectionmap;
+	const struct firmware *fw;
+	const u8 *fw_ptr;
+	const u8 *fw_bin_ptr;
+	int err, dlen, i, status;
+	u8 flag, first_block, retry;
+	u32 section_num, dl_size, section_offset;
+	u8 cmd[64];
+
+	err = request_firmware(&fw, fwname, &hdev->dev);
+	if (err < 0) {
+		bt_dev_err(hdev, "Failed to load firmware file (%d)", err);
+		return err;
+	}
+
+	fw_ptr = fw->data;
+	fw_bin_ptr = fw_ptr;
+	globaldesc = (struct btmtk_global_desc *)(fw_ptr + MTK_FW_ROM_PATCH_HEADER_SIZE);
+	section_num = le32_to_cpu(globaldesc->section_num);
+
+	for (i = 0; i < section_num; i++) {
+		first_block = 1;
+		fw_ptr = fw_bin_ptr;
+		sectionmap = (struct btmtk_section_map *)(fw_ptr + MTK_FW_ROM_PATCH_HEADER_SIZE +
+			      MTK_FW_ROM_PATCH_GD_SIZE + MTK_FW_ROM_PATCH_SEC_MAP_SIZE * i);
+
+		section_offset = le32_to_cpu(sectionmap->secoffset);
+		dl_size = le32_to_cpu(sectionmap->bin_info_spec.dlsize);
+
+		if (dl_size > 0) {
+			retry = 20;
+			while (retry > 0) {
+				cmd[0] = 0; /* 0 means legacy dl mode. */
+				memcpy(cmd + 1,
+				       fw_ptr + MTK_FW_ROM_PATCH_HEADER_SIZE +
+				       MTK_FW_ROM_PATCH_GD_SIZE + MTK_FW_ROM_PATCH_SEC_MAP_SIZE * i +
+				       MTK_SEC_MAP_COMMON_SIZE,
+				       MTK_SEC_MAP_NEED_SEND_SIZE + 1);
+
+				wmt_params.op = BTMTK_WMT_PATCH_DWNLD;
+				wmt_params.status = &status;
+				wmt_params.flag = 0;
+				wmt_params.dlen = MTK_SEC_MAP_NEED_SEND_SIZE + 1;
+				wmt_params.data = &cmd;
+
+				err = btusb_mtk_hci_wmt_sync(hdev, &wmt_params);
+				if (err < 0) {
+					bt_dev_err(hdev, "Failed to send wmt patch dwnld (%d)",
+						   err);
+					goto err_release_fw;
+				}
+
+				if (status == BTMTK_WMT_PATCH_UNDONE) {
+					break;
+				} else if (status == BTMTK_WMT_PATCH_PROGRESS) {
+					msleep(100);
+					retry--;
+				} else if (status == BTMTK_WMT_PATCH_DONE) {
+					goto next_section;
+				} else {
+					bt_dev_err(hdev, "Failed wmt patch dwnld status (%d)",
+						   status);
+					goto err_release_fw;
+				}
+			}
+
+			fw_ptr += section_offset;
+			wmt_params.op = BTMTK_WMT_PATCH_DWNLD;
+			wmt_params.status = NULL;
+
+			while (dl_size > 0) {
+				dlen = min_t(int, 250, dl_size);
+				if (first_block == 1) {
+					flag = 1;
+					first_block = 0;
+				} else if (dl_size - dlen <= 0) {
+					flag = 3;
+				} else {
+					flag = 2;
+				}
+
+				wmt_params.flag = flag;
+				wmt_params.dlen = dlen;
+				wmt_params.data = fw_ptr;
+
+				err = btusb_mtk_hci_wmt_sync(hdev, &wmt_params);
+				if (err < 0) {
+					bt_dev_err(hdev, "Failed to send wmt patch dwnld (%d)",
+						   err);
+					goto err_release_fw;
+				}
+
+				dl_size -= dlen;
+				fw_ptr += dlen;
+			}
+		}
+next_section:
+		continue;
+	}
+	/* Wait a few moments for firmware activation done */
+	usleep_range(100000, 120000);
+
+err_release_fw:
+	release_firmware(fw);
 
 	return err;
 }
@@ -3087,7 +3260,7 @@ static int btusb_mtk_setup_firmware(struct hci_dev *hdev, const char *fwname)
 	while (fw_size > 0) {
 		dlen = min_t(int, 250, fw_size);
 
-		/* Tell deivice the position in sequence */
+		/* Tell device the position in sequence */
 		if (fw_size - dlen <= 0)
 			flag = 3;
 		else if (fw_size < fw->size - 30)
@@ -3177,9 +3350,9 @@ err_free_buf:
 	return err;
 }
 
-static int btusb_mtk_id_get(struct btusb_data *data, u32 *id)
+static int btusb_mtk_id_get(struct btusb_data *data, u32 reg, u32 *id)
 {
-	return btusb_mtk_reg_read(data, 0x80000008, id);
+	return btusb_mtk_reg_read(data, reg, id);
 }
 
 static int btusb_mtk_setup(struct hci_dev *hdev)
@@ -3193,14 +3366,29 @@ static int btusb_mtk_setup(struct hci_dev *hdev)
 	const char *fwname;
 	int err, status;
 	u32 dev_id;
+	char fw_bin_name[64];
+	u32 fw_version = 0;
 	u8 param;
 
 	calltime = ktime_get();
 
-	err = btusb_mtk_id_get(data, &dev_id);
+	err = btusb_mtk_id_get(data, 0x80000008, &dev_id);
 	if (err < 0) {
 		bt_dev_err(hdev, "Failed to get device id (%d)", err);
 		return err;
+	}
+
+	if (!dev_id) {
+		err = btusb_mtk_id_get(data, 0x70010200, &dev_id);
+		if (err < 0) {
+			bt_dev_err(hdev, "Failed to get device id (%d)", err);
+			return err;
+		}
+		err = btusb_mtk_id_get(data, 0x80021004, &fw_version);
+		if (err < 0) {
+			bt_dev_err(hdev, "Failed to get fw version (%d)", err);
+			return err;
+		}
 	}
 
 	switch (dev_id) {
@@ -3210,8 +3398,28 @@ static int btusb_mtk_setup(struct hci_dev *hdev)
 	case 0x7668:
 		fwname = FIRMWARE_MT7668;
 		break;
+	case 0x7961:
+		snprintf(fw_bin_name, sizeof(fw_bin_name),
+			"mediatek/BT_RAM_CODE_MT%04x_1_%x_hdr.bin",
+			 dev_id & 0xffff, (fw_version & 0xff) + 1);
+		err = btusb_mtk_setup_firmware_79xx(hdev, fw_bin_name);
+
+		/* Enable Bluetooth protocol */
+		param = 1;
+		wmt_params.op = BTMTK_WMT_FUNC_CTRL;
+		wmt_params.flag = 0;
+		wmt_params.dlen = sizeof(param);
+		wmt_params.data = &param;
+		wmt_params.status = NULL;
+
+		err = btusb_mtk_hci_wmt_sync(hdev, &wmt_params);
+		if (err < 0) {
+			bt_dev_err(hdev, "Failed to send wmt func ctrl (%d)", err);
+			return err;
+		}
+		goto done;
 	default:
-		bt_dev_err(hdev, "Unsupported support hardware variant (%08x)",
+		bt_dev_err(hdev, "Unsupported hardware variant (%08x)",
 			   dev_id);
 		return -ENODEV;
 	}
@@ -3287,6 +3495,7 @@ ignore_func_on:
 	}
 	kfree_skb(skb);
 
+done:
 	rettime = ktime_get();
 	delta = ktime_sub(rettime, calltime);
 	duration = (unsigned long long)ktime_to_ns(delta) >> 10;

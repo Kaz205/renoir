@@ -18,6 +18,8 @@
 #include <linux/slab.h>
 #include <uapi/linux/sched/types.h>
 
+#include "cros_ec.h"
+
 /*
  * EC sends contiguous bytes of response packet on UART AP RX.
  * TTY driver in AP accumulates incoming bytes and calls the registered callback

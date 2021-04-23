@@ -226,8 +226,6 @@ static void hci_acl_create_connection(struct hci_conn *conn)
 
 	conn->attempt++;
 
-	conn->link_policy = hdev->link_policy;
-
 	memset(&cp, 0, sizeof(cp));
 	bacpy(&cp.bdaddr, &conn->dst);
 	cp.pscan_rep_mode = 0x02;
@@ -559,6 +557,7 @@ struct hci_conn *hci_conn_add(struct hci_dev *hdev, int type, bdaddr_t *dst,
 	conn->rssi = HCI_RSSI_INVALID;
 	conn->tx_power = HCI_TX_POWER_INVALID;
 	conn->max_tx_power = HCI_TX_POWER_INVALID;
+	conn->link_policy = hdev->link_policy;
 
 	set_bit(HCI_CONN_POWER_SAVE, &conn->flags);
 	conn->disc_timeout = HCI_DISCONN_TIMEOUT;
@@ -757,6 +756,16 @@ void hci_le_conn_failed(struct hci_conn *conn, u8 status)
 	hci_connect_cfm(conn, status);
 
 	hci_conn_del(conn);
+
+	/* The suspend notifier is waiting for all devices to disconnect and an
+	 * LE connect cancel will result in an hci_le_conn_failed. Once the last
+	 * connection is deleted, we should also wake the suspend queue to
+	 * complete suspend operations.
+	 */
+	if (list_empty(&hdev->conn_hash.list) &&
+	    test_and_clear_bit(SUSPEND_DISCONNECTING, hdev->suspend_tasks)) {
+		wake_up(&hdev->suspend_wait_q);
+	}
 
 	/* Since we may have temporarily stopped the background scanning in
 	 * favor of connection establishment, we should restart it.

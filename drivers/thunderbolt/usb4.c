@@ -1186,6 +1186,30 @@ int usb4_port_enumerate_retimers(struct tb_port *port)
 				  USB4_SB_OPCODE, &val, sizeof(val));
 }
 
+/**
+ * usb4_port_router_offline() - Enter or exit offline mode for the router
+ * @port: USB4 port
+ * @offline: if true, exit offline mode, otherwise enter offline mode
+ *
+ * This tells the USB4 router to exit or enter offline mode.
+ * Returns the result of the this operation.
+ * %0 in case of success and negative errno if there was an error.
+ */
+int usb4_port_router_offline(struct tb_port *port, bool offline)
+{
+	u32 val = offline;
+	int ret;
+
+	ret = usb4_port_sb_write(port, USB4_SB_TARGET_ROUTER, 0,
+				  USB4_SB_METADATA, &val, sizeof(val));
+	if (ret)
+		return ret;
+
+	val = USB4_SB_OPCODE_ROUTER_OFFLINE;
+	return usb4_port_sb_write(port, USB4_SB_TARGET_ROUTER, 0,
+				  USB4_SB_OPCODE, &val, sizeof(val));
+}
+
 static inline int usb4_port_retimer_op(struct tb_port *port, u8 index,
 				       enum usb4_sb_opcode opcode,
 				       int timeout_msec)
@@ -1258,6 +1282,32 @@ int usb4_port_retimer_is_last(struct tb_port *port, u8 index)
 	ret = usb4_port_retimer_read(port, index, USB4_SB_METADATA, &metadata,
 				     sizeof(metadata));
 	return ret ? ret : metadata & 1;
+}
+
+/**
+ * usb4_port_set_inbound_sbtx() - Set or unset the retimer sideband
+ * tx to the SoC
+ * @port: USB4 port
+ * @index: Retimer index
+ * @set: set or unset
+ *
+ * Returns the result of the USB4 port operation.
+ */
+int usb4_port_set_inbound_sbtx(struct tb_port *port, u8 index, bool set)
+{
+	int ret = usb4_port_retimer_op(port, index, set ?
+				       USB4_SB_OPCODE_SET_INBOUND_SBTX :
+				       USB4_SB_OPCODE_UNSET_INBOUND_SBTX, 500);
+	/*
+	 * Per the USB4 retimer spec, the retimer is not required to send an
+	 * RT (Retimer Transaction) response for the first SET_INBOUND_SBTX
+	 * command. So return the result of second attempt.
+	 */
+	if (ret == -ENODEV && set)
+		return usb4_port_retimer_op(port, index,
+					    USB4_SB_OPCODE_SET_INBOUND_SBTX,
+					    500);
+	return ret;
 }
 
 /**
@@ -1368,7 +1418,8 @@ int usb4_port_retimer_nvm_write(struct tb_port *port, u8 index, unsigned int add
  */
 int usb4_port_retimer_nvm_authenticate(struct tb_port *port, u8 index)
 {
-	u32 val;
+	u32 val, status = 0;
+	int ret;
 
 	/*
 	 * We need to use the raw operation here because once the
@@ -1376,8 +1427,24 @@ int usb4_port_retimer_nvm_authenticate(struct tb_port *port, u8 index)
 	 * so we do not get back the status now.
 	 */
 	val = USB4_SB_OPCODE_NVM_AUTH_WRITE;
-	return usb4_port_sb_write(port, USB4_SB_TARGET_RETIMER, index,
-				  USB4_SB_OPCODE, &val, sizeof(val));
+	ret = usb4_port_sb_write(port, USB4_SB_TARGET_RETIMER, index,
+				 USB4_SB_OPCODE, &val, sizeof(val));
+	if (ret)
+		return ret;
+
+	/*
+	 * Per USB4 Re-Timer Specification Rev 0.96, section 5.2, wait for
+	 * at least 5 seconds and then enumerate retimers. Then read the
+	 * results of the NVM_AUTH_WRITE port operation.
+	 */
+	msleep(6000);
+
+	ret = usb4_port_enumerate_retimers(port);
+
+	ret = usb4_port_retimer_nvm_authenticate_status(port, index, &status);
+	if (ret)
+		return ret;
+	return status ? -EIO : 0;
 }
 
 /**

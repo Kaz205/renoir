@@ -21,6 +21,11 @@
 #define NVM_MIN_SIZE		SZ_32K
 #define NVM_MAX_SIZE		SZ_512K
 
+enum nvm_write_ops {
+	WRITE_AND_AUTHENTICATE = 1,
+	WRITE_ONLY = 2,
+};
+
 /* Intel specific NVM offsets */
 #define NVM_DEVID		0x05
 #define NVM_VERSION		0x08
@@ -33,6 +38,7 @@
  * @minor: Minor version number of the active NVM portion
  * @id: Identifier used with both NVM portions
  * @active: Active portion NVMem device
+ * @active_size: Size of active portion NVMem device
  * @non_active: Non-active portion NVMem device
  * @buf: Buffer where the NVM image is stored before it is written to
  *	 the actual NVM flash device
@@ -50,6 +56,7 @@ struct tb_nvm {
 	u8 minor;
 	int id;
 	struct nvmem_device *active;
+	size_t active_size;
 	struct nvmem_device *non_active;
 	void *buf;
 	size_t buf_data_size;
@@ -177,6 +184,9 @@ struct tb_switch {
 	unsigned long quirks;
 };
 
+#define TB_RETIMER_SCAN_DELAY		(15 * 1000)
+#define TB_RETIMER_STOP_IO_DELAY	1000
+
 /**
  * struct tb_port - a thunderbolt port, part of a tb_switch
  * @config: Cached port configuration read from registers
@@ -190,12 +200,18 @@ struct tb_switch {
  * @port: Port number on switch
  * @disabled: Disabled by eeprom or enabled but not implemented
  * @bonded: true if the port is bonded (two lanes combined as one)
+ * @retimer_scan_done: true if retimer scan is done
+ * @rt_io_started: true if retimer IO is started
+ * @port_index: Type-C port index for this USB4 port
+ * @mux_mode: Type-C port mux mode for this USB4 port
  * @dual_link_port: If the switch is connected using two ports, points
  *		    to the other port.
  * @link_nr: Is this primary or secondary port on the dual_link.
  * @in_hopids: Currently allocated input HopIDs
  * @out_hopids: Currently allocated output HopIDs
  * @list: Used to link ports to DP resources list
+ * @retimer_scan_work: work to scan onboard retimers if no devices connected
+ * @retimer_stop_io_work: work to stop retimer io
  */
 struct tb_port {
 	struct tb_regs_port_header config;
@@ -209,11 +225,17 @@ struct tb_port {
 	u8 port;
 	bool disabled;
 	bool bonded;
+	bool retimer_scan_done;
+	bool rt_io_started;
+	u8 port_index;
+	u32 mux_mode;
 	struct tb_port *dual_link_port;
 	u8 link_nr:1;
 	struct ida in_hopids;
 	struct ida out_hopids;
 	struct list_head list;
+	struct delayed_work retimer_scan_work;
+	struct delayed_work retimer_stop_io_work;
 };
 
 /**
@@ -776,32 +798,6 @@ static inline bool tb_switch_is_titan_ridge(const struct tb_switch *sw)
 	return false;
 }
 
-static inline bool tb_switch_is_ice_lake(const struct tb_switch *sw)
-{
-	if (sw->config.vendor_id == PCI_VENDOR_ID_INTEL) {
-		switch (sw->config.device_id) {
-		case PCI_DEVICE_ID_INTEL_ICL_NHI0:
-		case PCI_DEVICE_ID_INTEL_ICL_NHI1:
-			return true;
-		}
-	}
-	return false;
-}
-
-static inline bool tb_switch_is_tiger_lake(const struct tb_switch *sw)
-{
-	if (sw->config.vendor_id == PCI_VENDOR_ID_INTEL) {
-		switch (sw->config.device_id) {
-		case PCI_DEVICE_ID_INTEL_TGL_NHI0:
-		case PCI_DEVICE_ID_INTEL_TGL_NHI1:
-		case PCI_DEVICE_ID_INTEL_TGL_H_NHI0:
-		case PCI_DEVICE_ID_INTEL_TGL_H_NHI1:
-			return true;
-		}
-	}
-	return false;
-}
-
 /**
  * tb_switch_is_usb4() - Is the switch USB4 compliant
  * @sw: Switch to check
@@ -959,8 +955,10 @@ void tb_xdomain_remove(struct tb_xdomain *xd);
 struct tb_xdomain *tb_xdomain_find_by_link_depth(struct tb *tb, u8 link,
 						 u8 depth);
 
-int tb_retimer_scan(struct tb_port *port);
-void tb_retimer_remove_all(struct tb_port *port);
+void tb_retimer_scan_delayed(struct work_struct *work);
+int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode,
+		    u8 *typec_port_index);
+void tb_retimer_remove_all(struct tb_port *port, struct tb_switch *sw);
 
 static inline bool tb_is_retimer(const struct device *dev)
 {
@@ -1017,6 +1015,8 @@ int usb4_port_retimer_nvm_authenticate_status(struct tb_port *port, u8 index,
 					      u32 *status);
 int usb4_port_retimer_nvm_read(struct tb_port *port, u8 index,
 			       unsigned int address, void *buf, size_t size);
+int usb4_port_set_inbound_sbtx(struct tb_port *port, u8 index, bool set);
+int usb4_port_router_offline(struct tb_port *port, bool offline);
 
 int usb4_usb3_port_max_link_rate(struct tb_port *port);
 int usb4_usb3_port_actual_link_rate(struct tb_port *port);

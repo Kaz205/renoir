@@ -164,9 +164,14 @@ extern int of_bus_n_size_cells(struct device_node *np);
 #ifdef CONFIG_OF_ADDRESS
 extern int of_dma_get_range(struct device_node *np, u64 *dma_addr,
 			    u64 *paddr, u64 *size);
+int of_dma_set_restricted_buffer(struct device *dev);
 #else
 static inline int of_dma_get_range(struct device_node *np, u64 *dma_addr,
 				   u64 *paddr, u64 *size)
+{
+	return -ENODEV;
+}
+static inline int of_dma_set_restricted_buffer(struct device *dev)
 {
 	return -ENODEV;
 }

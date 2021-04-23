@@ -856,7 +856,8 @@ int virtio_gpu_cmd_get_edids(struct virtio_gpu_device *vgdev)
 }
 
 void virtio_gpu_cmd_context_create(struct virtio_gpu_device *vgdev, uint32_t id,
-				   uint32_t nlen, const char *name)
+				   uint32_t context_init, uint32_t nlen,
+				   const char *name)
 {
 	struct virtio_gpu_ctx_create *cmd_p;
 	struct virtio_gpu_vbuffer *vbuf;
@@ -867,6 +868,7 @@ void virtio_gpu_cmd_context_create(struct virtio_gpu_device *vgdev, uint32_t id,
 	cmd_p->hdr.type = cpu_to_le32(VIRTIO_GPU_CMD_CTX_CREATE);
 	cmd_p->hdr.ctx_id = cpu_to_le32(id);
 	cmd_p->nlen = cpu_to_le32(nlen);
+	cmd_p->context_init = cpu_to_le32(context_init);
 	strncpy(cmd_p->debug_name, name, sizeof(cmd_p->debug_name) - 1);
 	cmd_p->debug_name[sizeof(cmd_p->debug_name) - 1] = 0;
 	virtio_gpu_queue_ctrl_buffer(vgdev, vbuf);
@@ -1271,7 +1273,7 @@ void virtio_gpu_cmd_map(struct virtio_gpu_device *vgdev,
 
 	cmd_p->hdr.type = cpu_to_le32(VIRTIO_GPU_CMD_RESOURCE_MAP);
 	cmd_p->resource_id = cpu_to_le32(bo->hw_res_handle);
-	cmd_p->offset = offset;
+	cmd_p->offset = cpu_to_le64(offset);
 
 	virtio_gpu_queue_fenced_ctrl_buffer(vgdev, vbuf, &cmd_p->hdr, fence);
 }
@@ -1290,6 +1292,37 @@ void virtio_gpu_cmd_unmap(struct virtio_gpu_device *vgdev,
 	cmd_p->resource_id = cpu_to_le32(resource_id);
 
 	virtio_gpu_queue_ctrl_buffer(vgdev, vbuf);
+}
+
+void
+virtio_gpu_cmd_resource_create_blob_guest(struct virtio_gpu_device *vgdev,
+					  struct virtio_gpu_object *bo,
+					  uint32_t ctx_id, uint32_t blob_mem,
+					  uint32_t blob_flags, uint64_t blob_id,
+					  uint64_t size, uint32_t nents,
+					  struct virtio_gpu_mem_entry *ents)
+{
+	struct virtio_gpu_resource_create_blob *cmd_p;
+	struct virtio_gpu_vbuffer *vbuf;
+
+	/* gets freed when the ring has consumed it */
+	cmd_p = virtio_gpu_alloc_cmd(vgdev, &vbuf, sizeof(*cmd_p));
+	memset(cmd_p, 0, sizeof(*cmd_p));
+
+	cmd_p->hdr.type = cpu_to_le32(VIRTIO_GPU_CMD_RESOURCE_CREATE_BLOB);
+	cmd_p->hdr.ctx_id = cpu_to_le32(ctx_id);
+	cmd_p->resource_id = cpu_to_le32(bo->hw_res_handle);
+	cmd_p->blob_mem = cpu_to_le32(blob_mem);
+	cmd_p->blob_flags = cpu_to_le32(blob_flags);
+	cmd_p->blob_id = cpu_to_le64(blob_id);
+	cmd_p->size = cpu_to_le64(size);
+	cmd_p->nr_entries = cpu_to_le32(nents);
+
+	vbuf->data_buf = ents;
+	vbuf->data_size = sizeof(*ents) * nents;
+
+	virtio_gpu_queue_ctrl_buffer(vgdev, vbuf);
+	bo->created = true;
 }
 
 void

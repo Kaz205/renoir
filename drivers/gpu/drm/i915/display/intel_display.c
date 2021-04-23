@@ -8075,19 +8075,6 @@ static int intel_crtc_compute_config(struct intel_crtc *crtc,
 		return -EINVAL;
 	}
 
-	if ((pipe_config->output_format == INTEL_OUTPUT_FORMAT_YCBCR420 ||
-	     pipe_config->output_format == INTEL_OUTPUT_FORMAT_YCBCR444) &&
-	     pipe_config->hw.ctm) {
-		/*
-		 * There is only one pipe CSC unit per pipe, and we need that
-		 * for output conversion from RGB->YCBCR. So if CTM is already
-		 * applied we can't support YCBCR420 output.
-		 */
-		drm_dbg_kms(&dev_priv->drm,
-			    "YCBCR420 and CTM together are not possible\n");
-		return -EINVAL;
-	}
-
 	/*
 	 * Pipe horizontal size must be even in:
 	 * - DVO ganged mode
@@ -12232,7 +12219,6 @@ static void intel_crtc_state_reset(struct intel_crtc_state *crtc_state,
 	crtc_state->cpu_transcoder = INVALID_TRANSCODER;
 	crtc_state->master_transcoder = INVALID_TRANSCODER;
 	crtc_state->hsw_workaround_pipe = INVALID_PIPE;
-	crtc_state->output_format = INTEL_OUTPUT_FORMAT_INVALID;
 	crtc_state->scaler_state.scaler_id = -1;
 	crtc_state->mst_master_transcoder = INVALID_TRANSCODER;
 }
@@ -12994,7 +12980,6 @@ static void snprintf_output_types(char *buf, size_t len,
 }
 
 static const char * const output_format_str[] = {
-	[INTEL_OUTPUT_FORMAT_INVALID] = "Invalid",
 	[INTEL_OUTPUT_FORMAT_RGB] = "RGB",
 	[INTEL_OUTPUT_FORMAT_YCBCR420] = "YCBCR4:2:0",
 	[INTEL_OUTPUT_FORMAT_YCBCR444] = "YCBCR4:4:4",
@@ -13003,7 +12988,7 @@ static const char * const output_format_str[] = {
 static const char *output_formats(enum intel_output_format format)
 {
 	if (format >= ARRAY_SIZE(output_format_str))
-		format = INTEL_OUTPUT_FORMAT_INVALID;
+		return "invalid";
 	return output_format_str[format];
 }
 
@@ -17793,6 +17778,8 @@ retry:
 		}
 
 		if (crtc_state->hw.active) {
+			struct intel_encoder *encoder;
+
 			ret = drm_atomic_add_affected_planes(state, &crtc->base);
 			if (ret)
 				goto out;
@@ -17804,6 +17791,17 @@ retry:
 			 * have readout for pipe gamma enable.
 			 */
 			crtc_state->uapi.color_mgmt_changed = true;
+
+			for_each_intel_encoder_mask(dev, encoder,
+						    crtc_state->uapi.encoder_mask) {
+				if (encoder->initial_fastset_check &&
+				    !encoder->initial_fastset_check(encoder, crtc_state)) {
+					ret = drm_atomic_add_affected_connectors(state,
+										 &crtc->base);
+					if (ret)
+						goto out;
+				}
+			}
 		}
 	}
 
@@ -18542,6 +18540,8 @@ static void intel_modeset_readout_hw_state(struct drm_device *dev)
 
 			encoder->base.crtc = &crtc->base;
 			encoder->get_config(encoder, crtc_state);
+			if (encoder->sync_state)
+				encoder->sync_state(encoder, crtc_state);
 		} else {
 			encoder->base.crtc = NULL;
 		}

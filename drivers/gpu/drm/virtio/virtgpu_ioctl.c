@@ -35,6 +35,10 @@
 
 #include "virtgpu_drv.h"
 
+#define VIRTGPU_BLOB_FLAG_MASK (VIRTGPU_BLOB_FLAG_MAPPABLE | \
+				VIRTGPU_BLOB_FLAG_SHAREABLE | \
+				VIRTGPU_BLOB_FLAG_CROSS_DEVICE)
+
 static void convert_to_hw_box(struct virtio_gpu_box *dst,
 			      const struct drm_virtgpu_3d_box *src)
 {
@@ -94,6 +98,23 @@ void virtio_gpu_unref_list(struct list_head *head)
 
 		drm_gem_object_put(&qobj->gem_base);
 	}
+}
+
+/* A context was already created when the device file was .open() by userspace,
+ * so it is destroyed, and recreated with the same ctx_id, but now contains
+ * meaningful context_init flags.
+ */
+static void virtio_gpu_create_context(struct virtio_gpu_device *vgdev,
+				      struct virtio_gpu_fpriv *vfpriv)
+{
+	char dbgname[TASK_COMM_LEN];
+
+	virtio_gpu_cmd_context_destroy(vgdev, vfpriv->ctx_id);
+
+	get_task_comm(dbgname, current);
+	virtio_gpu_cmd_context_create(vgdev, vfpriv->ctx_id,
+				      vfpriv->context_init, strlen(dbgname),
+				      dbgname);
 }
 
 /*
@@ -269,6 +290,15 @@ static int virtio_gpu_getparam_ioctl(struct drm_device *dev, void *data,
 	case VIRTGPU_PARAM_HOST_VISIBLE:
 		value = vgdev->has_host_visible == true ? 1 : 0;
 		break;
+	case VIRTGPU_PARAM_CROSS_DEVICE:
+		value = vgdev->has_resource_assign_uuid == true ? 1 : 0;
+		break;
+	case VIRTGPU_PARAM_CONTEXT_INIT:
+		value = vgdev->has_context_init == true ? 1 : 0;
+		break;
+	case VIRTGPU_PARAM_SUPPORTED_CAPSET_IDs:
+		value = vgdev->capset_id_mask;
+		break;
 	default:
 		return -EINVAL;
 	}
@@ -352,7 +382,6 @@ static int virtio_gpu_resource_info_cros_ioctl(struct drm_device *dev,
 	struct virtio_gpu_object *qobj = NULL;
 	int ret = 0;
 
-	/* validate only as the extended info is returned in either case */
 	if (ri->type != VIRTGPU_RESOURCE_INFO_TYPE_DEFAULT &&
 	    ri->type != VIRTGPU_RESOURCE_INFO_TYPE_EXTENDED)
 		return -EINVAL;
@@ -362,8 +391,20 @@ static int virtio_gpu_resource_info_cros_ioctl(struct drm_device *dev,
 		return -ENOENT;
 
 	qobj = gem_to_virtio_gpu_obj(gobj);
+
 	ri->res_handle = qobj->hw_res_handle;
 	ri->size = qobj->gem_base.size;
+
+	if (ri->type == VIRTGPU_RESOURCE_INFO_TYPE_DEFAULT) {
+		ri->blob_mem = qobj->blob_mem;
+		goto out;
+	} else {
+		if (qobj->blob_mem) {
+			ret = -EINVAL;
+			goto out;
+		}
+		ri->stride = 0;
+	}
 
 	if (!qobj->create_callback_done) {
 		ret = wait_event_interruptible(vgdev->resp_wq,
@@ -612,6 +653,15 @@ static int virtio_gpu_resource_create_blob_ioctl(struct drm_device *dev,
 	params.blob = true;
 	ctx_id = vfpriv ? vfpriv->ctx_id : 0;
 
+	if (rc_blob->blob_flags & ~VIRTGPU_BLOB_FLAG_MASK ||
+	    !rc_blob->blob_flags) {
+		return -EINVAL;
+	}
+
+	if (rc_blob->blob_flags & VIRTGPU_BLOB_FLAG_CROSS_DEVICE &&
+	    !vgdev->has_resource_assign_uuid)
+		return -EINVAL;
+
 	if (rc_blob->cmd_size) {
 		void *buf;
 	        /* gets freed when the ring has consumed it */
@@ -669,10 +719,21 @@ static int virtio_gpu_resource_create_blob_ioctl(struct drm_device *dev,
 		goto err_free_ents;
 	}
 
-	virtio_gpu_cmd_resource_create_blob(vgdev, obj, ctx_id,
-					    rc_blob->blob_mem, rc_blob->blob_flags,
-					    rc_blob->blob_id, rc_blob->size, nents,
-					    ents);
+	if (has_guest) {
+		virtio_gpu_cmd_resource_create_blob_guest(vgdev, obj, ctx_id,
+							  rc_blob->blob_mem,
+							  rc_blob->blob_flags,
+							  rc_blob->blob_id,
+							  rc_blob->size,
+							  nents, ents);
+	} else {
+		virtio_gpu_cmd_resource_create_blob(vgdev, obj, ctx_id,
+						    rc_blob->blob_mem,
+						    rc_blob->blob_flags,
+						    rc_blob->blob_id,
+						    rc_blob->size,
+						    nents, ents);
+	}
 
 	ret = drm_gem_handle_create(file, &obj->gem_base, &handle);
 	if (ret)
@@ -707,6 +768,62 @@ err_free_ents:
 	kfree(ents);
 err_free_obj:
 	drm_gem_object_release(&obj->gem_base);
+	return ret;
+}
+
+static int virtio_gpu_context_init_ioctl(struct drm_device *dev,
+					 void *data, struct drm_file *file)
+{
+	int ret = 0;
+	uint32_t num_params, i, param, value;
+	size_t len;
+	struct drm_virtgpu_context_set_param *ctx_set_params;
+	struct virtio_gpu_device *vgdev = dev->dev_private;
+	struct virtio_gpu_fpriv *vfpriv = file->driver_priv;
+	struct drm_virtgpu_context_init *args = data;
+
+	num_params = args->num_params;
+	len = num_params * sizeof(struct drm_virtgpu_context_set_param);
+
+	if (!vgdev->has_context_init || !vgdev->has_virgl_3d)
+		return -EINVAL;
+
+	/* Number of unique parameters supported at this time. */
+	if (num_params > 1)
+		return -EINVAL;
+
+	ctx_set_params = memdup_user(u64_to_user_ptr(args->ctx_set_params),
+				     len);
+
+	if (IS_ERR(ctx_set_params))
+		return PTR_ERR(ctx_set_params);
+
+	for (i = 0; i < num_params; i++) {
+		param = ctx_set_params[i].param;
+		value = ctx_set_params[i].value;
+
+		switch (param) {
+		case VIRTGPU_CONTEXT_PARAM_CAPSET_ID:
+			if (value > MAX_CAPSET_ID)
+				return -EINVAL;
+
+			if ((vgdev->capset_id_mask & (1 << value)) == 0)
+				return -EINVAL;
+
+			/* Context capset ID already set */
+			if (vfpriv->context_init &
+			    VIRTIO_GPU_CONTEXT_INIT_CAPSET_ID_MASK)
+				return -EINVAL;
+
+			vfpriv->context_init |= value;
+			break;
+		default:
+			return -EINVAL;
+		}
+	}
+
+	virtio_gpu_create_context(vgdev, vfpriv);
+
 	return ret;
 }
 
@@ -746,5 +863,9 @@ struct drm_ioctl_desc virtio_gpu_ioctls[DRM_VIRTIO_NUM_IOCTLS] = {
 
 	DRM_IOCTL_DEF_DRV(VIRTGPU_RESOURCE_CREATE_BLOB,
 			  virtio_gpu_resource_create_blob_ioctl,
+			  DRM_RENDER_ALLOW),
+
+	DRM_IOCTL_DEF_DRV(VIRTGPU_CONTEXT_INIT,
+			  virtio_gpu_context_init_ioctl,
 			  DRM_RENDER_ALLOW)
 	};
