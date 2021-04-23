@@ -2030,6 +2030,7 @@ struct edid *drm_get_edid(struct drm_connector *connector,
 	edid = drm_do_get_edid(connector, drm_do_probe_ddc_edid, adapter);
 	if (edid)
 		drm_get_displayid(connector, edid);
+	drm_connector_update_edid_property(connector, edid);
 	return edid;
 }
 EXPORT_SYMBOL(drm_get_edid);
