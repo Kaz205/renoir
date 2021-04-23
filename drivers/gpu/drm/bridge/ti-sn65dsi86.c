@@ -16,7 +16,6 @@
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
 #include <linux/regulator/consumer.h>
-#include <linux/workqueue.h>
 
 #include <asm/unaligned.h>
 
@@ -133,12 +132,6 @@
  * @ln_assign:    Value to program to the LN_ASSIGN register.
  * @ln_polrs:     Value for the 4-bit LN_POLRS field of SN_ENH_FRAME_REG.
  *
- * @pre_enabled_early: If true we did an early pre_enable at attach.
- * @pre_enable_timeout_work: Delayed work to undo the pre_enable from attach
- *                           if a normal pre_enable never came.
- * @pre_enable_mutex: Lock to synchronize between the pre_enable_timeout_work
- *                    and normal mechanisms.
- *
  * @gchip:        If we expose our GPIOs, this is used.
  * @gchip_output: A cache of whether we've set GPIOs to output.  This
  *                serves double-duty of keeping track of the direction and
@@ -167,10 +160,6 @@ struct ti_sn_bridge {
 	int				dp_lanes;
 	u8				ln_assign;
 	u8				ln_polrs;
-
-	bool				pre_enabled_early;
-	struct delayed_work		pre_enable_timeout_work;
-	struct mutex			pre_enable_mutex;
 
 #if defined(CONFIG_OF_GPIO)
 	struct gpio_chip		gchip;
@@ -285,6 +274,12 @@ static int ti_sn_bridge_connector_get_modes(struct drm_connector *connector)
 	struct ti_sn_bridge *pdata = connector_to_ti_sn_bridge(connector);
 	struct edid *edid = pdata->edid;
 	int num, ret;
+
+	if (!edid) {
+		pm_runtime_get_sync(pdata->dev);
+		edid = pdata->edid = drm_get_edid(connector, &pdata->aux.ddc);
+		pm_runtime_put(pdata->dev);
+	}
 
 	if (edid && drm_edid_is_valid(edid)) {
 		ret = drm_connector_update_edid_property(connector, edid);
@@ -420,8 +415,10 @@ static void ti_sn_bridge_post_disable(struct drm_bridge *bridge)
 	pm_runtime_put_sync(pdata->dev);
 }
 
-static void __ti_sn_bridge_pre_enable(struct ti_sn_bridge *pdata)
+static void ti_sn_bridge_pre_enable(struct drm_bridge *bridge)
 {
+	struct ti_sn_bridge *pdata = bridge_to_ti_sn_bridge(bridge);
+
 	pm_runtime_get_sync(pdata->dev);
 
 	/* configure bridge ref_clk */
@@ -447,38 +444,6 @@ static void __ti_sn_bridge_pre_enable(struct ti_sn_bridge *pdata)
 			   HPD_DISABLE);
 
 	drm_panel_prepare(pdata->panel);
-}
-
-static void ti_sn_bridge_pre_enable(struct drm_bridge *bridge)
-{
-	struct ti_sn_bridge *pdata = bridge_to_ti_sn_bridge(bridge);
-
-	mutex_lock(&pdata->pre_enable_mutex);
-	if (pdata->pre_enabled_early)
-		/* Already done! Just mark that normal pre_enable happened */
-		pdata->pre_enabled_early = false;
-	else
-		__ti_sn_bridge_pre_enable(pdata);
-	mutex_unlock(&pdata->pre_enable_mutex);
-}
-
-static void ti_sn_bridge_cancel_early_pre_enable(struct ti_sn_bridge *pdata)
-{
-	mutex_lock(&pdata->pre_enable_mutex);
-	if (pdata->pre_enabled_early) {
-		pdata->pre_enabled_early = false;
-		ti_sn_bridge_post_disable(&pdata->bridge);
-	}
-	mutex_unlock(&pdata->pre_enable_mutex);
-}
-
-static void ti_sn_bridge_pre_enable_timeout(struct work_struct *work)
-{
-	struct delayed_work *dwork = to_delayed_work(work);
-	struct ti_sn_bridge *pdata = container_of(dwork, struct ti_sn_bridge,
-						  pre_enable_timeout_work);
-
-	ti_sn_bridge_cancel_early_pre_enable(pdata);
 }
 
 static int ti_sn_bridge_attach(struct drm_bridge *bridge,
@@ -557,34 +522,6 @@ static int ti_sn_bridge_attach(struct drm_bridge *bridge,
 	/* attach panel to bridge */
 	drm_panel_attach(pdata->panel, &pdata->connector);
 
-	/*
-	 * If we have a refclk then we can support dynamic EDID.
-	 *
-	 * A few notes:
-	 * - From trial and error it appears that we need our clock setup in
-	 *   order to read the EDID. If we don't have refclk then we
-	 *   (presumably) need the MIPI clock on, but turning that on implies
-	 *   knowing the pixel clock / not needing the EDID. Maybe we could
-	 *   futz this if necessary, but for now we won't.
-	 * - In order to read the EDID we need power on to the bridge and
-	 *   the panel (and it has to finish booting up / assert HPD). This
-	 *   is slow so we leave the panel powered when we're done but setup a
-	 *   timeout so we don't leave it on forever.
-	 * - The rest of Linux assumes that it can read the EDID without
-	 *   (explicitly) enabling the power which is why this somewhat awkward
-	 *   step is needed.
-	 */
-	if (pdata->refclk) {
-		mutex_lock(&pdata->pre_enable_mutex);
-
-		pdata->pre_enabled_early = true;
-		__ti_sn_bridge_pre_enable(pdata);
-		pdata->edid = drm_get_edid(&pdata->connector, &pdata->aux.ddc);
-		schedule_delayed_work(&pdata->pre_enable_timeout_work, 30 * HZ);
-
-		mutex_unlock(&pdata->pre_enable_mutex);
-	}
-
 	return 0;
 
 err_dsi_attach:
@@ -592,17 +529,6 @@ err_dsi_attach:
 err_dsi_host:
 	drm_connector_cleanup(&pdata->connector);
 	return ret;
-}
-
-static void ti_sn_bridge_detach(struct drm_bridge *bridge)
-{
-	struct ti_sn_bridge *pdata = bridge_to_ti_sn_bridge(bridge);
-
-	cancel_delayed_work_sync(&pdata->pre_enable_timeout_work);
-	ti_sn_bridge_cancel_early_pre_enable(pdata);
-
-	kfree(pdata->edid);
-	pdata->edid = NULL;
 }
 
 static void ti_sn_bridge_disable(struct drm_bridge *bridge)
@@ -947,7 +873,6 @@ static void ti_sn_bridge_enable(struct drm_bridge *bridge)
 
 static const struct drm_bridge_funcs ti_sn_bridge_funcs = {
 	.attach = ti_sn_bridge_attach,
-	.detach = ti_sn_bridge_detach,
 	.pre_enable = ti_sn_bridge_pre_enable,
 	.enable = ti_sn_bridge_enable,
 	.disable = ti_sn_bridge_disable,
@@ -1313,10 +1238,6 @@ static int ti_sn_bridge_probe(struct i2c_client *client,
 	if (!pdata)
 		return -ENOMEM;
 
-	mutex_init(&pdata->pre_enable_mutex);
-	INIT_DELAYED_WORK(&pdata->pre_enable_timeout_work,
-			  ti_sn_bridge_pre_enable_timeout);
-
 	pdata->regmap = devm_regmap_init_i2c(client,
 					     &ti_sn_bridge_regmap_config);
 	if (IS_ERR(pdata->regmap)) {
@@ -1411,6 +1332,7 @@ static int ti_sn_bridge_remove(struct i2c_client *client)
 	if (!pdata)
 		return -EINVAL;
 
+	kfree(pdata->edid);
 	ti_sn_debugfs_remove(pdata);
 
 	of_node_put(pdata->host_node);
