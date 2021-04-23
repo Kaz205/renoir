@@ -673,7 +673,7 @@ static int panel_simple_probe(struct device *dev, const struct panel_desc *desc)
 
 	err = drm_panel_of_backlight(&panel->base);
 	if (err)
-		goto free_ddc;
+		goto disable_pm_runtime;
 
 	err = drm_panel_add(&panel->base);
 	if (err < 0)
@@ -681,6 +681,8 @@ static int panel_simple_probe(struct device *dev, const struct panel_desc *desc)
 
 	return 0;
 
+disable_pm_runtime:
+	pm_runtime_disable(dev);
 free_ddc:
 	if (panel->ddc)
 		put_device(&panel->ddc->dev);
@@ -696,6 +698,7 @@ static int panel_simple_remove(struct device *dev)
 	drm_panel_disable(&panel->base);
 	drm_panel_unprepare(&panel->base);
 
+	pm_runtime_disable(dev);
 	if (panel->ddc)
 		put_device(&panel->ddc->dev);
 
