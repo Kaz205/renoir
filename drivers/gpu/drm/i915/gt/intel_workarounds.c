@@ -772,7 +772,7 @@ gen9_wa_init_mcr(struct drm_i915_private *i915, struct i915_wa_list *wal)
 	unsigned int slice, subslice;
 	u32 mcr, mcr_mask;
 
-	GEM_BUG_ON(INTEL_GEN(i915) < 9);
+	GEM_BUG_ON(INTEL_GEN(i915) != 9);
 
 	/*
 	 * WaProgramMgsrForCorrectSliceSpecificMmioReads:glk,kbl,cml
