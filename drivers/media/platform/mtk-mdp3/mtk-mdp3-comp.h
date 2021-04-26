@@ -49,22 +49,22 @@ enum mdp_comp_id {
 	MDP_COMP_CAMIN2,	    /* 7 */
 	MDP_COMP_RDMA0,		    /* 8 */
 	MDP_COMP_RDMA1,		    /* 9 */
-	MDP_COMP_AAL0,          /* 10 */
-    MDP_COMP_AAL1,          /* 11 */
-	MDP_COMP_HDR0,		    /* 12 */
-	MDP_COMP_HDR1,		    /* 13 */
-	MDP_COMP_COLOR0,	    /* 14 */
-	MDP_COMP_COLOR1,	    /* 15 */
+	MDP_COMP_HDR0,		    /* 10 */
+	MDP_COMP_HDR1,		    /* 11 */
+	MDP_COMP_COLOR0,	    /* 12 */
+	MDP_COMP_COLOR1,	    /* 13 */
+	MDP_COMP_AAL0,          /* 14 */
+	MDP_COMP_AAL1,          /* 15 */
 	MDP_COMP_RSZ0,		    /* 16 */
 	MDP_COMP_RSZ1,		    /* 17 */
 	MDP_COMP_TDSHP0,	    /* 18 */
-    MDP_COMP_TDSHP1,        /* 19 */
+	MDP_COMP_TDSHP1,        /* 19 */
 	MDP_COMP_WROT0,		    /* 20 */
 	MDP_COMP_WROT1,		    /* 21 */
 
 	/* Dummy Engine */
-    MDP_COMP_RSZ2,
-    MDP_COMP_WDMA,
+	MDP_COMP_RSZ2,
+	MDP_COMP_WDMA,
 
 	MDP_MAX_COMP_COUNT	/* ALWAYS keep at the end */
 };

@@ -59,7 +59,6 @@ static int mdp_path_subfrm_require(struct mdp_path_subfrm *subfrm,
 	phys_addr_t mm_mutex = path->mdp_dev->mm_mutex.reg_base;
 	s32 mutex_id = -1;
 	u32 mutex_sof = 0;
-	int mdp_color = 0;
 	int index;
 	u16 subsys_id = path->mdp_dev->mm_mutex.subsys_id;
 
@@ -70,6 +69,7 @@ static int mdp_path_subfrm_require(struct mdp_path_subfrm *subfrm,
 		ctx = &path->comps[index];
 		if (is_output_disable(ctx->param, count))
 			continue;
+
 		switch (ctx->comp->id) {
         /**********************************************
              * Name            MSB LSB
@@ -157,12 +157,10 @@ static int mdp_path_subfrm_require(struct mdp_path_subfrm *subfrm,
 			subfrm->mutex_mod |= 1 << 13;
 			break;
 		case MDP_COLOR0:
-			if (mdp_color)
-				subfrm->mutex_mod |= 1 << 14;
+			subfrm->mutex_mod |= 1 << 14;
 			break;
 		case MDP_COLOR1:
-			if (mdp_color)
-				subfrm->mutex_mod |= 1 << 15;
+			subfrm->mutex_mod |= 1 << 15;
 			break;
 		default:
 			break;
@@ -315,9 +313,7 @@ static int mdp_path_ctx_init(struct mdp_dev *mdp, struct mdp_path *path)
 	int index, ret;
 
 	if (config->num_components < 1)
-	{
 	    return -EINVAL;
-	}
 
 	for (index = 0; index < config->num_components; index++) {
 		ret = mdp_comp_ctx_init(mdp, &path->comps[index],
@@ -490,13 +486,12 @@ int mdp_cmdq_send(struct mdp_dev *mdp, struct mdp_cmdq_param *param)
 		ret = cmdq_pkt_flush(cmd.pkt);
 #ifdef MDP_DEBUG
         if (ret) {
-                    struct mdp_func_struct *p_func = mdp_get_func();
-        
-                    p_func->mdp_dump_mmsys_config();
-                    mdp_dump_info(~0, 1);
-                }
-#endif
+	        struct mdp_func_struct *p_func = mdp_get_func();
 
+	        p_func->mdp_dump_mmsys_config();
+	        mdp_dump_info(~0, 1);
+		}
+#endif
 		if (!ret) { /* error handle in mdp_m2m_worker */
 			if (param->mdp_ctx)
 				mdp_m2m_job_finish(param->mdp_ctx);

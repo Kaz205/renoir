@@ -120,15 +120,14 @@ struct img_ipi_param {
 } __attribute__ ((__packed__));
 
 struct img_frameparam {
-	struct list_head list_entry;
 	struct img_ipi_frameparam frameparam;
 };
 
 /* ISP-MDP generic output information */
 
 struct img_comp_frame {
-	u32 output_disable:1;
-	u32 bypass:1;
+	u32 output_disable;
+	u32 bypass;
 	u16 in_width;
 	u16 in_height;
 	u16 out_width;
@@ -153,7 +152,7 @@ struct img_offset {
 } __attribute__ ((__packed__));
 
 struct img_comp_subfrm {
-	u32 tile_disable:1;
+	u32 tile_disable;
 	struct img_region in;
 	struct img_region out;
 	struct img_offset luma;
@@ -187,10 +186,42 @@ struct mdp_rdma_data {
 	struct mdp_rdma_subfrm subfrms[IMG_MAX_SUBFRAMES];
 } __attribute__ ((__packed__));
 
+struct mdp_hdr_subfrm {
+       u32 win_size;
+       u32 src;
+       u32 clip_ofst0;
+       u32 clip_ofst1;
+       u32 hist_ctrl_0;
+       u32 hist_ctrl_1;
+       u32 hdr_top;
+       u32 hist_addr;
+} __attribute__ ((__packed__));
+
+struct mdp_hdr_data {
+       struct mdp_hdr_subfrm   subfrms[IMG_MAX_SUBFRAMES];
+} __attribute__ ((__packed__));
+
+struct mdp_aal_subfrm {
+       u32 src;
+       u32 clip;
+       u32 clip_ofst;
+} __attribute__ ((__packed__));
+
+struct mdp_aal_data {
+       u32 format10bits;
+       struct mdp_aal_subfrm   subfrms[IMG_MAX_SUBFRAMES];
+} __attribute__ ((__packed__));
+
 struct mdp_rsz_subfrm {
 	u32 control2;
 	u32 src;
 	u32 clip;
+	u32 luma_h_int_ofst;
+    u32 luma_h_sub_ofst;
+    u32 luma_v_int_ofst;
+    u32 luma_v_sub_ofst;
+    u32 chroma_h_int_ofst;
+    u32 chroma_h_sub_ofst;
 } __attribute__ ((__packed__));
 
 struct mdp_rsz_data {
@@ -199,6 +230,27 @@ struct mdp_rsz_data {
 	u32 control1;
 	u32 control2;
 	struct mdp_rsz_subfrm subfrms[IMG_MAX_SUBFRAMES];
+} __attribute__ ((__packed__));
+
+struct mdp_tdshp_subfrm {
+       u32 src;
+       u32 clip;
+       u32 clip_ofst;
+       u32 hist_cfg_0;
+       u32 hist_cfg_1;
+} __attribute__ ((__packed__));
+
+struct mdp_tdshp_data {
+       struct mdp_tdshp_subfrm subfrms[IMG_MAX_SUBFRAMES];
+} __attribute__ ((__packed__));
+
+struct mdp_color_subfrm {
+       u32 src;
+       u32 clip;
+} __attribute__ ((__packed__));
+
+struct mdp_color_data {
+       struct mdp_color_subfrm subfrms[IMG_MAX_SUBFRAMES];
 } __attribute__ ((__packed__));
 
 struct mdp_wrot_subfrm {
@@ -253,7 +305,11 @@ struct img_compparam {
 	u32 num_subfrms;
 	union {
 		struct mdp_rdma_data rdma;
+		struct mdp_hdr_data hdr;
+		struct mdp_aal_data aal;
 		struct mdp_rsz_data rsz;
+		struct mdp_tdshp_data tdshp;
+		struct mdp_color_data color;
 		struct mdp_wrot_data wrot;
 		struct mdp_wdma_data wdma;
 		struct isp_data isp;
