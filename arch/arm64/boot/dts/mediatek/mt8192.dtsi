@@ -2210,14 +2210,18 @@
 			reg = <0 0x1f005000 0 0x1000>;
 			mediatek,gce-client-reg = <&gce 0x1f000 0x5000 0x1000>;
 			clocks = <&mdpsys CLK_MDP_AAL0>;
+			power-domains = <&spm MT8192_POWER_DOMAIN_MDP>;
+			mediatek,larb = <&larb2>;
 		};
 
-		mdp_aal1: mdp_aal0@1f006000 {
+		mdp_aal1: mdp_aal1@1f006000 {
 			compatible = "mediatek,mt8192-mdp-aal";
 			mediatek,mdp-id = <1>;
 			reg = <0 0x1f006000 0 0x1000>;
 			mediatek,gce-client-reg = <&gce 0x1f000 0x6000 0x1000>;
 			clocks = <&mdpsys CLK_MDP_AAL1>;
+			power-domains = <&spm MT8192_POWER_DOMAIN_MDP>;
+			mediatek,larb = <&larb2>;
 		};
 
 		mdp_hdr0: mdp_hdr0@1f007000 {
@@ -2226,14 +2230,18 @@
 			reg = <0 0x1f007000 0 0x1000>;
 			mediatek,gce-client-reg = <&gce 0x1f000 0x7000 0x1000>;
 			clocks = <&mdpsys CLK_MDP_HDR0>;
+			power-domains = <&spm MT8192_POWER_DOMAIN_MDP>;
+			mediatek,larb = <&larb2>;
 		};
 
-		mdp_hdr1: mdp_hdr0@1f008000 {
+		mdp_hdr1: mdp_hdr1@1f008000 {
 			compatible = "mediatek,mt8192-mdp-hdr";
 			mediatek,mdp-id = <1>;
 			reg = <0 0x1f008000 0 0x1000>;
 			mediatek,gce-client-reg = <&gce 0x1f000 0x8000 0x1000>;
 			clocks = <&mdpsys CLK_MDP_HDR1>;
+			power-domains = <&spm MT8192_POWER_DOMAIN_MDP>;
+			mediatek,larb = <&larb2>;
 		};
 
 		mdp_rsz0: mdp_rsz0@1f009000 {
@@ -2242,6 +2250,8 @@
 			reg = <0 0x1f009000 0 0x1000>;
 			mediatek,gce-client-reg = <&gce 0x1f000 0x9000 0x1000>;
 			clocks = <&mdpsys CLK_MDP_RSZ0>;
+			power-domains = <&spm MT8192_POWER_DOMAIN_MDP>;
+			mediatek,larb = <&larb2>;
 		};
 
 		mdp_rsz1: mdp_rsz1@1f00a000 {
@@ -2250,6 +2260,8 @@
 			reg = <0 0x1f00a000 0 0x1000>;
 			mediatek,gce-client-reg = <&gce 0x1f000 0xa000 0x1000>;
 			clocks = <&mdpsys CLK_MDP_RSZ1>;
+			power-domains = <&spm MT8192_POWER_DOMAIN_MDP>;
+			mediatek,larb = <&larb2>;
 		};
 
 		mdp_wrot0: mdp_wrot0@1f00b000 {
@@ -2263,7 +2275,7 @@
 			iommus = <&iommu0 M4U_PORT_L2_MDP_WROT0>;
 		};
 
-		mdp_wrot1: mdp_wrot0@1f00c000 {
+		mdp_wrot1: mdp_wrot1@1f00c000 {
 			compatible = "mediatek,mt8192-mdp-wrot";
 			mediatek,mdp-id = <1>;
 			reg = <0 0x1f00c000 0 0x1000>;
@@ -2280,6 +2292,8 @@
 			reg = <0 0x1f00d000 0 0x1000>;
 			mediatek,gce-client-reg = <&gce 0x1f000 0xd000 0x1000>;
 			clocks = <&mdpsys CLK_MDP_TDSHP0>;
+			power-domains = <&spm MT8192_POWER_DOMAIN_MDP>;
+			mediatek,larb = <&larb2>;
 		};
 
 		mdp_tdshp1: mdp_tdshp1@1f00e000 {
@@ -2288,6 +2302,8 @@
 			reg = <0 0x1f00e000 0 0x1000>;
 			mediatek,gce-client-reg = <&gce 0x1f000 0xe000 0x1000>;
 			clocks = <&mdpsys CLK_MDP_TDSHP1>;
+			power-domains = <&spm MT8192_POWER_DOMAIN_MDP>;
+			mediatek,larb = <&larb2>;
 		};
 
 		mdp_color0: mdp_color0@1f00f000 {
@@ -2296,6 +2312,8 @@
 			reg = <0 0x1f00f000 0 0x1000>;
 			mediatek,gce-client-reg = <&gce 0x1f000 0xf000 0x1000>;
 			clocks = <&mdpsys CLK_MDP_COLOR0>;
+			power-domains = <&spm MT8192_POWER_DOMAIN_MDP>;
+			mediatek,larb = <&larb2>;
 		};
 
 		mdp_color1: mdp_color1@1f010000 {
@@ -2304,6 +2322,8 @@
 			reg = <0 0x1f010000 0 0x1000>;
 			mediatek,gce-client-reg = <&gce 0x1f010 0 0x1000>;
 			clocks = <&mdpsys CLK_MDP_COLOR1>;
+			power-domains = <&spm MT8192_POWER_DOMAIN_MDP>;
+			mediatek,larb = <&larb2>;
 		};
 
 		larb2: larb@1f002000 {
