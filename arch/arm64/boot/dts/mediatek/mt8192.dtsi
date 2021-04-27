@@ -972,7 +972,8 @@
 			      <0 0x11203e00 0 0x0100>;
 			reg-names = "mac", "ippc";
 			interrupts-extended = <&gic GIC_SPI 97 IRQ_TYPE_LEVEL_HIGH 0>,
-					      <&pio 211 IRQ_TYPE_LEVEL_LOW>;
+					      <&pio 211 IRQ_TYPE_EDGE_FALLING>;
+			interrupt-names = "host", "wakeup";
 			phys = <&u2port0 PHY_TYPE_USB2>,
 			       <&u3port0 PHY_TYPE_USB3>;
 			assigned-clocks = <&topckgen CLK_TOP_USB_TOP_SEL>,
