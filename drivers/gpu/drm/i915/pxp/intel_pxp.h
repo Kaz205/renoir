@@ -6,6 +6,7 @@
 #ifndef __INTEL_PXP_H__
 #define __INTEL_PXP_H__
 
+#include <drm/drm_file.h>
 #include "intel_pxp_types.h"
 
 struct drm_i915_gem_object;
@@ -32,6 +33,8 @@ int intel_pxp_start(struct intel_pxp *pxp);
 int intel_pxp_key_check(struct intel_pxp *pxp,
 			struct drm_i915_gem_object *obj,
 			bool assign);
+
+int i915_pxp_ops_ioctl(struct drm_device *dev, void *data, struct drm_file *drmfile);
 #else
 static inline void intel_pxp_init(struct intel_pxp *pxp)
 {
@@ -54,6 +57,11 @@ static inline bool intel_pxp_is_active(const struct intel_pxp *pxp)
 static inline int intel_pxp_key_check(struct intel_pxp *pxp,
 				      struct drm_i915_gem_object *obj,
 				      bool assing)
+{
+	return -ENODEV;
+}
+
+static inline int i915_pxp_ops_ioctl(struct drm_device *dev, void *data, struct drm_file *drmfile)
 {
 	return -ENODEV;
 }

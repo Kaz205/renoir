@@ -191,7 +191,7 @@ enable_err_exit:
 	return ret;
 }
 
-static void mei_pxp_remove(struct mei_cl_device *cldev)
+static int mei_pxp_remove(struct mei_cl_device *cldev)
 {
 	struct i915_pxp_component *comp_master = mei_cldev_get_drvdata(cldev);
 	int ret;
@@ -203,6 +203,8 @@ static void mei_pxp_remove(struct mei_cl_device *cldev)
 	ret = mei_cldev_disable(cldev);
 	if (ret)
 		dev_warn(&cldev->dev, "mei_cldev_disable() failed\n");
+
+	return ret;
 }
 
 /* fbf6fcf1-96cf-4e2e-a6a6-1bab8cbe36b1 : PAVP GUID*/
