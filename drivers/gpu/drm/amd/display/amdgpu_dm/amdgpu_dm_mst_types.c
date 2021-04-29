@@ -396,8 +396,11 @@ static const struct drm_dp_mst_topology_cbs dm_mst_cbs = {
 void amdgpu_dm_initialize_dp_connector(struct amdgpu_display_manager *dm,
 				       struct amdgpu_dm_connector *aconnector)
 {
+	struct dc_link_settings max_link_enc_cap = {0};
+
 	aconnector->dm_dp_aux.aux.name = "dmdc";
 	aconnector->dm_dp_aux.aux.dev = aconnector->base.kdev;
+
 	aconnector->dm_dp_aux.aux.transfer = dm_dp_aux_transfer;
 	aconnector->dm_dp_aux.aux.drm_dev = dm->ddev;
 	aconnector->dm_dp_aux.ddc_service = aconnector->dc_link->ddc;
@@ -405,6 +408,8 @@ void amdgpu_dm_initialize_dp_connector(struct amdgpu_display_manager *dm,
 	drm_dp_aux_register(&aconnector->dm_dp_aux.aux);
 	drm_dp_cec_register_connector(&aconnector->dm_dp_aux.aux,
 				      &aconnector->base);
+
+	dc_link_dp_get_max_link_enc_cap(aconnector->dc_link, &max_link_enc_cap);
 	aconnector->mst_mgr.cbs = &dm_mst_cbs;
 	drm_dp_mst_topology_mgr_init(
 		&aconnector->mst_mgr,
@@ -412,6 +417,8 @@ void amdgpu_dm_initialize_dp_connector(struct amdgpu_display_manager *dm,
 		&aconnector->dm_dp_aux.aux,
 		16,
 		4,
+		(u8)max_link_enc_cap.lane_count,
+		(u8)max_link_enc_cap.link_rate,
 		aconnector->connector_id);
 }
 
