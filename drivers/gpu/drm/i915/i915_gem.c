@@ -53,6 +53,7 @@
 #include "i915_drv.h"
 #include "i915_trace.h"
 #include "i915_vgpu.h"
+#include "i915_user_extensions.h"
 
 #include "intel_pm.h"
 
@@ -293,6 +294,46 @@ i915_gem_create_ioctl(struct drm_device *dev, void *data,
 	struct drm_i915_gem_create *args = data;
 
 	i915_gem_flush_free_objects(i915);
+
+	return i915_gem_create(file,
+			       intel_memory_region_by_type(i915,
+							   INTEL_MEMORY_SYSTEM),
+			       &args->size, &args->handle);
+}
+
+struct create_ext {
+	struct drm_i915_private *i915;
+};
+
+static const i915_user_extension_fn create_extensions[] = {
+};
+
+/**
+ * Creates a new mm object and returns a handle to it.
+ * @dev: drm device pointer
+ * @data: ioctl data blob
+ * @file: drm file pointer
+ */
+int
+i915_gem_create_ext_ioctl(struct drm_device *dev, void *data,
+			  struct drm_file *file)
+{
+	struct drm_i915_private *i915 = to_i915(dev);
+	struct drm_i915_gem_create_ext *args = data;
+	struct create_ext ext_data = { .i915 = i915 };
+	int ret;
+
+	if (args->flags)
+		return -EINVAL;
+
+	i915_gem_flush_free_objects(i915);
+
+	ret = i915_user_extensions(u64_to_user_ptr(args->extensions),
+				   create_extensions,
+				   ARRAY_SIZE(create_extensions),
+				   &ext_data);
+	if (ret)
+		return ret;
 
 	return i915_gem_create(file,
 			       intel_memory_region_by_type(i915,
