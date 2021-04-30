@@ -86,7 +86,7 @@ struct vdec_lat_buf *vdec_msg_queue_get_lat_buf(
 
 	if (list_empty(&msg_queue->lat_queue)) {
 		mtk_v4l2_debug(3, "lat queue is NULL, num_lat = %d", msg_queue->num_lat);
-		timeout_jiff = msecs_to_jiffies(1000);
+		timeout_jiff = msecs_to_jiffies(1500);
 		ret = wait_event_timeout(msg_queue->lat_read,
 			!list_empty(&msg_queue->lat_queue), timeout_jiff);
 		if (!ret)
@@ -179,17 +179,22 @@ void vdec_msg_queue_update_ube_wptr(struct vdec_msg_queue *msg_queue,
 bool vdec_msg_queue_wait_lat_buf_full(struct vdec_msg_queue *msg_queue)
 {
 	long timeout_jiff;
-	int ret;
+	int ret, i;
 
-	timeout_jiff = msecs_to_jiffies(1000);
-	ret = wait_event_timeout(msg_queue->lat_read,
-		msg_queue->num_lat == NUM_BUFFER_COUNT, timeout_jiff);
-	if (!ret) {
-		mtk_v4l2_err("failed with lat buf isn't full: %d", msg_queue->num_lat);
-		return false;
+	for (i = 0; i < NUM_BUFFER_COUNT + 2; i++) {
+		timeout_jiff = msecs_to_jiffies(1000);
+		ret = wait_event_timeout(msg_queue->lat_read,
+			msg_queue->num_lat == NUM_BUFFER_COUNT, timeout_jiff);
+		if (ret) {
+			mtk_v4l2_debug(3, "success to get lat buf: %d",
+				msg_queue->num_lat);
+			return true;
+		}
 	}
 
-	return true;
+	mtk_v4l2_err("failed with lat buf isn't full: %d",
+		msg_queue->num_lat);
+	return false;
 }
 
 void vdec_msg_queue_deinit(
