@@ -168,16 +168,10 @@ static void mtk_vdec_stateless_cap_to_disp(struct mtk_vcodec_ctx *ctx,
 	vdec_frame_buf = container_of(fb, struct mtk_video_dec_buf,
 				      frame_buffer);
 	vb = &vdec_frame_buf->m2m_buf.vb;
-	if (error == 1) {
-		cap_y_size = 0;
-		cap_c_size = 0;
-	} else {
-		cap_y_size = ctx->q_data[MTK_Q_DATA_DST].sizeimage[0];
-		cap_c_size = ctx->q_data[MTK_Q_DATA_DST].sizeimage[1];
-	}
+	cap_y_size = ctx->q_data[MTK_Q_DATA_DST].sizeimage[0];
+	cap_c_size = ctx->q_data[MTK_Q_DATA_DST].sizeimage[1];
 
 	v4l2_m2m_dst_buf_remove(ctx->m2m_ctx);
-
 	vb2_set_plane_payload(&vb->vb2_buf, 0, cap_y_size);
 	if (ctx->q_data[MTK_Q_DATA_DST].fmt->num_planes == 2)
 		vb2_set_plane_payload(&vb->vb2_buf, 1, cap_c_size);
@@ -185,9 +179,10 @@ static void mtk_vdec_stateless_cap_to_disp(struct mtk_vcodec_ctx *ctx,
 	mtk_v4l2_debug(2,
 		"Free frame buffer id = %d to done_list",
 		vb->vb2_buf.index);
-	if (error == 1)
-		vb->flags |= V4L2_BUF_FLAG_LAST;
-	v4l2_m2m_buf_done(vb, VB2_BUF_STATE_DONE);
+	if (error)
+		v4l2_m2m_buf_done(vb, VB2_BUF_STATE_ERROR);
+	else
+		v4l2_m2m_buf_done(vb, VB2_BUF_STATE_DONE);
 }
 
 static struct vdec_fb *vdec_get_cap_buffer(struct mtk_vcodec_ctx *ctx)

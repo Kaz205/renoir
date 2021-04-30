@@ -369,7 +369,7 @@ static int vdec_vp8_slice_decode(void *h_vdec, struct mtk_vcodec_mem *bs,
 
 	/* wait decoder done interrupt */
 	err = mtk_vcodec_wait_for_core_done_ctx(inst->ctx,
-			MTK_INST_IRQ_RECEIVED, WAIT_INTR_TIMEOUT_MS);
+			MTK_INST_IRQ_RECEIVED, 50);
 	if (err)
 		inst->vsi->dec.timeout = true;
 	else
@@ -391,7 +391,7 @@ static int vdec_vp8_slice_decode(void *h_vdec, struct mtk_vcodec_mem *bs,
 			inst->vsi->dec.crc[6],
 			inst->vsi->dec.crc[7]);
 
-	inst->ctx->dev->vdec_pdata->cap_to_disp(inst->ctx, fb, 0);
+	inst->ctx->dev->vdec_pdata->cap_to_disp(inst->ctx, fb, !!err);
 	inst->ctx->decoded_frame_cnt++;
 	*res_chg = false;
 	return 0;
