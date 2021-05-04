@@ -1680,11 +1680,18 @@ static struct edid *anx7625_get_edid(struct anx7625_data *ctx)
 static enum drm_connector_status anx7625_sink_detect(struct anx7625_data *ctx)
 {
 	struct device *dev = &ctx->client->dev;
+	int status;
 
 	DRM_DEV_DEBUG_DRIVER(dev, "sink detect\n");
 
-	if (ctx->pdata.panel_bridge)
-		return connector_status_connected;
+	if (ctx->pdata.panel_bridge) {
+		pm_runtime_get_sync(dev);
+		status = anx7625_read_hpd_status_p0(ctx);
+		pm_runtime_put(dev);
+
+		return (status & HPD_STATUS) ? connector_status_connected :
+						     connector_status_disconnected;
+	}
 
 	return ctx->hpd_status ? connector_status_connected :
 				     connector_status_disconnected;
@@ -2459,10 +2466,9 @@ static int anx7625_i2c_probe(struct i2c_client *client,
 
 	platform->bridge.funcs = &anx7625_bridge_funcs;
 	platform->bridge.of_node = client->dev.of_node;
-	platform->bridge.ops = DRM_BRIDGE_OP_EDID;
+	platform->bridge.ops = DRM_BRIDGE_OP_EDID | DRM_BRIDGE_OP_DETECT;
 	if (!platform->pdata.panel_bridge)
-		platform->bridge.ops |= DRM_BRIDGE_OP_HPD |
-					DRM_BRIDGE_OP_DETECT;
+		platform->bridge.ops |= DRM_BRIDGE_OP_HPD;
 	platform->bridge.type = platform->pdata.panel_bridge ?
 				    DRM_MODE_CONNECTOR_eDP :
 				    DRM_MODE_CONNECTOR_DisplayPort;
