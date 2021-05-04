@@ -1484,6 +1484,7 @@ static void anx7625_set_crosspoint_switch(struct anx7625_data *ctx,
 
 static void anx7625_usb_two_ports_update(struct anx7625_data *ctx)
 {
+	usleep_range(10000, 12000);
 	if (ctx->typec_ports[0].has_dp && ctx->typec_ports[1].has_dp)
 		/* Both port available, do nothing to retain the current one. */
 		return;
@@ -1491,6 +1492,7 @@ static void anx7625_usb_two_ports_update(struct anx7625_data *ctx)
 		anx7625_set_crosspoint_switch(ctx, TYPEC_ORIENTATION_NORMAL);
 	else if (ctx->typec_ports[1].has_dp)
 		anx7625_set_crosspoint_switch(ctx, TYPEC_ORIENTATION_REVERSE);
+	usleep_range(10000, 12000);
 }
 
 static int anx7625_usb_mux_set(struct typec_mux *mux,
@@ -2324,6 +2326,10 @@ static int __maybe_unused anx7625_runtime_pm_resume(struct device *dev)
 	mutex_lock(&ctx->lock);
 
 	anx7625_power_on_init(ctx);
+#if IS_ENABLED(CONFIG_TYPEC)
+	if (!ctx->pdata.panel_bridge && ctx->pdata.tx_rx_to_two_ports)
+		anx7625_usb_two_ports_update(ctx);
+#endif  /* IS_ENABLED(CONFIG_TYPEC) */
 	anx7625_hpd_polling(ctx);
 
 	mutex_unlock(&ctx->lock);
