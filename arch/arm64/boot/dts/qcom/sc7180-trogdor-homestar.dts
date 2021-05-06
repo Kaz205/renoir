@@ -28,9 +28,9 @@ ap_ts_pen_1v8: &i2c4 {
 	status = "okay";
 	clock-frequency = <400000>;
 
-	ap_ts: touchscreen@5d {
+	ap_ts: touchscreen@14 {
 		compatible = "goodix,gt7375p";
-		reg = <0x5d>;
+		reg = <0x14>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&ts_int_l>, <&ts_reset_l>;
 
