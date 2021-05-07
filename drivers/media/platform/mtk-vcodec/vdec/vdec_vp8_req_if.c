@@ -324,6 +324,9 @@ static int vdec_vp8_slice_decode(void *h_vdec, struct mtk_vcodec_mem *bs,
 	uint64_t y_fb_dma, c_fb_dma;
 	int err;
 
+	/* Resolution changes are never initiated by us */
+	*res_chg = false;
+
 	/* bs NULL means flush decoder */
 	if (!bs)
 		return vpu_dec_reset(vpu);
@@ -393,7 +396,6 @@ static int vdec_vp8_slice_decode(void *h_vdec, struct mtk_vcodec_mem *bs,
 
 	inst->ctx->dev->vdec_pdata->cap_to_disp(inst->ctx, fb, !!err);
 	inst->ctx->decoded_frame_cnt++;
-	*res_chg = false;
 	return 0;
 
 error:
