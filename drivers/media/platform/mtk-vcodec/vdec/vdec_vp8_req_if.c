@@ -39,7 +39,6 @@
  * @frame_header_type : current frame header type
  * @wait_key_frame    : wait key frame coming
  * @crc               : Used to check whether hardware's status is right
- * @timeout           : Decode timeout: 1 timeout, 0 no timeount
  */
 struct vdec_vp8_slice_info {
 	uint64_t vld_wrapper_dma;
@@ -53,7 +52,6 @@ struct vdec_vp8_slice_info {
 	uint32_t resolution_changed;
 	uint32_t frame_header_type;
 	uint32_t crc[8];
-	uint32_t timeout;
 };
 
 /**
@@ -373,14 +371,18 @@ static int vdec_vp8_slice_decode(void *h_vdec, struct mtk_vcodec_mem *bs,
 	/* wait decoder done interrupt */
 	err = mtk_vcodec_wait_for_core_done_ctx(inst->ctx,
 			MTK_INST_IRQ_RECEIVED, 50);
-	if (err)
-		inst->vsi->dec.timeout = true;
-	else
-		inst->vsi->dec.timeout = false;
+	if (err) {
+		mtk_vcodec_debug(inst, "error while waiting for core: %d", err);
+		vpu_dec_end(vpu);
+		goto error;
+	}
 
 	err = vpu_dec_end(vpu);
-	if (err || inst->vsi->dec.timeout)
+	if (err) {
+		mtk_vcodec_debug(inst, "error while calling vpu_dec_end: %d",
+				 err);
 		goto error;
+	}
 
 	mtk_vcodec_debug(inst, "y_crc: 0x%x 0x%x 0x%x 0x%x",
 		inst->vsi->dec.crc[0],
@@ -394,14 +396,15 @@ static int vdec_vp8_slice_decode(void *h_vdec, struct mtk_vcodec_mem *bs,
 			inst->vsi->dec.crc[6],
 			inst->vsi->dec.crc[7]);
 
-	inst->ctx->dev->vdec_pdata->cap_to_disp(inst->ctx, fb, !!err);
 	inst->ctx->decoded_frame_cnt++;
-	return 0;
 
 error:
-	mtk_vcodec_err(inst, "\n - FRAME[%d] timeout=%d err=%d\n",
-		inst->ctx->decoded_frame_cnt,
-		inst->vsi->dec.timeout, err);
+	if (err) {
+		mtk_vcodec_err(inst, "\n - FRAME[%d] err=%d\n",
+			       inst->ctx->decoded_frame_cnt, err);
+	}
+
+	inst->ctx->dev->vdec_pdata->cap_to_disp(inst->ctx, fb, !!err);
 	return err;
 }
 
