@@ -411,7 +411,6 @@ struct anx7625_port_data {
 struct anx7625_data {
 	struct anx7625_platform_data pdata;
 	struct platform_device *audio_pdev;
-	atomic_t power_status;
 	int hpd_status;
 	int hpd_high_cnt;
 	int hdcp_en;
@@ -429,8 +428,6 @@ struct anx7625_data {
 	struct drm_bridge bridge;
 	u8 bridge_attached;
 	struct mipi_dsi_device *dsi;
-	wait_queue_head_t queue;
-	bool power_handled;
 	hdmi_codec_plugged_cb plugged_cb;
 	struct device *codec_dev;
 
