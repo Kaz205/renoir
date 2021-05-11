@@ -97,11 +97,6 @@ struct h5 {
 	struct gpio_desc *device_wake_gpio;
 };
 
-enum h5_capabilities {
-	H5_CAP_WIDEBAND_SPEECH = BIT(0),
-	H5_CAP_VALID_LE_STATES = BIT(1),
-};
-
 struct h5_vnd {
 	int (*setup)(struct h5 *h5);
 	void (*open)(struct h5 *h5);
@@ -109,11 +104,6 @@ struct h5_vnd {
 	int (*suspend)(struct h5 *h5);
 	int (*resume)(struct h5 *h5);
 	const struct acpi_gpio_mapping *acpi_gpio_map;
-};
-
-struct h5_device_data {
-	uint32_t capabilities;
-	struct h5_vnd *vnd;
 };
 
 static void h5_reset_rx(struct h5 *h5);
@@ -798,10 +788,7 @@ static int h5_serdev_probe(struct serdev_device *serdev)
 {
 	const struct acpi_device_id *match;
 	struct device *dev = &serdev->dev;
-	struct hci_dev *hdev;
 	struct h5 *h5;
-	const struct h5_device_data *data;
-	int err;
 
 	h5 = devm_kzalloc(dev, sizeof(*h5), GFP_KERNEL);
 	if (!h5)
@@ -818,20 +805,22 @@ static int h5_serdev_probe(struct serdev_device *serdev)
 		if (!match)
 			return -ENODEV;
 
-		data = (const struct h5_device_data *)match->driver_data;
-		h5->vnd = data->vnd;
+		h5->vnd = (const struct h5_vnd *)match->driver_data;
 		h5->id  = (char *)match->id;
 
 		if (h5->vnd->acpi_gpio_map)
 			devm_acpi_dev_add_driver_gpios(dev,
 						       h5->vnd->acpi_gpio_map);
 	} else {
+		const void *data;
+
 		data = of_device_get_match_data(dev);
 		if (!data)
 			return -ENODEV;
 
-		h5->vnd = data->vnd;
+		h5->vnd = (const struct h5_vnd *)data;
 	}
+
 
 	h5->enable_gpio = devm_gpiod_get_optional(dev, "enable", GPIOD_OUT_LOW);
 	if (IS_ERR(h5->enable_gpio))
@@ -842,20 +831,7 @@ static int h5_serdev_probe(struct serdev_device *serdev)
 	if (IS_ERR(h5->device_wake_gpio))
 		return PTR_ERR(h5->device_wake_gpio);
 
-	err = hci_uart_register_device(&h5->serdev_hu, &h5p);
-	if (err)
-		return err;
-
-	hdev = h5->serdev_hu.hdev;
-
-	/* Set match specific quirks */
-	if (data->capabilities & H5_CAP_WIDEBAND_SPEECH)
-		set_bit(HCI_QUIRK_WIDEBAND_SPEECH_SUPPORTED, &hdev->quirks);
-
-	if (data->capabilities & H5_CAP_VALID_LE_STATES)
-		set_bit(HCI_QUIRK_VALID_LE_STATES, &hdev->quirks);
-
-	return 0;
+	return hci_uart_register_device(&h5->serdev_hu, &h5p);
 }
 
 static void h5_serdev_remove(struct serdev_device *serdev)
@@ -1026,21 +1002,12 @@ static struct h5_vnd rtl_vnd = {
 	.resume		= h5_btrtl_resume,
 	.acpi_gpio_map	= acpi_btrtl_gpios,
 };
-
-static const struct h5_device_data h5_data_rtl8822cs = {
-	.capabilities = H5_CAP_WIDEBAND_SPEECH | H5_CAP_VALID_LE_STATES,
-	.vnd = &rtl_vnd,
-};
-
-static const struct h5_device_data __maybe_unused h5_data_rtl8723bs = {
-	.vnd = &rtl_vnd,
-};
 #endif
 
 #ifdef CONFIG_ACPI
 static const struct acpi_device_id h5_acpi_match[] = {
 #ifdef CONFIG_BT_HCIUART_RTL
-	{ "OBDA8723", (kernel_ulong_t)&h5_data_rtl8723bs},
+	{ "OBDA8723", (kernel_ulong_t)&rtl_vnd },
 #endif
 	{ },
 };
@@ -1054,8 +1021,7 @@ static const struct dev_pm_ops h5_serdev_pm_ops = {
 static const struct of_device_id rtl_bluetooth_of_match[] = {
 #ifdef CONFIG_BT_HCIUART_RTL
 	{ .compatible = "realtek,rtl8822cs-bt",
-	  .data = &h5_data_rtl8822cs,
-	},
+	  .data = (const void *)&rtl_vnd },
 #endif
 	{ },
 };
