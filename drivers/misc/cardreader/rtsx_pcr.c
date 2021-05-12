@@ -1273,6 +1273,7 @@ int rtsx_ms_power_off_card3v3(struct rtsx_pcr *pcr)
 
 static int rtsx_pci_init_hw(struct rtsx_pcr *pcr)
 {
+	struct pci_dev *pdev = pcr->pci;
 	int err;
 
 	if (PCI_PID(pcr) == PID_5228)
@@ -1373,7 +1374,8 @@ static int rtsx_pci_init_hw(struct rtsx_pcr *pcr)
 	rtsx_pci_init_ocp(pcr);
 
 	/* Enable clk_request_n to enable clock power management */
-	rtsx_pci_write_config_byte(pcr, pcr->pcie_cap + PCI_EXP_LNKCTL + 1, 1);
+	pcie_capability_write_word(pdev, PCI_EXP_LNKCTL,
+				   PCI_EXP_LNKCTL_CLKREQ_EN);
 	/* Enter L1 when host tx idle */
 	pci_write_config_byte(pdev, 0x70F, 0x5B);
 
