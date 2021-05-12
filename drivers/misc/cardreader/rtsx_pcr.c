@@ -1353,7 +1353,7 @@ static int rtsx_pci_init_hw(struct rtsx_pcr *pcr)
 	/* Enable clk_request_n to enable clock power management */
 	rtsx_pci_write_config_byte(pcr, pcr->pcie_cap + PCI_EXP_LNKCTL + 1, 1);
 	/* Enter L1 when host tx idle */
-	rtsx_pci_write_config_byte(pcr, 0x70F, 0x5B);
+	pci_write_config_byte(pdev, 0x70F, 0x5B);
 
 	if (pcr->ops->extra_init_hw) {
 		err = pcr->ops->extra_init_hw(pcr);
