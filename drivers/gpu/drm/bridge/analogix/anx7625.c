@@ -804,11 +804,19 @@ static void anx7625_dp_start(struct anx7625_data *ctx)
 {
 	int ret;
 	struct device *dev = &ctx->client->dev;
+	u8 data;
 
 	if (!ctx->display_timing_valid) {
 		DRM_DEV_ERROR(dev, "mipi not set display timing yet.\n");
 		return;
 	}
+
+	DRM_DEV_DEBUG_DRIVER(dev, "notify downstream enter into normal\n");
+	/* Downstream monitor enter into normal mode */
+	data = 1;
+	ret = anx7625_aux_dpcd_write(ctx, 0x00, 0x06, 0x00, 1, &data);
+	if (ret < 0)
+		DRM_DEV_ERROR(dev, "IO error : enable video fail\n");
 
 	/* HDCP config */
 	anx7625_hdcp_setting(ctx);
