@@ -55,7 +55,7 @@ ap_ts_pen_1v8: &i2c4 {
 
 &panel {
 	compatible = "samsung,atna33xc20";
-
+	enable-gpios = <&tlmm 12 GPIO_ACTIVE_HIGH>;
 	/delete-property/ backlight;
 };
 
@@ -65,6 +65,10 @@ ap_ts_pen_1v8: &i2c4 {
 
 &sdhc_2 {
 	status = "okay";
+};
+
+&sn65dsi86_bridge {
+		use-aux-backlight;
 };
 
 /* PINCTRL - modifications to sc7180-trogdor.dtsi */
