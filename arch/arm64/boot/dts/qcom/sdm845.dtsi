@@ -3378,10 +3378,6 @@
 			video-core1 {
 				compatible = "venus-encoder";
 			};
-
-			video-firmware {
-				iommus = <&apps_smmu 0x10b2 0x0>;
-			};
 		};
 
 		videocc: clock-controller@ab00000 {
