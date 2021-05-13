@@ -348,7 +348,7 @@ static int cros_pchg_probe(struct platform_device *pdev)
 		psy_desc->num_properties = ARRAY_SIZE(cros_pchg_props);
 		psy_cfg.drv_data = port;
 
-		psy = devm_power_supply_register_no_ws(dev, psy_desc, &psy_cfg);
+		psy = devm_power_supply_register(dev, psy_desc, &psy_cfg);
 		if (IS_ERR(psy)) {
 			dev_err(dev, "Failed to register power supply\n");
 			continue;
