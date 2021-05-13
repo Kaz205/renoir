@@ -5586,7 +5586,7 @@ enum pchg_state {
 	PCHG_STATE_INITIALIZED,
 	/* Charger is enabled and ready to detect a device. */
 	PCHG_STATE_ENABLED,
-	/* Device is detected in proximity. */
+	/* Device is in proximity. */
 	PCHG_STATE_DETECTED,
 	/* Device is being charged. */
 	PCHG_STATE_CHARGING,
@@ -5596,6 +5596,8 @@ enum pchg_state {
 	PCHG_STATE_DOWNLOAD,
 	/* In download mode. Ready for receiving data. */
 	PCHG_STATE_DOWNLOADING,
+	/* Device is ready for data communication. */
+	PCHG_STATE_CONNECTED,
 	/* Put no more entry below */
 	PCHG_STATE_COUNT,
 };
@@ -5609,6 +5611,7 @@ enum pchg_state {
 	[PCHG_STATE_FULL] = "FULL", \
 	[PCHG_STATE_DOWNLOAD] = "DOWNLOAD", \
 	[PCHG_STATE_DOWNLOADING] = "DOWNLOADING", \
+	[PCHG_STATE_CONNECTED] = "CONNECTED", \
 	}
 
 /*****************************************************************************/

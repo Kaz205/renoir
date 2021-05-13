@@ -27,6 +27,7 @@ struct port_data {
 	struct power_supply_desc psy_desc;
 	int psy_status;
 	int battery_percentage;
+	int charge_type;
 	struct charger_data *charger;
 	unsigned long last_update;
 };
@@ -42,6 +43,7 @@ struct charger_data {
 
 static enum power_supply_property cros_pchg_props[] = {
 	POWER_SUPPLY_PROP_STATUS,
+	POWER_SUPPLY_PROP_CHARGE_TYPE,
 	POWER_SUPPLY_PROP_CAPACITY,
 	POWER_SUPPLY_PROP_SCOPE,
 	/*
@@ -150,15 +152,19 @@ static int cros_pchg_get_status(struct port_data *port)
 	case PCHG_STATE_ENABLED:
 	default:
 		port->psy_status = POWER_SUPPLY_STATUS_UNKNOWN;
+		port->charge_type = POWER_SUPPLY_CHARGE_TYPE_NONE;
 		break;
 	case PCHG_STATE_DETECTED:
-		port->psy_status = POWER_SUPPLY_STATUS_NOT_CHARGING;
+		port->psy_status = POWER_SUPPLY_STATUS_CHARGING;
+		port->charge_type = POWER_SUPPLY_CHARGE_TYPE_TRICKLE;
 		break;
 	case PCHG_STATE_CHARGING:
 		port->psy_status = POWER_SUPPLY_STATUS_CHARGING;
+		port->charge_type = POWER_SUPPLY_CHARGE_TYPE_STANDARD;
 		break;
 	case PCHG_STATE_FULL:
 		port->psy_status = POWER_SUPPLY_STATUS_FULL;
+		port->charge_type = POWER_SUPPLY_CHARGE_TYPE_NONE;
 		break;
 	}
 
@@ -201,6 +207,7 @@ static int cros_pchg_get_prop(struct power_supply *psy,
 	switch (psp) {
 	case POWER_SUPPLY_PROP_STATUS:
 	case POWER_SUPPLY_PROP_CAPACITY:
+	case POWER_SUPPLY_PROP_CHARGE_TYPE:
 		cros_pchg_get_port_status(port, true);
 		break;
 	default:
@@ -213,6 +220,9 @@ static int cros_pchg_get_prop(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
 		val->intval = port->battery_percentage;
+		break;
+	case POWER_SUPPLY_PROP_CHARGE_TYPE:
+		val->intval = port->charge_type;
 		break;
 	case POWER_SUPPLY_PROP_SCOPE:
 		val->intval = POWER_SUPPLY_SCOPE_DEVICE;
@@ -349,10 +359,10 @@ static int cros_pchg_probe(struct platform_device *pdev)
 		psy_cfg.drv_data = port;
 
 		psy = devm_power_supply_register(dev, psy_desc, &psy_cfg);
-		if (IS_ERR(psy)) {
-			dev_err(dev, "Failed to register power supply\n");
-			continue;
-		}
+		if (IS_ERR(psy))
+			return dev_err_probe(
+					dev, PTR_ERR(psy),
+					"Failed to register power supply\n");
 		port->psy = psy;
 
 		charger->ports[charger->num_registered_psy++] = port;
