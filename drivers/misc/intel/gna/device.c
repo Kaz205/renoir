@@ -4,7 +4,9 @@
 #include <linux/device.h>
 #include <linux/dma-mapping.h>
 #include <linux/interrupt.h>
+#include <linux/fs.h>
 #include <linux/module.h>
+#include <linux/slab.h>
 
 #include <uapi/misc/intel/gna.h>
 
@@ -20,16 +22,68 @@ module_param(recovery_timeout, int, 0644);
 MODULE_PARM_DESC(recovery_timeout, "Recovery timeout in seconds");
 #endif
 
-struct file;
-
 static int gna_open(struct inode *inode, struct file *f)
 {
-	return -EPERM;
+	struct gna_file_private *file_priv;
+	struct gna_private *gna_priv;
+
+	gna_priv = container_of(f->private_data, struct gna_private, misc);
+
+	file_priv = kzalloc(sizeof(*file_priv), GFP_KERNEL);
+	if (!file_priv)
+		return -ENOMEM;
+
+	file_priv->fd = f;
+	file_priv->gna_priv = gna_priv;
+
+	mutex_init(&file_priv->memlist_lock);
+	INIT_LIST_HEAD(&file_priv->memory_list);
+
+	INIT_LIST_HEAD(&file_priv->flist);
+
+	mutex_lock(&gna_priv->flist_lock);
+	list_add_tail(&file_priv->flist, &gna_priv->file_list);
+	mutex_unlock(&gna_priv->flist_lock);
+
+	f->private_data = file_priv;
+
+	return 0;
+}
+
+static int gna_release(struct inode *inode, struct file *f)
+{
+	struct gna_memory_object *iter_mo, *temp_mo;
+	struct gna_file_private *file_priv;
+	struct gna_private *gna_priv;
+
+	/* free all memory objects created by that file */
+	file_priv = (struct gna_file_private *)f->private_data;
+	gna_priv = file_priv->gna_priv;
+
+	mutex_lock(&file_priv->memlist_lock);
+	list_for_each_entry_safe(iter_mo, temp_mo, &file_priv->memory_list, file_mem_list) {
+		queue_work(gna_priv->request_wq, &iter_mo->work);
+		wait_event(iter_mo->waitq, true);
+		gna_memory_free(gna_priv, iter_mo);
+	}
+	mutex_unlock(&file_priv->memlist_lock);
+
+	gna_delete_file_requests(f, gna_priv);
+
+	mutex_lock(&gna_priv->flist_lock);
+	list_del_init(&file_priv->flist);
+	mutex_unlock(&gna_priv->flist_lock);
+	kfree(file_priv);
+	f->private_data = NULL;
+
+	return 0;
 }
 
 static const struct file_operations gna_file_ops = {
 	.owner		=	THIS_MODULE,
 	.open		=	gna_open,
+	.release	=	gna_release,
+	.unlocked_ioctl =	gna_ioctl,
 };
 
 static void gna_devm_idr_destroy(void *data)
