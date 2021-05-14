@@ -20,11 +20,53 @@ module_param(recovery_timeout, int, 0644);
 MODULE_PARM_DESC(recovery_timeout, "Recovery timeout in seconds");
 #endif
 
+struct file;
+
+static int gna_open(struct inode *inode, struct file *f)
+{
+	return -EPERM;
+}
+
+static const struct file_operations gna_file_ops = {
+	.owner		=	THIS_MODULE,
+	.open		=	gna_open,
+};
+
 static void gna_devm_idr_destroy(void *data)
 {
 	struct idr *idr = data;
 
 	idr_destroy(idr);
+}
+
+static void gna_devm_deregister_misc_dev(void *data)
+{
+	struct miscdevice *misc = data;
+
+	misc_deregister(misc);
+}
+
+static int gna_devm_register_misc_dev(struct device *parent, struct miscdevice *misc)
+{
+	int ret;
+
+	ret = misc_register(misc);
+	if (ret) {
+		dev_err(parent, "misc device %s registering failed. errcode: %d\n",
+			misc->name, ret);
+		gna_devm_deregister_misc_dev(misc);
+	} else {
+		dev_dbg(parent, "device: %s registered\n",
+			misc->name);
+	}
+
+	ret = devm_add_action(parent, gna_devm_deregister_misc_dev, misc);
+	if (ret) {
+		dev_err(parent, "could not add devm action for %s misc deregister\n", misc->name);
+		gna_devm_deregister_misc_dev(misc);
+	}
+
+	return ret;
 }
 
 static irqreturn_t gna_interrupt(int irq, void *priv)
@@ -81,13 +123,13 @@ int gna_probe(struct device *parent, struct gna_dev_info *dev_info, void __iomem
 	gna_priv->recovery_timeout_jiffies = msecs_to_jiffies(recovery_timeout * 1000);
 	gna_priv->iobase = iobase;
 	gna_priv->info = *dev_info;
-	gna_priv->parent = parent;
+	gna_priv->misc.parent = parent;
 
 	dev_misc_name = devm_kasprintf(parent, GFP_KERNEL, "%s%d", GNA_DV_NAME, gna_priv->index);
 	if (!dev_misc_name)
 		return -ENOMEM;
 
-	gna_priv->name = dev_misc_name;
+	gna_priv->misc.name = dev_misc_name;
 
 	if (!(sizeof(dma_addr_t) > 4) ||
 		dma_set_mask(parent, DMA_BIT_MASK(64))) {
@@ -145,7 +187,11 @@ int gna_probe(struct device *parent, struct gna_dev_info *dev_info, void __iomem
 		return ret;
 	}
 
-	return 0;
+	gna_priv->misc.minor = MISC_DYNAMIC_MINOR;
+	gna_priv->misc.fops = &gna_file_ops;
+	gna_priv->misc.mode = 0666;
+
+	return gna_devm_register_misc_dev(parent, &gna_priv->misc);
 }
 
 static u32 gna_device_type_by_hwid(u32 hwid)

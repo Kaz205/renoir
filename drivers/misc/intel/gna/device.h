@@ -8,6 +8,7 @@
 #include <linux/idr.h>
 #include <linux/io.h>
 #include <linux/list.h>
+#include <linux/miscdevice.h>
 #include <linux/mutex.h>
 #include <linux/types.h>
 
@@ -41,8 +42,8 @@ struct gna_private {
 
 	int recovery_timeout_jiffies;
 
-	const char *name;
-	struct device *parent;
+	/* gna misc-device */
+	struct miscdevice misc;
 
 	/* hardware status set by interrupt handler */
 	u32 hw_status;
@@ -86,17 +87,17 @@ static inline void gna_reg_write(struct gna_private *gna_priv, u32 reg, u32 val)
 
 static inline struct device *gna_parent(struct gna_private *gna_priv)
 {
-	return gna_priv->parent;
+	return gna_priv->misc.parent;
 }
 
 static inline const char *gna_name(struct gna_private *gna_priv)
 {
-	return gna_priv->name;
+	return gna_priv->misc.name;
 }
 
 static inline struct device *gna_dev(struct gna_private *gna_priv)
 {
-	return gna_priv->parent;
+	return gna_priv->misc.this_device;
 }
 
 #endif /* __GNA_DEVICE_H__ */
