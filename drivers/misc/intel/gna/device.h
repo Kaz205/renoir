@@ -4,6 +4,7 @@
 #ifndef __GNA_DEVICE_H__
 #define __GNA_DEVICE_H__
 
+#include <linux/atomic.h>
 #include <linux/idr.h>
 #include <linux/io.h>
 #include <linux/list.h>
@@ -43,6 +44,11 @@ struct gna_private {
 
 	struct gna_mmu_object mmu;
 	struct mutex mmu_lock;
+
+	struct list_head request_list;
+	/* protects request_list */
+	struct mutex reqlist_lock;
+	atomic_t request_count;
 
 	/* memory objects' store */
 	struct idr memory_idr;

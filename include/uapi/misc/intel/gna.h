@@ -26,6 +26,43 @@ extern "C" {
 	 GNA_STS_PARAM_OOR		|\
 	 GNA_STS_VA_OOR)
 
+/*
+ * Structure describes part of memory to be overwritten before starting GNA
+ */
+struct gna_memory_patch {
+	/* offset from targeted memory */
+	__u64 offset;
+
+	__u64 size;
+	__u64 value;
+};
+
+struct gna_buffer {
+	__u64 memory_id;
+
+	__u64 offset;
+	__u64 size;
+
+	__u64 patch_count;
+	__u64 patches_ptr;
+};
+
+/*
+ * Driver performance timestamps in nanoseconds.
+ * Values regard system boot time, but do not count during suspend.
+ */
+struct gna_drv_perf {
+	__u64 pre_processing;	/* driver starts pre-processing */
+	__u64 processing;	/* hw starts processing */
+	__u64 hw_completed;	/* hw finishes processing */
+	__u64 completion;	/* driver finishes post-processing */
+};
+
+struct gna_hw_perf {
+	__u64 total;
+	__u64 stall;
+};
+
 struct gna_compute_cfg {
 	__u32 layer_base;
 	__u32 layer_count;

@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright(c) 2017-2021 Intel Corporation
 
-#include <linux/atomic.h>
 #include <linux/device.h>
 #include <linux/dma-mapping.h>
 #include <linux/module.h>
 
 #include "device.h"
 #include "hw.h"
+#include "request.h"
 
 static int recovery_timeout = 60;
 
@@ -81,6 +81,11 @@ int gna_probe(struct device *parent, struct gna_dev_info *dev_info, void __iomem
 	}
 
 	mutex_init(&gna_priv->memidr_lock);
+
+	atomic_set(&gna_priv->request_count, 0);
+
+	mutex_init(&gna_priv->reqlist_lock);
+	INIT_LIST_HEAD(&gna_priv->request_list);
 
 	return 0;
 }
