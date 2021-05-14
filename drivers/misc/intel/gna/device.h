@@ -70,7 +70,7 @@ struct gna_private {
 	struct mutex memidr_lock;
 };
 
-int gna_probe(struct device *parent, struct gna_dev_info *dev_info, void __iomem *iobase);
+int gna_probe(struct device *parent, struct gna_dev_info *dev_info, void __iomem *iobase, int irq);
 
 static inline u32 gna_reg_read(struct gna_private *gna_priv, u32 reg)
 {

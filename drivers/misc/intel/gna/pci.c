@@ -69,10 +69,33 @@ static const struct pci_device_id gna_pci_ids[] = {
 	{ }
 };
 
+static void gna_pcim_free_irq_vectors(void *data)
+{
+	struct pci_dev *pcidev = data;
+
+	pci_free_irq_vectors(pcidev);
+}
+
+static int gna_pcim_alloc_irq_vectors(struct pci_dev *pcidev)
+{
+	int ret;
+
+	ret = pci_alloc_irq_vectors(pcidev, 1, 1, PCI_IRQ_ALL_TYPES);
+	if (ret < 0)
+		return ret;
+
+	ret = devm_add_action(&pcidev->dev, gna_pcim_free_irq_vectors, pcidev);
+	if (ret)
+		gna_pcim_free_irq_vectors(pcidev);
+
+	return ret;
+}
+
 int gna_pci_probe(struct pci_dev *pcidev, const struct pci_device_id *pci_id)
 {
 	struct gna_dev_info *dev_info;
 	void __iomem *iobase;
+	int irq;
 	int ret;
 
 	ret = pcim_enable_device(pcidev);
@@ -91,9 +114,19 @@ int gna_pci_probe(struct pci_dev *pcidev, const struct pci_device_id *pci_id)
 
 	pci_set_master(pcidev);
 
+	ret = gna_pcim_alloc_irq_vectors(pcidev);
+	if (ret < 0)
+		return ret;
+
+	irq = pci_irq_vector(pcidev, 0);
+	if (unlikely(irq < 0)) {
+		dev_err(&pcidev->dev, "could not get irq number\n");
+		return -EIO;
+	}
+
 	dev_info = (struct gna_dev_info *)pci_id->driver_data;
 
-	ret = gna_probe(&pcidev->dev, dev_info, iobase);
+	ret = gna_probe(&pcidev->dev, dev_info, iobase, irq);
 	if (ret) {
 		dev_err(&pcidev->dev, "could not initialize device\n");
 		return ret;

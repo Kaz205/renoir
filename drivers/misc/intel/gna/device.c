@@ -3,6 +3,7 @@
 
 #include <linux/device.h>
 #include <linux/dma-mapping.h>
+#include <linux/interrupt.h>
 #include <linux/module.h>
 
 #include "device.h"
@@ -21,6 +22,16 @@ static void gna_devm_idr_destroy(void *data)
 	struct idr *idr = data;
 
 	idr_destroy(idr);
+}
+
+static irqreturn_t gna_interrupt(int irq, void *priv)
+{
+	struct gna_private *gna_priv;
+
+	gna_priv = (struct gna_private *)priv;
+	gna_priv->dev_busy = false;
+	wake_up(&gna_priv->dev_busy_waitq);
+	return IRQ_HANDLED;
 }
 
 static void gna_devm_destroy_workqueue(void *data)
@@ -51,7 +62,7 @@ static int gna_devm_create_singlethread_workqueue(struct gna_private *gna_priv)
 	return ret;
 }
 
-int gna_probe(struct device *parent, struct gna_dev_info *dev_info, void __iomem *iobase)
+int gna_probe(struct device *parent, struct gna_dev_info *dev_info, void __iomem *iobase, int irq)
 {
 	static atomic_t dev_last_idx = ATOMIC_INIT(-1);
 	struct gna_private *gna_priv;
@@ -123,6 +134,13 @@ int gna_probe(struct device *parent, struct gna_dev_info *dev_info, void __iomem
 	ret = gna_devm_create_singlethread_workqueue(gna_priv);
 	if (ret)
 		return ret;
+
+	ret = devm_request_irq(parent, irq, gna_interrupt,
+			IRQF_SHARED, dev_misc_name, gna_priv);
+	if (ret) {
+		dev_err(parent, "could not register for interrupt\n");
+		return ret;
+	}
 
 	return 0;
 }
