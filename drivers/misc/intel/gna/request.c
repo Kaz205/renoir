@@ -6,6 +6,7 @@
 #include <linux/idr.h>
 #include <linux/mm.h>
 #include <linux/mutex.h>
+#include <linux/pm_runtime.h>
 #include <linux/uaccess.h>
 #include <linux/slab.h>
 
@@ -65,6 +66,14 @@ static void gna_request_process(struct work_struct *work)
 
 	score_request->drv_perf.pre_processing = ktime_get_ns();
 
+	ret = pm_runtime_get_sync(gna_parent(gna_priv));
+	if (ret < 0 && ret != -EACCES) {
+		dev_warn(gna_dev(gna_priv), "pm_runtime_get_sync() failed: %d\n", ret);
+		score_request->status = -ENODEV;
+		pm_runtime_put_noidle(gna_parent(gna_priv));
+		goto end;
+	}
+
 	/* Set busy flag before kicking off HW. The isr will clear it and wake up us. There is
 	 * no difference if isr is missed in a timeout situation of the last request. We just
 	 * always set it busy and let the wait_event_timeout check the reset.
@@ -75,6 +84,8 @@ static void gna_request_process(struct work_struct *work)
 
 	ret = gna_score(score_request);
 	if (ret) {
+		if (pm_runtime_put(gna_parent(gna_priv)) < 0)
+			dev_warn(gna_dev(gna_priv), "pm_runtime_put() failed: %d\n", ret);
 		score_request->status = ret;
 		goto end;
 	}
@@ -93,6 +104,10 @@ static void gna_request_process(struct work_struct *work)
 
 	gna_request_update_status(score_request);
 	gna_abort_hw(gna_priv);
+
+	ret = pm_runtime_put(gna_parent(gna_priv));
+	if (ret < 0)
+		dev_warn(gna_dev(gna_priv), "pm_runtime_put() failed: %d\n", ret);
 
 	buffer = score_request->buffer_list;
 	for (i = 0; i < score_request->buffer_count; i++, buffer++) {

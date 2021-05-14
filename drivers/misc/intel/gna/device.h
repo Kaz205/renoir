@@ -10,6 +10,7 @@
 #include <linux/list.h>
 #include <linux/miscdevice.h>
 #include <linux/mutex.h>
+#include <linux/pm_runtime.h>
 #include <linux/types.h>
 
 #include "hw.h"
@@ -74,6 +75,8 @@ struct gna_private {
 
 int gna_probe(struct device *parent, struct gna_dev_info *dev_info, void __iomem *iobase, int irq);
 int gna_getparam(struct gna_private *gna_priv, union gna_parameter *param);
+
+extern const struct dev_pm_ops __maybe_unused gna_pm;
 
 static inline u32 gna_reg_read(struct gna_private *gna_priv, u32 reg)
 {

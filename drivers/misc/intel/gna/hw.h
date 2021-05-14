@@ -49,6 +49,7 @@ struct gna_private;
 #define GNA_MMIO_CTRL		0x84
 #define GNA_MMIO_PTC		0x8C
 #define GNA_MMIO_PSC		0x90
+#define GNA_MMIO_D0I3C		0xA8
 #define GNA_MMIO_DESBASE	0xB0
 #define GNA_MMIO_IBUFFS		0xB4
 

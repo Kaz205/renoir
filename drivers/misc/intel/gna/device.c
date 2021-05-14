@@ -22,6 +22,30 @@ module_param(recovery_timeout, int, 0644);
 MODULE_PARM_DESC(recovery_timeout, "Recovery timeout in seconds");
 #endif
 
+static int __maybe_unused gna_runtime_suspend(struct device *dev)
+{
+	struct gna_private *gna_priv = dev_get_drvdata(dev);
+	u32 val = gna_reg_read(gna_priv, GNA_MMIO_D0I3C);
+
+	dev_dbg(dev, "%s D0I3, reg %.8x\n", __func__, val);
+
+	return 0;
+}
+
+static int __maybe_unused gna_runtime_resume(struct device *dev)
+{
+	struct gna_private *gna_priv = dev_get_drvdata(dev);
+	u32 val = gna_reg_read(gna_priv, GNA_MMIO_D0I3C);
+
+	dev_dbg(dev, "%s D0I3, reg %.8x\n", __func__, val);
+
+	return 0;
+}
+
+const struct dev_pm_ops __maybe_unused gna_pm = {
+	SET_RUNTIME_PM_OPS(gna_runtime_suspend, gna_runtime_resume, NULL)
+};
+
 static int gna_open(struct inode *inode, struct file *f)
 {
 	struct gna_file_private *file_priv;
@@ -121,6 +145,22 @@ static int gna_devm_register_misc_dev(struct device *parent, struct miscdevice *
 	}
 
 	return ret;
+}
+
+static void gna_pm_init(struct device *dev)
+{
+	pm_runtime_set_autosuspend_delay(dev, 200);
+	pm_runtime_use_autosuspend(dev);
+	pm_runtime_mark_last_busy(dev);
+	pm_runtime_allow(dev);
+	pm_runtime_put_noidle(dev);
+}
+
+static void gna_pm_remove(void *data)
+{
+	struct device *dev = data;
+
+	pm_runtime_get_noresume(dev);
 }
 
 static irqreturn_t gna_interrupt(int irq, void *priv)
@@ -245,7 +285,20 @@ int gna_probe(struct device *parent, struct gna_dev_info *dev_info, void __iomem
 	gna_priv->misc.fops = &gna_file_ops;
 	gna_priv->misc.mode = 0666;
 
-	return gna_devm_register_misc_dev(parent, &gna_priv->misc);
+	ret = gna_devm_register_misc_dev(parent, &gna_priv->misc);
+	if (ret)
+		return ret;
+
+	dev_set_drvdata(parent, gna_priv);
+
+	gna_pm_init(parent);
+	ret = devm_add_action(parent, gna_pm_remove, parent);
+	if (ret) {
+		dev_err(parent, "could not add devm action for pm\n");
+		return ret;
+	}
+
+	return 0;
 }
 
 static u32 gna_device_type_by_hwid(u32 hwid)
