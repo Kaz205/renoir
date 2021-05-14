@@ -6,8 +6,11 @@
 #include <linux/interrupt.h>
 #include <linux/module.h>
 
+#include <uapi/misc/intel/gna.h>
+
 #include "device.h"
 #include "hw.h"
+#include "ioctl.h"
 #include "request.h"
 
 static int recovery_timeout = 60;
@@ -140,6 +143,50 @@ int gna_probe(struct device *parent, struct gna_dev_info *dev_info, void __iomem
 	if (ret) {
 		dev_err(parent, "could not register for interrupt\n");
 		return ret;
+	}
+
+	return 0;
+}
+
+static u32 gna_device_type_by_hwid(u32 hwid)
+{
+	switch (hwid) {
+	case GNA_DEV_HWID_CNL:
+		return GNA_DEV_TYPE_0_9;
+	case GNA_DEV_HWID_GLK:
+	case GNA_DEV_HWID_EHL:
+	case GNA_DEV_HWID_ICL:
+		return GNA_DEV_TYPE_1_0;
+	case GNA_DEV_HWID_JSL:
+	case GNA_DEV_HWID_TGL:
+	case GNA_DEV_HWID_RKL:
+		return GNA_DEV_TYPE_2_0;
+	case GNA_DEV_HWID_ADL:
+	case GNA_DEV_HWID_RPL:
+		return GNA_DEV_TYPE_3_0;
+	default:
+		return 0;
+	}
+}
+
+int gna_getparam(struct gna_private *gna_priv, union gna_parameter *param)
+{
+	switch (param->in.id) {
+	case GNA_PARAM_DEVICE_ID:
+		param->out.value = gna_priv->info.hwid;
+		break;
+	case GNA_PARAM_RECOVERY_TIMEOUT:
+		param->out.value = jiffies_to_msecs(gna_priv->recovery_timeout_jiffies) / 1000;
+		break;
+	case GNA_PARAM_INPUT_BUFFER_S:
+		param->out.value = gna_priv->hw_info.in_buf_s;
+		break;
+	case GNA_PARAM_DEVICE_TYPE:
+		param->out.value = gna_device_type_by_hwid(gna_priv->info.hwid);
+		break;
+	default:
+		dev_err(gna_dev(gna_priv), "unknown parameter id %llu\n", param->in.id);
+		return -EINVAL;
 	}
 
 	return 0;

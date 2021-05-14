@@ -17,6 +17,7 @@
 #define GNA_DV_NAME	"intel_gna"
 
 struct workqueue_struct;
+union gna_parameter;
 struct device;
 struct file;
 
@@ -71,6 +72,7 @@ struct gna_private {
 };
 
 int gna_probe(struct device *parent, struct gna_dev_info *dev_info, void __iomem *iobase, int irq);
+int gna_getparam(struct gna_private *gna_priv, union gna_parameter *param);
 
 static inline u32 gna_reg_read(struct gna_private *gna_priv, u32 reg)
 {

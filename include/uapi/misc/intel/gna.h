@@ -8,11 +8,18 @@
 extern "C" {
 #endif
 
+#include <linux/const.h>
+#include <linux/ioctl.h>
 #include <linux/types.h>
 
 /* Operation modes */
 #define GNA_MODE_GMM	0
 #define GNA_MODE_XNN	1
+
+#define GNA_PARAM_DEVICE_ID		1
+#define GNA_PARAM_RECOVERY_TIMEOUT	2
+#define GNA_PARAM_DEVICE_TYPE		3
+#define GNA_PARAM_INPUT_BUFFER_S	4
 
 #define GNA_STS_SCORE_COMPLETED		_BITUL(0)
 #define GNA_STS_STATISTICS_VALID	_BITUL(3)
@@ -29,6 +36,11 @@ extern "C" {
 	 GNA_STS_PCI_UNEXCOMPL_ERR	|\
 	 GNA_STS_PARAM_OOR		|\
 	 GNA_STS_VA_OOR)
+
+#define GNA_DEV_TYPE_0_9	0x09
+#define GNA_DEV_TYPE_1_0	0x10
+#define GNA_DEV_TYPE_2_0	0x20
+#define GNA_DEV_TYPE_3_0	0x30
 
 /*
  * Structure describes part of memory to be overwritten before starting GNA
@@ -81,6 +93,16 @@ struct gna_compute_cfg {
 	__u8 pad[5];
 };
 
+union gna_parameter {
+	struct {
+		__u64 id;
+	} in;
+
+	struct {
+		__u64 value;
+	} out;
+};
+
 union gna_memory_map {
 	struct {
 		__u64 address;
@@ -92,6 +114,37 @@ union gna_memory_map {
 		__u64 memory_id;
 	} out;
 };
+
+union gna_compute {
+	struct {
+		struct gna_compute_cfg config;
+	} in;
+
+	struct {
+		__u64 request_id;
+	} out;
+};
+
+union gna_wait {
+	struct {
+		__u64 request_id;
+		__u32 timeout;
+		__u32 pad;
+	} in;
+
+	struct {
+		__u32 hw_status;
+		__u32 pad;
+		struct gna_drv_perf drv_perf;
+		struct gna_hw_perf hw_perf;
+	} out;
+};
+
+#define GNA_GET_PARAMETER	_IOWR('C', 0x01, union gna_parameter)
+#define GNA_MAP_MEMORY		_IOWR('C', 0x02, union gna_memory_map)
+#define GNA_UNMAP_MEMORY	_IOWR('C', 0x03, __u64)
+#define GNA_COMPUTE		_IOWR('C', 0x04, union gna_compute)
+#define GNA_WAIT		_IOWR('C', 0x05, union gna_wait)
 
 #if defined(__cplusplus)
 }
