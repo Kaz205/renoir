@@ -16,6 +16,13 @@ module_param(recovery_timeout, int, 0644);
 MODULE_PARM_DESC(recovery_timeout, "Recovery timeout in seconds");
 #endif
 
+static void gna_devm_idr_destroy(void *data)
+{
+	struct idr *idr = data;
+
+	idr_destroy(idr);
+}
+
 int gna_probe(struct device *parent, struct gna_dev_info *dev_info, void __iomem *iobase)
 {
 	static atomic_t dev_last_idx = ATOMIC_INIT(-1);
@@ -51,6 +58,17 @@ int gna_probe(struct device *parent, struct gna_dev_info *dev_info, void __iomem
 
 	bld_reg = gna_reg_read(gna_priv, GNA_MMIO_IBUFFS);
 	gna_priv->hw_info.in_buf_s = bld_reg & GENMASK(7, 0);
+
+	mutex_init(&gna_priv->mmu_lock);
+
+	idr_init(&gna_priv->memory_idr);
+	ret = devm_add_action(parent, gna_devm_idr_destroy, &gna_priv->memory_idr);
+	if (ret) {
+		dev_err(parent, "could not add devm action for idr\n");
+		return ret;
+	}
+
+	mutex_init(&gna_priv->memidr_lock);
 
 	return 0;
 }

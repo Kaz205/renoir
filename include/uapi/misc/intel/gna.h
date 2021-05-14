@@ -40,6 +40,18 @@ struct gna_compute_cfg {
 	__u8 pad[5];
 };
 
+union gna_memory_map {
+	struct {
+		__u64 address;
+		__u32 size;
+		__u32 pad;
+	} in;
+
+	struct {
+		__u64 memory_id;
+	} out;
+};
+
 #if defined(__cplusplus)
 }
 #endif
