@@ -23,6 +23,34 @@ static void gna_devm_idr_destroy(void *data)
 	idr_destroy(idr);
 }
 
+static void gna_devm_destroy_workqueue(void *data)
+{
+	struct workqueue_struct *request_wq = data;
+
+	destroy_workqueue(request_wq);
+}
+
+static int gna_devm_create_singlethread_workqueue(struct gna_private *gna_priv)
+{
+	struct device *dev = gna_parent(gna_priv);
+	const char *name = gna_name(gna_priv);
+	int ret;
+
+	gna_priv->request_wq = create_singlethread_workqueue(name);
+	if (!gna_priv->request_wq) {
+		dev_err(dev, "could not create %s workqueue\n", name);
+		return -EFAULT;
+	}
+
+	ret = devm_add_action(dev, gna_devm_destroy_workqueue, gna_priv->request_wq);
+	if (ret) {
+		dev_err(dev, "could not add devm action for %s workqueue\n", name);
+		gna_devm_destroy_workqueue(gna_priv->request_wq);
+	}
+
+	return ret;
+}
+
 int gna_probe(struct device *parent, struct gna_dev_info *dev_info, void __iomem *iobase)
 {
 	static atomic_t dev_last_idx = ATOMIC_INIT(-1);
@@ -89,6 +117,12 @@ int gna_probe(struct device *parent, struct gna_dev_info *dev_info, void __iomem
 
 	mutex_init(&gna_priv->reqlist_lock);
 	INIT_LIST_HEAD(&gna_priv->request_list);
+
+	init_waitqueue_head(&gna_priv->dev_busy_waitq);
+
+	ret = gna_devm_create_singlethread_workqueue(gna_priv);
+	if (ret)
+		return ret;
 
 	return 0;
 }

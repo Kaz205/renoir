@@ -16,6 +16,7 @@
 
 #define GNA_DV_NAME	"intel_gna"
 
+struct workqueue_struct;
 struct device;
 struct file;
 
@@ -42,6 +43,9 @@ struct gna_private {
 	const char *name;
 	struct device *parent;
 
+	/* hardware status set by interrupt handler */
+	u32 hw_status;
+
 	/* device related resources */
 	void __iomem *iobase;
 	struct gna_dev_info info;
@@ -50,9 +54,14 @@ struct gna_private {
 	struct gna_mmu_object mmu;
 	struct mutex mmu_lock;
 
+	/* if true, then gna device is processing */
+	bool dev_busy;
+	struct wait_queue_head dev_busy_waitq;
+
 	struct list_head request_list;
 	/* protects request_list */
 	struct mutex reqlist_lock;
+	struct workqueue_struct *request_wq;
 	atomic_t request_count;
 
 	/* memory objects' store */
@@ -76,6 +85,11 @@ static inline void gna_reg_write(struct gna_private *gna_priv, u32 reg, u32 val)
 static inline struct device *gna_parent(struct gna_private *gna_priv)
 {
 	return gna_priv->parent;
+}
+
+static inline const char *gna_name(struct gna_private *gna_priv)
+{
+	return gna_priv->name;
 }
 
 static inline struct device *gna_dev(struct gna_private *gna_priv)

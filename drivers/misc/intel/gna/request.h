@@ -8,6 +8,7 @@
 #include <linux/list.h>
 #include <linux/types.h>
 #include <linux/wait.h>
+#include <linux/workqueue.h>
 
 #include <uapi/misc/intel/gna.h>
 
@@ -46,6 +47,7 @@ struct gna_request {
 	struct gna_buffer *buffer_list;
 	u64 buffer_count;
 
+	struct work_struct work;
 	struct wait_queue_head waitq;
 };
 
