@@ -10,6 +10,10 @@ extern "C" {
 
 #include <linux/types.h>
 
+/* Operation modes */
+#define GNA_MODE_GMM	0
+#define GNA_MODE_XNN	1
+
 #define GNA_STS_SCORE_COMPLETED		_BITUL(0)
 #define GNA_STS_STATISTICS_VALID	_BITUL(3)
 #define GNA_STS_PCI_MMU_ERR		_BITUL(4)

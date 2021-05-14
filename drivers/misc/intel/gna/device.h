@@ -30,6 +30,11 @@ struct gna_file_private {
 };
 
 struct gna_private {
+	/* list of opened files */
+	struct list_head file_list;
+	/* protects file_list */
+	struct mutex flist_lock;
+
 	int index;
 
 	int recovery_timeout_jiffies;

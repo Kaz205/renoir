@@ -82,6 +82,9 @@ int gna_probe(struct device *parent, struct gna_dev_info *dev_info, void __iomem
 
 	mutex_init(&gna_priv->memidr_lock);
 
+	mutex_init(&gna_priv->flist_lock);
+	INIT_LIST_HEAD(&gna_priv->file_list);
+
 	atomic_set(&gna_priv->request_count, 0);
 
 	mutex_init(&gna_priv->reqlist_lock);
