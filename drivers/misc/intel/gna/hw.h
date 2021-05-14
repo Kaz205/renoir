@@ -47,6 +47,10 @@ struct gna_desc_info {
 	struct gna_mmu_info mmu_info;
 };
 
+struct gna_hw_info {
+	u8 in_buf_s;
+};
+
 struct gna_dev_info {
 	u32 hwid;
 	u32 num_pagetables;

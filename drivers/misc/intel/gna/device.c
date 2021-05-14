@@ -21,6 +21,7 @@ int gna_probe(struct device *parent, struct gna_dev_info *dev_info, void __iomem
 	static atomic_t dev_last_idx = ATOMIC_INIT(-1);
 	struct gna_private *gna_priv;
 	const char *dev_misc_name;
+	u32 bld_reg;
 	int ret;
 
 	gna_priv = devm_kzalloc(parent, sizeof(*gna_priv), GFP_KERNEL);
@@ -47,6 +48,9 @@ int gna_probe(struct device *parent, struct gna_dev_info *dev_info, void __iomem
 			return ret;
 		}
 	}
+
+	bld_reg = gna_reg_read(gna_priv, GNA_MMIO_IBUFFS);
+	gna_priv->hw_info.in_buf_s = bld_reg & GENMASK(7, 0);
 
 	return 0;
 }
