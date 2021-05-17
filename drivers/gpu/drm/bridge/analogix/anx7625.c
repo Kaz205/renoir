@@ -2359,8 +2359,10 @@ static int __maybe_unused anx7625_resume(struct device *dev)
 	if (!ctx->pdata.intp_irq)
 		return 0;
 
-	if (!pm_runtime_enabled(dev) || !pm_runtime_suspended(dev))
+	if (!pm_runtime_enabled(dev) || !pm_runtime_suspended(dev)) {
+		enable_irq(ctx->pdata.intp_irq);
 		anx7625_runtime_pm_resume(dev);
+	}
 
 	return 0;
 }
@@ -2372,8 +2374,11 @@ static int __maybe_unused anx7625_suspend(struct device *dev)
 	if (!ctx->pdata.intp_irq)
 		return 0;
 
-	if (!pm_runtime_enabled(dev) || !pm_runtime_suspended(dev))
+	if (!pm_runtime_enabled(dev) || !pm_runtime_suspended(dev)) {
 		anx7625_runtime_pm_suspend(dev);
+		disable_irq(ctx->pdata.intp_irq);
+		flush_workqueue(ctx->workqueue);
+	}
 
 	return 0;
 }
