@@ -22,7 +22,6 @@
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_bridge.h>
-#include <drm/drm_dp_aux_backlight.h>
 #include <drm/drm_dp_helper.h>
 #include <drm/drm_mipi_dsi.h>
 #include <drm/drm_of.h>
@@ -127,7 +126,6 @@
  * @panel:        Our panel.
  * @enable_gpio:  The GPIO we toggle to enable the bridge.
  * @supplies:     Data for bulk enabling/disabling our regulators.
- * @backlight:    The DP aux backlight device.
  * @dp_lanes:     Count of dp_lanes we're using.
  * @ln_assign:    Value to program to the LN_ASSIGN register.
  * @ln_polrs:     Value for the 4-bit LN_POLRS field of SN_ENH_FRAME_REG.
@@ -156,7 +154,6 @@ struct ti_sn_bridge {
 	struct drm_panel		*panel;
 	struct gpio_desc		*enable_gpio;
 	struct regulator_bulk_data	supplies[SN_REGULATOR_SUPPLY_NUM];
-	struct drm_dp_aux_backlight	*backlight;
 	int				dp_lanes;
 	u8				ln_assign;
 	u8				ln_polrs;
@@ -437,8 +434,6 @@ static void ti_sn_bridge_detach(struct drm_bridge *bridge)
 static void ti_sn_bridge_disable(struct drm_bridge *bridge)
 {
 	struct ti_sn_bridge *pdata = bridge_to_ti_sn_bridge(bridge);
-
-	drm_dp_aux_backlight_disable(pdata->backlight);
 
 	drm_panel_disable(pdata->panel);
 
@@ -826,8 +821,6 @@ static void ti_sn_bridge_enable(struct drm_bridge *bridge)
 			   VSTREAM_ENABLE);
 
 	drm_panel_enable(pdata->panel);
-
-	drm_dp_aux_backlight_enable(pdata->backlight);
 }
 
 static void ti_sn_bridge_pre_enable(struct drm_bridge *bridge)
@@ -1227,7 +1220,6 @@ static int ti_sn_bridge_probe(struct i2c_client *client,
 			      const struct i2c_device_id *id)
 {
 	struct ti_sn_bridge *pdata;
-	struct drm_dp_aux_backlight *aux_bl;
 	int ret;
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
@@ -1285,8 +1277,10 @@ static int ti_sn_bridge_probe(struct i2c_client *client,
 	pm_runtime_enable(pdata->dev);
 
 	ret = ti_sn_setup_gpio_controller(pdata);
-	if (ret)
-		goto out;
+	if (ret) {
+		pm_runtime_disable(pdata->dev);
+		return ret;
+	}
 
 	i2c_set_clientdata(client, pdata);
 
@@ -1294,24 +1288,6 @@ static int ti_sn_bridge_probe(struct i2c_client *client,
 	pdata->aux.dev = pdata->dev;
 	pdata->aux.transfer = ti_sn_aux_transfer;
 	drm_dp_aux_init(&pdata->aux);
-
-	if (of_find_property(pdata->dev->of_node, "use-aux-backlight", NULL)) {
-		aux_bl = devm_kzalloc(pdata->dev, sizeof(*aux_bl), GFP_KERNEL);
-		if (!aux_bl) {
-			ret = -ENOMEM;
-			goto out;
-		}
-		aux_bl->dev = pdata->dev;
-		aux_bl->aux = &pdata->aux;
-		ret = drm_dp_aux_backlight_register("ti-sn-aux-backlight",
-						    aux_bl);
-		if (ret) {
-			DRM_ERROR("failed to register dp aux backlight %d\n",
-				  ret);
-			goto out;
-		}
-		pdata->backlight = aux_bl;
-	}
 
 	pdata->bridge.funcs = &ti_sn_bridge_funcs;
 	pdata->bridge.of_node = client->dev.of_node;
@@ -1321,10 +1297,6 @@ static int ti_sn_bridge_probe(struct i2c_client *client,
 	ti_sn_debugfs_init(pdata);
 
 	return 0;
-
-out:
-	pm_runtime_disable(pdata->dev);
-	return ret;
 }
 
 static int ti_sn_bridge_remove(struct i2c_client *client)
