@@ -173,8 +173,10 @@ int drm_dp_aux_backlight_register(const char *name,
 						  aux_bl->dev, aux_bl,
 						  &aux_bl_ops, &bl_props);
 	if (IS_ERR(aux_bl->bd)) {
+		int ret = PTR_ERR(aux_bl->bd);
+
 		aux_bl->bd = NULL;
-		return PTR_ERR(aux_bl->bd);
+		return ret;
 	}
 
 	return 0;
