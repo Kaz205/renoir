@@ -377,6 +377,7 @@ const struct mdp_format *mdp_try_fmt_mplane(struct v4l2_format *f,
 	const struct mdp_pix_limit *pix_limit;
 	u32 wmin, wmax, hmin, hmax, org_w, org_h;
 	unsigned int i;
+	u32 ysize;
 	u32 exsize;
 
 	if (!V4L2_TYPE_IS_MULTIPLANAR(f->type))
@@ -436,18 +437,18 @@ const struct mdp_format *mdp_try_fmt_mplane(struct v4l2_format *f,
 		si = (bpl * pix_mp->height * fmt->depth[i]) / fmt->row_depth[i];
 		if(MDP_COLOR_IS_UFP(fmt->mdp_color))
 	    {
-	        if(i == 0)
-	        {
-	            exsize = ((si>>8) + 128);
-	            exsize = (exsize + 63) & (~63);
-	        }
+			if(i == 0)
+				ysize = si;
 
-	        if(i == 1)
-	        {
-	            exsize = exsize / 2 + 128;
-	            exsize = (exsize + 15) & (~15);
-	        }
-	        si += exsize;
+			exsize = (((ysize + 255) >> 8) + 128);
+			exsize = ((exsize + 63) >> 6) << 6;
+
+			if(i == 1)
+			{
+				exsize = exsize / 2 + 128;
+				exsize = ((exsize + 15) >> 4) << 4;
+			}
+			si += exsize;
 	    }
 
 		pix_mp->plane_fmt[i].bytesperline = bpl;
@@ -641,14 +642,13 @@ static void mdp_prepare_buffer(struct img_image_buffer *b,
 					       vb->planes[i].data_offset;
 	    if(MDP_COLOR_IS_UFP(b->format.colorformat))
 	    {
-	        exsize = ((b->format.plane_fmt[0].size>>8) + 128);
-	        if(i == 0)
-	            exsize = (exsize + 63) & (~63);
+	        exsize = (((b->format.plane_fmt[0].size + 255)>>8) + 128);
+	        exsize = ((exsize + 63) >> 6) << 6;
 
 	        if(i == 1)
 	        {
 	            exsize = exsize / 2 + 128;
-	            exsize = (exsize + 15) & (~15);
+	            exsize = ((exsize + 15) >> 4) << 4;
 	        }
 	        b->format.plane_fmt[i].size += exsize;
 	    }
@@ -666,14 +666,13 @@ static void mdp_prepare_buffer(struct img_image_buffer *b,
 					       pix_mp->height, i);
 	    if(MDP_COLOR_IS_UFP(b->format.colorformat))
 	    {
-	        exsize = ((b->format.plane_fmt[0].size>>8) + 128);
-	        if(i == 0)
-	            exsize = (exsize + 63) & (~63);
+	        exsize = (((b->format.plane_fmt[0].size + 255)>>8) + 128);
+			exsize = ((exsize + 63) >> 6) << 6;
 
 	        if(i == 1)
 	        {
 	            exsize = exsize / 2 + 128;
-	            exsize = (exsize + 15) & (~15);
+	            exsize = ((exsize + 15) >> 4) << 4;
 	        }
 	        b->format.plane_fmt[i].size += exsize;
 	    }
