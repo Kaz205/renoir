@@ -1526,7 +1526,7 @@ static int anx7625_usb_mux_set(struct typec_mux *mux,
 
 	/* dp off, power off last */
 	if (old_has_dp && !new_has_dp)
-		pm_runtime_put(dev);
+		pm_runtime_put_sync(dev);
 
 	return 0;
 }
@@ -1671,7 +1671,7 @@ static struct edid *anx7625_get_edid(struct anx7625_data *ctx)
 
 	pm_runtime_get_sync(dev);
 	edid_num = sp_tx_edid_read(ctx, p_edid->edid_raw_data);
-	pm_runtime_put(dev);
+	pm_runtime_put_sync(dev);
 
 	if (edid_num < 1) {
 		DRM_DEV_ERROR(dev, "Fail to read EDID: %d\n", edid_num);
@@ -1695,7 +1695,7 @@ static enum drm_connector_status anx7625_sink_detect(struct anx7625_data *ctx)
 	if (ctx->pdata.panel_bridge) {
 		pm_runtime_get_sync(dev);
 		status = anx7625_read_hpd_status_p0(ctx);
-		pm_runtime_put(dev);
+		pm_runtime_put_sync(dev);
 
 		return (status & HPD_STATUS) ? connector_status_connected :
 						     connector_status_disconnected;
@@ -2005,7 +2005,7 @@ static void anx7625_bridge_disable(struct drm_bridge *bridge)
 
 	anx7625_dp_stop(ctx);
 
-	pm_runtime_put(dev);
+	pm_runtime_put_sync(dev);
 }
 
 static void
