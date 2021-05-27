@@ -19,6 +19,7 @@
 	backlight_lcd0: backlight_lcd0 {
 		compatible = "pwm-backlight";
 		pwms = <&pwm0 0 500000>;
+		power-supply = <&ppvar_sys>;
 		enable-gpios = <&pio 152 0>;
 		brightness-levels = < 0 1023 >;
 		num-interpolated-steps = <1023>;
