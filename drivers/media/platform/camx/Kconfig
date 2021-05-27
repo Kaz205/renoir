@@ -177,13 +177,6 @@ config QTI_SENSORS
 			  Say Y here to enable selecting module
 			  Support for the Camera actuator driver
 
-		config QTI_FLASH
-			bool "Camera FLASH driver"
-			default n
-			help
-			  Say Y here to enable selecting module
-			  Support for the Camera Flash driver
-
 		config QTI_IR_LED
 			bool "Camera IR Led driver"
 			default n
