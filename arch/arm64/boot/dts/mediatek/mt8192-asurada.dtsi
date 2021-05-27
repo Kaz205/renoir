@@ -408,6 +408,8 @@
 		interrupt-parent = <&pio>;
 		interrupts = <15 IRQ_TYPE_LEVEL_LOW>;
 
+		vcc-supply = <&pp3300_u>;
+
 		wakeup-source;
 	};
 
