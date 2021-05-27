@@ -390,6 +390,10 @@
 		interrupts = <18 IRQ_TYPE_LEVEL_LOW>;
 		realtek,jd-src = <1>;
 		realtek,btndet-delay = <16>;
+
+		AVDD-supply = <&mt6359_vio18_ldo_reg>;
+		MICVDD-supply = <&pp3300_g>;
+		VBAT-supply = <&pp3300_ldo_z>;
 	};
 };
 
