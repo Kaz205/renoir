@@ -146,14 +146,6 @@ config QTI_JPEG
 	  Say Y here to enable selecting module
           Support for the JPEG engine
 
-config QTI_FD
-        bool "Qualcomm FD driver"
-	default n
-	depends on (QTI_CAMERA_SYNC && QTI_CAMERA_SMMU && QTI_CAMERA_CRM)
-        help
-	  Say Y here to enable selecting module
-          Support for the FD engine
-
 config QTI_LRME
         bool "Qualcomm LRME driver"
 	default n
