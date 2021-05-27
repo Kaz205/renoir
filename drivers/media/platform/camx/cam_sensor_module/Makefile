@@ -6,12 +6,10 @@ obj-$(CONFIG_QTI_SENSORS) += \
 	cam_actuator/ \
 	cam_sensor/ \
 	cam_eeprom/ \
-	cam_ir_led/ \
 	cam_actuator/ \
 	cam_cci/ \
 	cam_csiphy/ \
 	cam_eeprom/ \
-	cam_ir_led/ \
 	cam_res_mgr/ \
 	cam_sensor/ \
 	cam_sensor_io/ \
