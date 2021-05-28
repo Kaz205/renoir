@@ -2177,7 +2177,7 @@ static int32_t cam_icp_mgr_process_msg(void *priv, void *data)
 	return rc;
 }
 
-int32_t cam_icp_hw_mgr_cb(uint32_t irq_status, void *data)
+static int32_t cam_icp_hw_mgr_cb(uint32_t irq_status, void *data)
 {
 	int32_t rc = 0;
 	unsigned long flags;

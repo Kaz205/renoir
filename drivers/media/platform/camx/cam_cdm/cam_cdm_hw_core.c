@@ -56,8 +56,8 @@ static enum cam_cdm_id cam_hw_cdm_get_id_by_name(char *name)
 	return CAM_CDM_MAX;
 }
 
-int cam_hw_cdm_bl_fifo_pending_bl_rb(struct cam_hw_info *cdm_hw,
-	uint32_t *pending_bl)
+static int cam_hw_cdm_bl_fifo_pending_bl_rb(struct cam_hw_info *cdm_hw,
+					    uint32_t *pending_bl)
 {
 	int rc = 0;
 
@@ -150,8 +150,7 @@ static int cam_hw_cdm_enable_core(struct cam_hw_info *cdm_hw, bool enable)
 	return rc;
 }
 
-void cam_hw_cdm_dump_core_debug_registers(
-	struct cam_hw_info *cdm_hw)
+static void cam_hw_cdm_dump_core_debug_registers(struct cam_hw_info *cdm_hw)
 {
 	uint32_t dump_reg, core_dbg, loop_cnt;
 
@@ -226,8 +225,8 @@ void cam_hw_cdm_dump_core_debug_registers(
 
 }
 
-int cam_hw_cdm_wait_for_bl_fifo(struct cam_hw_info *cdm_hw,
-	uint32_t bl_count)
+static int cam_hw_cdm_wait_for_bl_fifo(struct cam_hw_info *cdm_hw,
+				       uint32_t bl_count)
 {
 	uint32_t pending_bl = 0;
 	int32_t available_bl_slots = 0;
@@ -287,8 +286,8 @@ int cam_hw_cdm_wait_for_bl_fifo(struct cam_hw_info *cdm_hw,
 	return rc;
 }
 
-bool cam_hw_cdm_bl_write(struct cam_hw_info *cdm_hw, uint32_t src,
-	uint32_t len, uint32_t tag)
+static bool cam_hw_cdm_bl_write(struct cam_hw_info *cdm_hw, uint32_t src,
+				uint32_t len, uint32_t tag)
 {
 	if (cam_cdm_write_hw_reg(cdm_hw, CDM_BL_FIFO_BASE_REG, src)) {
 		CAM_ERR(CAM_CDM, "Failed to write CDM base to BL base");
@@ -302,7 +301,7 @@ bool cam_hw_cdm_bl_write(struct cam_hw_info *cdm_hw, uint32_t src,
 	return false;
 }
 
-bool cam_hw_cdm_commit_bl_write(struct cam_hw_info *cdm_hw)
+static bool cam_hw_cdm_commit_bl_write(struct cam_hw_info *cdm_hw)
 {
 	if (cam_cdm_write_hw_reg(cdm_hw, CDM_BL_FIFO_STORE_REG, 1)) {
 		CAM_ERR(CAM_CDM, "Failed to write CDM commit BL");
@@ -311,8 +310,8 @@ bool cam_hw_cdm_commit_bl_write(struct cam_hw_info *cdm_hw)
 	return false;
 }
 
-int cam_hw_cdm_submit_gen_irq(struct cam_hw_info *cdm_hw,
-	struct cam_cdm_hw_intf_cmd_submit_bl *req)
+static int cam_hw_cdm_submit_gen_irq(struct cam_hw_info *cdm_hw,
+				     struct cam_cdm_hw_intf_cmd_submit_bl *req)
 {
 	struct cam_cdm_bl_cb_request_entry *node;
 	struct cam_cdm *core = (struct cam_cdm *)cdm_hw->core_info;
@@ -624,7 +623,7 @@ static void cam_hw_cdm_iommu_fault_handler(struct iommu_domain *domain,
 
 }
 
-irqreturn_t cam_hw_cdm_irq(int irq_num, void *data)
+static irqreturn_t cam_hw_cdm_irq(int irq_num, void *data)
 {
 	struct cam_hw_info *cdm_hw = data;
 	struct cam_cdm *cdm_core = cdm_hw->core_info;
@@ -806,7 +805,7 @@ int cam_hw_cdm_deinit(void *hw_priv,
 	return rc;
 }
 
-int cam_hw_cdm_probe(struct platform_device *pdev)
+static int cam_hw_cdm_probe(struct platform_device *pdev)
 {
 	int rc;
 	struct cam_hw_info *cdm_hw = NULL;
@@ -1032,7 +1031,7 @@ release_mem:
 	return rc;
 }
 
-int cam_hw_cdm_remove(struct platform_device *pdev)
+static int cam_hw_cdm_remove(struct platform_device *pdev)
 {
 	int rc = -EBUSY;
 	struct cam_hw_info *cdm_hw = NULL;

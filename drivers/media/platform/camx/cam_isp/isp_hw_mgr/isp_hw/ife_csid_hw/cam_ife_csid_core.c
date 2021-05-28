@@ -3522,7 +3522,7 @@ static int cam_csid_dispatch_irq(struct cam_ife_csid_hw *csid_hw,
 	return rc;
 }
 
-irqreturn_t cam_ife_csid_irq(int irq_num, void *data)
+static irqreturn_t cam_ife_csid_irq(int irq_num, void *data)
 {
 	struct cam_ife_csid_hw                         *csid_hw;
 	struct cam_hw_soc_info                         *soc_info;

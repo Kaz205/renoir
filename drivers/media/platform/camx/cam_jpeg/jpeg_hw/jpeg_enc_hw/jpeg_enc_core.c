@@ -411,9 +411,8 @@ int cam_jpeg_enc_stop_hw(void *data,
 	return 0;
 }
 
-int cam_jpeg_enc_hw_dump(
-	struct cam_hw_info *jpeg_enc_dev,
-	struct cam_jpeg_hw_dump_args *dump_args)
+static int cam_jpeg_enc_hw_dump(struct cam_hw_info *jpeg_enc_dev,
+				struct cam_jpeg_hw_dump_args *dump_args)
 {
 
 	struct cam_hw_soc_info *soc_info = NULL;

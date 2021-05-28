@@ -62,9 +62,8 @@ static int cam_csiphy_notify_secure_mode(struct csiphy_device *csiphy_dev,
 	return 0;
 }
 
-int32_t cam_csiphy_get_instance_offset(
-	struct csiphy_device *csiphy_dev,
-	int32_t dev_handle)
+static int32_t cam_csiphy_get_instance_offset(struct csiphy_device *csiphy_dev,
+					      int32_t dev_handle)
 {
 	int32_t i;
 
@@ -83,8 +82,8 @@ int32_t cam_csiphy_get_instance_offset(
 	return i;
 }
 
-void cam_csiphy_query_cap(struct csiphy_device *csiphy_dev,
-	struct cam_csiphy_query_cap *csiphy_cap)
+static void cam_csiphy_query_cap(struct csiphy_device *csiphy_dev,
+				 struct cam_csiphy_query_cap *csiphy_cap)
 {
 	struct cam_hw_soc_info *soc_info = &csiphy_dev->soc_info;
 
@@ -116,10 +115,10 @@ void cam_csiphy_reset(struct csiphy_device *csiphy_dev)
 	}
 }
 
-int32_t cam_csiphy_update_secure_info(
-	struct csiphy_device *csiphy_dev,
-	struct cam_csiphy_info  *cam_cmd_csiphy_info,
-	struct cam_config_dev_cmd *cfg_dev)
+static int32_t
+cam_csiphy_update_secure_info(struct csiphy_device *csiphy_dev,
+			      struct cam_csiphy_info *cam_cmd_csiphy_info,
+			      struct cam_config_dev_cmd *cfg_dev)
 {
 	uint32_t clock_lane, adj_lane_mask, temp;
 	int32_t offset;
@@ -164,8 +163,8 @@ int32_t cam_csiphy_update_secure_info(
 	return 0;
 }
 
-int32_t cam_cmd_buf_parser(struct csiphy_device *csiphy_dev,
-	struct cam_config_dev_cmd *cfg_dev)
+static int32_t cam_cmd_buf_parser(struct csiphy_device *csiphy_dev,
+				  struct cam_config_dev_cmd *cfg_dev)
 {
 	int32_t                 rc = 0;
 	uintptr_t                generic_ptr;
@@ -282,7 +281,8 @@ void cam_csiphy_cphy_irq_config(struct csiphy_device *csiphy_dev)
 			csiphy_dev->ctrl_reg->csiphy_irq_reg[i].reg_addr);
 }
 
-void cam_csiphy_cphy_data_rate_config(struct csiphy_device *csiphy_device)
+static void
+cam_csiphy_cphy_data_rate_config(struct csiphy_device *csiphy_device)
 {
 	int i = 0, j = 0;
 	uint64_t phy_data_rate = 0;
@@ -380,7 +380,7 @@ irqreturn_t cam_csiphy_irq(int irq_num, void *data)
 	return IRQ_HANDLED;
 }
 
-int32_t cam_csiphy_config_dev(struct csiphy_device *csiphy_dev)
+static int32_t cam_csiphy_config_dev(struct csiphy_device *csiphy_dev)
 {
 	int32_t      rc = 0;
 	uint32_t     lane_enable = 0, mask = 1, size = 0;
