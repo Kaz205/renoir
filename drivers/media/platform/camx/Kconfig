@@ -50,48 +50,6 @@ config QTI_ISP
 	  Say Y here to enable selecting module
 	  Support for the ISP engine
 
-if QTI_ISP
-	config QTI_MIPI_PHY
-		bool "Qualcomm MIPI C-PHY driver"
-		default y
-		depends on (QTI_ISP)
-		help
-		  Say Y here to enable selecting module
-		  Support for MIPI Combo CSI physical interfaces
-
-	config QTI_PPI
-		bool "Qualcomm PPI driver"
-		default y
-		depends on (QTI_ISP)
-		help
-		  Say Y here to enable selecting module
-		  Support for the PPI interfaces
-
-	config QTI_CSID
-		bool "Qualcomm CSIDx driver"
-		default y
-		depends on (QTI_ISP)
-		help
-		  Say Y here to enable selecting module
-		  Support for the CSIDx engines
-
-	config QTI_VFE
-		bool "Qualcomm VFEx driver"
-		default y
-		depends on (QTI_ISP)
-		help
-		  Say Y here to enable selecting module
-		  Support for the VFEx engines
-
-	config QTI_VFE_LITE
-		bool "Qualcomm Lite VFEx driver"
-		default y
-		depends on (QTI_ISP)
-		help
-		  Say Y here to enable selecting module
-		  Support for the Lite IFEx engines
-endif
-
 config QTI_ICP_A5
         bool "Qualcomm ICP/A5 driver"
 	depends on (QTI_CAMERA_SYNC && QTI_CAMERA_SMMU && QTI_CAMERA_CRM)
