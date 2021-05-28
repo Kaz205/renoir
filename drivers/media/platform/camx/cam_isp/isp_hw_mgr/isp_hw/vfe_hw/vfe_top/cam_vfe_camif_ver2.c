@@ -342,14 +342,15 @@ static int cam_vfe_camif_reg_dump(
 	for (wm_idx = 0; wm_idx <= 23; wm_idx++) {
 		offset = 0x2214 + 0x100 * wm_idx;
 		CAM_INFO(CAM_ISP,
-			"BUS_WM%u offset 0x%x val 0x%x offset 0x%x val 0x%x",
-			wm_idx, offset,
-			cam_io_r_mb(camif_priv->mem_base + offset),
-			offset + 4, cam_io_r_mb(camif_priv->mem_base +
-			offset + 4), offset + 8,
-			cam_io_r_mb(camif_priv->mem_base + offset + 8),
-			offset + 12, cam_io_r_mb(camif_priv->mem_base +
-			offset + 12));
+			 "BUS_WM%u offset 0x%x val 0x%x offset 0x%x val 0x%x offset 0x%x val 0x%x offset 0x%x val 0x%x",
+			 wm_idx, offset,
+			 cam_io_r_mb(camif_priv->mem_base + offset),
+			 offset + 4,
+			 cam_io_r_mb(camif_priv->mem_base + offset + 4),
+			 offset + 8,
+			 cam_io_r_mb(camif_priv->mem_base + offset + 8),
+			 offset + 12,
+			 cam_io_r_mb(camif_priv->mem_base + offset + 12));
 	}
 
 	offset = 0x420;
