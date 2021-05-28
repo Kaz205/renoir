@@ -150,63 +150,6 @@ static int cam_hw_cdm_enable_core(struct cam_hw_info *cdm_hw, bool enable)
 	return rc;
 }
 
-int cam_hw_cdm_enable_core_dbg(struct cam_hw_info *cdm_hw)
-{
-	int rc = 0;
-
-	if (cam_cdm_write_hw_reg(cdm_hw, CDM_DBG_CORE_DBUG, 0x10100)) {
-		CAM_ERR(CAM_CDM, "Failed to Write CDM HW core debug");
-		rc = -EIO;
-	}
-
-	return rc;
-}
-
-int cam_hw_cdm_disable_core_dbg(struct cam_hw_info *cdm_hw)
-{
-	int rc = 0;
-
-	if (cam_cdm_write_hw_reg(cdm_hw, CDM_DBG_CORE_DBUG, 0)) {
-		CAM_ERR(CAM_CDM, "Failed to Write CDM HW core debug");
-		rc = -EIO;
-	}
-
-	return rc;
-}
-
-void cam_hw_cdm_dump_scratch_registors(struct cam_hw_info *cdm_hw)
-{
-	uint32_t dump_reg = 0;
-
-	cam_cdm_read_hw_reg(cdm_hw, CDM_CFG_CORE_EN, &dump_reg);
-	CAM_ERR(CAM_CDM, "dump core en=%x", dump_reg);
-
-	cam_cdm_read_hw_reg(cdm_hw, CDM_DBG_SCRATCH_0_REG, &dump_reg);
-	CAM_ERR(CAM_CDM, "dump scratch0=%x", dump_reg);
-
-	cam_cdm_read_hw_reg(cdm_hw, CDM_DBG_SCRATCH_1_REG, &dump_reg);
-	CAM_ERR(CAM_CDM, "dump scratch1=%x", dump_reg);
-
-	cam_cdm_read_hw_reg(cdm_hw, CDM_DBG_SCRATCH_2_REG, &dump_reg);
-	CAM_ERR(CAM_CDM, "dump scratch2=%x", dump_reg);
-
-	cam_cdm_read_hw_reg(cdm_hw, CDM_DBG_SCRATCH_3_REG, &dump_reg);
-	CAM_ERR(CAM_CDM, "dump scratch3=%x", dump_reg);
-
-	cam_cdm_read_hw_reg(cdm_hw, CDM_DBG_SCRATCH_4_REG, &dump_reg);
-	CAM_ERR(CAM_CDM, "dump scratch4=%x", dump_reg);
-
-	cam_cdm_read_hw_reg(cdm_hw, CDM_DBG_SCRATCH_5_REG, &dump_reg);
-	CAM_ERR(CAM_CDM, "dump scratch5=%x", dump_reg);
-
-	cam_cdm_read_hw_reg(cdm_hw, CDM_DBG_SCRATCH_6_REG, &dump_reg);
-	CAM_ERR(CAM_CDM, "dump scratch6=%x", dump_reg);
-
-	cam_cdm_read_hw_reg(cdm_hw, CDM_DBG_SCRATCH_7_REG, &dump_reg);
-	CAM_ERR(CAM_CDM, "dump scratch7=%x", dump_reg);
-
-}
-
 void cam_hw_cdm_dump_core_debug_registers(
 	struct cam_hw_info *cdm_hw)
 {

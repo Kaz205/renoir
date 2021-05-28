@@ -341,17 +341,6 @@ void cam_csiphy_cphy_data_rate_config(struct csiphy_device *csiphy_device)
 	}
 }
 
-void cam_csiphy_cphy_irq_disable(struct csiphy_device *csiphy_dev)
-{
-	int32_t i;
-	void __iomem *csiphybase =
-		csiphy_dev->soc_info.reg_map[0].mem_base;
-
-	for (i = 0; i < csiphy_dev->num_irq_registers; i++)
-		cam_io_w_mb(0x0, csiphybase +
-			csiphy_dev->ctrl_reg->csiphy_irq_reg[i].reg_addr);
-}
-
 irqreturn_t cam_csiphy_irq(int irq_num, void *data)
 {
 	uint32_t irq;

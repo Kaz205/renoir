@@ -1871,37 +1871,6 @@ static void __cam_req_mgr_unreserve_link(
 /* Workqueue context processing section */
 
 /**
- * cam_req_mgr_process_send_req()
- *
- * @brief: This runs in workque thread context. Call core funcs to send
- *         apply request id to drivers.
- * @priv : link information.
- * @data : contains information about frame_id, link etc.
- *
- * @return: 0 on success.
- */
-int cam_req_mgr_process_send_req(void *priv, void *data)
-{
-	int                                 rc = 0;
-	struct cam_req_mgr_core_link        *link = NULL;
-	struct cam_req_mgr_send_request     *send_req = NULL;
-	struct cam_req_mgr_req_queue        *in_q = NULL;
-
-	if (!data || !priv) {
-		CAM_ERR(CAM_CRM, "input args NULL %pK %pK", data, priv);
-		rc = -EINVAL;
-		goto end;
-	}
-	link = (struct cam_req_mgr_core_link *)priv;
-	send_req = (struct cam_req_mgr_send_request *)data;
-	in_q = send_req->in_q;
-
-	rc = __cam_req_mgr_send_req(link, in_q, CAM_TRIGGER_POINT_SOF);
-end:
-	return rc;
-}
-
-/**
  * cam_req_mgr_process_flush_req()
  *
  * @brief: This runs in workque thread context. Call core funcs to check
