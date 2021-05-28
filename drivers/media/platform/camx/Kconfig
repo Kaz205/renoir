@@ -58,24 +58,6 @@ config QTI_ICP_A5
 	  Say Y here to enable selecting module
           Support for the ICP/A5 engine
 
-if QTI_ICP_A5
-	config QTI_IPE
-		bool "Qualcomm IPE driver"
-		default y
-		depends on (QTI_ICP_A5)
-		help
-		  Say Y here to enable selecting module
-		  Support for the IPE engines
-
-	config QTI_BPS
-		bool "Qualcomm BPS driver"
-		default y
-		depends on (QTI_ICP_A5)
-		help
-		  Say Y here to enable selecting module
-		  Support for the BPS engine
-endif
-
 config QTI_CPAS
         bool "Qualcomm CPAS driver"
 	default y
