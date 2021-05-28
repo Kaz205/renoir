@@ -107,101 +107,26 @@ config QTI_SENSORS
 			  Say Y here to enable selecting module
 			  Support for the Camera actuator driver
 
-		choice
-			prompt "Select interface"
+		config QTI_CCI
+			bool "Qualcomm CCI driver"
+			default y
 			help
-			  Select physical interface for real devices or Virtual
-			  interface and dummy devices
+			  Say Y here to enable selecting module
+			  Support for the synchronous QUP based I2C interface
 
-			config QTI_PHY_IO
-				bool "I2C, CCI or SPI interface"
-				help
-				  Use real devices attached on I2C/CCI or SPI physical interface.
+		config QTI_I2C
+			bool "Qualcomm I2C driver"
+			default y
+			help
+			  Say Y here to enable selecting module
+			  Support for the synchronous GENI based I2C interface
 
-			config QTI_VIRT_IO
-				bool "Virtual interface"
-				help
-				  Use Virtual interface for dummy devices.
-				  This driver not return data or acknowledge.
-				  May be useful for diagnostic purposes.
-		endchoice
-
-		if (QTI_VIRT_IO)
-			config QTI_FSENSOR_ADDR
-				hex "Front Sensor ID register"
-				range 0x0 0xFFFF
-				default "0x300b"
-				help
-				  The address of register contains the sensor id.
-				  This value will used for virtual device matching.
-
-			config QTI_FSENSOR_DATA
-				hex "Front Sensor ID"
-				range 0x0 0xFFFF
-				default "0x5675"
-				help
-				  The value in ID register
-				  This value will used for virtual device matching.
-
-			if (QTI_FSENSOR_ADDR != 0)
-				config QTI_FSENSOR_ID
-					hex "Sensor Slave address"
-					range 0x0 0xFF
-					default "0x6c"
-					help
-					  The Sensor address on CCI/I2C bus
-					  This value will used for virtual device matching.
-			endif
-
-			config QTI_RSENSOR_ADDR
-				hex "Rear Sensor ID register"
-				range 0x0 0xFFFF
-				default "0x300b"
-				help
-				  The address of register contains the sensor id
-				  This value will used for virtual device matching.
-
-			config QTI_RSENSOR_DATA
-				hex "Rear Sensor ID"
-				range 0x0 0xFFFF
-				default "0x885a"
-				help
-				  The value in ID register
-				  This value will used for virtual device matching.
-
-			if (QTI_RSENSOR_ADDR != 0)
-				config QTI_RSENSOR_ID
-					hex "Sensor Slave address"
-					range 0x0 0xFF
-					default "0x20"
-					help
-					  The Sensor address on CCI/I2C bus
-					  This value will used for virtual device matching.
-			endif
-		endif
-
-		if (QTI_PHY_IO || QTI_VIRT_IO)
-			config QTI_CCI
-				bool "Qualcomm CCI driver"
-				default y
-				help
-				  Say Y here to enable selecting module
-				  Support for the synchronous QUP based I2C interface
-
-			config QTI_I2C
-				bool "Qualcomm I2C driver"
-				default y
-				help
-				  Say Y here to enable selecting module
-				  Support for the synchronous GENI based I2C interface
-
-			config QTI_SPI
-				bool "Qualcomm SPI_GENI driver"
-				default y
-				help
-				  Say Y here to enable selecting module
-				  Support for the GENI based Serial Peripheral Interface
-		endif
+		config QTI_SPI
+			bool "Qualcomm SPI_GENI driver"
+			default y
+			help
+			  Say Y here to enable selecting module
+			  Support for the GENI based Serial Peripheral Interface
 
 	endif
 
