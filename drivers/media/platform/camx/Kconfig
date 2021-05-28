@@ -68,16 +68,6 @@ config QTI_CPAS
 	  Say Y here to enable selecting module
           Support for CDMx engines SW interface
 
-if QTI_CPAS
-	config QTI_CDM
-		bool "Qualcomm CDMx driver"
-		default y
-		depends on (QTI_CPAS)
-		help
-		  Say Y here to enable selecting module
-		  Support for the CDMx engine
-endif
-
 config QTI_JPEG
         bool "Qualcomm JPEG driver"
 	default n
