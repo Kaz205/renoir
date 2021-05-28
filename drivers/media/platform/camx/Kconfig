@@ -18,116 +18,14 @@ menuconfig SPECTRA_CAMERA
 
 if SPECTRA_CAMERA
 
-config QTI_CAMERA_SYNC
-        bool "Qualcomm camera SYNC driver"
-	default y
-        help
-	  Say Y here to enable selecting module
-          Support for camera drivers synchronization
-
-config QTI_CAMERA_SMMU
-        bool "Qualcomm System Memory Management Unit (SMMU)"
-	default y
-	depends on (IOMMU_DMA)
-        help
-	  Say Y here to enable selecting module
-          Support for memory pools and context banks
-
-config QTI_CAMERA_CRM
-        bool "Qualcomm Camera Request Manager (CRM)"
-	default y
-	depends on (QTI_CAMERA_SYNC && QTI_CAMERA_SMMU)
-	select VIDEOBUF2_DMA_SG
-        help
-	  Say Y here to enable selecting module
-          Support for camera drivers memory requests
-
-config QTI_ISP
-        bool "Qualcomm ISP drivers"
-	depends on (QTI_CAMERA_SYNC && QTI_CAMERA_SMMU && QTI_CAMERA_CRM)
-	default y
-        help
-	  Say Y here to enable selecting module
-	  Support for the ISP engine
-
-config QTI_ICP_A5
-        bool "Qualcomm ICP/A5 driver"
-	depends on (QTI_CAMERA_SYNC && QTI_CAMERA_SMMU && QTI_CAMERA_CRM)
-	default y
-        help
-	  Say Y here to enable selecting module
-          Support for the ICP/A5 engine
-
-config QTI_CPAS
-        bool "Qualcomm CPAS driver"
-	default y
-	depends on (QTI_CAMERA_SYNC && QTI_CAMERA_SMMU && QTI_CAMERA_CRM)
-	depends on QCOM_CLK_RPMH
-	depends on INTERCONNECT_QCOM_SC7180
-        help
-	  Say Y here to enable selecting module
-          Support for CDMx engines SW interface
-
-config QTI_JPEG
-        bool "Qualcomm JPEG driver"
-	default n
-	depends on (QTI_CAMERA_SYNC && QTI_CAMERA_SMMU && QTI_CAMERA_CRM)
-        help
-	  Say Y here to enable selecting module
-          Support for the JPEG engine
-
-config QTI_LRME
-        bool "Qualcomm LRME driver"
-	default n
-	depends on (QTI_CAMERA_SYNC && QTI_CAMERA_SMMU && QTI_CAMERA_CRM)
-        help
-	  Say Y here to enable selecting module
-          Support for the LRME engine
-
-config QTI_SENSORS
-        bool "Qualcomm sensor drivers"
-	default y
-	depends on (QTI_CAMERA_SYNC && QTI_CAMERA_SMMU && QTI_CAMERA_CRM)
-        help
-	  Say Y here to enable selecting module
-          Support for the Sensors and Actuator etc
-
-	if QTI_SENSORS
-		config QTI_EEPROM
-			bool "Camera EEPROM driver"
-			default y
-			help
-			  Say Y here to enable selecting module
-			  Support for the Camera eeprom driver
-
-		config QTI_ACTUATOR
-			bool "Camera Actuator driver"
-			default n
-			help
-			  Say Y here to enable selecting module
-			  Support for the Camera actuator driver
-
-		config QTI_CCI
-			bool "Qualcomm CCI driver"
-			default y
-			help
-			  Say Y here to enable selecting module
-			  Support for the synchronous QUP based I2C interface
-
-		config QTI_I2C
-			bool "Qualcomm I2C driver"
-			default y
-			help
-			  Say Y here to enable selecting module
-			  Support for the synchronous GENI based I2C interface
-
-		config QTI_SPI
-			bool "Qualcomm SPI_GENI driver"
-			default y
-			help
-			  Say Y here to enable selecting module
-			  Support for the GENI based Serial Peripheral Interface
-
-	endif
+source "drivers/media/platform/camx/cam_sync/Kconfig"
+source "drivers/media/platform/camx/cam_smmu/Kconfig"
+source "drivers/media/platform/camx/cam_req_mgr/Kconfig"
+source "drivers/media/platform/camx/cam_isp/Kconfig"
+source "drivers/media/platform/camx/cam_icp/Kconfig"
+source "drivers/media/platform/camx/cam_cpas/Kconfig"
+source "drivers/media/platform/camx/cam_jpeg/Kconfig"
+source "drivers/media/platform/camx/cam_lrme/Kconfig"
+source "drivers/media/platform/camx/cam_sensor_module/Kconfig"
 
 endif
