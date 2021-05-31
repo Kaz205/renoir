@@ -67,6 +67,10 @@ ap_ts_pen_1v8: &i2c4 {
 	status = "okay";
 };
 
+&secondary_mi2s {
+	qcom,playback-sd-lines = <0 1>;
+};
+
 &sn65dsi86_bridge {
 		use-aux-backlight;
 };
@@ -80,6 +84,13 @@ ap_ts_pen_1v8: &i2c4 {
 
 	pinconf {
 		pins = "gpio67";
+	};
+};
+
+&sec_mi2s_active{
+	pinmux {
+		pins = "gpio49", "gpio50", "gpio51", "gpio52";
+		function = "mi2s_1";
 	};
 };
 
