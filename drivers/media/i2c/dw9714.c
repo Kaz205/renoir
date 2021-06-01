@@ -162,7 +162,8 @@ static int dw9714_probe(struct i2c_client *client)
 	if (rval < 0)
 		goto err_cleanup;
 
-	pm_runtime_set_active(&client->dev);
+	if (!acpi_dev_state_low_power(&client->dev))
+		pm_runtime_set_active(&client->dev);
 	pm_runtime_enable(&client->dev);
 	pm_runtime_idle(&client->dev);
 
@@ -262,6 +263,7 @@ static struct i2c_driver dw9714_i2c_driver = {
 	.probe_new = dw9714_probe,
 	.remove = dw9714_remove,
 	.id_table = dw9714_id_table,
+	.flags = I2C_DRV_FL_ALLOW_LOW_POWER_PROBE,
 };
 
 module_i2c_driver(dw9714_i2c_driver);
