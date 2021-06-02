@@ -414,9 +414,8 @@ static struct snd_soc_cdai_ops sof_probe_compr_ops = {
 #endif
 #endif
 
-static int ssp_dai_hw_params(struct snd_pcm_substream *substream,
-			     struct snd_pcm_hw_params *params,
-			     struct snd_soc_dai *dai)
+static int ssp_dai_prepare(struct snd_pcm_substream *substream,
+			   struct snd_soc_dai *dai)
 {
 	struct snd_soc_pcm_runtime *rtd = asoc_substream_to_rtd(substream);
 	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, SOF_AUDIO_PCM_DRV_NAME);
@@ -502,7 +501,7 @@ static int ssp_dai_hw_free(struct snd_pcm_substream *substream,
 }
 
 static const struct snd_soc_dai_ops ssp_dai_ops = {
-	.hw_params = ssp_dai_hw_params,
+	.prepare = ssp_dai_prepare,
 	.hw_free = ssp_dai_hw_free,
 };
 
