@@ -340,26 +340,33 @@ struct napi_struct {
 	struct list_head	dev_list;
 	struct hlist_node	napi_hash_node;
 	unsigned int		napi_id;
+	struct task_struct	*thread;
 };
 
 enum {
-	NAPI_STATE_SCHED,	/* Poll is scheduled */
-	NAPI_STATE_MISSED,	/* reschedule a napi */
-	NAPI_STATE_DISABLE,	/* Disable pending */
-	NAPI_STATE_NPSVC,	/* Netpoll - don't dequeue from poll_list */
-	NAPI_STATE_HASHED,	/* In NAPI hash (busy polling possible) */
-	NAPI_STATE_NO_BUSY_POLL,/* Do not add in napi_hash, no busy polling */
-	NAPI_STATE_IN_BUSY_POLL,/* sk_busy_loop() owns this NAPI */
+	NAPI_STATE_SCHED,		/* Poll is scheduled */
+	NAPI_STATE_MISSED,		/* reschedule a napi */
+	NAPI_STATE_DISABLE,		/* Disable pending */
+	NAPI_STATE_NPSVC,		/* Netpoll - don't dequeue from poll_list */
+	NAPI_STATE_HASHED,		/* In NAPI hash (busy polling possible) */
+	NAPI_STATE_LISTED,		/* NAPI added to system lists */
+	NAPI_STATE_NO_BUSY_POLL,	/* Do not add in napi_hash, no busy polling */
+	NAPI_STATE_IN_BUSY_POLL,	/* sk_busy_loop() owns this NAPI */
+	NAPI_STATE_THREADED,		/* The poll is performed inside its own thread*/
+	NAPI_STATE_SCHED_THREADED,	/* Napi is currently scheduled in threaded mode */
 };
 
 enum {
-	NAPIF_STATE_SCHED	 = BIT(NAPI_STATE_SCHED),
-	NAPIF_STATE_MISSED	 = BIT(NAPI_STATE_MISSED),
-	NAPIF_STATE_DISABLE	 = BIT(NAPI_STATE_DISABLE),
-	NAPIF_STATE_NPSVC	 = BIT(NAPI_STATE_NPSVC),
-	NAPIF_STATE_HASHED	 = BIT(NAPI_STATE_HASHED),
-	NAPIF_STATE_NO_BUSY_POLL = BIT(NAPI_STATE_NO_BUSY_POLL),
-	NAPIF_STATE_IN_BUSY_POLL = BIT(NAPI_STATE_IN_BUSY_POLL),
+	NAPIF_STATE_SCHED		= BIT(NAPI_STATE_SCHED),
+	NAPIF_STATE_MISSED		= BIT(NAPI_STATE_MISSED),
+	NAPIF_STATE_DISABLE		= BIT(NAPI_STATE_DISABLE),
+	NAPIF_STATE_NPSVC		= BIT(NAPI_STATE_NPSVC),
+	NAPIF_STATE_HASHED		= BIT(NAPI_STATE_HASHED),
+	NAPIF_STATE_LISTED		= BIT(NAPI_STATE_LISTED),
+	NAPIF_STATE_NO_BUSY_POLL	= BIT(NAPI_STATE_NO_BUSY_POLL),
+	NAPIF_STATE_IN_BUSY_POLL	= BIT(NAPI_STATE_IN_BUSY_POLL),
+	NAPIF_STATE_THREADED		= BIT(NAPI_STATE_THREADED),
+	NAPIF_STATE_SCHED_THREADED	= BIT(NAPI_STATE_SCHED_THREADED),
 };
 
 enum gro_result {
@@ -481,6 +488,8 @@ static inline bool napi_complete(struct napi_struct *n)
 	return napi_complete_done(n, 0);
 }
 
+int dev_set_threaded(struct net_device *dev, bool threaded);
+
 /**
  *	napi_hash_del - remove a NAPI from global table
  *	@napi: NAPI context
@@ -504,20 +513,7 @@ bool napi_hash_del(struct napi_struct *napi);
  */
 void napi_disable(struct napi_struct *n);
 
-/**
- *	napi_enable - enable NAPI scheduling
- *	@n: NAPI context
- *
- * Resume NAPI from being scheduled on this context.
- * Must be paired with napi_disable.
- */
-static inline void napi_enable(struct napi_struct *n)
-{
-	BUG_ON(!test_bit(NAPI_STATE_SCHED, &n->state));
-	smp_mb__before_atomic();
-	clear_bit(NAPI_STATE_SCHED, &n->state);
-	clear_bit(NAPI_STATE_NPSVC, &n->state);
-}
+void napi_enable(struct napi_struct *n);
 
 /**
  *	napi_synchronize - wait until NAPI is not running
@@ -1555,6 +1551,12 @@ enum netdev_priv_flags {
 #define IFF_L3MDEV_RX_HANDLER		IFF_L3MDEV_RX_HANDLER
 #define IFF_LIVE_RENAME_OK		IFF_LIVE_RENAME_OK
 
+/* Specifies the type of the struct net_device::ml_priv pointer */
+enum netdev_ml_priv_type {
+	ML_PRIV_NONE,
+	ML_PRIV_CAN,
+};
+
 /**
  *	struct net_device - The DEVICE structure.
  *
@@ -1732,6 +1734,7 @@ enum netdev_priv_flags {
  * 	@nd_net:		Network namespace this network device is inside
  *
  * 	@ml_priv:	Mid-layer private
+ *	@ml_priv_type:  Mid-layer private type
  * 	@lstats:	Loopback statistics
  * 	@tstats:	Tunnel statistics
  * 	@dstats:	Dummy statistics
@@ -1775,6 +1778,8 @@ enum netdev_priv_flags {
  *			switch port.
  *
  *	@wol_enabled:	Wake-on-LAN is enabled
+ *
+ *	@threaded:	napi threaded mode is enabled
  *
  *	FIXME: cleanup struct net_device such that network protocol info
  *	moves out.
@@ -2019,8 +2024,10 @@ struct net_device {
 	possible_net_t			nd_net;
 
 	/* mid-layer private */
+	void				*ml_priv;
+	enum netdev_ml_priv_type	ml_priv_type;
+
 	union {
-		void					*ml_priv;
 		struct pcpu_lstats __percpu		*lstats;
 		struct pcpu_sw_netstats __percpu	*tstats;
 		struct pcpu_dstats __percpu		*dstats;
@@ -2066,6 +2073,7 @@ struct net_device {
 	struct lock_class_key	addr_list_lock_key;
 	bool			proto_down;
 	unsigned		wol_enabled:1;
+	unsigned		threaded:1;
 };
 #define to_net_dev(d) container_of(d, struct net_device, dev)
 
@@ -2165,6 +2173,29 @@ static inline void netdev_set_rx_headroom(struct net_device *dev, int new_hr)
 static inline void netdev_reset_rx_headroom(struct net_device *dev)
 {
 	netdev_set_rx_headroom(dev, -1);
+}
+
+static inline void *netdev_get_ml_priv(struct net_device *dev,
+				       enum netdev_ml_priv_type type)
+{
+	if (dev->ml_priv_type != type)
+		return NULL;
+
+	return dev->ml_priv;
+}
+
+static inline void netdev_set_ml_priv(struct net_device *dev,
+				      void *ml_priv,
+				      enum netdev_ml_priv_type type)
+{
+	WARN(dev->ml_priv_type && dev->ml_priv_type != type,
+	     "Overwriting already set ml_priv_type (%u) with different ml_priv_type (%u)!\n",
+	     dev->ml_priv_type, type);
+	WARN(!dev->ml_priv_type && dev->ml_priv,
+	     "Overwriting already set ml_priv and ml_priv_type is ML_PRIV_NONE!\n");
+
+	dev->ml_priv = ml_priv;
+	dev->ml_priv_type = type;
 }
 
 /*
@@ -3679,6 +3710,9 @@ int dev_pre_changeaddr_notify(struct net_device *dev, const char *addr,
 			      struct netlink_ext_ack *extack);
 int dev_set_mac_address(struct net_device *dev, struct sockaddr *sa,
 			struct netlink_ext_ack *extack);
+int dev_set_mac_address_user(struct net_device *dev, struct sockaddr *sa,
+			     struct netlink_ext_ack *extack);
+int dev_get_mac_address(struct sockaddr *sa, struct net *net, char *dev_name);
 int dev_change_carrier(struct net_device *, bool new_carrier);
 int dev_get_phys_port_id(struct net_device *dev,
 			 struct netdev_phys_item_id *ppid);
@@ -4044,6 +4078,7 @@ static inline void netif_tx_disable(struct net_device *dev)
 
 	local_bh_disable();
 	cpu = smp_processor_id();
+	spin_lock(&dev->tx_global_lock);
 	for (i = 0; i < dev->num_tx_queues; i++) {
 		struct netdev_queue *txq = netdev_get_tx_queue(dev, i);
 
@@ -4051,6 +4086,7 @@ static inline void netif_tx_disable(struct net_device *dev)
 		netif_tx_stop_queue(txq);
 		__netif_tx_unlock(txq);
 	}
+	spin_unlock(&dev->tx_global_lock);
 	local_bh_enable();
 }
 

@@ -7,7 +7,7 @@
  * Copyright 2006-2010	Johannes Berg <johannes@sipsolutions.net>
  * Copyright 2013-2014 Intel Mobile Communications GmbH
  * Copyright 2015-2017	Intel Deutschland GmbH
- * Copyright (C) 2018-2019 Intel Corporation
+ * Copyright (C) 2018-2020 Intel Corporation
  */
 
 #include <linux/netdevice.h>
@@ -259,6 +259,19 @@ struct ieee80211_he_obss_pd {
 	bool enable;
 	u8 min_offset;
 	u8 max_offset;
+};
+
+/**
+ * struct cfg80211_he_bss_color - AP settings for BSS coloring
+ *
+ * @color: the current color.
+ * @enabled: HE BSS color is used
+ * @partial: define the AID equation.
+ */
+struct cfg80211_he_bss_color {
+	u8 color;
+	bool enabled;
+	bool partial;
 };
 
 /**
@@ -990,6 +1003,8 @@ enum cfg80211_ap_settings_flags {
  * @twt_responder: Enable Target Wait Time
  * @flags: flags, as defined in enum cfg80211_ap_settings_flags
  * @he_obss_pd: OBSS Packet Detection settings
+ * @he_bss_color: BSS Color settings
+ * @he_oper: HE operation IE (or %NULL if HE isn't enabled)
  */
 struct cfg80211_ap_settings {
 	struct cfg80211_chan_def chandef;
@@ -1014,10 +1029,12 @@ struct cfg80211_ap_settings {
 	const struct ieee80211_ht_cap *ht_cap;
 	const struct ieee80211_vht_cap *vht_cap;
 	const struct ieee80211_he_cap_elem *he_cap;
+	const struct ieee80211_he_operation *he_oper;
 	bool ht_required, vht_required;
 	bool twt_responder;
 	u32 flags;
 	struct ieee80211_he_obss_pd he_obss_pd;
+	struct cfg80211_he_bss_color he_bss_color;
 };
 
 /**
@@ -2651,6 +2668,13 @@ enum wiphy_params_flags {
 };
 
 #define IEEE80211_DEFAULT_AIRTIME_WEIGHT	256
+
+/* The per TXQ device queue limit in airtime */
+#define IEEE80211_DEFAULT_AQL_TXQ_LIMIT_L	5000
+#define IEEE80211_DEFAULT_AQL_TXQ_LIMIT_H	12000
+
+/* The per interface airtime threshold to switch to lower queue limit */
+#define IEEE80211_AQL_THRESHOLD			24000
 
 /**
  * struct cfg80211_pmksa - PMK Security Association
@@ -5256,7 +5280,7 @@ unsigned int ieee80211_get_mesh_hdrlen(struct ieee80211s_hdr *meshhdr);
  */
 int ieee80211_data_to_8023_exthdr(struct sk_buff *skb, struct ethhdr *ehdr,
 				  const u8 *addr, enum nl80211_iftype iftype,
-				  u8 data_offset);
+				  u8 data_offset, bool is_amsdu);
 
 /**
  * ieee80211_data_to_8023 - convert an 802.11 data frame to 802.3
@@ -5268,7 +5292,7 @@ int ieee80211_data_to_8023_exthdr(struct sk_buff *skb, struct ethhdr *ehdr,
 static inline int ieee80211_data_to_8023(struct sk_buff *skb, const u8 *addr,
 					 enum nl80211_iftype iftype)
 {
-	return ieee80211_data_to_8023_exthdr(skb, NULL, addr, iftype, 0);
+	return ieee80211_data_to_8023_exthdr(skb, NULL, addr, iftype, 0, false);
 }
 
 /**

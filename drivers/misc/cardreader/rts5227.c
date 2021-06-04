@@ -56,9 +56,10 @@ static void rts5227_fill_driving(struct rtsx_pcr *pcr, u8 voltage)
 
 static void rts5227_fetch_vendor_settings(struct rtsx_pcr *pcr)
 {
+	struct pci_dev *pdev = pcr->pci;
 	u32 reg;
 
-	rtsx_pci_read_config_dword(pcr, PCR_SETTING_REG1, &reg);
+	pci_read_config_dword(pdev, PCR_SETTING_REG1, &reg);
 	pcr_dbg(pcr, "Cfg 0x%x: 0x%x\n", PCR_SETTING_REG1, reg);
 
 	if (!rtsx_vendor_setting_valid(reg))
@@ -69,24 +70,13 @@ static void rts5227_fetch_vendor_settings(struct rtsx_pcr *pcr)
 	pcr->card_drive_sel &= 0x3F;
 	pcr->card_drive_sel |= rtsx_reg_to_card_drive_sel(reg);
 
-	rtsx_pci_read_config_dword(pcr, PCR_SETTING_REG2, &reg);
+	pci_read_config_dword(pdev, PCR_SETTING_REG2, &reg);
 	pcr_dbg(pcr, "Cfg 0x%x: 0x%x\n", PCR_SETTING_REG2, reg);
+	if (rtsx_check_mmc_support(reg))
+		pcr->extra_caps |= EXTRA_CAPS_NO_MMC;
 	pcr->sd30_drive_sel_3v3 = rtsx_reg_to_sd30_drive_sel_3v3(reg);
 	if (rtsx_reg_check_reverse_socket(reg))
 		pcr->flags |= PCR_REVERSE_SOCKET;
-}
-
-static void rts5227_force_power_down(struct rtsx_pcr *pcr, u8 pm_state)
-{
-	/* Set relink_time to 0 */
-	rtsx_pci_write_register(pcr, AUTOLOAD_CFG_BASE + 1, 0xFF, 0);
-	rtsx_pci_write_register(pcr, AUTOLOAD_CFG_BASE + 2, 0xFF, 0);
-	rtsx_pci_write_register(pcr, AUTOLOAD_CFG_BASE + 3, 0x01, 0);
-
-	if (pm_state == HOST_ENTER_S3)
-		rtsx_pci_write_register(pcr, pcr->reg_pm_ctrl3, 0x10, 0x10);
-
-	rtsx_pci_write_register(pcr, FPDCTL, 0x03, 0x03);
 }
 
 static void rts5227_init_from_cfg(struct rtsx_pcr *pcr)
@@ -309,7 +299,6 @@ static const struct pcr_ops rts5227_pcr_ops = {
 	.switch_output_voltage = rts5227_switch_output_voltage,
 	.cd_deglitch = NULL,
 	.conv_clk_and_div_n = NULL,
-	.force_power_down = rts5227_force_power_down,
 };
 
 /* SD Pull Control Enable:
@@ -409,6 +398,11 @@ static int rts522a_extra_init_hw(struct rtsx_pcr *pcr)
 {
 	rts5227_extra_init_hw(pcr);
 
+	/* Power down OCP for power consumption */
+	if (!pcr->card_exist)
+		rtsx_pci_write_register(pcr, FPDCTL, OC_POWER_DOWN,
+				OC_POWER_DOWN);
+
 	rtsx_pci_write_register(pcr, FUNC_FORCE_CTL, FUNC_FORCE_UPME_XMT_DBG,
 		FUNC_FORCE_UPME_XMT_DBG);
 	rtsx_pci_write_register(pcr, PCLK_CTL, 0x04, 0x04);
@@ -465,7 +459,6 @@ static void rts522a_set_l1off_cfg_sub_d0(struct rtsx_pcr *pcr, int active)
 	rtsx_set_l1off_sub(pcr, val);
 }
 
-
 /* rts522a operations mainly derived from rts5227, except phy/hw init setting.
  */
 static const struct pcr_ops rts522a_pcr_ops = {
@@ -481,7 +474,6 @@ static const struct pcr_ops rts522a_pcr_ops = {
 	.switch_output_voltage = rts522a_switch_output_voltage,
 	.cd_deglitch = NULL,
 	.conv_clk_and_div_n = NULL,
-	.force_power_down = rts5227_force_power_down,
 	.set_l1off_cfg_sub_d0 = rts522a_set_l1off_cfg_sub_d0,
 };
 

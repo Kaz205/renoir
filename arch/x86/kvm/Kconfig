@@ -71,6 +71,15 @@ config KVM_INTEL
 	  To compile this as a module, choose M here: the module
 	  will be called kvm-intel.
 
+config KVM_INVEPT_GLOBAL
+	bool "Always use global context for INVEPT"
+	default n
+	depends on KVM_INTEL
+	---help---
+	  Always use global context for INVEPT, to workaround b/188008861.
+
+	  If unsure, say N.
+
 config KVM_AMD
 	tristate "KVM for AMD processors support"
 	depends on KVM

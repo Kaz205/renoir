@@ -9,6 +9,7 @@
 #include "intel_pxp_arb.h"
 #include "intel_pxp_sm.h"
 #include "intel_pxp_cmd.h"
+#include "gt/intel_gt_pm.h"
 
 /* KCR register definitions */
 #define KCR_INIT            _MMIO(0x320f0)
@@ -187,6 +188,7 @@ bool intel_pxp_gem_object_status(struct drm_i915_private *i915)
 int i915_pxp_ops_ioctl(struct drm_device *dev, void *data, struct drm_file *drmfile)
 {
 	int ret;
+	intel_wakeref_t wakeref;
 	struct pxp_info pxp_info = {0};
 	struct drm_i915_pxp_ops *pxp_ops = data;
 	struct drm_i915_private *i915 = to_i915(dev);
@@ -202,10 +204,25 @@ int i915_pxp_ops_ioctl(struct drm_device *dev, void *data, struct drm_file *drmf
 	mutex_lock(&pxp->ctx.mutex);
 
 	if (pxp->ctx.global_state_in_suspend) {
-		drm_err(&i915->drm, "Return failure due to state in suspend\n");
-		pxp_info.sm_status = PXP_SM_STATUS_SESSION_NOT_AVAILABLE;
-		ret = 0;
-		goto end;
+		wakeref = intel_runtime_pm_get_if_in_use(&i915->runtime_pm);
+		if (wakeref) {
+			/*
+			 * Workaround for scenario when intel_pxp_pm_prepare_suspend()
+			 * is called but suspend is aborted before i915 suspends so
+			 * intel_pxp_pm_resume() isn't called and this flag left set
+			 *
+			 * In this scenario, since we didn't actually go into suspend
+			 * the sessions are valid and alive so can just clear this
+			 * flag if awake.
+			*/
+			pxp->ctx.global_state_in_suspend = false;
+			intel_runtime_pm_put(&i915->runtime_pm, wakeref);
+		} else {
+			drm_err(&i915->drm, "Return failure due to state in suspend\n");
+			pxp_info.sm_status = PXP_SM_STATUS_SESSION_NOT_AVAILABLE;
+			ret = 0;
+			goto end;
+		}
 	}
 
 	if (pxp->ctx.global_state_attacked) {

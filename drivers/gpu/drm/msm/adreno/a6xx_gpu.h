@@ -23,15 +23,17 @@ struct a6xx_gpu {
 
 	struct a6xx_gmu gmu;
 
-	void __iomem *llc_mmio;
-	void *llc_slice;
-	void *htw_llc_slice;
-
 	struct drm_gem_object *shadow_bo;
 	uint64_t shadow_iova;
 	uint32_t *shadow;
 
 	bool has_whereami;
+
+	void __iomem *llc_mmio;
+	void *llc_slice;
+	void *htw_llc_slice;
+
+	struct opp_table *opp_table;
 };
 
 #define to_a6xx_gpu(x) container_of(x, struct a6xx_gpu, base)

@@ -91,7 +91,7 @@ TEST_CUSTOM_PROGS = $(OUTPUT)/urandom_read
 all: $(TEST_CUSTOM_PROGS)
 
 $(OUTPUT)/urandom_read: $(OUTPUT)/%: %.c
-	$(CC) -o $@ $< -Wl,--build-id
+	$(CC) -o $@ $< -Wl,--build-id=sha1
 
 $(OUTPUT)/test_stub.o: test_stub.c
 	$(CC) $(TEST_PROGS_CFLAGS) $(CFLAGS) -c -o $@ $<

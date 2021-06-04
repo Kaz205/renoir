@@ -371,6 +371,54 @@
 #define EC_ACPI_MEM_USB_PORT_POWER 0x13
 
 /*
+ * Retimer firmware update. Only Burnside Bridge retimer firmware update
+ * is supported so far.
+ * Read:
+ *      Result of last operation AP requested
+ * Write:
+ *      bits[3:0]: USB-C port number
+ *      bits[7:4]: Operation requested by AP
+ *
+ * To update retimer firmware, AP needs set up TBT Alt mode.
+ * AP requests operations in this sequence:
+ * 1. Query which ports have retimer.
+ * In the query result, each bit represents one port.
+ * 2. Suspend specified PD port's task.
+ * 3. Get current MUX mode.
+ * 4. Set TBT Alt mode based on current MUX mode.
+ * NDA (no device attached) case:
+ * AP requests EC to enter USB mode -> enter Safe mode -> enter TBT mode ->
+ * update firmware -> disconnect MUX -> resume PD task.
+ *
+ * DA (device attached) cases:
+ * If in DP Alt mode, AP requests EC to disconnect MUX -> enter USB mode ->
+ * enter Safe mode -> enter TBT mode -> update firmware -> disconnect MUX ->
+ * resume PD task.
+ * If in TBT Alt mode, AP updates firmware directly -> disconnect MUX ->
+ * resume PD task.
+ * If in USB3 mode, AP requests EC enter Safe mode -> enter TBT mode ->
+ * update firmware -> disconnect MUX -> resume PD task.
+ *
+ */
+#define EC_ACPI_MEM_USB_RETIMER_FW_UPDATE 0x14
+
+#define USB_RETIMER_FW_UPDATE_OP_SHIFT 4
+#define USB_RETIMER_FW_UPDATE_INVALID_MUX 0xff
+/* Retimer firmware update operations */
+#define USB_RETIMER_FW_UPDATE_QUERY_PORT 0 /* Which ports has retimer */
+#define USB_RETIMER_FW_UPDATE_SUSPEND_PD 1 /* Suspend PD port */
+#define USB_RETIMER_FW_UPDATE_RESUME_PD  2 /* Resume PD port  */
+#define USB_RETIMER_FW_UPDATE_GET_MUX    3 /* Read current USB MUX  */
+#define USB_RETIMER_FW_UPDATE_SET_USB    4 /* Set MUX to USB mode   */
+#define USB_RETIMER_FW_UPDATE_SET_SAFE   5 /* Set MUX to Safe mode  */
+#define USB_RETIMER_FW_UPDATE_SET_TBT    6 /* Set MUX to TBT mode   */
+#define USB_RETIMER_FW_UPDATE_DISCONNECT 7 /* Set MUX to disconnect */
+
+#define EC_ACPI_MEM_USB_RETIMER_PORT(x)   ((x) & 0x0f)
+#define EC_ACPI_MEM_USB_RETIMER_OP(x) \
+	(((x) & 0xf0) >> USB_RETIMER_FW_UPDATE_OP_SHIFT)
+
+/*
  * ACPI addresses 0x20 - 0xff map to EC_MEMMAP offset 0x00 - 0xdf.  This data
  * is read-only from the AP.  Added in EC_ACPI_MEM_VERSION 2.
  */
@@ -3499,6 +3547,7 @@ struct ec_response_get_next_event_v1 {
 #define EC_MKBP_LID_OPEN	0
 #define EC_MKBP_TABLET_MODE	1
 #define EC_MKBP_BASE_ATTACHED	2
+#define EC_MKBP_FRONT_PROXIMITY	3
 
 /* Run keyboard factory test scanning */
 #define EC_CMD_KEYBOARD_FACTORY_TEST 0x0068
@@ -5520,9 +5569,14 @@ struct ec_params_pchg {
 } __ec_align1;
 
 struct ec_response_pchg {
-	uint32_t error; /* enum pchg_error */
-	uint8_t state; /* enum pchg_state state */
+	uint32_t error;			/* enum pchg_error */
+	uint8_t state;			/* enum pchg_state state */
 	uint8_t battery_percentage;
+	uint8_t unused0;
+	uint8_t unused1;
+	/* Fields added in version 1 */
+	uint32_t fw_version;
+	uint32_t dropped_event_count;
 } __ec_align2;
 
 enum pchg_state {
@@ -5538,6 +5592,12 @@ enum pchg_state {
 	PCHG_STATE_CHARGING,
 	/* Device is fully charged. It implies DETECTED (& not charging). */
 	PCHG_STATE_FULL,
+	/* In download (a.k.a. firmware update) mode */
+	PCHG_STATE_DOWNLOAD,
+	/* In download mode. Ready for receiving data. */
+	PCHG_STATE_DOWNLOADING,
+	/* Put no more entry below */
+	PCHG_STATE_COUNT,
 };
 
 #define EC_PCHG_STATE_TEXT { \
@@ -5547,6 +5607,8 @@ enum pchg_state {
 	[PCHG_STATE_DETECTED] = "DETECTED", \
 	[PCHG_STATE_CHARGING] = "CHARGING", \
 	[PCHG_STATE_FULL] = "FULL", \
+	[PCHG_STATE_DOWNLOAD] = "DOWNLOAD", \
+	[PCHG_STATE_DOWNLOADING] = "DOWNLOADING", \
 	}
 
 /*****************************************************************************/
@@ -5716,6 +5778,32 @@ struct ec_response_typec_discovery {
 	struct svid_mode_info svids[0];
 } __ec_align1;
 
+/* USB Type-C commands for AP-controlled device policy. */
+#define EC_CMD_TYPEC_CONTROL 0x0132
+
+enum typec_control_command {
+	TYPEC_CONTROL_COMMAND_EXIT_MODES,
+	TYPEC_CONTROL_COMMAND_CLEAR_EVENTS,
+	TYPEC_CONTROL_COMMAND_ENTER_MODE,
+};
+
+struct ec_params_typec_control {
+	uint8_t port;
+	uint8_t command;	/* enum typec_control_command */
+	uint16_t reserved;
+
+	/*
+	 * This section will be interpreted based on |command|. Define a
+	 * placeholder structure to avoid having to increase the size and bump
+	 * the command version when adding new sub-commands.
+	 */
+	union {
+		uint32_t clear_events_mask;
+		uint8_t mode_to_enter;      /* enum typec_mode */
+		uint8_t placeholder[128];
+	};
+} __ec_align1;
+
 /*
  * Gather all status information for a port.
  *
@@ -5789,6 +5877,7 @@ enum tcpc_cc_polarity {
 
 #define PD_STATUS_EVENT_SOP_DISC_DONE		BIT(0)
 #define PD_STATUS_EVENT_SOP_PRIME_DISC_DONE	BIT(1)
+#define PD_STATUS_EVENT_HARD_RESET		BIT(2)
 
 struct ec_params_typec_status {
 	uint8_t port;

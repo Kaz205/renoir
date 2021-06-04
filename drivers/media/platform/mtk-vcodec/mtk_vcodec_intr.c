@@ -12,7 +12,7 @@
 #include "mtk_vcodec_util.h"
 
 int mtk_vcodec_wait_for_done_ctx(struct mtk_vcodec_ctx  *ctx, int command,
-				 unsigned int timeout_ms)
+				unsigned int timeout_ms)
 {
 	wait_queue_head_t *waitqueue;
 	long timeout_jiff, ret;
@@ -27,13 +27,13 @@ int mtk_vcodec_wait_for_done_ctx(struct mtk_vcodec_ctx  *ctx, int command,
 
 	if (!ret) {
 		status = -1;	/* timeout */
-		mtk_v4l2_err("[%d] cmd=%d, ctx->type=%d, wait_event_interruptible_timeout time=%ums out %d %d!",
-				ctx->id, ctx->type, command, timeout_ms,
-				ctx->int_cond, ctx->int_type);
+		mtk_v4l2_err("[%d] ctx->type=%d, cmd=%d, wait_event_interruptible_timeout time=%ums out %d %d!",
+			     ctx->id, ctx->type, command, timeout_ms,
+			     ctx->int_cond, ctx->int_type);
 	} else if (-ERESTARTSYS == ret) {
-		mtk_v4l2_err("[%d] cmd=%d, ctx->type=%d, wait_event_interruptible_timeout interrupted by a signal %d %d",
-				ctx->id, ctx->type, command, ctx->int_cond,
-				ctx->int_type);
+		mtk_v4l2_err("[%d] ctx->type=%d, cmd=%d, wait_event_interruptible_timeout interrupted by a signal %d %d",
+			     ctx->id, ctx->type, command, ctx->int_cond,
+			     ctx->int_type);
 		status = -1;
 	}
 
@@ -43,3 +43,36 @@ int mtk_vcodec_wait_for_done_ctx(struct mtk_vcodec_ctx  *ctx, int command,
 	return status;
 }
 EXPORT_SYMBOL(mtk_vcodec_wait_for_done_ctx);
+
+int mtk_vcodec_wait_for_core_done_ctx(struct mtk_vcodec_ctx  *ctx, int command,
+				unsigned int timeout_ms)
+{
+	wait_queue_head_t *waitqueue;
+	long timeout_jiff, ret;
+	int status = 0;
+
+	waitqueue = (wait_queue_head_t *)&ctx->core_queue;
+	timeout_jiff = msecs_to_jiffies(timeout_ms);
+
+	ret = wait_event_interruptible_timeout(*waitqueue,
+				ctx->int_core_cond,
+				timeout_jiff);
+
+	if (!ret) {
+		status = -1;	/* timeout */
+		mtk_v4l2_err("[%d] cmd=%d, ctx->type=%d, wait_event_interruptible_timeout time=%ums out %d %d!",
+				ctx->id, ctx->type, command, timeout_ms,
+				ctx->int_core_cond, ctx->int_core_type);
+	} else if (-ERESTARTSYS == ret) {
+		status = -1;
+		mtk_v4l2_err("[%d] cmd=%d, ctx->type=%d, wait_event_interruptible_timeout interrupted by a signal %d %d",
+				ctx->id, ctx->type, command, ctx->int_core_cond,
+				ctx->int_core_type);
+	}
+
+	ctx->int_core_cond = 0;
+	ctx->int_core_type = 0;
+
+	return status;
+}
+EXPORT_SYMBOL(mtk_vcodec_wait_for_core_done_ctx);

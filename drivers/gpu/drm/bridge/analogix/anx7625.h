@@ -7,6 +7,8 @@
 #ifndef __ANX7625_H__
 #define __ANX7625_H__
 
+#include <sound/hdmi-codec.h>
+
 #define ANX7625_DRV_VERSION "0.1.04"
 
 /* Loading OCM re-trying times */
@@ -54,6 +56,18 @@
 #define INTERFACE_CHANGE_INT 0x44
 #define HPD_STATUS_CHANGE 0x80
 #define HPD_STATUS 0x80
+
+#define TCPC_SWITCH_0 0xB4
+#define SW_SEL1_ML0_A10_A11 BIT(0)
+#define SW_SEL1_ML0_B10_B11 BIT(1)
+#define SW_SEL1_SSRX_A10_A11 BIT(4)
+#define SW_SEL1_SSRX_B10_B11 BIT(5)
+
+#define TCPC_SWITCH_1 0xB5
+#define SW_SEL2_ML1_B2_B3 BIT(0)
+#define SW_SEL2_ML1_A2_A3 BIT(1)
+#define SW_SEL2_SSTX_B2_B3 BIT(4)
+#define SW_SEL2_SSTX_A2_A3 BIT(5)
 
 /******** END of I2C Address 0x58 ********/
 
@@ -111,6 +125,7 @@
 #define AUDIO_CHANNEL_STATUS_6 0xd5
 #define TDM_SLAVE_MODE 0x10
 #define I2S_SLAVE_MODE 0x08
+#define AUDIO_LAYOUT   0x01
 
 #define AUDIO_CONTROL_REGISTER 0xe6
 #define TDM_TIMING_MODE 0x08
@@ -141,12 +156,20 @@
 #define  HORIZONTAL_BACK_PORCH_H      0x22  /* Bit[7:4] are reserved */
 
 /******** END of I2C Address 0x72 *********/
+
+/***************************************************************/
+/* Register definition of device address 0x7a */
+#define DP_TX_SWING_REG_CNT		0x14
+#define DP_TX_LANE0_SWING_REG0		0x00
+#define DP_TX_LANE1_SWING_REG0		0x14
+/******** END of I2C Address 0x7a *********/
+
 /***************************************************************/
 /* Register definition of device address 0x7e */
 
 #define  I2C_ADDR_7E_FLASH_CONTROLLER  0x7E
 
-#define FLASH_LOAD_STA 0x05
+#define FLASH_LOAD_STA          0x05
 #define FLASH_LOAD_STA_CHK	BIT(7)
 
 #define  XTAL_FRQ_SEL    0x3F
@@ -347,13 +370,24 @@ struct s_edid_data {
 
 /***************** Display End *****************/
 
+#define MAX_LANES_SUPPORT	4
+
 struct anx7625_platform_data {
 	struct gpio_desc *gpio_p_on;
 	struct gpio_desc *gpio_reset;
+	struct regulator_bulk_data supplies[3];
 	struct drm_bridge *panel_bridge;
 	int intp_irq;
+	int is_dpi;
+	int mipi_lanes;
+	int hdcp_support;
+	int dp_lane0_swing_reg_cnt;
+	int lane0_reg_data[DP_TX_SWING_REG_CNT];
+	int dp_lane1_swing_reg_cnt;
+	int lane1_reg_data[DP_TX_SWING_REG_CNT];
 	u32 low_power_mode;
 	struct device_node *mipi_host_node;
+	bool tx_rx_to_two_ports;
 };
 
 struct anx7625_i2c_client {
@@ -366,11 +400,20 @@ struct anx7625_i2c_client {
 	struct i2c_client *tcpc_client;
 };
 
+struct anx7625_data;
+
+struct anx7625_port_data {
+	bool has_dp;
+	struct typec_mux *typec_mux;
+	struct anx7625_data *ctx;
+};
+
 struct anx7625_data {
 	struct anx7625_platform_data pdata;
-	atomic_t power_status;
+	struct platform_device *audio_pdev;
 	int hpd_status;
 	int hpd_high_cnt;
+	int hdcp_en;
 	/* Lock for work queue */
 	struct mutex lock;
 	struct i2c_client *client;
@@ -385,6 +428,10 @@ struct anx7625_data {
 	struct drm_bridge bridge;
 	u8 bridge_attached;
 	struct mipi_dsi_device *dsi;
+	hdmi_codec_plugged_cb plugged_cb;
+	struct device *codec_dev;
+
+	struct anx7625_port_data typec_ports[2];
 };
 
 #endif  /* __ANX7625_H__ */

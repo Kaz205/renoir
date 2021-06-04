@@ -52,18 +52,6 @@ static void virtio_gpu_config_changed_work_func(struct work_struct *work)
 		      events_clear, &events_clear);
 }
 
-static int virtio_gpu_context_create(struct virtio_gpu_device *vgdev,
-				      uint32_t nlen, const char *name)
-{
-	int handle = ida_alloc(&vgdev->ctx_id_ida, GFP_KERNEL);
-
-	if (handle < 0)
-		return handle;
-	handle += 1;
-	virtio_gpu_cmd_context_create(vgdev, handle, nlen, name);
-	return handle;
-}
-
 static void virtio_gpu_context_destroy(struct virtio_gpu_device *vgdev,
 				      uint32_t ctx_id)
 {
@@ -83,6 +71,7 @@ static void virtio_gpu_get_capsets(struct virtio_gpu_device *vgdev,
 				   int num_capsets)
 {
 	int i, ret;
+	bool invalid_capset_id = false;
 
 	vgdev->capsets = kcalloc(num_capsets,
 				 sizeof(struct virtio_gpu_drv_capset),
@@ -95,14 +84,28 @@ static void virtio_gpu_get_capsets(struct virtio_gpu_device *vgdev,
 		virtio_gpu_cmd_get_capset_info(vgdev, i);
 		ret = wait_event_timeout(vgdev->resp_wq,
 					 vgdev->capsets[i].id > 0, 5 * HZ);
-		if (ret == 0) {
+		/*
+		 * Capability ids are defined in the virtio-gpu spec and are
+		 * between 1 to 31, inclusive.
+		 */
+		if (!vgdev->capsets[i].id ||
+				 vgdev->capsets[i].id > MAX_CAPSET_ID)
+			invalid_capset_id = true;
+
+		if (ret == 0)
 			DRM_ERROR("timed out waiting for cap set %d\n", i);
+		else if (invalid_capset_id)
+			DRM_ERROR("invalid capset id %u\n",
+				  vgdev->capsets[i].id);
+
+		if (ret == 0 || invalid_capset_id) {
 			spin_lock(&vgdev->display_info_lock);
 			kfree(vgdev->capsets);
 			vgdev->capsets = NULL;
 			spin_unlock(&vgdev->display_info_lock);
 			return;
 		}
+		vgdev->capset_id_mask |= 1 << vgdev->capsets[i].id;
 		DRM_INFO("cap set %d: id %d, max-version %d, max-size %d\n",
 			 i, vgdev->capsets[i].id,
 			 vgdev->capsets[i].max_version,
@@ -193,6 +196,10 @@ int virtio_gpu_init(struct drm_device *dev)
 		vgdev->has_resource_blob = true;
 		DRM_INFO("resource_blob: %u, host visible %u\n",
 			  vgdev->has_resource_blob, vgdev->has_host_visible);
+
+		if (virtio_has_feature(vgdev->vdev, VIRTIO_GPU_F_CONTEXT_INIT))
+			vgdev->has_context_init = true;
+		DRM_INFO("context init: %u\n", vgdev->has_context_init);
 	}
 
 	ret = virtio_find_vqs(vgdev->vdev, 2, vqs, callbacks, names, NULL);
@@ -226,14 +233,14 @@ int virtio_gpu_init(struct drm_device *dev)
 	}
 	DRM_INFO("number of scanouts: %d\n", num_scanouts);
 
-	virtio_cread(vgdev->vdev, struct virtio_gpu_config,
-		     num_capsets, &num_capsets);
-	DRM_INFO("number of cap sets: %d\n", num_capsets);
-
 	virtio_gpu_modeset_init(vgdev);
 
 	virtio_device_ready(vgdev->vdev);
 	vgdev->vqs_ready = true;
+
+	virtio_cread(vgdev->vdev, struct virtio_gpu_config,
+		     num_capsets, &num_capsets);
+	DRM_INFO("number of cap sets: %d\n", num_capsets);
 
 	if (num_capsets)
 		virtio_gpu_get_capsets(vgdev, num_capsets);
@@ -289,7 +296,7 @@ int virtio_gpu_driver_open(struct drm_device *dev, struct drm_file *file)
 {
 	struct virtio_gpu_device *vgdev = dev->dev_private;
 	struct virtio_gpu_fpriv *vfpriv;
-	int id;
+	int handle;
 	char dbgname[TASK_COMM_LEN];
 
 	/* can't create contexts without 3d renderer */
@@ -302,13 +309,21 @@ int virtio_gpu_driver_open(struct drm_device *dev, struct drm_file *file)
 		return -ENOMEM;
 
 	get_task_comm(dbgname, current);
-	id = virtio_gpu_context_create(vgdev, strlen(dbgname), dbgname);
-	if (id < 0) {
+
+	handle = ida_alloc(&vgdev->ctx_id_ida, GFP_KERNEL);
+	if (handle < 0) {
 		kfree(vfpriv);
-		return id;
+		return handle;
 	}
 
-	vfpriv->ctx_id = id;
+	vfpriv->ctx_id = handle + 1;
+
+	/* create the default context without context_init flags for
+	 * back-compatibility
+	 */
+	virtio_gpu_cmd_context_create(vgdev, vfpriv->ctx_id, 0, strlen(dbgname),
+				      dbgname);
+
 	file->driver_priv = vfpriv;
 	return 0;
 }

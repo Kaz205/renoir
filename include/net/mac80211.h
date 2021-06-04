@@ -316,6 +316,7 @@ struct ieee80211_vif_chanctx_switch {
  *	functionality changed for this BSS (AP mode).
  * @BSS_CHANGED_TWT: TWT status changed
  * @BSS_CHANGED_HE_OBSS_PD: OBSS Packet Detection status changed.
+ * @BSS_CHANGED_HE_BSS_COLOR: BSS Color has changed
  *
  */
 enum ieee80211_bss_change {
@@ -348,6 +349,7 @@ enum ieee80211_bss_change {
 	BSS_CHANGED_FTM_RESPONDER	= 1<<26,
 	BSS_CHANGED_TWT			= 1<<27,
 	BSS_CHANGED_HE_OBSS_PD		= 1<<28,
+	BSS_CHANGED_HE_BSS_COLOR	= 1<<29,
 
 	/* when adding here, make sure to change ieee80211_reconfig */
 };
@@ -494,7 +496,6 @@ struct ieee80211_ftm_responder_params {
  * This structure keeps information about a BSS (and an association
  * to that BSS) that can change during the lifetime of the BSS.
  *
- * @bss_color: 6-bit value to mark inter-BSS frame, if BSS supports HE
  * @htc_trig_based_pkt_ext: default PE in 4us units, if BSS supports HE
  * @multi_sta_back_32bit: supports BA bitmap of 32-bits in Multi-STA BACK
  * @uora_exists: is the UORA element advertised by AP
@@ -604,10 +605,10 @@ struct ieee80211_ftm_responder_params {
  *	in order to discover all the nontransmitted BSSIDs in the set.
  * @he_operation: HE operation information of the AP we are connected to
  * @he_obss_pd: OBSS Packet Detection parameters.
+ * @he_bss_color: BSS coloring settings, if BSS supports HE
  */
 struct ieee80211_bss_conf {
 	const u8 *bssid;
-	u8 bss_color;
 	u8 htc_trig_based_pkt_ext;
 	bool multi_sta_back_32bit;
 	bool uora_exists;
@@ -667,6 +668,7 @@ struct ieee80211_bss_conf {
 	u8 profile_periodicity;
 	struct ieee80211_he_operation he_operation;
 	struct ieee80211_he_obss_pd he_obss_pd;
+	struct cfg80211_he_bss_color he_bss_color;
 };
 
 /**
@@ -713,9 +715,8 @@ struct ieee80211_bss_conf {
  * @IEEE80211_TX_INTFL_OFFCHAN_TX_OK: Internal to mac80211. Used to indicate
  *	that a frame can be transmitted while the queues are stopped for
  *	off-channel operation.
- * @IEEE80211_TX_INTFL_NEED_TXPROCESSING: completely internal to mac80211,
- *	used to indicate that a pending frame requires TX processing before
- *	it can be sent out.
+ * @IEEE80211_TX_CTL_HW_80211_ENCAP: This frame uses hardware encapsulation
+ *	(header conversion)
  * @IEEE80211_TX_INTFL_RETRIED: completely internal to mac80211,
  *	used to indicate that a frame was already retried due to PS
  * @IEEE80211_TX_INTFL_DONT_ENCRYPT: completely internal to mac80211,
@@ -784,7 +785,7 @@ enum mac80211_tx_info_flags {
 	IEEE80211_TX_STAT_AMPDU_NO_BACK		= BIT(11),
 	IEEE80211_TX_CTL_RATE_CTRL_PROBE	= BIT(12),
 	IEEE80211_TX_INTFL_OFFCHAN_TX_OK	= BIT(13),
-	IEEE80211_TX_INTFL_NEED_TXPROCESSING	= BIT(14),
+	IEEE80211_TX_CTL_HW_80211_ENCAP		= BIT(14),
 	IEEE80211_TX_INTFL_RETRIED		= BIT(15),
 	IEEE80211_TX_INTFL_DONT_ENCRYPT		= BIT(16),
 	IEEE80211_TX_CTL_NO_PS_BUFFER		= BIT(17),
@@ -816,6 +817,9 @@ enum mac80211_tx_info_flags {
  * @IEEE80211_TX_CTRL_AMSDU: This frame is an A-MSDU frame
  * @IEEE80211_TX_CTRL_FAST_XMIT: This frame is going through the fast_xmit path
  * @IEEE80211_TX_CTRL_SKIP_MPATH_LOOKUP: This frame skips mesh path lookup
+ * @IEEE80211_TX_INTCFL_NEED_TXPROCESSING: completely internal to mac80211,
+ *	used to indicate that a pending frame requires TX processing before
+ *	it can be sent out.
  *
  * These flags are used in tx_info->control.flags.
  */
@@ -826,6 +830,7 @@ enum mac80211_tx_control_flags {
 	IEEE80211_TX_CTRL_AMSDU			= BIT(3),
 	IEEE80211_TX_CTRL_FAST_XMIT		= BIT(4),
 	IEEE80211_TX_CTRL_SKIP_MPATH_LOOKUP	= BIT(5),
+	IEEE80211_TX_INTCFL_NEED_TXPROCESSING	= BIT(6),
 };
 
 /*
@@ -967,6 +972,7 @@ ieee80211_rate_get_vht_nss(const struct ieee80211_tx_rate *rate)
  * @band: the band to transmit on (use for checking for races)
  * @hw_queue: HW queue to put the frame on, skb_get_queue_mapping() gives the AC
  * @ack_frame_id: internal frame ID for TX status, used internally
+ * @tx_time_est: TX time estimate in units of 4us, used internally
  * @control: union part for control data
  * @control.rates: TX rates array to try
  * @control.rts_cts_rate_idx: rate for RTS or CTS
@@ -988,7 +994,8 @@ ieee80211_rate_get_vht_nss(const struct ieee80211_tx_rate *rate)
  * @status.ampdu_ack_len: AMPDU ack length
  * @status.ampdu_len: AMPDU length
  * @status.antenna: (legacy, kept only for iwlegacy)
- * @status.tx_time: airtime consumed for transmission
+ * @status.tx_time: airtime consumed for transmission; note this is only
+ *	used for WMM AC, not for airtime fairness
  * @status.is_valid_ack_signal: ACK signal is valid
  * @status.status_driver_data: driver use area
  * @ack: union part for pure ACK data
@@ -1003,11 +1010,11 @@ ieee80211_rate_get_vht_nss(const struct ieee80211_tx_rate *rate)
 struct ieee80211_tx_info {
 	/* common information */
 	u32 flags;
-	u8 band;
-
-	u8 hw_queue;
-
-	u16 ack_frame_id;
+	u32 band:3,
+	    ack_frame_id:13,
+	    hw_queue:4,
+	    tx_time_est:10;
+	/* 2 free bits */
 
 	union {
 		struct {
@@ -1057,6 +1064,22 @@ struct ieee80211_tx_info {
 			IEEE80211_TX_INFO_DRIVER_DATA_SIZE / sizeof(void *)];
 	};
 };
+
+static inline u16
+ieee80211_info_set_tx_time_est(struct ieee80211_tx_info *info, u16 tx_time_est)
+{
+	/* We only have 10 bits in tx_time_est, so store airtime
+	 * in increments of 4us and clamp the maximum to 2**12-1
+	 */
+	info->tx_time_est = min_t(u16, tx_time_est, 4095) >> 2;
+	return info->tx_time_est << 2;
+}
+
+static inline u16
+ieee80211_info_get_tx_time_est(struct ieee80211_tx_info *info)
+{
+	return info->tx_time_est << 2;
+}
 
 /**
  * struct ieee80211_tx_status - extended tx staus info for rate control
@@ -1568,6 +1591,21 @@ enum ieee80211_vif_flags {
 	IEEE80211_VIF_GET_NOA_UPDATE		= BIT(3),
 };
 
+
+/**
+ * enum ieee80211_offload_flags - virtual interface offload flags
+ *
+ * @IEEE80211_OFFLOAD_ENCAP_ENABLED: tx encapsulation offload is enabled
+ *	The driver supports sending frames passed as 802.3 frames by mac80211.
+ *	It must also support sending 802.11 packets for the same interface.
+ * @IEEE80211_OFFLOAD_ENCAP_4ADDR: support 4-address mode encapsulation offload
+ */
+
+enum ieee80211_offload_flags {
+	IEEE80211_OFFLOAD_ENCAP_ENABLED		= BIT(0),
+	IEEE80211_OFFLOAD_ENCAP_4ADDR		= BIT(1),
+};
+
 /**
  * struct ieee80211_vif - per-interface data
  *
@@ -1588,6 +1626,11 @@ enum ieee80211_vif_flags {
  *	these need to be set (or cleared) when the interface is added
  *	or, if supported by the driver, the interface type is changed
  *	at runtime, mac80211 will never touch this field
+ * @offloaad_flags: hardware offload capabilities/flags for this interface.
+ *	These are initialized by mac80211 before calling .add_interface,
+ *	.change_interface or .update_vif_offload and updated by the driver
+ *	within these ops, based on supported features or runtime change
+ *	restrictions.
  * @hw_queue: hardware queue for each AC
  * @cab_queue: content-after-beacon (DTIM beacon really) queue, AP mode only
  * @chanctx_conf: The channel context this interface is assigned to, or %NULL
@@ -1622,6 +1665,7 @@ struct ieee80211_vif {
 	struct ieee80211_chanctx_conf __rcu *chanctx_conf;
 
 	u32 driver_flags;
+	u32 offload_flags;
 
 #ifdef CONFIG_MAC80211_DEBUGFS
 	struct dentry *debugfs_dir;
@@ -2284,6 +2328,9 @@ struct ieee80211_txq {
  *	aggregating MPDUs with the same keyid, allowing mac80211 to keep Tx
  *	A-MPDU sessions active while rekeying with Extended Key ID.
  *
+ * @IEEE80211_HW_SUPPORTS_TX_ENCAP_OFFLOAD: Hardware supports tx encapsulation
+ *	offload
+ *
  * @NUM_IEEE80211_HW_FLAGS: number of hardware flags, used for sizing arrays
  */
 enum ieee80211_hw_flags {
@@ -2336,6 +2383,7 @@ enum ieee80211_hw_flags {
 	IEEE80211_HW_SUPPORTS_MULTI_BSSID,
 	IEEE80211_HW_SUPPORTS_ONLY_HE_MULTI_BSSID,
 	IEEE80211_HW_AMPDU_KEYBORDER_SUPPORT,
+	IEEE80211_HW_SUPPORTS_TX_ENCAP_OFFLOAD,
 
 	/* keep last, obviously */
 	NUM_IEEE80211_HW_FLAGS
@@ -3758,6 +3806,8 @@ enum ieee80211_reconfig_type {
  * @abort_pmsr: abort peer measurement (this call can sleep)
  *
  * @set_sar_specs: Update the SAR (TX power) settings.
+ * @update_vif_config: Update virtual interface offload flags
+ *	This callback may sleep.
  */
 struct ieee80211_ops {
 	void (*tx)(struct ieee80211_hw *hw,
@@ -4064,6 +4114,8 @@ struct ieee80211_ops {
 			   struct cfg80211_pmsr_request *request);
 	int (*set_sar_specs)(struct ieee80211_hw *hw,
 			     const struct cfg80211_sar_specs *sar);
+	void (*update_vif_offload)(struct ieee80211_hw *hw,
+				   struct ieee80211_vif *vif);
 };
 
 /**
@@ -4645,6 +4697,26 @@ static inline void ieee80211_tx_status_ni(struct ieee80211_hw *hw,
  */
 void ieee80211_tx_status_irqsafe(struct ieee80211_hw *hw,
 				 struct sk_buff *skb);
+
+/**
+ * ieee80211_tx_status_8023 - transmit status callback for 802.3 frame format
+ *
+ * Call this function for all transmitted data frames after their transmit
+ * completion. This callback should only be called for data frames which
+ * are are using driver's (or hardware's) offload capability of encap/decap
+ * 802.11 frames.
+ *
+ * This function may not be called in IRQ context. Calls to this function
+ * for a single hardware must be synchronized against each other and all
+ * calls in the same tx status family.
+ *
+ * @hw: the hardware the frame was transmitted by
+ * @vif: the interface for which the frame was transmitted
+ * @skb: the frame that was transmitted, owned by mac80211 after this call
+ */
+void ieee80211_tx_status_8023(struct ieee80211_hw *hw,
+			       struct ieee80211_vif *vif,
+			       struct sk_buff *skb);
 
 /**
  * ieee80211_report_low_ack - report non-responding station
@@ -5542,7 +5614,7 @@ void ieee80211_send_eosp_nullfunc(struct ieee80211_sta *pubsta, int tid);
 /**
  * ieee80211_sta_register_airtime - register airtime usage for a sta/tid
  *
- * Register airtime usage for a given sta on a given tid. The driver can call
+ * Register airtime usage for a given sta on a given tid. The driver must call
  * this function to notify mac80211 that a station used a certain amount of
  * airtime. This information will be used by the TXQ scheduler to schedule
  * stations in a way that ensures airtime fairness.
@@ -5566,6 +5638,18 @@ void ieee80211_send_eosp_nullfunc(struct ieee80211_sta *pubsta, int tid);
  */
 void ieee80211_sta_register_airtime(struct ieee80211_sta *pubsta, u8 tid,
 				    u32 tx_airtime, u32 rx_airtime);
+
+/**
+ * ieee80211_txq_airtime_check - check if a txq can send frame to device
+ *
+ * @hw: pointer obtained from ieee80211_alloc_hw()
+ * @txq: pointer obtained from station or virtual interface
+ *
+ * Return true if the AQL's airtime limit has not been reached and the txq can
+ * continue to send more packets to the device. Otherwise return false.
+ */
+bool
+ieee80211_txq_airtime_check(struct ieee80211_hw *hw, struct ieee80211_txq *txq);
 
 /**
  * ieee80211_iter_keys - iterate keys programmed into the device
@@ -6427,5 +6511,45 @@ void ieee80211_nan_func_terminated(struct ieee80211_vif *vif,
 void ieee80211_nan_func_match(struct ieee80211_vif *vif,
 			      struct cfg80211_nan_match_params *match,
 			      gfp_t gfp);
+
+/**
+ * ieee80211_calc_rx_airtime - calculate estimated transmission airtime for RX.
+ *
+ * This function calculates the estimated airtime usage of a frame based on the
+ * rate information in the RX status struct and the frame length.
+ *
+ * @hw: pointer as obtained from ieee80211_alloc_hw()
+ * @status: &struct ieee80211_rx_status containing the transmission rate
+ *          information.
+ * @len: frame length in bytes
+ */
+u32 ieee80211_calc_rx_airtime(struct ieee80211_hw *hw,
+			      struct ieee80211_rx_status *status,
+			      int len);
+
+/**
+ * ieee80211_calc_tx_airtime - calculate estimated transmission airtime for TX.
+ *
+ * This function calculates the estimated airtime usage of a frame based on the
+ * rate information in the TX info struct and the frame length.
+ *
+ * @hw: pointer as obtained from ieee80211_alloc_hw()
+ * @info: &struct ieee80211_tx_info of the frame.
+ * @len: frame length in bytes
+ */
+u32 ieee80211_calc_tx_airtime(struct ieee80211_hw *hw,
+			      struct ieee80211_tx_info *info,
+			      int len);
+/**
+ * ieee80211_set_hw_80211_encap - enable hardware encapsulation offloading.
+ *
+ * This function is used to notify mac80211 that a vif can be passed raw 802.3
+ * frames. The driver needs to then handle the 802.11 encapsulation inside the
+ * hardware or firmware.
+ *
+ * @vif: &struct ieee80211_vif pointer from the add_interface callback.
+ * @enable: indicate if the feature should be turned on or off
+ */
+bool ieee80211_set_hw_80211_encap(struct ieee80211_vif *vif, bool enable);
 
 #endif /* MAC80211_H */

@@ -202,6 +202,9 @@ static const struct snd_soc_dapm_route kabylake_map[] = {
 	{ "IN1P", NULL, "Headset Mic" },
 	{ "IN1N", NULL, "Headset Mic" },
 
+	{"HDMI1", NULL, "hif5-0 Output"},
+	{"HDMI2", NULL, "hif6-0 Output"},
+
 	/* CODEC BE connections */
 	{ "Left HiFi Playback", NULL, "ssp0 Tx" },
 	{ "Right HiFi Playback", NULL, "ssp0 Tx" },
@@ -246,7 +249,7 @@ static struct snd_soc_codec_conf max98927_codec_conf[] = {
 };
 
 
-static int kabylake_rt5663_fe_init(struct snd_soc_pcm_runtime *rtd)
+static int kabylake_pb_fe_init(struct snd_soc_pcm_runtime *rtd)
 {
 	struct snd_soc_dapm_context *dapm;
 	struct snd_soc_component *component = asoc_rtd_to_cpu(rtd, 0)->component;
@@ -367,7 +370,7 @@ static int kbl_fe_startup(struct snd_pcm_substream *substream)
 	return 0;
 }
 
-static const struct snd_soc_ops kabylake_rt5663_fe_ops = {
+static const struct snd_soc_ops kabylake_fe_ops = {
 	.startup = kbl_fe_startup,
 };
 
@@ -602,11 +605,11 @@ static struct snd_soc_dai_link kabylake_dais[] = {
 		.stream_name = "Audio",
 		.dynamic = 1,
 		.nonatomic = 1,
-		.init = kabylake_rt5663_fe_init,
+		.init = kabylake_pb_fe_init,
 		.trigger = {
 			SND_SOC_DPCM_TRIGGER_POST, SND_SOC_DPCM_TRIGGER_POST},
 		.dpcm_playback = 1,
-		.ops = &kabylake_rt5663_fe_ops,
+		.ops = &kabylake_fe_ops,
 		SND_SOC_DAILINK_REG(system, dummy, platform),
 	},
 	[KBL_DPCM_AUDIO_CP] = {
@@ -617,7 +620,7 @@ static struct snd_soc_dai_link kabylake_dais[] = {
 		.trigger = {
 			SND_SOC_DPCM_TRIGGER_POST, SND_SOC_DPCM_TRIGGER_POST},
 		.dpcm_capture = 1,
-		.ops = &kabylake_rt5663_fe_ops,
+		.ops = &kabylake_fe_ops,
 		SND_SOC_DAILINK_REG(system, dummy, platform),
 	},
 	[KBL_DPCM_AUDIO_HS_PB] = {
@@ -626,6 +629,10 @@ static struct snd_soc_dai_link kabylake_dais[] = {
 		.dpcm_playback = 1,
 		.nonatomic = 1,
 		.dynamic = 1,
+		.init = kabylake_pb_fe_init,
+		.trigger = {
+			SND_SOC_DPCM_TRIGGER_POST, SND_SOC_DPCM_TRIGGER_POST},
+		.ops = &kabylake_fe_ops,
 		SND_SOC_DAILINK_REG(system2, dummy, platform),
 	},
 	[KBL_DPCM_AUDIO_ECHO_REF_CP] = {

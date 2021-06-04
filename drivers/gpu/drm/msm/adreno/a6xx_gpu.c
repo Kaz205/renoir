@@ -10,6 +10,7 @@
 
 #include <linux/bitfield.h>
 #include <linux/devfreq.h>
+#include <linux/nvmem-consumer.h>
 #include <linux/soc/qcom/llcc-qcom.h>
 
 #define GPU_PAS_ID 13
@@ -1091,7 +1092,7 @@ static void a6xx_llc_slices_init(struct platform_device *pdev,
 	a6xx_gpu->llc_slice = llcc_slice_getd(LLCC_GPU);
 	a6xx_gpu->htw_llc_slice = llcc_slice_getd(LLCC_GPUHTW);
 
-	if (IS_ERR(a6xx_gpu->llc_slice) && IS_ERR(a6xx_gpu->htw_llc_slice))
+	if (IS_ERR_OR_NULL(a6xx_gpu->llc_slice) && IS_ERR_OR_NULL(a6xx_gpu->htw_llc_slice))
 		a6xx_gpu->llc_mmio = ERR_PTR(-EINVAL);
 }
 
@@ -1145,12 +1146,12 @@ static int a6xx_get_timestamp(struct msm_gpu *gpu, uint64_t *value)
 	struct a6xx_gpu *a6xx_gpu = to_a6xx_gpu(adreno_gpu);
 
 	/* Force the GPU power on so we can read this register */
-	a6xx_gmu_set_oob(&a6xx_gpu->gmu, GMU_OOB_GPU_SET);
+	a6xx_gmu_set_oob(&a6xx_gpu->gmu, GMU_OOB_PERFCOUNTER_SET);
 
-	*value = gpu_read64(gpu, REG_A6XX_RBBM_PERFCTR_CP_0_LO,
-		REG_A6XX_RBBM_PERFCTR_CP_0_HI);
+	*value = gpu_read64(gpu, REG_A6XX_CP_ALWAYS_ON_COUNTER_LO,
+		REG_A6XX_CP_ALWAYS_ON_COUNTER_HI);
 
-	a6xx_gmu_clear_oob(&a6xx_gpu->gmu, GMU_OOB_GPU_SET);
+	a6xx_gmu_clear_oob(&a6xx_gpu->gmu, GMU_OOB_PERFCOUNTER_SET);
 	return 0;
 }
 
@@ -1182,6 +1183,10 @@ static void a6xx_destroy(struct msm_gpu *gpu)
 	a6xx_gmu_remove(a6xx_gpu);
 
 	adreno_gpu_cleanup(adreno_gpu);
+
+	if (a6xx_gpu->opp_table)
+		dev_pm_opp_put_supported_hw(a6xx_gpu->opp_table);
+
 	kfree(a6xx_gpu);
 }
 
@@ -1237,6 +1242,69 @@ static uint32_t a6xx_get_rptr(struct msm_gpu *gpu, struct msm_ringbuffer *ring)
 		return a6xx_gpu->shadow[ring->id];
 
 	return ring->memptrs->rptr = gpu_read(gpu, REG_A6XX_CP_RB_RPTR);
+}
+
+static u32 a618_get_speed_bin(u32 fuse)
+{
+	if (fuse == 0)
+		return 0;
+	else if (fuse == 169)
+		return 1;
+	else if (fuse == 174)
+		return 2;
+
+	return UINT_MAX;
+}
+
+static u32 fuse_to_supp_hw(struct device *dev, u32 revn, u32 fuse)
+{
+	u32 val = UINT_MAX;
+
+	if (revn == 618)
+		val = a618_get_speed_bin(fuse);
+
+	if (val == UINT_MAX) {
+		DRM_DEV_ERROR(dev,
+			"missing support for speed-bin: %u. Some OPPs may not be supported by hardware",
+			fuse);
+		return UINT_MAX;
+	}
+
+	return (1 << val);
+}
+
+static int a6xx_set_supported_hw(struct device *dev, struct a6xx_gpu *a6xx_gpu,
+		u32 revn)
+{
+	struct opp_table *opp_table;
+	u32 supp_hw = UINT_MAX;
+	u16 speedbin;
+	int ret;
+
+	ret = nvmem_cell_read_u16(dev, "speed_bin", &speedbin);
+	/*
+	 * -ENOENT means that the platform doesn't support speedbin which is
+	 * fine
+	 */
+	if (ret == -ENOENT) {
+		return 0;
+	} else if (ret) {
+		DRM_DEV_ERROR(dev,
+			      "failed to read speed-bin (%d). Some OPPs may not be supported by hardware",
+			      ret);
+		goto done;
+	}
+	speedbin = le16_to_cpu(speedbin);
+
+	supp_hw = fuse_to_supp_hw(dev, revn, speedbin);
+
+done:
+	opp_table = dev_pm_opp_set_supported_hw(dev, &supp_hw, 1);
+	if (IS_ERR(opp_table))
+		return PTR_ERR(opp_table);
+
+	a6xx_gpu->opp_table = opp_table;
+	return 0;
 }
 
 static const struct adreno_gpu_funcs funcs = {
@@ -1299,6 +1367,12 @@ struct msm_gpu *a6xx_gpu_init(struct drm_device *dev)
 		adreno_gpu->base.hw_apriv = true;
 
 	a6xx_llc_slices_init(pdev, a6xx_gpu);
+
+	ret = a6xx_set_supported_hw(&pdev->dev, a6xx_gpu, info->revn);
+	if (ret) {
+		a6xx_destroy(&(a6xx_gpu->base.base));
+		return ERR_PTR(ret);
+	}
 
 	ret = adreno_gpu_init(dev, pdev, adreno_gpu, &funcs, 1);
 	if (ret) {

@@ -56,6 +56,12 @@
 #define IS_GFX_DEVICE(pdev) ((pdev->class >> 16) == PCI_BASE_CLASS_DISPLAY)
 #define IS_USB_DEVICE(pdev) ((pdev->class >> 8) == PCI_CLASS_SERIAL_USB)
 #define IS_ISA_DEVICE(pdev) ((pdev->class >> 8) == PCI_CLASS_BRIDGE_ISA)
+#define IS_INTEL_IPU(pdev) ((pdev)->vendor == PCI_VENDOR_ID_INTEL &&	\
+			    ((pdev)->device == 0x9a19 ||		\
+			     (pdev)->device == 0x9a39 ||		\
+			     (pdev)->device == 0x4e19 ||		\
+			     (pdev)->device == 0x465d ||		\
+			     (pdev)->device == 0x1919))
 #define IS_AZALIA(pdev) ((pdev)->vendor == 0x8086 && (pdev)->device == 0x3a3e)
 
 #define IOAPIC_RANGE_START	(0xfee00000)
@@ -362,6 +368,7 @@ int intel_iommu_enabled = 0;
 EXPORT_SYMBOL_GPL(intel_iommu_enabled);
 
 static int dmar_map_gfx = 1;
+static int dmar_map_ipu = 1;
 static int dmar_forcedac;
 static int intel_iommu_strict;
 static int intel_iommu_superpage = 1;
@@ -371,6 +378,7 @@ static int intel_no_bounce;
 #define IDENTMAP_ALL		1
 #define IDENTMAP_GFX		2
 #define IDENTMAP_AZALIA		4
+#define IDENTMAP_IPU		8
 
 int intel_iommu_gfx_mapped;
 EXPORT_SYMBOL_GPL(intel_iommu_gfx_mapped);
@@ -2926,6 +2934,9 @@ static int device_def_domain_type(struct device *dev)
 		if ((iommu_identity_mapping & IDENTMAP_GFX) && IS_GFX_DEVICE(pdev))
 			return IOMMU_DOMAIN_IDENTITY;
 
+		if ((iommu_identity_mapping & IDENTMAP_IPU) && IS_INTEL_IPU(pdev))
+			return IOMMU_DOMAIN_IDENTITY;
+
 		/*
 		 * We want to start off with all devices in the 1:1 domain, and
 		 * take them out later if we find they can't access all of memory.
@@ -3315,6 +3326,9 @@ static int __init init_dmars(void)
 
 	if (!dmar_map_gfx)
 		iommu_identity_mapping |= IDENTMAP_GFX;
+
+	if (!dmar_map_ipu)
+		iommu_identity_mapping |= IDENTMAP_IPU;
 
 	check_tylersburg_isoch();
 
@@ -3794,6 +3808,8 @@ static const struct dma_map_ops intel_dma_ops = {
 	.dma_supported = dma_direct_supported,
 	.mmap = dma_common_mmap,
 	.get_sgtable = dma_common_get_sgtable,
+	.alloc_pages = dma_common_alloc_pages,
+	.free_pages = dma_common_free_pages,
 	.get_required_mask = intel_get_required_mask,
 };
 
@@ -3809,7 +3825,7 @@ bounce_sync_single(struct device *dev, dma_addr_t addr, size_t size,
 		return;
 
 	tlb_addr = intel_iommu_iova_to_phys(&domain->domain, addr);
-	if (is_swiotlb_buffer(tlb_addr))
+	if (is_swiotlb_buffer(dev, tlb_addr))
 		swiotlb_tbl_sync_single(dev, tlb_addr, size, dir, target);
 }
 
@@ -3857,7 +3873,7 @@ bounce_map_single(struct device *dev, phys_addr_t paddr, size_t size,
 	 */
 	if (!IS_ALIGNED(paddr | size, VTD_PAGE_SIZE)) {
 		tlb_addr = swiotlb_tbl_map_single(dev,
-				__phys_to_dma(dev, io_tlb_start),
+				__phys_to_dma(dev, get_swiotlb_start(dev)),
 				paddr, size, aligned_size, dir, attrs);
 		if (tlb_addr == DMA_MAPPING_ERROR) {
 			goto swiotlb_error;
@@ -3889,7 +3905,7 @@ bounce_map_single(struct device *dev, phys_addr_t paddr, size_t size,
 	return (phys_addr_t)iova_pfn << PAGE_SHIFT;
 
 mapping_error:
-	if (is_swiotlb_buffer(tlb_addr))
+	if (is_swiotlb_buffer(dev, tlb_addr))
 		swiotlb_tbl_unmap_single(dev, tlb_addr, size,
 					 aligned_size, dir, attrs);
 swiotlb_error:
@@ -3917,7 +3933,7 @@ bounce_unmap_single(struct device *dev, dma_addr_t dev_addr, size_t size,
 		return;
 
 	intel_unmap(dev, dev_addr, size);
-	if (is_swiotlb_buffer(tlb_addr))
+	if (is_swiotlb_buffer(dev, tlb_addr))
 		swiotlb_tbl_unmap_single(dev, tlb_addr, size,
 					 aligned_size, dir, attrs);
 
@@ -4040,6 +4056,8 @@ static const struct dma_map_ops bounce_dma_ops = {
 	.sync_sg_for_device	= bounce_sync_sg_for_device,
 	.map_resource		= bounce_map_resource,
 	.unmap_resource		= bounce_unmap_resource,
+	.alloc_pages		= dma_common_alloc_pages,
+	.free_pages		= dma_common_free_pages,
 	.dma_supported		= dma_direct_supported,
 };
 
@@ -5955,6 +5973,18 @@ static void quirk_iommu_igfx(struct pci_dev *dev)
 	dmar_map_gfx = 0;
 }
 
+static void quirk_iommu_ipu(struct pci_dev *dev)
+{
+	if (!IS_INTEL_IPU(dev))
+		return;
+
+	if (risky_device(dev))
+		return;
+
+	pci_info(dev, "Passthrough IOMMU for integrated Intel IPU\n");
+	dmar_map_ipu = 0;
+}
+
 /* G4x/GM45 integrated gfx dmar support is totally busted. */
 DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2a40, quirk_iommu_igfx);
 DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2e00, quirk_iommu_igfx);
@@ -5989,6 +6019,9 @@ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x163E, quirk_iommu_igfx);
 DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x1632, quirk_iommu_igfx);
 DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x163A, quirk_iommu_igfx);
 DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x163D, quirk_iommu_igfx);
+
+/* disable IPU dmar support */
+DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, PCI_ANY_ID, quirk_iommu_ipu);
 
 static void quirk_iommu_rwbf(struct pci_dev *dev)
 {

@@ -303,6 +303,7 @@ static int  __maybe_unused dw9807_vcm_resume(struct device *dev)
 
 static const struct of_device_id dw9807_of_table[] = {
 	{ .compatible = "dongwoon,dw9807-vcm" },
+	{ .compatible = "dongwoon,dw9807" },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, dw9807_of_table);

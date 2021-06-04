@@ -67,7 +67,10 @@ static int intel_dp_mst_compute_link_config(struct intel_encoder *encoder,
 						       false);
 
 		slots = drm_dp_atomic_find_vcpi_slots(state, &intel_dp->mst_mgr,
-						      connector->port, crtc_state->pbn);
+						      connector->port,
+						      crtc_state->pbn,
+						      drm_dp_get_vc_payload_bw(crtc_state->port_clock,
+									       crtc_state->lane_count));
 		if (slots == -EDEADLK)
 			return slots;
 		if (slots >= 0)
@@ -581,6 +584,15 @@ static void intel_dp_mst_enc_get_config(struct intel_encoder *encoder,
 	intel_ddi_get_config(&dig_port->base, pipe_config);
 }
 
+static bool intel_dp_mst_initial_fastset_check(struct intel_encoder *encoder,
+					       struct intel_crtc_state *crtc_state)
+{
+	struct intel_dp_mst_encoder *intel_mst = enc_to_mst(encoder);
+	struct intel_digital_port *dig_port = intel_mst->primary;
+
+	return intel_dp_initial_fastset_check(&dig_port->base, crtc_state);
+}
+
 static int intel_dp_mst_get_ddc_modes(struct drm_connector *connector)
 {
 	struct intel_connector *intel_connector = to_intel_connector(connector);
@@ -865,6 +877,7 @@ intel_dp_create_fake_mst_encoder(struct intel_digital_port *dig_port, enum pipe 
 	intel_encoder->enable = intel_mst_enable_dp;
 	intel_encoder->get_hw_state = intel_dp_mst_enc_get_hw_state;
 	intel_encoder->get_config = intel_dp_mst_enc_get_config;
+	intel_encoder->initial_fastset_check = intel_dp_mst_initial_fastset_check;
 
 	return intel_mst;
 
