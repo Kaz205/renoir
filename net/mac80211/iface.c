@@ -8,7 +8,7 @@
  * Copyright 2008, Johannes Berg <johannes@sipsolutions.net>
  * Copyright 2013-2014  Intel Mobile Communications GmbH
  * Copyright (c) 2016        Intel Deutschland GmbH
- * Copyright (C) 2018 Intel Corporation
+ * Copyright (C) 2018-2021 Intel Corporation
  */
 #include <linux/slab.h>
 #include <linux/kernel.h>
@@ -43,6 +43,7 @@
  */
 
 static void ieee80211_iface_work(struct work_struct *work);
+static void ieee80211_set_vif_encap_ops(struct ieee80211_sub_if_data *sdata);
 
 bool __ieee80211_recalc_txpower(struct ieee80211_sub_if_data *sdata)
 {
@@ -348,6 +349,85 @@ static int ieee80211_check_queues(struct ieee80211_sub_if_data *sdata,
 	return 0;
 }
 
+static bool ieee80211_iftype_supports_encap_offload(enum nl80211_iftype iftype)
+{
+	switch (iftype) {
+	/* P2P GO and client are mapped to AP/STATION types */
+	case NL80211_IFTYPE_AP:
+	case NL80211_IFTYPE_STATION:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool ieee80211_set_sdata_offload_flags(struct ieee80211_sub_if_data *sdata)
+{
+	struct ieee80211_local *local = sdata->local;
+	u32 flags;
+
+	flags = sdata->vif.offload_flags;
+
+	if (ieee80211_hw_check(&local->hw, SUPPORTS_TX_ENCAP_OFFLOAD) &&
+	    ieee80211_iftype_supports_encap_offload(sdata->vif.type)) {
+		flags |= IEEE80211_OFFLOAD_ENCAP_ENABLED;
+
+		if (!ieee80211_hw_check(&local->hw, SUPPORTS_TX_FRAG) &&
+		    local->hw.wiphy->frag_threshold != (u32)-1)
+			flags &= ~IEEE80211_OFFLOAD_ENCAP_ENABLED;
+
+		if (local->monitors)
+			flags &= ~IEEE80211_OFFLOAD_ENCAP_ENABLED;
+	} else {
+		flags &= ~IEEE80211_OFFLOAD_ENCAP_ENABLED;
+	}
+
+	if (sdata->vif.offload_flags == flags)
+		return false;
+
+	sdata->vif.offload_flags = flags;
+	return true;
+}
+
+
+static void ieee80211_recalc_sdata_offload(struct ieee80211_sub_if_data *sdata)
+{
+	struct ieee80211_local *local = sdata->local;
+	struct ieee80211_sub_if_data *vsdata;
+
+	if (ieee80211_set_sdata_offload_flags(sdata)) {
+		drv_update_vif_offload(local, sdata);
+		ieee80211_set_vif_encap_ops(sdata);
+	}
+
+	list_for_each_entry(vsdata, &local->interfaces, list) {
+		if (vsdata->vif.type != NL80211_IFTYPE_AP_VLAN ||
+		    vsdata->bss != &sdata->u.ap)
+			continue;
+
+		ieee80211_set_vif_encap_ops(vsdata);
+	}
+}
+
+void ieee80211_recalc_offload(struct ieee80211_local *local)
+{
+	struct ieee80211_sub_if_data *sdata;
+
+	if (!ieee80211_hw_check(&local->hw, SUPPORTS_TX_ENCAP_OFFLOAD))
+		return;
+
+	mutex_lock(&local->iflist_mtx);
+
+	list_for_each_entry(sdata, &local->interfaces, list) {
+		if (!ieee80211_sdata_running(sdata))
+			continue;
+
+		ieee80211_recalc_sdata_offload(sdata);
+	}
+
+	mutex_unlock(&local->iflist_mtx);
+}
+
 void ieee80211_adjust_monitor_flags(struct ieee80211_sub_if_data *sdata,
 				    const int offset)
 {
@@ -585,6 +665,7 @@ int ieee80211_do_open(struct wireless_dev *wdev, bool coming_up)
 		if (rtnl_dereference(sdata->bss->beacon)) {
 			ieee80211_vif_vlan_copy_chanctx(sdata);
 			netif_carrier_on(dev);
+			ieee80211_set_vif_encap_ops(sdata);
 		} else {
 			netif_carrier_off(dev);
 		}
@@ -614,6 +695,7 @@ int ieee80211_do_open(struct wireless_dev *wdev, bool coming_up)
 
 		ieee80211_adjust_monitor_flags(sdata, 1);
 		ieee80211_configure_filter(local);
+		ieee80211_recalc_offload(local);
 		mutex_lock(&local->mtx);
 		ieee80211_recalc_idle(local);
 		mutex_unlock(&local->mtx);
@@ -623,10 +705,13 @@ int ieee80211_do_open(struct wireless_dev *wdev, bool coming_up)
 	default:
 		if (coming_up) {
 			ieee80211_del_virtual_monitor(local);
+			ieee80211_set_sdata_offload_flags(sdata);
 
 			res = drv_add_interface(local, sdata);
 			if (res)
 				goto err_stop;
+
+			ieee80211_set_vif_encap_ops(sdata);
 			res = ieee80211_check_queues(sdata,
 				ieee80211_vif_type_p2p(&sdata->vif));
 			if (res)
@@ -1108,16 +1193,12 @@ static void ieee80211_set_multicast_list(struct net_device *dev)
  */
 static void ieee80211_teardown_sdata(struct ieee80211_sub_if_data *sdata)
 {
-	int i;
-
 	/* free extra data */
 	ieee80211_free_keys(sdata, false);
 
 	ieee80211_debugfs_remove_netdev(sdata);
 
-	for (i = 0; i < IEEE80211_FRAGMENT_MAX; i++)
-		__skb_queue_purge(&sdata->fragments[i].skb_list);
-	sdata->fragment_next = 0;
+	ieee80211_destroy_frag_cache(&sdata->frags);
 
 	if (ieee80211_vif_is_mesh(&sdata->vif))
 		ieee80211_mesh_teardown_sdata(sdata);
@@ -1205,6 +1286,17 @@ static const struct net_device_ops ieee80211_monitorif_ops = {
 	.ndo_get_stats64	= ieee80211_get_stats64,
 };
 
+static const struct net_device_ops ieee80211_dataif_8023_ops = {
+	.ndo_open		= ieee80211_open,
+	.ndo_stop		= ieee80211_stop,
+	.ndo_uninit		= ieee80211_uninit,
+	.ndo_start_xmit		= ieee80211_subif_start_xmit_8023,
+	.ndo_set_rx_mode	= ieee80211_set_multicast_list,
+	.ndo_set_mac_address	= ieee80211_change_mac,
+	.ndo_select_queue	= ieee80211_netdev_select_queue,
+	.ndo_get_stats64	= ieee80211_get_stats64,
+};
+
 static void ieee80211_if_free(struct net_device *dev)
 {
 	free_percpu(dev->tstats);
@@ -1223,6 +1315,32 @@ static void ieee80211_if_setup_no_queue(struct net_device *dev)
 {
 	ieee80211_if_setup(dev);
 	dev->priv_flags |= IFF_NO_QUEUE;
+}
+
+static void ieee80211_set_vif_encap_ops(struct ieee80211_sub_if_data *sdata)
+{
+	struct ieee80211_local *local = sdata->local;
+	struct ieee80211_sub_if_data *bss = sdata;
+	bool enabled;
+
+	if (sdata->vif.type == NL80211_IFTYPE_AP_VLAN) {
+		if (!sdata->bss)
+			return;
+
+		bss = container_of(sdata->bss, struct ieee80211_sub_if_data, u.ap);
+	}
+
+	if (!ieee80211_hw_check(&local->hw, SUPPORTS_TX_ENCAP_OFFLOAD) ||
+	    !ieee80211_iftype_supports_encap_offload(bss->vif.type))
+		return;
+
+	enabled = bss->vif.offload_flags & IEEE80211_OFFLOAD_ENCAP_ENABLED;
+	if (sdata->wdev.use_4addr &&
+	    !(bss->vif.offload_flags & IEEE80211_OFFLOAD_ENCAP_4ADDR))
+		enabled = false;
+
+	sdata->dev->netdev_ops = enabled ? &ieee80211_dataif_8023_ops :
+					   &ieee80211_dataif_ops;
 }
 
 static void ieee80211_iface_work(struct work_struct *work)
@@ -1546,6 +1664,7 @@ static int ieee80211_runtime_change_iftype(struct ieee80211_sub_if_data *sdata,
 
 	ieee80211_teardown_sdata(sdata);
 
+	ieee80211_set_sdata_offload_flags(sdata);
 	ret = drv_change_interface(local, sdata, internal_type, p2p);
 	if (ret)
 		type = ieee80211_vif_type_p2p(&sdata->vif);
@@ -1558,6 +1677,7 @@ static int ieee80211_runtime_change_iftype(struct ieee80211_sub_if_data *sdata,
 	ieee80211_check_queues(sdata, type);
 
 	ieee80211_setup_sdata(sdata, type);
+	ieee80211_set_vif_encap_ops(sdata);
 
 	err = ieee80211_do_open(&sdata->wdev, false);
 	WARN(err, "type change: do_open returned %d", err);
@@ -1828,8 +1948,7 @@ int ieee80211_if_add(struct ieee80211_local *local, const char *name,
 	sdata->wdev.wiphy = local->hw.wiphy;
 	sdata->local = local;
 
-	for (i = 0; i < IEEE80211_FRAGMENT_MAX; i++)
-		skb_queue_head_init(&sdata->fragments[i].skb_list);
+	ieee80211_init_frag_cache(&sdata->frags);
 
 	INIT_LIST_HEAD(&sdata->key_list);
 

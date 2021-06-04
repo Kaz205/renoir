@@ -552,6 +552,7 @@ config X86_UV
 	depends on X86_EXTENDED_PLATFORM
 	depends on NUMA
 	depends on EFI
+	depends on KEXEC_CORE
 	depends on X86_X2APIC
 	depends on PCI
 	---help---
@@ -914,6 +915,7 @@ config DMI
 
 config GART_IOMMU
 	bool "Old AMD GART IOMMU support"
+	select DMA_OPS
 	select IOMMU_HELPER
 	select SWIOTLB
 	depends on X86_64 && PCI && AMD_NB
@@ -2969,6 +2971,7 @@ config HAVE_ATOMIC_IOMAP
 	depends on X86_32
 
 config X86_DEV_DMA_OPS
+	select DMA_OPS
 	bool
 
 source "drivers/firmware/Kconfig"

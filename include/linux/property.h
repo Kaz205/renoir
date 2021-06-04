@@ -48,6 +48,7 @@ int device_property_read_string(struct device *dev, const char *propname,
 				const char **val);
 int device_property_match_string(struct device *dev,
 				 const char *propname, const char *string);
+int device_is_compatible(struct device *dev, const char *compat);
 
 bool fwnode_device_is_available(const struct fwnode_handle *fwnode);
 bool fwnode_property_present(const struct fwnode_handle *fwnode,
@@ -117,6 +118,7 @@ struct fwnode_handle *fwnode_handle_get(struct fwnode_handle *fwnode);
 void fwnode_handle_put(struct fwnode_handle *fwnode);
 
 int fwnode_irq_get(struct fwnode_handle *fwnode, unsigned int index);
+int fwnode_is_compatible(struct fwnode_handle *fwnode, const char *compat);
 
 unsigned int device_get_child_node_count(struct device *dev);
 

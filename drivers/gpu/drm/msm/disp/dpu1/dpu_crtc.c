@@ -835,6 +835,7 @@ static int dpu_crtc_atomic_check(struct drm_crtc *crtc,
 	if (!state->enable || !state->active) {
 		DPU_DEBUG("crtc%d -> enable %d, active %d, skip atomic_check\n",
 				crtc->base.id, state->enable, state->active);
+		memset(&cstate->new_perf, 0, sizeof(cstate->new_perf));
 		goto end;
 	}
 

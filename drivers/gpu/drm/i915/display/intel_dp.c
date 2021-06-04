@@ -160,8 +160,12 @@ static void intel_dp_set_sink_rates(struct intel_dp *intel_dp)
 		162000, 270000, 540000, 810000
 	};
 	int i, max_rate;
+	int max_lttpr_rate;
 
 	max_rate = drm_dp_bw_code_to_link_rate(intel_dp->dpcd[DP_MAX_LINK_RATE]);
+	max_lttpr_rate = drm_dp_lttpr_max_link_rate(intel_dp->lttpr_common_caps);
+	if (max_lttpr_rate)
+		max_rate = min(max_rate, max_lttpr_rate);
 
 	for (i = 0; i < ARRAY_SIZE(dp_rates); i++) {
 		if (dp_rates[i] > max_rate)
@@ -207,6 +211,10 @@ static int intel_dp_max_common_lane_count(struct intel_dp *intel_dp)
 	int source_max = dig_port->max_lanes;
 	int sink_max = drm_dp_max_lane_count(intel_dp->dpcd);
 	int fia_max = intel_tc_port_fia_max_lane_count(dig_port);
+	int lttpr_max = drm_dp_lttpr_max_lane_count(intel_dp->lttpr_common_caps);
+
+	if (lttpr_max)
+		sink_max = min(sink_max, lttpr_max);
 
 	return min3(source_max, sink_max, fia_max);
 }
@@ -1280,6 +1288,7 @@ static u32 g4x_get_aux_send_ctl(struct intel_dp *intel_dp,
 	else
 		precharge = 5;
 
+	/* Max timeout value on G4x-BDW: 1.6ms */
 	if (IS_BROADWELL(dev_priv))
 		timeout = DP_AUX_CH_CTL_TIME_OUT_600us;
 	else
@@ -1306,6 +1315,12 @@ static u32 skl_get_aux_send_ctl(struct intel_dp *intel_dp,
 	enum phy phy = intel_port_to_phy(i915, dig_port->base.port);
 	u32 ret;
 
+	/*
+	 * Max timeout values:
+	 * SKL-GLK: 1.6ms
+	 * CNL: 3.2ms
+	 * ICL+: 4ms
+	 */
 	ret = DP_AUX_CH_CTL_SEND_BUSY |
 	      DP_AUX_CH_CTL_DONE |
 	      DP_AUX_CH_CTL_INTERRUPT |
@@ -3643,6 +3658,66 @@ static void intel_dp_get_config(struct intel_encoder *encoder,
 	}
 }
 
+static bool
+intel_dp_get_dpcd(struct intel_dp *intel_dp);
+
+/**
+ * intel_dp_sync_state - sync the encoder state during init/resume
+ * @encoder: intel encoder to sync
+ * @crtc_state: state for the CRTC connected to the encoder
+ *
+ * Sync any state stored in the encoder wrt. HW state during driver init
+ * and system resume.
+ */
+void intel_dp_sync_state(struct intel_encoder *encoder,
+			 const struct intel_crtc_state *crtc_state)
+{
+	struct intel_dp *intel_dp = enc_to_intel_dp(encoder);
+
+	/*
+	 * Don't clobber DPCD if it's been already read out during output
+	 * setup (eDP) or detect.
+	 */
+	if (intel_dp->dpcd[DP_DPCD_REV] == 0)
+		intel_dp_get_dpcd(intel_dp);
+
+	intel_dp->max_link_lane_count = intel_dp_max_common_lane_count(intel_dp);
+	intel_dp->max_link_rate = intel_dp_max_common_rate(intel_dp);
+}
+
+bool intel_dp_initial_fastset_check(struct intel_encoder *encoder,
+				    struct intel_crtc_state *crtc_state)
+{
+	struct drm_i915_private *i915 = to_i915(encoder->base.dev);
+	struct intel_dp *intel_dp = enc_to_intel_dp(encoder);
+
+	/*
+	 * If BIOS has set an unsupported or non-standard link rate for some
+	 * reason force an encoder recompute and full modeset.
+	 */
+	if (intel_dp_rate_index(intel_dp->source_rates, intel_dp->num_source_rates,
+				crtc_state->port_clock) < 0) {
+		drm_dbg_kms(&i915->drm, "Forcing full modeset due to unsupported link rate\n");
+		crtc_state->uapi.connectors_changed = true;
+		return false;
+	}
+
+	/*
+	 * FIXME hack to force full modeset when DSC is being used.
+	 *
+	 * As long as we do not have full state readout and config comparison
+	 * of crtc_state->dsc, we have no way to ensure reliable fastset.
+	 * Remove once we have readout for DSC.
+	 */
+	if (crtc_state->dsc.compression_enable) {
+		drm_dbg_kms(&i915->drm, "Forcing full modeset due to DSC being enabled\n");
+		crtc_state->uapi.mode_changed = true;
+		return false;
+	}
+
+	return true;
+}
+
 static void intel_disable_dp(struct intel_atomic_state *state,
 			     struct intel_encoder *encoder,
 			     const struct intel_crtc_state *old_crtc_state,
@@ -3736,7 +3811,7 @@ cpt_set_link_train(struct intel_dp *intel_dp,
 
 	*DP &= ~DP_LINK_TRAIN_MASK_CPT;
 
-	switch (dp_train_pat & DP_TRAINING_PATTERN_MASK) {
+	switch (intel_dp_training_pattern_symbol(dp_train_pat)) {
 	case DP_TRAINING_PATTERN_DISABLE:
 		*DP |= DP_LINK_TRAIN_OFF_CPT;
 		break;
@@ -3767,7 +3842,7 @@ g4x_set_link_train(struct intel_dp *intel_dp,
 
 	*DP &= ~DP_LINK_TRAIN_MASK;
 
-	switch (dp_train_pat & DP_TRAINING_PATTERN_MASK) {
+	switch (intel_dp_training_pattern_symbol(dp_train_pat)) {
 	case DP_TRAINING_PATTERN_DISABLE:
 		*DP |= DP_LINK_TRAIN_OFF;
 		break;
@@ -4084,17 +4159,6 @@ static void chv_dp_post_pll_disable(struct intel_atomic_state *state,
 				    const struct drm_connector_state *old_conn_state)
 {
 	chv_phy_post_pll_disable(encoder, old_crtc_state);
-}
-
-/*
- * Fetch AUX CH registers 0x202 - 0x207 which contain
- * link status information
- */
-bool
-intel_dp_get_link_status(struct intel_dp *intel_dp, u8 link_status[DP_LINK_STATUS_SIZE])
-{
-	return drm_dp_dpcd_read(&intel_dp->aux, DP_LANE0_1_STATUS, link_status,
-				DP_LINK_STATUS_SIZE) == DP_LINK_STATUS_SIZE;
 }
 
 static u8 intel_dp_voltage_max_2(struct intel_dp *intel_dp,
@@ -4445,45 +4509,20 @@ ivb_cpu_edp_set_signal_levels(struct intel_dp *intel_dp,
 	intel_de_posting_read(dev_priv, intel_dp->output_reg);
 }
 
-void intel_dp_set_signal_levels(struct intel_dp *intel_dp,
-				const struct intel_crtc_state *crtc_state)
-{
-	struct drm_i915_private *dev_priv = dp_to_i915(intel_dp);
-	u8 train_set = intel_dp->train_set[0];
-
-	drm_dbg_kms(&dev_priv->drm, "Using vswing level %d%s\n",
-		    train_set & DP_TRAIN_VOLTAGE_SWING_MASK,
-		    train_set & DP_TRAIN_MAX_SWING_REACHED ? " (max)" : "");
-	drm_dbg_kms(&dev_priv->drm, "Using pre-emphasis level %d%s\n",
-		    (train_set & DP_TRAIN_PRE_EMPHASIS_MASK) >>
-		    DP_TRAIN_PRE_EMPHASIS_SHIFT,
-		    train_set & DP_TRAIN_MAX_PRE_EMPHASIS_REACHED ?
-		    " (max)" : "");
-
-	intel_dp->set_signal_levels(intel_dp, crtc_state);
-}
-
 void
 intel_dp_program_link_training_pattern(struct intel_dp *intel_dp,
 				       const struct intel_crtc_state *crtc_state,
 				       u8 dp_train_pat)
 {
 	struct drm_i915_private *dev_priv = dp_to_i915(intel_dp);
-	u8 train_pat_mask = drm_dp_training_pattern_mask(intel_dp->dpcd);
 
-	if (dp_train_pat & train_pat_mask)
+	if ((intel_dp_training_pattern_symbol(dp_train_pat)) !=
+	    DP_TRAINING_PATTERN_DISABLE)
 		drm_dbg_kms(&dev_priv->drm,
 			    "Using DP training pattern TPS%d\n",
-			    dp_train_pat & train_pat_mask);
+			    intel_dp_training_pattern_symbol(dp_train_pat));
 
 	intel_dp->set_link_train(intel_dp, crtc_state, dp_train_pat);
-}
-
-void intel_dp_set_idle_link_train(struct intel_dp *intel_dp,
-				  const struct intel_crtc_state *crtc_state)
-{
-	if (intel_dp->set_idle_link_train)
-		intel_dp->set_idle_link_train(intel_dp, crtc_state);
 }
 
 static void
@@ -4704,7 +4743,7 @@ intel_dp_get_dpcd(struct intel_dp *intel_dp)
 {
 	int ret;
 
-	if (drm_dp_read_dpcd_caps(&intel_dp->aux, intel_dp->dpcd))
+	if (intel_dp_init_lttpr_and_dprx_caps(intel_dp) < 0)
 		return false;
 
 	/*
@@ -5501,17 +5540,19 @@ static void intel_dp_process_phy_request(struct intel_dp *intel_dp,
 		&intel_dp->compliance.test_data.phytest;
 	u8 link_status[DP_LINK_STATUS_SIZE];
 
-	if (!intel_dp_get_link_status(intel_dp, link_status)) {
+	if (drm_dp_dpcd_read_phy_link_status(&intel_dp->aux, DP_PHY_DPRX,
+					     link_status) < 0) {
 		DRM_DEBUG_KMS("failed to get link status\n");
 		return;
 	}
 
 	/* retrieve vswing & pre-emphasis setting */
-	intel_dp_get_adjust_train(intel_dp, crtc_state, link_status);
+	intel_dp_get_adjust_train(intel_dp, crtc_state, DP_PHY_DPRX,
+				  link_status);
 
 	intel_dp_autotest_phy_ddi_disable(intel_dp, crtc_state);
 
-	intel_dp_set_signal_levels(intel_dp, crtc_state);
+	intel_dp_set_signal_levels(intel_dp, crtc_state, DP_PHY_DPRX);
 
 	intel_dp_phy_pattern_update(intel_dp, crtc_state);
 
@@ -5677,7 +5718,8 @@ intel_dp_needs_link_retrain(struct intel_dp *intel_dp)
 	if (intel_psr_enabled(intel_dp))
 		return false;
 
-	if (!intel_dp_get_link_status(intel_dp, link_status))
+	if (drm_dp_dpcd_read_phy_link_status(&intel_dp->aux, DP_PHY_DPRX,
+					     link_status) < 0)
 		return false;
 
 	/*
@@ -7960,6 +8002,8 @@ bool intel_dp_init(struct drm_i915_private *dev_priv,
 	intel_encoder->compute_config = intel_dp_compute_config;
 	intel_encoder->get_hw_state = intel_dp_get_hw_state;
 	intel_encoder->get_config = intel_dp_get_config;
+	intel_encoder->sync_state = intel_dp_sync_state;
+	intel_encoder->initial_fastset_check = intel_dp_initial_fastset_check;
 	intel_encoder->update_pipe = intel_panel_update_backlight;
 	intel_encoder->suspend = intel_dp_encoder_suspend;
 	intel_encoder->shutdown = intel_dp_encoder_shutdown;

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (c) 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
  */
 
 #include <asm/div64.h>
@@ -206,6 +206,7 @@ struct bcm_voter *of_bcm_voter_get(struct device *dev, const char *name)
 	}
 	mutex_unlock(&bcm_voter_lock);
 
+	of_node_put(node);
 	return voter;
 }
 EXPORT_SYMBOL_GPL(of_bcm_voter_get);
@@ -363,6 +364,7 @@ static const struct of_device_id bcm_voter_of_match[] = {
 	{ .compatible = "qcom,bcm-voter" },
 	{ }
 };
+MODULE_DEVICE_TABLE(of, bcm_voter_of_match);
 
 static struct platform_driver qcom_icc_bcm_voter_driver = {
 	.probe = qcom_icc_bcm_voter_probe,

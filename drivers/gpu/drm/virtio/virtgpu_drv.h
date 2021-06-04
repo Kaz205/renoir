@@ -54,6 +54,8 @@
 #define UUID_INITIALIZED 1
 #define UUID_INITIALIZATION_FAILED 2
 
+#define MAX_CAPSET_ID 31
+
 struct virtio_gpu_object_params {
 	uint32_t format;
 	uint32_t width;
@@ -228,6 +230,7 @@ struct virtio_gpu_device {
 	bool has_resource_assign_uuid;
 	bool has_resource_blob;
 	bool has_host_visible;
+	bool has_context_init;
 
 	struct work_struct config_changed_work;
 
@@ -237,6 +240,7 @@ struct virtio_gpu_device {
 
 	struct virtio_gpu_drv_capset *capsets;
 	uint32_t num_capsets;
+	uint32_t capset_id_mask;
 	struct list_head cap_cache;
 
 	/* coherent memory */
@@ -252,10 +256,11 @@ struct virtio_gpu_device {
 
 struct virtio_gpu_fpriv {
 	uint32_t ctx_id;
+	uint32_t context_init;
 };
 
 /* virtio_ioctl.c */
-#define DRM_VIRTIO_NUM_IOCTLS 13
+#define DRM_VIRTIO_NUM_IOCTLS 12
 extern struct drm_ioctl_desc virtio_gpu_ioctls[DRM_VIRTIO_NUM_IOCTLS];
 int virtio_gpu_object_list_validate(struct ww_acquire_ctx *ticket,
 				    struct list_head *head);
@@ -334,7 +339,8 @@ int virtio_gpu_cmd_get_capset(struct virtio_gpu_device *vgdev,
 			      struct virtio_gpu_drv_cap_cache **cache_p);
 int virtio_gpu_cmd_get_edids(struct virtio_gpu_device *vgdev);
 void virtio_gpu_cmd_context_create(struct virtio_gpu_device *vgdev, uint32_t id,
-				   uint32_t nlen, const char *name);
+				   uint32_t context_init, uint32_t nlen,
+				   const char *name);
 void virtio_gpu_cmd_context_destroy(struct virtio_gpu_device *vgdev,
 				    uint32_t id);
 void virtio_gpu_cmd_context_attach_resource(struct virtio_gpu_device *vgdev,
@@ -362,6 +368,13 @@ virtio_gpu_cmd_resource_create_3d(struct virtio_gpu_device *vgdev,
 				  struct virtio_gpu_object *bo,
 				  struct virtio_gpu_object_params *params,
 				  struct virtio_gpu_fence *fence);
+void
+virtio_gpu_cmd_resource_create_blob_guest(struct virtio_gpu_device *vgdev,
+					  struct virtio_gpu_object *bo,
+					  uint32_t ctx_id, uint32_t blob_mem,
+					  uint32_t blob_flags, uint64_t blob_id,
+					  uint64_t size, uint32_t nents,
+					  struct virtio_gpu_mem_entry *ents);
 void
 virtio_gpu_cmd_resource_create_blob(struct virtio_gpu_device *vgdev,
 				    struct virtio_gpu_object *bo,

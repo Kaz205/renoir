@@ -17,7 +17,7 @@ struct cmdq_pkt;
 
 struct cmdq_client_reg {
 	u8 subsys;
-	u16 offset;
+	u32 offset;
 	u16 size;
 };
 
@@ -103,6 +103,21 @@ int cmdq_pkt_write_mask(struct cmdq_pkt *pkt, u8 subsys,
 			u16 offset, u32 value, u32 mask);
 
 /**
+ * cmdq_pkt_write_s_mask_value() - append write_s command with mask to the CMDQ
+ *				   packet which write value to a physical
+ *				   address
+ * @pkt:	the CMDQ packet
+ * @high_addr_reg_idx:	internal register ID which contains high address of pa
+ * @addr_low:	low address of pa
+ * @value:	the specified target value
+ * @mask:	the specified target mask
+ *
+ * Return: 0 for success; else the error code is returned
+ */
+int cmdq_pkt_write_s_mask_value(struct cmdq_pkt *pkt, u8 high_addr_reg_idx,
+				u16 addr_low, u32 value, u32 mask);
+
+/**
  * cmdq_pkt_wfe() - append wait for event command to the CMDQ packet
  * @pkt:	the CMDQ packet
  * @event:	the desired event type to "wait and CLEAR"
@@ -152,6 +167,20 @@ int cmdq_pkt_poll(struct cmdq_pkt *pkt, u8 subsys,
  */
 int cmdq_pkt_poll_mask(struct cmdq_pkt *pkt, u8 subsys,
 		       u16 offset, u32 value, u32 mask);
+
+/**
+ * cmdq_pkt_assign() - Append logic assign command to the CMDQ packet, ask GCE
+ *             to execute an instruction that set a constant value into
+ *             internal register and use as value, mask or address in
+ *             read/write instruction.
+ * @pkt:    the CMDQ packet
+ * @reg_idx:    the CMDQ internal register ID
+ * @value:  the specified value
+ *
+ * Return: 0 for success; else the error code is returned
+ */
+int cmdq_pkt_assign(struct cmdq_pkt *pkt, u16 reg_idx, u32 value);
+
 /**
  * cmdq_pkt_flush_async() - trigger CMDQ to asynchronously execute the CMDQ
  *                          packet and call back at the end of done packet
@@ -179,5 +208,7 @@ int cmdq_pkt_flush_async(struct cmdq_pkt *pkt, cmdq_async_flush_cb cb,
  * commands have been done.
  */
 int cmdq_pkt_flush(struct cmdq_pkt *pkt);
+
+s32 cmdq_pkt_poll_addr(struct cmdq_pkt *pkt, u32 value, u32 addr, u32 mask, u8 reg_gpr);
 
 #endif	/* __MTK_CMDQ_H__ */

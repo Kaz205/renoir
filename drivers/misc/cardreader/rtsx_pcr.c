@@ -23,6 +23,7 @@
 
 #include "rtsx_pcr.h"
 #include "rts5261.h"
+#include "rts5228.h"
 
 static bool msi_en = true;
 module_param(msi_en, bool, S_IRUGO | S_IWUSR);
@@ -50,22 +51,11 @@ static const struct pci_device_id rtsx_pci_ids[] = {
 	{ PCI_DEVICE(0x10EC, 0x525A), PCI_CLASS_OTHERS << 16, 0xFF0000 },
 	{ PCI_DEVICE(0x10EC, 0x5260), PCI_CLASS_OTHERS << 16, 0xFF0000 },
 	{ PCI_DEVICE(0x10EC, 0x5261), PCI_CLASS_OTHERS << 16, 0xFF0000 },
+	{ PCI_DEVICE(0x10EC, 0x5228), PCI_CLASS_OTHERS << 16, 0xFF0000 },
 	{ 0, }
 };
 
 MODULE_DEVICE_TABLE(pci, rtsx_pci_ids);
-
-static inline void rtsx_pci_enable_aspm(struct rtsx_pcr *pcr)
-{
-	rtsx_pci_update_cfg_byte(pcr, pcr->pcie_cap + PCI_EXP_LNKCTL,
-		0xFC, pcr->aspm_en);
-}
-
-static inline void rtsx_pci_disable_aspm(struct rtsx_pcr *pcr)
-{
-	rtsx_pci_update_cfg_byte(pcr, pcr->pcie_cap + PCI_EXP_LNKCTL,
-		0xFC, 0);
-}
 
 static int rtsx_comm_set_ltr_latency(struct rtsx_pcr *pcr, u32 latency)
 {
@@ -93,24 +83,18 @@ int rtsx_set_ltr_latency(struct rtsx_pcr *pcr, u32 latency)
 
 static void rtsx_comm_set_aspm(struct rtsx_pcr *pcr, bool enable)
 {
-	struct rtsx_cr_option *option = &pcr->option;
-
 	if (pcr->aspm_enabled == enable)
 		return;
 
-	if (option->dev_aspm_mode == DEV_ASPM_DYNAMIC) {
-		if (enable)
-			rtsx_pci_enable_aspm(pcr);
-		else
-			rtsx_pci_disable_aspm(pcr);
-	} else if (option->dev_aspm_mode == DEV_ASPM_BACKDOOR) {
-		u8 mask = FORCE_ASPM_VAL_MASK;
-		u8 val = 0;
+	if (pcr->aspm_en & 0x02)
+		rtsx_pci_write_register(pcr, ASPM_FORCE_CTL, FORCE_ASPM_CTL0 |
+			FORCE_ASPM_CTL1, enable ? 0 : FORCE_ASPM_CTL0 | FORCE_ASPM_CTL1);
+	else
+		rtsx_pci_write_register(pcr, ASPM_FORCE_CTL, FORCE_ASPM_CTL0 |
+			FORCE_ASPM_CTL1, FORCE_ASPM_CTL0 | FORCE_ASPM_CTL1);
 
-		if (enable)
-			val = pcr->aspm_en;
-		rtsx_pci_write_register(pcr, ASPM_FORCE_CTL,  mask, val);
-	}
+	if (!enable && (pcr->aspm_en & 0x02))
+		mdelay(10);
 
 	pcr->aspm_enabled = enable;
 }
@@ -230,16 +214,10 @@ int __rtsx_pci_write_phy_register(struct rtsx_pcr *pcr, u8 addr, u16 val)
 	int err, i, finished = 0;
 	u8 tmp;
 
-	rtsx_pci_init_cmd(pcr);
-
-	rtsx_pci_add_cmd(pcr, WRITE_REG_CMD, PHYDATA0, 0xFF, (u8)val);
-	rtsx_pci_add_cmd(pcr, WRITE_REG_CMD, PHYDATA1, 0xFF, (u8)(val >> 8));
-	rtsx_pci_add_cmd(pcr, WRITE_REG_CMD, PHYADDR, 0xFF, addr);
-	rtsx_pci_add_cmd(pcr, WRITE_REG_CMD, PHYRWCTL, 0xFF, 0x81);
-
-	err = rtsx_pci_send_cmd(pcr, 100);
-	if (err < 0)
-		return err;
+	rtsx_pci_write_register(pcr, PHYDATA0, 0xFF, (u8)val);
+	rtsx_pci_write_register(pcr, PHYDATA1, 0xFF, (u8)(val >> 8));
+	rtsx_pci_write_register(pcr, PHYADDR, 0xFF, addr);
+	rtsx_pci_write_register(pcr, PHYRWCTL, 0xFF, 0x81);
 
 	for (i = 0; i < 100000; i++) {
 		err = rtsx_pci_read_register(pcr, PHYRWCTL, &tmp);
@@ -271,16 +249,10 @@ int __rtsx_pci_read_phy_register(struct rtsx_pcr *pcr, u8 addr, u16 *val)
 {
 	int err, i, finished = 0;
 	u16 data;
-	u8 *ptr, tmp;
+	u8 tmp, val1, val2;
 
-	rtsx_pci_init_cmd(pcr);
-
-	rtsx_pci_add_cmd(pcr, WRITE_REG_CMD, PHYADDR, 0xFF, addr);
-	rtsx_pci_add_cmd(pcr, WRITE_REG_CMD, PHYRWCTL, 0xFF, 0x80);
-
-	err = rtsx_pci_send_cmd(pcr, 100);
-	if (err < 0)
-		return err;
+	rtsx_pci_write_register(pcr, PHYADDR, 0xFF, addr);
+	rtsx_pci_write_register(pcr, PHYRWCTL, 0xFF, 0x80);
 
 	for (i = 0; i < 100000; i++) {
 		err = rtsx_pci_read_register(pcr, PHYRWCTL, &tmp);
@@ -296,17 +268,9 @@ int __rtsx_pci_read_phy_register(struct rtsx_pcr *pcr, u8 addr, u16 *val)
 	if (!finished)
 		return -ETIMEDOUT;
 
-	rtsx_pci_init_cmd(pcr);
-
-	rtsx_pci_add_cmd(pcr, READ_REG_CMD, PHYDATA0, 0, 0);
-	rtsx_pci_add_cmd(pcr, READ_REG_CMD, PHYDATA1, 0, 0);
-
-	err = rtsx_pci_send_cmd(pcr, 100);
-	if (err < 0)
-		return err;
-
-	ptr = rtsx_pci_get_cmd_data(pcr);
-	data = ((u16)ptr[1] << 8) | ptr[0];
+	rtsx_pci_read_register(pcr, PHYDATA0, &val1);
+	rtsx_pci_read_register(pcr, PHYDATA1, &val2);
+	data = val1 | (val2 << 8);
 
 	if (val)
 		*val = data;
@@ -441,7 +405,7 @@ static void rtsx_pci_add_sg_tbl(struct rtsx_pcr *pcr,
 	if (end)
 		option |= RTSX_SG_END;
 
-	if (PCI_PID(pcr) == PID_5261) {
+	if ((PCI_PID(pcr) == PID_5261) || (PCI_PID(pcr) == PID_5228)) {
 		if (len > 0xFFFF)
 			val = ((u64)addr << 32) | (((u64)len & 0xFFFF) << 16)
 				| (((u64)len >> 16) << 6) | option;
@@ -746,6 +710,9 @@ int rtsx_pci_switch_clock(struct rtsx_pcr *pcr, unsigned int card_clock,
 
 	if (PCI_PID(pcr) == PID_5261)
 		return rts5261_pci_switch_clock(pcr, card_clock,
+				ssc_depth, initial_mode, double_clk, vpclk);
+	if (PCI_PID(pcr) == PID_5228)
+		return rts5228_pci_switch_clock(pcr, card_clock,
 				ssc_depth, initial_mode, double_clk, vpclk);
 
 	if (initial_mode) {
@@ -1139,6 +1106,21 @@ static void rtsx_pci_idle_work(struct work_struct *work)
 }
 
 #ifdef CONFIG_PM
+
+static void rtsx_base_force_power_down(struct rtsx_pcr *pcr, u8 pm_state)
+{
+	/* Set relink_time to 0 */
+	rtsx_pci_write_register(pcr, AUTOLOAD_CFG_BASE + 1, MASK_8_BIT_DEF, 0);
+	rtsx_pci_write_register(pcr, AUTOLOAD_CFG_BASE + 2, MASK_8_BIT_DEF, 0);
+	rtsx_pci_write_register(pcr, AUTOLOAD_CFG_BASE + 3,
+			RELINK_TIME_MASK, 0);
+
+	rtsx_pci_write_register(pcr, pcr->reg_pm_ctrl3,
+			D3_DELINK_MODE_EN, D3_DELINK_MODE_EN);
+
+	rtsx_pci_write_register(pcr, FPDCTL, ALL_POWER_DOWN, ALL_POWER_DOWN);
+}
+
 static void rtsx_pci_power_off(struct rtsx_pcr *pcr, u8 pm_state)
 {
 	if (pcr->ops->turn_off_led)
@@ -1152,6 +1134,8 @@ static void rtsx_pci_power_off(struct rtsx_pcr *pcr, u8 pm_state)
 
 	if (pcr->ops->force_power_down)
 		pcr->ops->force_power_down(pcr, pm_state);
+	else
+		rtsx_base_force_power_down(pcr, pm_state);
 }
 #endif
 
@@ -1284,9 +1268,13 @@ int rtsx_ms_power_off_card3v3(struct rtsx_pcr *pcr)
 
 static int rtsx_pci_init_hw(struct rtsx_pcr *pcr)
 {
+	struct pci_dev *pdev = pcr->pci;
 	int err;
 
-	pcr->pcie_cap = pci_find_capability(pcr->pci, PCI_CAP_ID_EXP);
+	if (PCI_PID(pcr) == PID_5228)
+		rtsx_pci_write_register(pcr, RTS5228_LDO1_CFG1, RTS5228_LDO1_SR_TIME_MASK,
+				RTS5228_LDO1_SR_0_5);
+
 	rtsx_pci_writel(pcr, RTSX_HCBAR, pcr->host_cmds_addr);
 
 	rtsx_pci_enable_bus_int(pcr);
@@ -1307,7 +1295,7 @@ static int rtsx_pci_init_hw(struct rtsx_pcr *pcr)
 	/* Wait SSC power stable */
 	udelay(200);
 
-	rtsx_pci_disable_aspm(pcr);
+	rtsx_disable_aspm(pcr);
 	if (pcr->ops->optimize_phy) {
 		err = pcr->ops->optimize_phy(pcr);
 		if (err < 0)
@@ -1333,6 +1321,9 @@ static int rtsx_pci_init_hw(struct rtsx_pcr *pcr)
 	if (PCI_PID(pcr) == PID_5261)
 		rtsx_pci_add_cmd(pcr, WRITE_REG_CMD, SSC_CTL2, 0xFF,
 			RTS5261_SSC_DEPTH_2M);
+	else if (PCI_PID(pcr) == PID_5228)
+		rtsx_pci_add_cmd(pcr, WRITE_REG_CMD, SSC_CTL2, 0xFF,
+			RTS5228_SSC_DEPTH_2M);
 	else
 		rtsx_pci_add_cmd(pcr, WRITE_REG_CMD, SSC_CTL2, 0xFF, 0x12);
 
@@ -1367,6 +1358,7 @@ static int rtsx_pci_init_hw(struct rtsx_pcr *pcr)
 	case PID_525A:
 	case PID_5260:
 	case PID_5261:
+	case PID_5228:
 		rtsx_pci_write_register(pcr, PM_CLK_FORCE_CTL, 1, 1);
 		break;
 	default:
@@ -1377,15 +1369,18 @@ static int rtsx_pci_init_hw(struct rtsx_pcr *pcr)
 	rtsx_pci_init_ocp(pcr);
 
 	/* Enable clk_request_n to enable clock power management */
-	rtsx_pci_write_config_byte(pcr, pcr->pcie_cap + PCI_EXP_LNKCTL + 1, 1);
+	pcie_capability_clear_and_set_word(pcr->pci, PCI_EXP_LNKCTL,
+					0, PCI_EXP_LNKCTL_CLKREQ_EN);
 	/* Enter L1 when host tx idle */
-	rtsx_pci_write_config_byte(pcr, 0x70F, 0x5B);
+	pci_write_config_byte(pdev, 0x70F, 0x5B);
 
 	if (pcr->ops->extra_init_hw) {
 		err = pcr->ops->extra_init_hw(pcr);
 		if (err < 0)
 			return err;
 	}
+
+	rtsx_pci_write_register(pcr, ASPM_FORCE_CTL, 0x30, 0x30);
 
 	/* No CD interrupt if probing driver with card inserted.
 	 * So we need to initialize pcr->card_exist here.
@@ -1454,6 +1449,10 @@ static int rtsx_pci_init_chip(struct rtsx_pcr *pcr)
 	case 0x5261:
 		rts5261_init_params(pcr);
 		break;
+
+	case 0x5228:
+		rts5228_init_params(pcr);
+		break;
 	}
 
 	pcr_dbg(pcr, "PID: 0x%04x, IC version: 0x%02x\n",
@@ -1493,6 +1492,7 @@ static int rtsx_pci_probe(struct pci_dev *pcidev,
 	struct pcr_handle *handle;
 	u32 base, len;
 	int ret, i, bar = 0;
+	u8 val;
 
 	dev_dbg(&(pcidev->dev),
 		": Realtek PCI-E Card Reader found at %s [%04x:%04x] (rev %x)\n",
@@ -1558,7 +1558,11 @@ static int rtsx_pci_probe(struct pci_dev *pcidev,
 	pcr->host_cmds_addr = pcr->rtsx_resv_buf_addr;
 	pcr->host_sg_tbl_ptr = pcr->rtsx_resv_buf + HOST_CMDS_BUF_LEN;
 	pcr->host_sg_tbl_addr = pcr->rtsx_resv_buf_addr + HOST_CMDS_BUF_LEN;
-
+	rtsx_pci_read_register(pcr, ASPM_FORCE_CTL, &val);
+	if (val & FORCE_ASPM_CTL0 && val & FORCE_ASPM_CTL1)
+		pcr->aspm_enabled = false;
+	else
+		pcr->aspm_enabled = true;
 	pcr->card_inserted = 0;
 	pcr->card_removed = 0;
 	INIT_DELAYED_WORK(&pcr->carddet_work, rtsx_pci_card_detect);
