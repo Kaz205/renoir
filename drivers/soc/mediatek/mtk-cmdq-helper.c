@@ -12,6 +12,7 @@
 #define CMDQ_WRITE_ENABLE_MASK	BIT(0)
 #define CMDQ_POLL_ENABLE_MASK	BIT(0)
 #define CMDQ_EOC_IRQ_EN		BIT(0)
+#define CMDQ_REG_TYPE		1
 
 struct cmdq_instruction {
 	union {
@@ -21,8 +22,17 @@ struct cmdq_instruction {
 	union {
 		u16 offset;
 		u16 event;
+		u16 reg_dst;
 	};
-	u8 subsys;
+	union {
+		u8 subsys;
+		struct {
+			u8 sop:5;
+			u8 arg_c_t:1;
+			u8 src_t:1;
+			u8 dst_t:1;
+		};
+	};
 	u8 op;
 };
 
@@ -47,7 +57,7 @@ int cmdq_dev_get_client_reg(struct device *dev,
 	}
 
 	client_reg->subsys = (u8)spec.args[0];
-	client_reg->offset = (u16)spec.args[1];
+	client_reg->offset = (u32)spec.args[1];
 	client_reg->size = (u16)spec.args[2];
 	of_node_put(spec.np);
 
@@ -213,6 +223,39 @@ int cmdq_pkt_write_mask(struct cmdq_pkt *pkt, u8 subsys,
 }
 EXPORT_SYMBOL(cmdq_pkt_write_mask);
 
+int cmdq_pkt_assign(struct cmdq_pkt *pkt, u16 reg_idx, u32 value)
+{
+	struct cmdq_instruction inst = {};
+
+	inst.op = CMDQ_CODE_LOGIC;
+	inst.dst_t = CMDQ_REG_TYPE;
+	inst.reg_dst = reg_idx;
+	inst.value = value;
+	return cmdq_pkt_append_command(pkt, inst);
+}
+EXPORT_SYMBOL(cmdq_pkt_assign);
+
+int cmdq_pkt_write_s_mask_value(struct cmdq_pkt *pkt, u8 high_addr_reg_idx,
+				u16 addr_low, u32 value, u32 mask)
+{
+	struct cmdq_instruction inst = {};
+	int err;
+
+	inst.op = CMDQ_CODE_MASK;
+	inst.mask = ~mask;
+	err = cmdq_pkt_append_command(pkt, inst);
+	if (err < 0)
+		return err;
+
+	inst.op = CMDQ_CODE_WRITE_S_MASK;
+	inst.sop = high_addr_reg_idx;
+	inst.offset = addr_low;
+	inst.value = value;
+
+	return cmdq_pkt_append_command(pkt, inst);
+}
+EXPORT_SYMBOL(cmdq_pkt_write_s_mask_value);
+
 int cmdq_pkt_wfe(struct cmdq_pkt *pkt, u16 event)
 {
 	struct cmdq_instruction inst = { {0} };
@@ -242,6 +285,46 @@ int cmdq_pkt_clear_event(struct cmdq_pkt *pkt, u16 event)
 	return cmdq_pkt_append_command(pkt, inst);
 }
 EXPORT_SYMBOL(cmdq_pkt_clear_event);
+
+s32 cmdq_pkt_poll_addr(struct cmdq_pkt *pkt, u32 value, u32 addr, u32 mask,
+	u8 reg_gpr)
+{
+	struct cmdq_instruction inst = { {0} };
+
+	s32 err;
+
+	if (mask != 0xffffffff) {
+		inst.op = CMDQ_CODE_MASK;
+		inst.mask = ~mask;
+		err = cmdq_pkt_append_command(pkt, inst);
+		if (err != 0)
+			return err;
+
+		addr = addr | 0x1;
+	}
+
+	/* Move extra handle APB address to GPR */
+	inst.op = CMDQ_CODE_MOVE;
+	inst.value = addr;
+	inst.sop = reg_gpr;
+	inst.dst_t = 1;
+	err = cmdq_pkt_append_command(pkt, inst);
+	if (err != 0)
+		pr_err("%s fail append command move addr to reg err:%d",
+			__func__, err);
+
+	inst.op = CMDQ_CODE_POLL;
+	inst.value = value;
+	inst.sop = reg_gpr;
+	inst.dst_t = 1;
+	err = cmdq_pkt_append_command(pkt, inst);
+	if (err != 0)
+		pr_err("%s fail append command poll err:%d",
+			__func__, err);
+
+	return err;
+}
+EXPORT_SYMBOL(cmdq_pkt_poll_addr);
 
 int cmdq_pkt_poll(struct cmdq_pkt *pkt, u8 subsys,
 		  u16 offset, u32 value)
@@ -313,7 +396,8 @@ static void cmdq_pkt_flush_async_cb(struct cmdq_cb_data data)
 			del_timer(&client->timer);
 		else
 			mod_timer(&client->timer, jiffies +
-				  msecs_to_jiffies(client->timeout_ms));
+				  msecs_to_jiffies(client->timeout_ms *
+						   client->pkt_cnt));
 		spin_unlock_irqrestore(&client->lock, flags);
 	}
 
@@ -346,9 +430,7 @@ int cmdq_pkt_flush_async(struct cmdq_pkt *pkt, cmdq_async_flush_cb cb,
 
 	if (client->timeout_ms != CMDQ_NO_TIMEOUT) {
 		spin_lock_irqsave(&client->lock, flags);
-		if (client->pkt_cnt++ == 0)
-			mod_timer(&client->timer, jiffies +
-				  msecs_to_jiffies(client->timeout_ms));
+		client->pkt_cnt++;
 		spin_unlock_irqrestore(&client->lock, flags);
 	}
 
@@ -357,6 +439,21 @@ int cmdq_pkt_flush_async(struct cmdq_pkt *pkt, cmdq_async_flush_cb cb,
 		return err;
 	/* We can send next packet immediately, so just call txdone. */
 	mbox_client_txdone(client->chan, 0);
+
+	if (client->timeout_ms != CMDQ_NO_TIMEOUT) {
+		spin_lock_irqsave(&client->lock, flags);
+		/*
+		 * GCE HW maybe execute too quickly and the callback function
+		 * may be invoked earlier. If this happens, pkt_cnt is reduced
+		 * by 1 in cmdq_pkt_flush_async_cb(). The timer is set only if
+		 * pkt_cnt is greater than 0.
+		 */
+		if (client->pkt_cnt > 0)
+			mod_timer(&client->timer, jiffies +
+				  msecs_to_jiffies(client->timeout_ms *
+						   client->pkt_cnt));
+		spin_unlock_irqrestore(&client->lock, flags);
+	}
 
 	return 0;
 }

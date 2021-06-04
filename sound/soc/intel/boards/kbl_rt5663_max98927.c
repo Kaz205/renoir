@@ -29,9 +29,9 @@
 #define DMIC_CH(p) p->list[p->count-1]
 #define MAXIM_DEV0_NAME "i2c-MX98927:00"
 #define MAXIM_DEV1_NAME "i2c-MX98927:01"
+#define QUAD_CHANNEL 4
 
 static struct snd_soc_card *kabylake_audio_card;
-static const struct snd_pcm_hw_constraint_list *dmic_constraints;
 static struct snd_soc_jack skylake_hdmi[3];
 
 struct kbl_hdmi_pcm {
@@ -151,6 +151,10 @@ static const struct snd_soc_dapm_route kabylake_map[] = {
 	{ "IN1N", NULL, "Headset Mic" },
 	{ "DMic", NULL, "SoC DMIC" },
 
+	{"HDMI1", NULL, "hif5-0 Output"},
+	{"HDMI2", NULL, "hif6-0 Output"},
+	{"HDMI3", NULL, "hif7-0 Output"},
+
 	/* CODEC BE connections */
 	{ "Left HiFi Playback", NULL, "ssp0 Tx" },
 	{ "Right HiFi Playback", NULL, "ssp0 Tx" },
@@ -194,8 +198,9 @@ static const struct snd_kcontrol_new kabylake_5663_controls[] = {
 static const struct snd_soc_dapm_widget kabylake_5663_widgets[] = {
 	SND_SOC_DAPM_HP("Headphone Jack", NULL),
 	SND_SOC_DAPM_MIC("Headset Mic", NULL),
-	SND_SOC_DAPM_SPK("DP", NULL),
-	SND_SOC_DAPM_SPK("HDMI", NULL),
+	SND_SOC_DAPM_SPK("HDMI1", NULL),
+	SND_SOC_DAPM_SPK("HDMI2", NULL),
+	SND_SOC_DAPM_SPK("HDMI3", NULL),
 	SND_SOC_DAPM_SUPPLY("Platform Clock", SND_SOC_NOPM, 0, 0,
 			platform_clock_control, SND_SOC_DAPM_PRE_PMU |
 			SND_SOC_DAPM_POST_PMD),
@@ -211,8 +216,9 @@ static const struct snd_soc_dapm_route kabylake_5663_map[] = {
 	{ "IN1P", NULL, "Headset Mic" },
 	{ "IN1N", NULL, "Headset Mic" },
 
-	{ "HDMI", NULL, "hif5 Output" },
-	{ "DP", NULL, "hif6 Output" },
+	{"HDMI1", NULL, "hif5-0 Output"},
+	{"HDMI2", NULL, "hif6-0 Output"},
+	{"HDMI3", NULL, "hif7-0 Output"},
 
 	/* CODEC BE connections */
 	{ "AIF Playback", NULL, "ssp1 Tx" },
@@ -238,7 +244,7 @@ static struct snd_soc_codec_conf max98927_codec_conf[] = {
 	},
 };
 
-static int kabylake_rt5663_fe_init(struct snd_soc_pcm_runtime *rtd)
+static int kabylake_pb_fe_init(struct snd_soc_pcm_runtime *rtd)
 {
 	int ret;
 	struct snd_soc_dapm_context *dapm;
@@ -365,6 +371,16 @@ static const struct snd_pcm_hw_constraint_list constraints_channels = {
 	.mask = 0,
 };
 
+static const unsigned int channels_quad[] = {
+	QUAD_CHANNEL,
+};
+
+static const struct snd_pcm_hw_constraint_list constraints_channels_quad = {
+	.count = ARRAY_SIZE(channels_quad),
+	.list = channels_quad,
+	.mask = 0,
+};
+
 static int kbl_fe_startup(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
@@ -389,7 +405,7 @@ static int kbl_fe_startup(struct snd_pcm_substream *substream)
 	return 0;
 }
 
-static const struct snd_soc_ops kabylake_rt5663_fe_ops = {
+static const struct snd_soc_ops kabylake_fe_ops = {
 	.startup = kbl_fe_startup,
 };
 
@@ -480,7 +496,7 @@ static int kabylake_dmic_fixup(struct snd_soc_pcm_runtime *rtd,
 	struct snd_interval *channels = hw_param_interval(params,
 				SNDRV_PCM_HW_PARAM_CHANNELS);
 
-	if (params_channels(params) == 2 || DMIC_CH(dmic_constraints) == 2)
+	if (params_channels(params) == 2)
 		channels->min = channels->max = 2;
 	else
 		channels->min = channels->max = 4;
@@ -524,33 +540,13 @@ static struct snd_soc_ops kabylake_ssp0_ops = {
 	.hw_params = kabylake_ssp0_hw_params,
 };
 
-static unsigned int channels_dmic[] = {
-	2, 4,
-};
-
-static struct snd_pcm_hw_constraint_list constraints_dmic_channels = {
-	.count = ARRAY_SIZE(channels_dmic),
-	.list = channels_dmic,
-	.mask = 0,
-};
-
-static const unsigned int dmic_2ch[] = {
-	2,
-};
-
-static const struct snd_pcm_hw_constraint_list constraints_dmic_2ch = {
-	.count = ARRAY_SIZE(dmic_2ch),
-	.list = dmic_2ch,
-	.mask = 0,
-};
-
 static int kabylake_dmic_startup(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 
-	runtime->hw.channels_max = DMIC_CH(dmic_constraints);
+	runtime->hw.channels_min = runtime->hw.channels_max = QUAD_CHANNEL;
 	snd_pcm_hw_constraint_list(runtime, 0, SNDRV_PCM_HW_PARAM_CHANNELS,
-			dmic_constraints);
+			&constraints_channels_quad);
 
 	return snd_pcm_hw_constraint_list(substream->runtime, 0,
 			SNDRV_PCM_HW_PARAM_RATE, &constraints_rates);
@@ -665,11 +661,11 @@ static struct snd_soc_dai_link kabylake_dais[] = {
 		.stream_name = "Audio",
 		.dynamic = 1,
 		.nonatomic = 1,
-		.init = kabylake_rt5663_fe_init,
+		.init = kabylake_pb_fe_init,
 		.trigger = {
 			SND_SOC_DPCM_TRIGGER_POST, SND_SOC_DPCM_TRIGGER_POST},
 		.dpcm_playback = 1,
-		.ops = &kabylake_rt5663_fe_ops,
+		.ops = &kabylake_fe_ops,
 		SND_SOC_DAILINK_REG(system, dummy, platform),
 	},
 	[KBL_DPCM_AUDIO_CP] = {
@@ -680,7 +676,7 @@ static struct snd_soc_dai_link kabylake_dais[] = {
 		.trigger = {
 			SND_SOC_DPCM_TRIGGER_POST, SND_SOC_DPCM_TRIGGER_POST},
 		.dpcm_capture = 1,
-		.ops = &kabylake_rt5663_fe_ops,
+		.ops = &kabylake_fe_ops,
 		SND_SOC_DAILINK_REG(system, dummy, platform),
 	},
 	[KBL_DPCM_AUDIO_HS_PB] = {
@@ -689,6 +685,10 @@ static struct snd_soc_dai_link kabylake_dais[] = {
 		.dpcm_playback = 1,
 		.nonatomic = 1,
 		.dynamic = 1,
+		.init = kabylake_pb_fe_init,
+		.trigger = {
+			SND_SOC_DPCM_TRIGGER_POST, SND_SOC_DPCM_TRIGGER_POST},
+		.ops = &kabylake_fe_ops,
 		SND_SOC_DAILINK_REG(system2, dummy, platform),
 	},
 	[KBL_DPCM_AUDIO_ECHO_REF_CP] = {
@@ -828,7 +828,7 @@ static struct snd_soc_dai_link kabylake_5663_dais[] = {
 		.trigger = {
 			SND_SOC_DPCM_TRIGGER_POST, SND_SOC_DPCM_TRIGGER_POST},
 		.dpcm_playback = 1,
-		.ops = &kabylake_rt5663_fe_ops,
+		.ops = &kabylake_fe_ops,
 		SND_SOC_DAILINK_REG(system, dummy, platform),
 	},
 	[KBL_DPCM_AUDIO_5663_CP] = {
@@ -839,7 +839,7 @@ static struct snd_soc_dai_link kabylake_5663_dais[] = {
 		.trigger = {
 			SND_SOC_DPCM_TRIGGER_POST, SND_SOC_DPCM_TRIGGER_POST},
 		.dpcm_capture = 1,
-		.ops = &kabylake_rt5663_fe_ops,
+		.ops = &kabylake_fe_ops,
 		SND_SOC_DAILINK_REG(system, dummy, platform),
 	},
 	[KBL_DPCM_AUDIO_5663_HDMI1_PB] = {
@@ -970,7 +970,6 @@ static struct snd_soc_card kabylake_audio_card_rt5663 = {
 static int kabylake_audio_probe(struct platform_device *pdev)
 {
 	struct kbl_rt5663_private *ctx;
-	struct snd_soc_acpi_mach *mach;
 	int ret;
 
 	ctx = devm_kzalloc(&pdev->dev, sizeof(*ctx), GFP_KERNEL);
@@ -984,11 +983,6 @@ static int kabylake_audio_probe(struct platform_device *pdev)
 
 	kabylake_audio_card->dev = &pdev->dev;
 	snd_soc_card_set_drvdata(kabylake_audio_card, ctx);
-
-	mach = pdev->dev.platform_data;
-	if (mach)
-		dmic_constraints = mach->mach_params.dmic_num == 2 ?
-			&constraints_dmic_2ch : &constraints_dmic_channels;
 
 	ctx->mclk = devm_clk_get(&pdev->dev, "ssp1_mclk");
 	if (IS_ERR(ctx->mclk)) {

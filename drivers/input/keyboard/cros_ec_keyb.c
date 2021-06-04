@@ -70,7 +70,7 @@ struct cros_ec_keyb {
 	struct notifier_block notifier;
 
 	u16 function_row_physmap[MAX_NUM_TOP_ROW_KEYS];
-	u8 num_function_row_keys;
+	size_t num_function_row_keys;
 };
 
 /**
@@ -558,8 +558,11 @@ static int cros_ec_keyb_register_matrix(struct cros_ec_keyb *ckdev)
 	struct input_dev *idev;
 	const char *phys;
 	int err;
-	u32 top_row_key_pos[MAX_NUM_TOP_ROW_KEYS] = {0};
-	u8 i;
+	struct property *prop;
+	const __be32 *p;
+	u16 *physmap;
+	u32 key_pos;
+	int row, col;
 
 	err = matrix_keypad_parse_properties(dev, &ckdev->rows, &ckdev->cols);
 	if (err)
@@ -611,20 +614,19 @@ static int cros_ec_keyb_register_matrix(struct cros_ec_keyb *ckdev)
 	ckdev->idev = idev;
 	cros_ec_keyb_compute_valid_keys(ckdev);
 
-	if (of_property_read_variable_u32_array(dev->of_node,
-						"function-row-physmap",
-						top_row_key_pos,
-						0,
-						MAX_NUM_TOP_ROW_KEYS) > 0) {
-		for (i = 0; i < MAX_NUM_TOP_ROW_KEYS; i++) {
-			if (!top_row_key_pos[i])
-				break;
-			ckdev->function_row_physmap[i] = MATRIX_SCAN_CODE(
-						KEY_ROW(top_row_key_pos[i]),
-						KEY_COL(top_row_key_pos[i]),
-						ckdev->row_shift);
+	physmap = ckdev->function_row_physmap;
+	of_property_for_each_u32(dev->of_node, "function-row-physmap",
+				 prop, p, key_pos) {
+		if (ckdev->num_function_row_keys == MAX_NUM_TOP_ROW_KEYS) {
+			dev_warn(dev, "Only support up to %d top row keys\n",
+				 MAX_NUM_TOP_ROW_KEYS);
+			break;
 		}
-		ckdev->num_function_row_keys = i;
+		row = KEY_ROW(key_pos);
+		col = KEY_COL(key_pos);
+		*physmap = MATRIX_SCAN_CODE(row, col, ckdev->row_shift);
+		physmap++;
+		ckdev->num_function_row_keys++;
 	}
 
 	err = input_register_device(ckdev->idev);
@@ -641,16 +643,15 @@ static ssize_t function_row_physmap_show(struct device *dev,
 					 char *buf)
 {
 	ssize_t size = 0;
-	u8 i;
+	int i;
 	struct cros_ec_keyb *ckdev = dev_get_drvdata(dev);
-
-	if (!ckdev->num_function_row_keys)
-		return 0;
+	u16 *physmap = ckdev->function_row_physmap;
 
 	for (i = 0; i < ckdev->num_function_row_keys; i++)
-		size += scnprintf(buf + size, PAGE_SIZE - size, "%02X ",
-				  ckdev->function_row_physmap[i]);
-	size += scnprintf(buf + size, PAGE_SIZE - size, "\n");
+		size += scnprintf(buf + size, PAGE_SIZE - size,
+				  "%s%02X", size ? " " : "", physmap[i]);
+	if (size)
+		size += scnprintf(buf + size, PAGE_SIZE - size, "\n");
 
 	return size;
 }

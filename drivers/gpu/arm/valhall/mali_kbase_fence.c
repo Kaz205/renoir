@@ -211,4 +211,3 @@ kbase_fence_add_callback(struct kbase_jd_atom *katom,
 
 	return err;
 }
-

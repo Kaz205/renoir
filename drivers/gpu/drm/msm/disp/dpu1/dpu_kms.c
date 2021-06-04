@@ -43,6 +43,8 @@
 #define DPU_DEBUGFS_DIR "msm_dpu"
 #define DPU_DEBUGFS_HWMASKNAME "hw_log_mask"
 
+#define MIN_IB_BW	400000000ULL /* Min ib vote 400MB */
+
 static int dpu_kms_hw_init(struct msm_kms *kms);
 static void _dpu_kms_mmu_destroy(struct dpu_kms *dpu_kms);
 
@@ -581,8 +583,6 @@ static int _dpu_kms_drm_obj_init(struct dpu_kms *dpu_kms)
 	struct drm_plane *primary_planes[MAX_PLANES], *plane;
 	struct drm_plane *cursor_planes[MAX_PLANES] = { NULL };
 	struct drm_crtc *crtc;
-	unsigned cursor_idx = 0;
-	unsigned primary_idx = 0;
 
 	struct msm_drm_private *priv;
 	struct dpu_mdss_cfg *catalog;
@@ -606,28 +606,21 @@ static int _dpu_kms_drm_obj_init(struct dpu_kms *dpu_kms)
 	/* Create the planes, keeping track of one primary/cursor per crtc */
 	for (i = 0; i < catalog->sspp_count; i++) {
 		enum drm_plane_type type;
-		unsigned possible_crtcs;
 
 		if ((catalog->sspp[i].features & BIT(DPU_SSPP_CURSOR))
-			&& cursor_planes_idx < max_crtc_count) {
+			&& cursor_planes_idx < max_crtc_count)
 			type = DRM_PLANE_TYPE_CURSOR;
-			possible_crtcs = BIT(cursor_idx);
-			cursor_idx++;
-		} else if (primary_planes_idx < max_crtc_count) {
+		else if (primary_planes_idx < max_crtc_count)
 			type = DRM_PLANE_TYPE_PRIMARY;
-			possible_crtcs = BIT(primary_idx);
-			primary_idx++;
-		} else {
+		else
 			type = DRM_PLANE_TYPE_OVERLAY;
-			possible_crtcs = (1UL << max_crtc_count) - 1;
-		}
 
 		DPU_DEBUG("Create plane type %d with features %lx (cur %lx)\n",
 			  type, catalog->sspp[i].features,
 			  catalog->sspp[i].features & BIT(DPU_SSPP_CURSOR));
 
 		plane = dpu_plane_init(dev, catalog->sspp[i].id, type,
-				       possible_crtcs, 0);
+				       (1UL << max_crtc_count) - 1, 0);
 		if (IS_ERR(plane)) {
 			DPU_ERROR("dpu_plane_init failed\n");
 			ret = PTR_ERR(plane);
@@ -939,6 +932,9 @@ static int dpu_kms_hw_init(struct msm_kms *kms)
 		DPU_DEBUG("REG_DMA is not defined");
 	}
 
+	if (of_device_is_compatible(dev->dev->of_node, "qcom,sc7180-mdss"))
+		dpu_kms_parse_data_bus_icc_path(dpu_kms);
+
 	pm_runtime_get_sync(&dpu_kms->pdev->dev);
 
 	dpu_kms->core_rev = readl_relaxed(dpu_kms->mmio + 0x0);
@@ -1039,9 +1035,6 @@ static int dpu_kms_hw_init(struct msm_kms *kms)
 	}
 
 	dpu_vbif_init_memtypes(dpu_kms);
-
-	if (of_device_is_compatible(dev->dev->of_node, "qcom,sc7180-mdss"))
-		dpu_kms_parse_data_bus_icc_path(dpu_kms);
 
 	pm_runtime_put_sync(&dpu_kms->pdev->dev);
 
@@ -1199,10 +1192,10 @@ static int __maybe_unused dpu_runtime_resume(struct device *dev)
 
 	ddev = dpu_kms->dev;
 
+	WARN_ON(!(dpu_kms->num_paths));
 	/* Min vote of BW is required before turning on AXI clk */
 	for (i = 0; i < dpu_kms->num_paths; i++)
-		icc_set_bw(dpu_kms->path[i], 0,
-			dpu_kms->catalog->perf.min_dram_ib);
+		icc_set_bw(dpu_kms->path[i], 0, Bps_to_icc(MIN_IB_BW));
 
 	rc = msm_dss_enable_clk(mp->clk_config, mp->num_clk, true);
 	if (rc) {

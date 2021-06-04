@@ -707,6 +707,7 @@ struct hci_chan {
 	struct sk_buff_head data_q;
 	unsigned int	sent;
 	__u8		state;
+	bool		amp;
 };
 
 struct hci_conn_params {
@@ -1686,6 +1687,36 @@ static inline struct smp_irk *hci_get_irk(struct hci_dev *hdev,
 	return hci_find_irk_by_rpa(hdev, bdaddr);
 }
 
+/* Erratum 5412 which has been fixed in 4.2 changed the validation of
+ * connection parameters.  For backwards compatibility reasons, the old
+ * calculation must be tolerated.
+ * For further details :
+ * https://www.bluetooth.org/errata/errata_view.cfm?errata_id=5419
+ */
+static inline int hci_check_conn_params_legacy(u16 min, u16 max, u16 latency,
+					u16 to_multiplier)
+{
+	u16 max_latency;
+
+	if (min > max || min < 6 || max > 3200)
+		return -EINVAL;
+
+	if (to_multiplier < 10 || to_multiplier > 3200)
+		return -EINVAL;
+
+	if (max >= to_multiplier * 8)
+		return -EINVAL;
+
+	max_latency = (to_multiplier * 8 / max) - 1;
+	if (latency > 499 || latency > max_latency)
+		return -EINVAL;
+
+	return 0;
+}
+
+/* Connection Parameter Validation Helper.
+ * See Vol 6, Part B, section 4.5.1.
+ */
 static inline int hci_check_conn_params(u16 min, u16 max, u16 latency,
 					u16 to_multiplier)
 {
@@ -1791,7 +1822,7 @@ void __mgmt_power_off(struct hci_dev *hdev);
 void mgmt_new_link_key(struct hci_dev *hdev, struct link_key *key,
 		       bool persistent);
 void mgmt_device_connected(struct hci_dev *hdev, struct hci_conn *conn,
-			   u32 flags, u8 *name, u8 name_len);
+			   u8 *name, u8 name_len);
 void mgmt_device_disconnected(struct hci_dev *hdev, bdaddr_t *bdaddr,
 			      u8 link_type, u8 addr_type, u8 reason,
 			      bool mgmt_connected);

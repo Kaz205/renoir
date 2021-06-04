@@ -311,9 +311,11 @@ static inline void ept_sync_global(void)
 
 static inline void ept_sync_context(u64 eptp)
 {
+#ifndef CONFIG_KVM_INVEPT_GLOBAL
 	if (cpu_has_vmx_invept_context())
 		__invept(VMX_EPT_EXTENT_CONTEXT, eptp, 0);
 	else
+#endif
 		ept_sync_global();
 }
 

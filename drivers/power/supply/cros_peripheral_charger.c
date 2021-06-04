@@ -88,6 +88,27 @@ static int cros_pchg_ec_command(const struct charger_data *charger,
 	return ret;
 }
 
+static const unsigned int pchg_cmd_version = 1;
+
+static bool cros_pchg_cmd_ver_check(const struct charger_data *charger)
+{
+	struct ec_params_get_cmd_versions_v1 req;
+	struct ec_response_get_cmd_versions rsp;
+	int ret;
+
+	req.cmd = EC_CMD_PCHG;
+	ret = cros_pchg_ec_command(charger, 1, EC_CMD_GET_CMD_VERSIONS,
+				   &req, sizeof(req), &rsp, sizeof(rsp));
+	if (ret < 0) {
+		dev_warn(charger->dev,
+			 "Unable to get versions of EC_CMD_PCHG (err:%d)\n",
+			 ret);
+		return false;
+	}
+
+	return !!(rsp.version_mask & BIT(pchg_cmd_version));
+}
+
 static int cros_pchg_port_count(const struct charger_data *charger)
 {
 	struct ec_response_pchg_count rsp;
@@ -115,7 +136,7 @@ static int cros_pchg_get_status(struct port_data *port)
 	int ret;
 
 	req.port = port->port_number;
-	ret = cros_pchg_ec_command(charger, 0, EC_CMD_PCHG,
+	ret = cros_pchg_ec_command(charger, pchg_cmd_version, EC_CMD_PCHG,
 				   &req, sizeof(req), &rsp, sizeof(rsp));
 	if (ret < 0) {
 		dev_err(dev, "Unable to get port.%d status (err:%d)\n",
@@ -292,6 +313,12 @@ static int cros_pchg_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
+	if (!cros_pchg_cmd_ver_check(charger)) {
+		dev_err(dev, "EC_CMD_PCHG version %d isn't available.\n",
+			pchg_cmd_version);
+		return -ENOTSUPP;
+	}
+
 	num_ports = ret;
 	if (num_ports > EC_PCHG_MAX_PORTS) {
 		dev_err(dev, "Too many peripheral charge ports (%d)\n",
@@ -321,7 +348,7 @@ static int cros_pchg_probe(struct platform_device *pdev)
 		psy_desc->num_properties = ARRAY_SIZE(cros_pchg_props);
 		psy_cfg.drv_data = port;
 
-		psy = devm_power_supply_register_no_ws(dev, psy_desc, &psy_cfg);
+		psy = devm_power_supply_register(dev, psy_desc, &psy_cfg);
 		if (IS_ERR(psy)) {
 			dev_err(dev, "Failed to register power supply\n");
 			continue;

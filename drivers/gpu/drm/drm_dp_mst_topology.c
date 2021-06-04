@@ -3637,14 +3637,26 @@ static int drm_dp_send_up_ack_reply(struct drm_dp_mst_topology_mgr *mgr,
 	return 0;
 }
 
-static int drm_dp_get_vc_payload_bw(u8 dp_link_bw, u8  dp_link_count)
+/**
+ * drm_dp_get_vc_payload_bw - get the VC payload BW for an MST link
+ * @link_rate: link rate in 10kbits/s units
+ * @link_lane_count: lane count
+ *
+ * Calculate the total bandwidth of a MultiStream Transport link. The returned
+ * value is in units of PBNs/(timeslots/1 MTP). This value can be used to
+ * convert the number of PBNs required for a given stream to the number of
+ * timeslots this stream requires in each MTP.
+ */
+int drm_dp_get_vc_payload_bw(int link_rate, int link_lane_count)
 {
-	if (dp_link_bw == 0 || dp_link_count == 0)
-		DRM_DEBUG_KMS("invalid link bandwidth in DPCD: %x (link count: %d)\n",
-			      dp_link_bw, dp_link_count);
+	if (link_rate == 0 || link_lane_count == 0)
+		DRM_DEBUG_KMS("invalid link rate/lane count: (%d / %d)\n",
+			      link_rate, link_lane_count);
 
-	return dp_link_bw * dp_link_count / 2;
+	/* See DP v2.0 2.6.4.2, VCPayload_Bandwidth_for_OneTimeSlotPer_MTP_Allocation */
+	return link_rate * link_lane_count / 54000;
 }
+EXPORT_SYMBOL(drm_dp_get_vc_payload_bw);
 
 /**
  * drm_dp_read_mst_cap() - check whether or not a sink supports MST
@@ -3698,7 +3710,7 @@ int drm_dp_mst_topology_mgr_set_mst(struct drm_dp_mst_topology_mgr *mgr, bool ms
 			goto out_unlock;
 		}
 
-		mgr->pbn_div = drm_dp_get_vc_payload_bw(mgr->dpcd[1],
+		mgr->pbn_div = drm_dp_get_vc_payload_bw(drm_dp_bw_code_to_link_rate(mgr->dpcd[1]),
 							mgr->dpcd[2] & DP_MAX_LANE_COUNT_MASK);
 		if (mgr->pbn_div == 0) {
 			ret = -EINVAL;
@@ -4198,6 +4210,7 @@ drm_dp_mst_detect_port(struct drm_connector *connector,
 
 	switch (port->pdt) {
 	case DP_PEER_DEVICE_NONE:
+		break;
 	case DP_PEER_DEVICE_MST_BRANCHING:
 		if (!port->mcs)
 			ret = connector_status_connected;
@@ -4302,6 +4315,7 @@ static int drm_dp_init_vcpi(struct drm_dp_mst_topology_mgr *mgr,
  * @mgr: MST topology manager for the port
  * @port: port to find vcpi slots for
  * @pbn: bandwidth required for the mode in PBN
+ * @pbn_div: divider for DSC mode that takes FEC into account
  *
  * Allocates VCPI slots to @port, replacing any previous VCPI allocations it
  * may have had. Any atomic drivers which support MST must call this function
@@ -4328,7 +4342,8 @@ static int drm_dp_init_vcpi(struct drm_dp_mst_topology_mgr *mgr,
  */
 int drm_dp_atomic_find_vcpi_slots(struct drm_atomic_state *state,
 				  struct drm_dp_mst_topology_mgr *mgr,
-				  struct drm_dp_mst_port *port, int pbn)
+				  struct drm_dp_mst_port *port, int pbn,
+				  int pbn_div)
 {
 	struct drm_dp_mst_topology_state *topology_state;
 	struct drm_dp_vcpi_allocation *pos, *vcpi = NULL;
@@ -4361,7 +4376,10 @@ int drm_dp_atomic_find_vcpi_slots(struct drm_atomic_state *state,
 	if (!vcpi)
 		prev_slots = 0;
 
-	req_slots = DIV_ROUND_UP(pbn, mgr->pbn_div);
+	if (pbn_div <= 0)
+		pbn_div = mgr->pbn_div;
+
+	req_slots = DIV_ROUND_UP(pbn, pbn_div);
 
 	DRM_DEBUG_ATOMIC("[CONNECTOR:%d:%s] [MST PORT:%p] VCPI %d -> %d\n",
 			 port->connector->base.id, port->connector->name,

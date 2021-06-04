@@ -210,4 +210,6 @@ const struct dma_map_ops dma_iommu_ops = {
 	.sync_sg_for_device	= dma_iommu_sync_sg_for_device,
 	.mmap			= dma_common_mmap,
 	.get_sgtable		= dma_common_get_sgtable,
+	.alloc_pages		= dma_common_alloc_pages,
+	.free_pages		= dma_common_free_pages,
 };

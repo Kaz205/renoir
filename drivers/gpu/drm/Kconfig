@@ -172,6 +172,19 @@ config DRM_DP_CEC
 	  Note: not all adapters support this feature, and even for those
 	  that do support this they often do not hook up the CEC pin.
 
+config DRM_DP_AUX_BACKLIGHT
+	bool "Enable DisplayPort aux backlight control support"
+	depends on DRM
+	select DRM_KMS_HELPER
+	help
+	  Choose this option if you want to use panel backlight control
+	  using DPCD registers on the DisplayPort aux channel.
+
+	  The panel should be capable of backlight adjustment from DPCD
+	  registers by the source device. In this configuration, the eDP TCON
+	  receives the backlight level information from the host, through
+	  the AUX channel.
+
 config DRM_TTM
 	tristate
 	depends on DRM && MMU
@@ -223,6 +236,7 @@ source "drivers/gpu/drm/arm/Kconfig"
 config DRM_RADEON
 	tristate "ATI Radeon"
 	depends on DRM && PCI && MMU
+	depends on AGP || !AGP
 	select FW_LOADER
         select DRM_KMS_HELPER
         select DRM_TTM

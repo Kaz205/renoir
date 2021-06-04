@@ -99,9 +99,6 @@ struct icc_node_data *qcom_icc_xlate_extended(struct of_phandle_args *spec, void
 	struct icc_node_data *ndata;
 	struct icc_node *node;
 
-	if (!spec)
-		return ERR_PTR(-EINVAL);
-
 	node = of_icc_xlate_onecell(spec, data);
 	if (IS_ERR(node))
 		return ERR_CAST(node);
@@ -114,6 +111,9 @@ struct icc_node_data *qcom_icc_xlate_extended(struct of_phandle_args *spec, void
 
 	if (spec->args_count == 2)
 		ndata->tag = spec->args[1];
+
+	if (spec->args_count > 2)
+		pr_warn("%pOF: Too many arguments, path tag is not parsed\n", spec->np);
 
 	return ndata;
 }
