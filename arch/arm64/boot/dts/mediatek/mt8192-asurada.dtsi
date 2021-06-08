@@ -1108,7 +1108,7 @@
 			bias-pull-up;
 		};
 		ap_wake_bt: ap_wake_bt {
-			pinmux = <PINMUX_GPIO168__FUNC_GPIO168>; /* AP_WAKE_BT_L */
+			pinmux = <PINMUX_GPIO168__FUNC_GPIO168>; /* AP_WAKE_BT_H */
 			output-low;
 		};
 	};
@@ -1777,6 +1777,7 @@
 		pinctrl-0 = <&bt_pins>;
 
 		enable-gpios = <&pio 144 GPIO_ACTIVE_HIGH>;
+		device-wake-gpios = <&pio 168 GPIO_ACTIVE_HIGH>;
 	};
 };
 
