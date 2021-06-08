@@ -962,11 +962,11 @@ static void h5_btrtl_close(struct h5 *h5)
 static int h5_btrtl_suspend(struct h5 *h5)
 {
 	serdev_device_set_flow_control(h5->hu->serdev, false);
+	gpiod_set_value_cansleep(h5->device_wake_gpio, 0);
 
-	if (!test_bit(H5_WAKEUP_ENABLE, &h5->flags)) {
-		gpiod_set_value_cansleep(h5->device_wake_gpio, 0);
+	if (!test_bit(H5_WAKEUP_ENABLE, &h5->flags))
 		gpiod_set_value_cansleep(h5->enable_gpio, 0);
-	}
+
 	return 0;
 }
 
@@ -1004,7 +1004,16 @@ static int h5_btrtl_resume(struct h5 *h5)
 		INIT_WORK(&reprobe->work, h5_btrtl_reprobe_worker);
 		reprobe->dev = get_device(&h5->hu->serdev->dev);
 		queue_work(system_long_wq, &reprobe->work);
+	} else {
+		gpiod_set_value_cansleep(h5->device_wake_gpio, 1);
+
+		/* TODO (b/184716907): Ideally we should cache the values from
+		 * the config file instead of just hardcoding true, but it
+		 * doesn't really matter as this is just a hack.
+		 */
+		serdev_device_set_flow_control(h5->hu->serdev, true);
 	}
+
 	return 0;
 }
 
