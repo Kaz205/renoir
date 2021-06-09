@@ -738,7 +738,7 @@ static int crypt_iv_eboiv_gen(struct crypt_config *cc, u8 *iv,
 	u8 buf[MAX_CIPHER_BLOCKSIZE] __aligned(__alignof__(__le64));
 	struct skcipher_request *req;
 	struct scatterlist src, dst;
-	DECLARE_CRYPTO_WAIT(wait);
+	struct crypto_wait wait;
 	int err;
 
 	req = skcipher_request_alloc(any_tfm(cc), GFP_NOIO);
