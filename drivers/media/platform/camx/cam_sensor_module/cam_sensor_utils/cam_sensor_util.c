@@ -1660,6 +1660,11 @@ int cam_sensor_core_power_up(struct cam_sensor_power_ctrl_t *ctrl,
 			if (power_setting->config_val)
 				soc_info->clk_rate[0][power_setting->seq_val] =
 					power_setting->config_val;
+			rc = cam_soc_util_power_domain_enable_default(soc_info);
+			if (rc) {
+				CAM_ERR(CAM_SENSOR, "CCI Power domains enable failed");
+				goto power_up_failed;
+			}
 
 			for (j = 0; j < soc_info->num_clk; j++) {
 				rc = cam_soc_util_clk_enable(soc_info->clk[j],
@@ -1796,6 +1801,7 @@ power_up_failed:
 				cam_soc_util_clk_disable(soc_info->clk[i],
 					soc_info->clk_name[i]);
 			}
+			cam_soc_util_power_domain_disable_default(soc_info);
 			ret = cam_config_mclk_reg(ctrl, soc_info, index);
 			if (ret < 0) {
 				CAM_ERR(CAM_SENSOR,
@@ -1963,6 +1969,7 @@ int cam_sensor_util_power_down(struct cam_sensor_power_ctrl_t *ctrl,
 					soc_info->clk_name[i]);
 			}
 
+			cam_soc_util_power_domain_disable_default(soc_info);
 			ret = cam_config_mclk_reg(ctrl, soc_info, index);
 			if (ret < 0) {
 				CAM_ERR(CAM_SENSOR,

@@ -644,4 +644,6 @@ int cam_soc_util_clk_enable_default(struct cam_hw_soc_info *soc_info,
 uint32_t cam_soc_util_get_vote_level(struct cam_hw_soc_info *soc_info,
 	uint64_t clock_rate);
 
+int cam_soc_util_power_domain_enable_default(struct cam_hw_soc_info *soc_info);
+void cam_soc_util_power_domain_disable_default(struct cam_hw_soc_info *soc_info);
 #endif /* _CAM_SOC_UTIL_H_ */

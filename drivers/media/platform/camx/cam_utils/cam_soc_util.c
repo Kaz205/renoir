@@ -1469,7 +1469,7 @@ static void cam_soc_util_regulator_disable_default(
 	}
 }
 
-static void cam_soc_util_power_domain_disable_default(
+void cam_soc_util_power_domain_disable_default(
 	struct cam_hw_soc_info *soc_info)
 {
 	int j = 0;
@@ -1529,7 +1529,7 @@ disable_rgltr:
 	return rc;
 }
 
-static int cam_soc_util_power_domain_enable_default(
+int cam_soc_util_power_domain_enable_default(
 	struct cam_hw_soc_info *soc_info)
 {
 	int j = 0, rc = 0;
