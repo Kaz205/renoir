@@ -163,14 +163,6 @@ int cam_mem_get_io_buf(int32_t buf_handle, int32_t mmu_handle,
 		goto handle_mismatch;
 	}
 
-	rc = dma_buf_begin_cpu_access(tbl.bufq[idx].dma_buf, DMA_BIDIRECTIONAL);
-	if (rc)
-		CAM_ERR(CAM_MEM, "dma begin access failed rc=%d", rc);
-
-	rc = dma_buf_end_cpu_access(tbl.bufq[idx].dma_buf, DMA_BIDIRECTIONAL);
-	if (rc)
-		CAM_ERR(CAM_MEM, "dma end access failed rc=%d", rc);
-
 	CAM_DBG(CAM_MEM,
 		"handle:0x%x fd:%d iova_ptr:%pK len_ptr:%llu",
 		mmu_handle, tbl.bufq[idx].fd, iova_ptr, *len_ptr);
