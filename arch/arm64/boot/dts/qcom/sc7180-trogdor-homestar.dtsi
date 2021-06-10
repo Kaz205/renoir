@@ -16,8 +16,20 @@ ap_h1_spi: &spi0 {};
 #include "sc7180-trogdor-mipi-camera.dtsi"
 
 / {
-	model = "Google Homestar";
-	compatible = "google,homestar", "qcom,sc7180";
+	pp3300_touch: pp3300-touch {
+		compatible = "regulator-fixed";
+		regulator-name = "pp3300_touch";
+
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+
+		gpio = <&tlmm 87 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		pinctrl-names = "default";
+		pinctrl-0 = <&en_pp3300_touch>;
+
+		vin-supply = <&pp3300_a>;
+	};
 };
 
 &ap_tp_i2c {
@@ -39,7 +51,7 @@ ap_ts_pen_1v8: &i2c4 {
 
 		reset-gpios = <&tlmm 8 GPIO_ACTIVE_LOW>;
 
-		vdd-supply = <&pp3300_ts>;
+		vdd-supply = <&pp3300_touch>;
 	};
 };
 
@@ -198,7 +210,7 @@ ap_ts_pen_1v8: &i2c4 {
 			  "HUB_EN",
 			  "",
 			  "PP1800_MIPI_SW_EN",
-			  "",
+			  "EN_PP3300_TOUCH",
 			  "",
 			  "",
 			  "AP_SKU_ID1",
@@ -230,4 +242,17 @@ ap_ts_pen_1v8: &i2c4 {
 			  "AP_TS_PEN_I2C_SCL",
 			  "DP_HOT_PLUG_DET",
 			  "EC_IN_RW_ODL";
+
+	en_pp3300_touch: en-pp3300-touch {
+		pinmux {
+			pins = "gpio87";
+			function = "gpio";
+		};
+
+		pinconf {
+			pins = "gpio87";
+			drive-strength = <2>;
+			bias-disable;
+		};
+	};
 };

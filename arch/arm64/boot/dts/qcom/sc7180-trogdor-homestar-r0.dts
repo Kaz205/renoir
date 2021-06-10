@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Google Homestar board device tree source
+ *
+ * Copyright 2021 Google LLC.
+ */
+
+/dts-v1/;
+
+#include "sc7180-trogdor-homestar.dtsi"
+
+/ {
+	model = "Google Homestar (rev0 - 1)";
+	compatible = "google,homestar-rev0", "google,homestar-rev1", "qcom,sc7180";
+};
+
+&ap_ts {
+	vdd-supply = <&pp3300_ts>;
+};
