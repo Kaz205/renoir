@@ -12325,4 +12325,7 @@ enum skl_power_gate {
 #define CLKREQ_POLICY			_MMIO(0x101038)
 #define  CLKREQ_POLICY_MEM_UP_OVRD	REG_BIT(1)
 
+/* PXP regs */
+#define GEN12_KCR_SIP _MMIO(0x32260) /* KCR hwdrm session in play 0-31 */
+
 #endif /* _I915_REG_H_ */

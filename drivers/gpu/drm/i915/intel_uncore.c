@@ -1927,6 +1927,10 @@ static const struct reg_whitelist {
 	.offset_udw = RING_TIMESTAMP_UDW(RENDER_RING_BASE),
 	.gen_mask = INTEL_GEN_MASK(4, 12),
 	.size = 8
+}, {
+	.offset_ldw = GEN12_KCR_SIP,
+	.gen_mask = INTEL_GEN_MASK(12, 12),
+	.size = 4
 } };
 
 int i915_reg_read_ioctl(struct drm_device *dev,
