@@ -791,7 +791,7 @@ static void __cam_isp_ctx_send_sof_boot_timestamp(
 	req_msg.u.frame_msg.sof_status = sof_event_status;
 
 	CAM_DBG(CAM_ISP,
-		"request id:%lld frame number:%lld boot time stamp:0x%llx",
+		"request id:%lld frame number:%lld boot time stamp:%lld",
 		request_id, ctx_isp->frame_id,
 		ctx_isp->boot_timestamp);
 
@@ -820,7 +820,7 @@ static void __cam_isp_ctx_send_sof_timestamp(
 	req_msg.u.frame_msg.sof_status = sof_event_status;
 
 	CAM_DBG(CAM_ISP,
-		"request id:%lld frame number:%lld SOF time stamp:0x%llx",
+		"request id:%lld frame number:%lld SOF time stamp:%lld",
 		request_id, ctx_isp->frame_id,
 		ctx_isp->sof_timestamp_val);
 	CAM_DBG(CAM_ISP, "sof status:%d", sof_event_status);
@@ -1138,7 +1138,7 @@ static int __cam_isp_ctx_sof_in_activated_state(
 
 	ctx_isp->irq_timestamps = sof_event_data->irq_mono_boot_time;
 
-	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:0x%llx, ctx %u",
+	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:0x%lld, ctx %u",
 		ctx_isp->frame_id, ctx_isp->sof_timestamp_val, ctx->ctx_id);
 
 	return rc;
@@ -1730,7 +1730,7 @@ static int __cam_isp_ctx_fs2_sof_in_sof_state(
 	ctx_isp->sof_timestamp_val = sof_event_data->timestamp;
 	ctx_isp->boot_timestamp = sof_event_data->boot_time;
 
-	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:0x%llx",
+	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:%lld",
 		ctx_isp->frame_id, ctx_isp->sof_timestamp_val);
 
 	if (!(list_empty(&ctx->wait_req_list)))
@@ -2722,7 +2722,7 @@ static int __cam_isp_ctx_rdi_only_sof_in_top_state(
 	ctx_isp->sof_timestamp_val = sof_event_data->timestamp;
 	ctx_isp->boot_timestamp = sof_event_data->boot_time;
 
-	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:0x%llx",
+	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:%lld",
 		ctx_isp->frame_id, ctx_isp->sof_timestamp_val);
 
 	/*
@@ -2778,7 +2778,7 @@ static int __cam_isp_ctx_rdi_only_sof_in_applied_state(
 	ctx_isp->frame_id++;
 	ctx_isp->sof_timestamp_val = sof_event_data->timestamp;
 	ctx_isp->boot_timestamp = sof_event_data->boot_time;
-	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:0x%llx",
+	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:%lld",
 		ctx_isp->frame_id, ctx_isp->sof_timestamp_val);
 
 	ctx_isp->substate_activated = CAM_ISP_CTX_ACTIVATED_BUBBLE_APPLIED;
@@ -2802,7 +2802,7 @@ static int __cam_isp_ctx_rdi_only_sof_in_bubble_applied(
 	 * the previous sof time stamp that got captured in the
 	 * sof in applied state.
 	 */
-	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:0x%llx",
+	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:%lld",
 		ctx_isp->frame_id, ctx_isp->sof_timestamp_val);
 	__cam_isp_ctx_send_sof_timestamp(ctx_isp, request_id,
 		CAM_REQ_MGR_SOF_EVENT_SUCCESS);
@@ -2810,7 +2810,7 @@ static int __cam_isp_ctx_rdi_only_sof_in_bubble_applied(
 	ctx_isp->frame_id++;
 	ctx_isp->sof_timestamp_val = sof_event_data->timestamp;
 	ctx_isp->boot_timestamp = sof_event_data->boot_time;
-	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:0x%llx",
+	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:%lld",
 		ctx_isp->frame_id, ctx_isp->sof_timestamp_val);
 
 	if (list_empty(&ctx->wait_req_list)) {
@@ -2903,7 +2903,7 @@ static int __cam_isp_ctx_rdi_only_sof_in_bubble_state(
 	ctx_isp->frame_id++;
 	ctx_isp->sof_timestamp_val = sof_event_data->timestamp;
 	ctx_isp->boot_timestamp = sof_event_data->boot_time;
-	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:0x%llx",
+	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:%lld",
 		ctx_isp->frame_id, ctx_isp->sof_timestamp_val);
 	/*
 	 * Signal all active requests with error and move the  all the active
