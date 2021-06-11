@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2018, 2020-2021 The Linux Foundation. All rights reserved.
  * Copyright (C) 2013 Red Hat
  * Author: Rob Clark <robdclark@gmail.com>
  */
@@ -19,6 +19,7 @@
 #include <drm/drm_of.h>
 #include <drm/drm_vblank.h>
 
+#include "disp/msm_disp_snapshot.h"
 #include "msm_drv.h"
 #include "msm_debugfs.h"
 #include "msm_fence.h"
@@ -122,8 +123,8 @@ struct clk *msm_clk_get(struct platform_device *pdev, const char *name)
 	return clk;
 }
 
-void __iomem *_msm_ioremap(struct platform_device *pdev, const char *name,
-			   const char *dbgname, bool quiet)
+static void __iomem *_msm_ioremap(struct platform_device *pdev, const char *name,
+				  const char *dbgname, bool quiet, phys_addr_t *psize)
 {
 	struct resource *res;
 	unsigned long size;
@@ -152,19 +153,28 @@ void __iomem *_msm_ioremap(struct platform_device *pdev, const char *name,
 	if (reglog)
 		printk(KERN_DEBUG "IO:region %s %p %08lx\n", dbgname, ptr, size);
 
+	if (psize)
+		*psize = size;
+
 	return ptr;
 }
 
 void __iomem *msm_ioremap(struct platform_device *pdev, const char *name,
 			  const char *dbgname)
 {
-	return _msm_ioremap(pdev, name, dbgname, false);
+	return _msm_ioremap(pdev, name, dbgname, false, NULL);
 }
 
 void __iomem *msm_ioremap_quiet(struct platform_device *pdev, const char *name,
 				const char *dbgname)
 {
-	return _msm_ioremap(pdev, name, dbgname, true);
+	return _msm_ioremap(pdev, name, dbgname, true, NULL);
+}
+
+void __iomem *msm_ioremap_size(struct platform_device *pdev, const char *name,
+			  const char *dbgname, phys_addr_t *psize)
+{
+	return _msm_ioremap(pdev, name, dbgname, false, psize);
 }
 
 void msm_writel(u32 data, void __iomem *addr)
@@ -277,6 +287,8 @@ static int msm_drm_uninit(struct device *dev)
 	if (fbdev && priv->fbdev)
 		msm_fbdev_free(ddev);
 #endif
+
+	msm_disp_snapshot_destroy(ddev);
 
 	drm_mode_config_cleanup(ddev);
 
@@ -558,6 +570,10 @@ static int msm_drm_init(struct device *dev, struct drm_driver *drv)
 	if (ret)
 		goto err_msm_uninit;
 
+	ret = msm_disp_snapshot_init(ddev);
+	if (ret)
+		DRM_DEV_ERROR(dev, "msm_disp_snapshot_init failed ret = %d\n", ret);
+
 	drm_mode_config_reset(ddev);
 
 #ifdef CONFIG_DRM_FBDEV_EMULATION
@@ -694,7 +710,7 @@ static int msm_enable_vblank(struct drm_device *dev, unsigned int pipe)
 	struct msm_kms *kms = priv->kms;
 	if (!kms)
 		return -ENXIO;
-	DBG("dev=%p, crtc=%u", dev, pipe);
+	drm_dbg_vbl(dev, "crtc=%u", pipe);
 	return vblank_ctrl_queue_work(priv, pipe, true);
 }
 
@@ -704,7 +720,7 @@ static void msm_disable_vblank(struct drm_device *dev, unsigned int pipe)
 	struct msm_kms *kms = priv->kms;
 	if (!kms)
 		return;
-	DBG("dev=%p, crtc=%u", dev, pipe);
+	drm_dbg_vbl(dev, "crtc=%u", pipe);
 	vblank_ctrl_queue_work(priv, pipe, false);
 }
 

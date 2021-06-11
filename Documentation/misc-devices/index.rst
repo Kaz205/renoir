@@ -17,6 +17,7 @@ fit into other categories.
    eeprom
    ibmvmc
    ics932s401
+   intel/gna
    isl29003
    lis3lv02d
    max6875

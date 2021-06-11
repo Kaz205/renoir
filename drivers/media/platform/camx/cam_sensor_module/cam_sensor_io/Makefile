@@ -8,10 +8,7 @@ ccflags-y += -I$(srctree)/drivers/media/platform/camx/cam_req_mgr
 ccflags-y += -I$(srctree)/drivers/media/platform/camx/cam_smmu/
 ccflags-y += -I$(srctree)/drivers/media/platform/camx/cam_core/
 
-obj-$(CONFIG_QTI_PHY_IO) += \
-	cam_sensor_io.o
-
-obj-$(CONFIG_QTI_VIRT_IO) += \
+obj-$(CONFIG_QTI_SENSORS) += \
 	cam_sensor_io.o
 
 obj-$(CONFIG_QTI_CCI) += \

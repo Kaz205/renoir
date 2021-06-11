@@ -24,6 +24,7 @@
 #include "cam_cdm.h"
 #include "cam_soc_util.h"
 #include "cam_io_util.h"
+#include "cam_cdm_soc.h"
 
 #define CAM_CDM_OFFSET_FROM_REG(x, y) ((x)->offsets[y].offset)
 #define CAM_CDM_ATTR_FROM_REG(x, y) ((x)->offsets[y].attribute)

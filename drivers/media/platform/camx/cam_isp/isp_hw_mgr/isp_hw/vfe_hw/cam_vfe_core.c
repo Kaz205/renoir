@@ -120,8 +120,8 @@ int cam_vfe_get_hw_caps(void *hw_priv, void *get_hw_cap_args, uint32_t arg_size)
 	return rc;
 }
 
-int cam_vfe_reset_irq_top_half(uint32_t    evt_id,
-	struct cam_irq_th_payload         *th_payload)
+static int cam_vfe_reset_irq_top_half(uint32_t evt_id,
+				      struct cam_irq_th_payload *th_payload)
 {
 	int32_t                            rc = -EINVAL;
 	struct cam_vfe_irq_handler_priv   *handler_priv;

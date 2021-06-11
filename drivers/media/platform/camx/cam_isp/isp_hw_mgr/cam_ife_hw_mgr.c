@@ -2012,8 +2012,9 @@ err:
 	return rc;
 }
 
-void cam_ife_cam_cdm_callback(uint32_t handle, void *userdata,
-	enum cam_cdm_cb_status status, uint64_t cookie)
+static void
+cam_ife_cam_cdm_callback(uint32_t handle, void *userdata,
+			 enum cam_cdm_cb_status status, uint64_t cookie)
 {
 	struct cam_ife_hw_mgr_ctx *ctx = NULL;
 
@@ -3900,8 +3901,7 @@ static int cam_isp_blob_sensor_config(
 	return rc;
 }
 
-
-void fill_res_bitmap(uint32_t resource_type, unsigned long *res_bitmap)
+static void fill_res_bitmap(uint32_t resource_type, unsigned long *res_bitmap)
 {
 
 	switch (resource_type) {

@@ -85,9 +85,9 @@ static bool cam_a5_cpas_cb(uint32_t client_handle, void *userdata,
 	return error_handled;
 }
 
-int cam_a5_register_cpas(struct cam_hw_soc_info *soc_info,
-			struct cam_a5_device_core_info *core_info,
-			uint32_t hw_idx)
+static int cam_a5_register_cpas(struct cam_hw_soc_info *soc_info,
+				struct cam_a5_device_core_info *core_info,
+				uint32_t hw_idx)
 {
 	struct cam_cpas_register_params cpas_register_params;
 	int rc;
@@ -108,7 +108,7 @@ int cam_a5_register_cpas(struct cam_hw_soc_info *soc_info,
 	return rc;
 }
 
-int cam_a5_probe(struct platform_device *pdev)
+static int cam_a5_probe(struct platform_device *pdev)
 {
 	int rc = 0;
 	struct cam_hw_info *a5_dev = NULL;

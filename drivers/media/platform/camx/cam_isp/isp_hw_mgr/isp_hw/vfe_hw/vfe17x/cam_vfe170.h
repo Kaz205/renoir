@@ -1037,10 +1037,6 @@ struct cam_vfe_hw_info cam_vfe170_hw_info = {
 
 	.camif_version                 = CAM_VFE_CAMIF_VER_2_0,
 	.camif_reg                     = &vfe170_camif_reg,
-
-	.camif_lite_version            = 0,
-	.camif_reg                     = NULL,
-
 };
 
 #endif /* _CAM_VFE170_H_ */

@@ -945,7 +945,7 @@ static int __remove_mapping(struct address_space *mapping, struct page *page,
 	if (PageSwapCache(page)) {
 		swp_entry_t swap = { .val = page_private(page) };
 		mem_cgroup_swapout(page, swap);
-		__delete_from_swap_cache(page, swap);
+		__delete_from_swap_cache(page, swap, NULL);
 		xa_unlock_irqrestore(&mapping->i_pages, flags);
 		put_swap_page(page, swap);
 	} else {
@@ -1652,10 +1652,7 @@ static __always_inline void update_lru_sizes(struct lruvec *lruvec,
 		if (!nr_zone_taken[zid])
 			continue;
 
-		__update_lru_size(lruvec, lru, zid, -nr_zone_taken[zid]);
-#ifdef CONFIG_MEMCG
-		mem_cgroup_update_lru_size(lruvec, lru, zid, -nr_zone_taken[zid]);
-#endif
+		update_lru_size(lruvec, lru, zid, -nr_zone_taken[zid]);
 	}
 
 }
@@ -1807,10 +1804,9 @@ int isolate_lru_page(struct page *page)
 		spin_lock_irq(&pgdat->lru_lock);
 		lruvec = mem_cgroup_page_lruvec(page, pgdat);
 		if (PageLRU(page)) {
-			int lru = page_lru(page);
 			get_page(page);
 			ClearPageLRU(page);
-			del_page_from_lru_list(page, lruvec, lru);
+			del_page_from_lru_list(page, lruvec);
 			ret = 0;
 		}
 		spin_unlock_irq(&pgdat->lru_lock);
@@ -1879,16 +1875,15 @@ static unsigned noinline_for_stack move_pages_to_lru(struct lruvec *lruvec,
 						     struct list_head *list)
 {
 	struct pglist_data *pgdat = lruvec_pgdat(lruvec);
-	int nr_pages, nr_moved = 0;
+	int nr_moved = 0;
 	LIST_HEAD(pages_to_free);
 	struct page *page;
-	enum lru_list lru;
 
 	while (!list_empty(list)) {
 		page = lru_to_page(list);
 		VM_BUG_ON_PAGE(PageLRU(page), page);
+		list_del(&page->lru);
 		if (unlikely(!page_evictable(page))) {
-			list_del(&page->lru);
 			spin_unlock_irq(&pgdat->lru_lock);
 			putback_lru_page(page);
 			spin_lock_irq(&pgdat->lru_lock);
@@ -1897,16 +1892,11 @@ static unsigned noinline_for_stack move_pages_to_lru(struct lruvec *lruvec,
 		lruvec = mem_cgroup_page_lruvec(page, pgdat);
 
 		SetPageLRU(page);
-		lru = page_lru(page);
-
-		nr_pages = hpage_nr_pages(page);
-		update_lru_size(lruvec, lru, page_zonenum(page), nr_pages);
-		list_move(&page->lru, &lruvec->lists[lru]);
+		add_page_to_lru_list(page, lruvec);
 
 		if (put_page_testzero(page)) {
-			__ClearPageLRU(page);
-			__ClearPageActive(page);
-			del_page_from_lru_list(page, lruvec, lru);
+			del_page_from_lru_list(page, lruvec);
+			__clear_page_lru_flags(page);
 
 			if (unlikely(PageCompound(page))) {
 				spin_unlock_irq(&pgdat->lru_lock);
@@ -1915,7 +1905,7 @@ static unsigned noinline_for_stack move_pages_to_lru(struct lruvec *lruvec,
 			} else
 				list_add(&page->lru, &pages_to_free);
 		} else {
-			nr_moved += nr_pages;
+			nr_moved += hpage_nr_pages(page);
 		}
 	}
 
@@ -2329,7 +2319,7 @@ static void get_scan_count(struct lruvec *lruvec, struct mem_cgroup *memcg,
 {
 	int swappiness = mem_cgroup_swappiness(memcg);
 	struct zone_reclaim_stat *reclaim_stat = &lruvec->reclaim_stat;
-	u64 fraction[2];
+	u64 fraction[ANON_AND_FILE];
 	u64 denominator = 0;	/* gcc */
 	struct pglist_data *pgdat = lruvec_pgdat(lruvec);
 	unsigned long anon_prio, file_prio;
@@ -2449,8 +2439,6 @@ static void get_scan_count(struct lruvec *lruvec, struct mem_cgroup *memcg,
 	 * Because workloads change over time (and to avoid overflow)
 	 * we keep these statistics as a floating average, which ends
 	 * up weighing recent references more than old ones.
-	 *
-	 * anon in [0], file in [1]
 	 */
 
 	anon  = lruvec_lru_size(lruvec, LRU_ACTIVE_ANON, MAX_NR_ZONES) +
@@ -4406,12 +4394,9 @@ void check_move_unevictable_pages(struct pagevec *pvec)
 			continue;
 
 		if (page_evictable(page)) {
-			enum lru_list lru = page_lru_base_type(page);
-
-			VM_BUG_ON_PAGE(PageActive(page), page);
+			del_page_from_lru_list(page, lruvec);
 			ClearPageUnevictable(page);
-			del_page_from_lru_list(page, lruvec, LRU_UNEVICTABLE);
-			add_page_to_lru_list(page, lruvec, lru);
+			add_page_to_lru_list(page, lruvec);
 			pgrescued++;
 		}
 	}

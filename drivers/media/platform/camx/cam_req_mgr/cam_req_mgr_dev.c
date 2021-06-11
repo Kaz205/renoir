@@ -557,7 +557,7 @@ int cam_req_mgr_notify_message(struct cam_req_mgr_message *msg,
 }
 EXPORT_SYMBOL(cam_req_mgr_notify_message);
 
-void cam_video_device_cleanup(void)
+static void cam_video_device_cleanup(void)
 {
 	video_unregister_device(g_dev.video);
 	video_device_release(g_dev.video);

@@ -102,6 +102,7 @@ struct msm_dsi_host {
 	int id;
 
 	void __iomem *ctrl_base;
+	phys_addr_t ctrl_size;
 	struct regulator_bulk_data supplies[DSI_DEV_REGULATOR_MAX];
 
 	struct clk *bus_clks[DSI_BUS_CLK_MAX];
@@ -1841,7 +1842,7 @@ int msm_dsi_host_init(struct msm_dsi *msm_dsi)
 		goto fail;
 	}
 
-	msm_host->ctrl_base = msm_ioremap(pdev, "dsi_ctrl", "DSI CTRL");
+	msm_host->ctrl_base = msm_ioremap_size(pdev, "dsi_ctrl", "DSI CTRL", &msm_host->ctrl_size);
 	if (IS_ERR(msm_host->ctrl_base)) {
 		pr_err("%s: unable to map Dsi ctrl base\n", __func__);
 		ret = PTR_ERR(msm_host->ctrl_base);
@@ -2226,13 +2227,13 @@ void msm_dsi_host_cmd_xfer_commit(struct mipi_dsi_host *host, u32 dma_base,
 }
 
 int msm_dsi_host_set_src_pll(struct mipi_dsi_host *host,
-	struct msm_dsi_pll *src_pll)
+	struct msm_dsi_phy *src_phy)
 {
 	struct msm_dsi_host *msm_host = to_msm_dsi_host(host);
 	struct clk *byte_clk_provider, *pixel_clk_provider;
 	int ret;
 
-	ret = msm_dsi_pll_get_clk_provider(src_pll,
+	ret = msm_dsi_phy_get_clk_provider(src_phy,
 				&byte_clk_provider, &pixel_clk_provider);
 	if (ret) {
 		pr_info("%s: can't get provider from pll, don't set parent\n",
@@ -2488,4 +2489,16 @@ struct drm_bridge *msm_dsi_host_get_bridge(struct mipi_dsi_host *host)
 	struct msm_dsi_host *msm_host = to_msm_dsi_host(host);
 
 	return of_drm_find_bridge(msm_host->device_node);
+}
+
+void msm_dsi_host_snapshot(struct msm_disp_state *disp_state, struct mipi_dsi_host *host)
+{
+	struct msm_dsi_host *msm_host = to_msm_dsi_host(host);
+
+	pm_runtime_get_sync(&msm_host->pdev->dev);
+
+	msm_disp_snapshot_add_block(disp_state, msm_host->ctrl_size,
+			msm_host->ctrl_base, "dsi%d_ctrl", msm_host->id);
+
+	pm_runtime_put_sync(&msm_host->pdev->dev);
 }
