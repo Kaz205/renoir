@@ -1828,10 +1828,7 @@ validate_vp9_seg_params(struct v4l2_vp9_segmentation *seg)
 
 	for (i = 0; i < ARRAY_SIZE(seg->feature_enabled); i++) {
 		if (seg->feature_enabled[i] &
-		    ~(V4L2_VP9_SEGMENT_FEATURE_QP_DELTA |
-		      V4L2_VP9_SEGMENT_FEATURE_LF |
-		      V4L2_VP9_SEGMENT_FEATURE_REF_FRAME |
-		      V4L2_VP9_SEGMENT_FEATURE_SKIP))
+		    ~V4L2_VP9_SEGMENT_FEATURE_ENABLED_MASK)
 			return -EINVAL;
 	}
 
