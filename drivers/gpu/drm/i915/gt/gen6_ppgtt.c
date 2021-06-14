@@ -240,7 +240,7 @@ static int gen6_ppgtt_init_scratch(struct gen6_ppgtt *ppgtt)
 	struct i915_page_directory * const pd = ppgtt->base.pd;
 	int ret;
 
-	ret = setup_scratch_page(vm, __GFP_HIGHMEM);
+	ret = setup_scratch_page(vm, GFP_KERNEL | __GFP_HIGHMEM);
 	if (ret)
 		return ret;
 
