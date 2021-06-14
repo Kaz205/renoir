@@ -1181,7 +1181,8 @@ void tb_retimer_remove_all(struct tb_port *port, struct tb_switch *sw)
 	 * Remove the retimers that belong to the switch being removed.
 	 * Allow for the removal of non-onboard retimers.
 	 */
-	if (port->cap_usb4 && ((rt && sw == rt->port->sw) || tb_route(sw)))
+	if (port->cap_usb4 && ((rt && sw == rt->port->sw) ||
+			       (!rt && tb_route(sw))))
 		device_for_each_child_reverse(&port->sw->dev, port,
 					      remove_retimer);
 }
