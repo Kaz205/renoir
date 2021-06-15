@@ -992,8 +992,7 @@ void cam_mem_mgr_close(void)
 	struct cam_mem_mgr_release_cmd cmd;
         int i = 1;
 
-        for_each_set_bit_from(i, tbl.bitmap,
-                              BITS_TO_LONGS(CAM_MEM_BUFQ_MAX) * sizeof(long)) {
+        for_each_set_bit_from(i, tbl.bitmap, tbl.bits) {
 		mutex_lock(&tbl.m_lock);
                 if (tbl.bufq[i].active) {
                         CAM_DBG(CAM_MEM, "Active buffer idx=%d", i);
