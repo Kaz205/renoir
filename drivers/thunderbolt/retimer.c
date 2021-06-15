@@ -514,7 +514,7 @@ static int tb_retimer_nvm_read(void *priv, unsigned int offset, void *val,
 	ret = usb4_port_retimer_nvm_read(rt->port, rt->index, offset, val, bytes);
 	/* Stop the IO on error or when the entire nvm is read */
 	if (ret || offset + bytes == nvm->active_size)
-		tb_retimer_stop_io(rt->port->sw, mux_mode, rt->port->port_index, rt->port);
+		tb_retimer_stop_io(rt->port->sw, mux_mode, port_index, rt->port);
 
 	mutex_unlock(&rt->tb->lock);
 
@@ -994,7 +994,6 @@ int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode,
 			 */
 			if (port->port != (BIT(j + 1) - 1))
 				continue;
-			port->port_index = j;
 			/* Match found */
 			break;
 		}

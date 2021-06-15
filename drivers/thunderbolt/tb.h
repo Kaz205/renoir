@@ -201,7 +201,6 @@ struct tb_switch {
  * @bonded: true if the port is bonded (two lanes combined as one)
  * @retimer_scan_done: true if retimer scan is done
  * @rt_io_started: true if retimer IO is started
- * @port_index: Type-C port index for this USB4 port
  * @dual_link_port: If the switch is connected using two ports, points
  *		    to the other port.
  * @link_nr: Is this primary or secondary port on the dual_link.
@@ -224,7 +223,6 @@ struct tb_port {
 	bool bonded;
 	bool retimer_scan_done;
 	bool rt_io_started;
-	u8 port_index;
 	struct tb_port *dual_link_port;
 	u8 link_nr:1;
 	struct ida in_hopids;
