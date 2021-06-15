@@ -1003,8 +1003,6 @@ int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode,
 			*typec_port_index = j;
 
 		tb_retimer_start_io(port->sw, &mode, j, port);
-		port->mux_mode = mode;
-
 		if (mux_mode)
 			*mux_mode = mode;
 
