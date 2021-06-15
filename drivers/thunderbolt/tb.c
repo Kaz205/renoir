@@ -578,12 +578,8 @@ static void tb_scan_port(struct tb_port *port)
 			 * Downstream switch is reachable through two ports.
 			 * Only scan on the primary port (link_nr == 0).
 			 */
-
-	if (tb_wait_for_port(port, false) <= 0) {
-		tb_retimer_scan(port);
+	if (tb_wait_for_port(port, false) <= 0)
 		return;
-	}
-
 	if (port->remote) {
 		tb_port_dbg(port, "port already has a remote\n");
 		return;
