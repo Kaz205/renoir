@@ -33,7 +33,6 @@
  * @minor: Minor version number of the active NVM portion
  * @id: Identifier used with both NVM portions
  * @active: Active portion NVMem device
- * @active_size: Size of active portion NVMem device
  * @non_active: Non-active portion NVMem device
  * @buf: Buffer where the NVM image is stored before it is written to
  *	 the actual NVM flash device
@@ -51,7 +50,6 @@ struct tb_nvm {
 	u8 minor;
 	int id;
 	struct nvmem_device *active;
-	size_t active_size;
 	struct nvmem_device *non_active;
 	void *buf;
 	size_t buf_data_size;

@@ -580,8 +580,6 @@ static int tb_retimer_nvm_add(struct tb_retimer *rt)
 	if (ret)
 		goto err_nvm;
 
-	nvm->active_size = nvm_size;
-
 	ret = tb_nvm_add_non_active(nvm, NVM_MAX_SIZE, tb_retimer_nvm_write);
 	if (ret)
 		goto err_nvm;
