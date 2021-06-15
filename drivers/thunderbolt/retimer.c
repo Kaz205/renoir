@@ -427,7 +427,9 @@ static int __maybe_unused tb_retimer_stop_io(struct tb_switch *sw, u32 mux_mode,
 	if (tb_route(sw))
 		return 0;
 
-	if (mux_mode != USB_PD_MUX_NONE)
+	if (mux_mode & USB_PD_MUX_TBT_COMPAT_ENABLED ||
+	    mux_mode & USB_PD_MUX_USB4_ENABLED ||
+	    mux_mode != USB_PD_MUX_NONE)
 		return 0;
 
 	for (i = 1; i <= TB_MAX_RETIMER_INDEX; i++)
@@ -444,7 +446,10 @@ static int __maybe_unused tb_retimer_stop_io(struct tb_switch *sw, u32 mux_mode,
 	if (ret)
 		return ret;
 
-	return tb_retimer_acpi_dsm_force_power(sw, false);
+	ret = tb_retimer_acpi_dsm_force_power(sw, false);
+	if (ret)
+		return ret;
+	return 0;
 }
 
 #else
