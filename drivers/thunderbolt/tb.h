@@ -991,8 +991,6 @@ int usb4_port_retimer_nvm_authenticate_status(struct tb_port *port, u8 index,
 					      u32 *status);
 int usb4_port_retimer_nvm_read(struct tb_port *port, u8 index,
 			       unsigned int address, void *buf, size_t size);
-int usb4_port_set_inbound_sbtx(struct tb_port *port, u8 index, bool set);
-int usb4_port_router_offline(struct tb_port *port, bool offline);
 
 int usb4_usb3_port_max_link_rate(struct tb_port *port);
 int usb4_usb3_port_actual_link_rate(struct tb_port *port);
