@@ -701,7 +701,6 @@ static ssize_t nvm_authenticate_store(struct device *dev,
 {
 	struct tb_retimer *rt = tb_to_retimer(dev);
 	bool val;
-	u32 mux_mode = 0;
 	int ret;
 
 	pm_runtime_get_sync(&rt->dev);
@@ -729,16 +728,13 @@ static ssize_t nvm_authenticate_store(struct device *dev,
 			goto exit_unlock;
 		}
 
-		tb_retimer_scan(rt->port, false, &mux_mode);
 		ret = tb_retimer_nvm_validate_and_write(rt);
 		if (ret)
-			goto exit_stop_io;
+			goto exit_unlock;
 
 		ret = usb4_port_retimer_nvm_authenticate(rt->port, rt->index);
 	}
 
-exit_stop_io:
-	tb_retimer_stop_io(rt->port->sw, mux_mode, rt->index, rt->port);
 exit_unlock:
 	mutex_unlock(&rt->tb->lock);
 exit_rpm:
