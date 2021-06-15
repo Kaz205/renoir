@@ -963,7 +963,6 @@ int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode,
 	u32 status[TB_MAX_RETIMER_INDEX] = {}, result = 0;
 	u32 mode = USB_RETIMER_FW_UPDATE_INVALID_MUX;
 	int ret, i, j = 0, last_idx = 0;
-	bool io_started = false;
 
 	if (!port->cap_usb4)
 		return 0;
@@ -971,34 +970,30 @@ int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode,
 	if (enumerate && port->retimer_scan_done)
 		return 0;
 
-	/* Start IO for onboard retimers */
 	ret = tb_retimer_acpi_dsm_get_port_info(port->sw, &result);
-	if (!ret && result) {
-		/* Get the Type-C port index in j */
-		for_each_set_bit(j, (const unsigned long *)&result,
-				 BITS_PER_BYTE) {
-			/*
-			 * Skip non-matching USB4 ports given the Type-C
-			 * port info
-			 */
-			if (port->port != (BIT(j + 1) - 1))
-				continue;
-			/* Match found */
-			break;
-		}
+	if (ret)
+		result = 1;
 
-		if (typec_port_index)
-			*typec_port_index = j;
+	/* Get the Type-C port index in j */
+	for_each_set_bit(j, (const unsigned long *)&result, BITS_PER_BYTE) {
+		/* skip non-matching USB4 ports given the Type-C port info */
+		if (port->port != (BIT(j + 1) - 1))
+			continue;
+		/* Match found */
+		break;
+	}
 
-		io_started = !tb_retimer_start_io(port->sw, &mode, j);
-		if (mux_mode)
-			*mux_mode = mode;
+	if (typec_port_index)
+		*typec_port_index = j;
 
-		if (mode == USB_PD_MUX_NONE) {
-			usb4_port_router_offline(port, false);
-			/* This delay helps router handle further operations */
-			msleep(100);
-		}
+	tb_retimer_start_io(port->sw, &mode, j);
+	if (mux_mode)
+		*mux_mode = mode;
+
+	if (mode == USB_PD_MUX_NONE) {
+		usb4_port_router_offline(port, false);
+		/* This delay helps router handle subsequent operations */
+		msleep(100);
 	}
 
 	/*
@@ -1006,8 +1001,10 @@ int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode,
 	 * port are set.
 	 */
 	ret = usb4_port_enumerate_retimers(port);
-	if (ret)
-		goto out_retimer_stop_io;
+	if (ret) {
+		tb_retimer_stop_io(port->sw, mode, j, port);
+		return ret;
+	}
 
 	/*
 	 * Before doing anything else, read the authentication status.
@@ -1058,10 +1055,9 @@ int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode,
 	}
 
 out_retimer_stop_io:
-	if (io_started)
-		tb_retimer_stop_io(port->sw, mode, j, port);
+	tb_retimer_stop_io(port->sw, mode, j, port);
 out:
-	return ret;
+	return 0;
 }
 
 static int remove_retimer(struct device *dev, void *data)
