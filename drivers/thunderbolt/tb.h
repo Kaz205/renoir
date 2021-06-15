@@ -21,11 +21,6 @@
 #define NVM_MIN_SIZE		SZ_32K
 #define NVM_MAX_SIZE		SZ_512K
 
-enum nvm_write_ops {
-	WRITE_AND_AUTHENTICATE = 1,
-	WRITE_ONLY = 2,
-};
-
 /* Intel specific NVM offsets */
 #define NVM_DEVID		0x05
 #define NVM_VERSION		0x08
