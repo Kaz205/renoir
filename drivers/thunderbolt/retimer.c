@@ -746,7 +746,7 @@ static ssize_t nvm_authenticate_store(struct device *dev,
 			goto exit_unlock;
 		}
 
-		tb_retimer_scan(rt->port, false, &mux_mode, NULL);
+		tb_retimer_scan(rt->port, false, &mux_mode);
 		ret = tb_retimer_nvm_validate_and_write(rt);
 		if (ret)
 			goto exit_stop_io;
@@ -950,14 +950,12 @@ static struct tb_retimer *tb_port_find_retimer(struct tb_port *port, u8 index)
  * @port: USB4 port to scan
  * @enumerate: Enumerate the retimer or just scan and prepare the retimer for IO
  * @mux_mode: stores the mux mode
- * @typec_port_index: stores the Type-C port index
  *
  * Tries to enumerate on-board retimers connected to @port. Found
  * retimers are registered as children of @port. Does not scan for cable
  * retimers for now.
  */
-int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode,
-		    u8 *typec_port_index)
+int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode)
 {
 	u32 status[TB_MAX_RETIMER_INDEX] = {}, result = 0;
 	u32 mode = USB_RETIMER_FW_UPDATE_INVALID_MUX;
@@ -981,9 +979,6 @@ int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode,
 		/* Match found */
 		break;
 	}
-
-	if (typec_port_index)
-		*typec_port_index = j;
 
 	tb_retimer_start_io(port->sw, &mode, j);
 	if (mux_mode)
