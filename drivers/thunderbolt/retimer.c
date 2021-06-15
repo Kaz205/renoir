@@ -361,7 +361,7 @@ static int __maybe_unused tb_retimer_start_io(struct tb_switch *sw,
 
 	/* Limit this only to on-board retimers */
 	if (tb_route(sw))
-		return -ENOTSUPP;
+		return 0;
 
 	/* check for minimum supported functions */
 	ret = tb_retimer_acpi_dsm_query_fn(sw, &data);
@@ -371,25 +371,36 @@ static int __maybe_unused tb_retimer_start_io(struct tb_switch *sw,
 	if (data != RETIMER_DSM_FN_MINIMUM)
 		return -ENOTSUPP;
 
-	/* Read the current mux mode */
-	ret = tb_retimer_acpi_dsm_get_mux(sw, mux_mode, typec_port_index);
-	if (ret)
-		return ret;
-
-	/* For all device attached cases, exit */
-	if (*mux_mode != USB_PD_MUX_NONE)
-		return 0;
-
 	/* Suspend the PD */
 	ret = tb_retimer_acpi_dsm_suspend_pd(sw, true, typec_port_index);
 	if (ret)
 		return ret;
 
+	/* Read the current mux mode */
+	ret = tb_retimer_acpi_dsm_get_mux(sw, mux_mode, typec_port_index);
+	if (ret)
+		goto err_pd_resume;
+
+	/* If already in TBT ALT or USB4 mode, nothing to be done */
+	if (*mux_mode & USB_PD_MUX_TBT_COMPAT_ENABLED ||
+	    *mux_mode & USB_PD_MUX_USB4_ENABLED)
+		goto err_pd_resume;
+
+	/* For all other device attached cases, exit */
+	if (*mux_mode != USB_PD_MUX_NONE)
+		goto err_pd_resume;
+
+	/* if no device attached, enable force power gpio */
 	ret = tb_retimer_acpi_dsm_force_power(sw, true);
 	if (ret)
 		goto err_pd_resume;
 
 	ret = tb_retimer_enter_tbt_alt_mode(sw, typec_port_index);
+	if (ret)
+		goto err_force_power_off;
+
+	/* Read the current mux mode */
+	ret = tb_retimer_acpi_dsm_get_mux(sw, &data, typec_port_index);
 	if (ret)
 		goto err_force_power_off;
 
