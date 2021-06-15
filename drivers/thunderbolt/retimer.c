@@ -938,9 +938,6 @@ int tb_retimer_scan(struct tb_port *port, u32 *mux_mode)
 	if (!port->cap_usb4)
 		return 0;
 
-	if (port->retimer_scan_done)
-		return 0;
-
 	ret = tb_retimer_acpi_dsm_get_port_info(port->sw, &result);
 	if (ret)
 		result = 1;
@@ -1000,7 +997,6 @@ int tb_retimer_scan(struct tb_port *port, u32 *mux_mode)
 			break;
 	}
 
-	port->retimer_scan_done = true;
 	if (!last_idx)
 		goto out_retimer_stop_io;
 

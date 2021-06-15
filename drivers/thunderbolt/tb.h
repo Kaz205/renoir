@@ -190,7 +190,6 @@ struct tb_switch {
  * @port: Port number on switch
  * @disabled: Disabled by eeprom or enabled but not implemented
  * @bonded: true if the port is bonded (two lanes combined as one)
- * @retimer_scan_done: true if retimer scan is done
  * @dual_link_port: If the switch is connected using two ports, points
  *		    to the other port.
  * @link_nr: Is this primary or secondary port on the dual_link.
@@ -210,7 +209,6 @@ struct tb_port {
 	u8 port;
 	bool disabled;
 	bool bonded;
-	bool retimer_scan_done;
 	struct tb_port *dual_link_port;
 	u8 link_nr:1;
 	struct ida in_hopids;
