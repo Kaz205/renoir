@@ -923,66 +923,34 @@ static struct tb_retimer *tb_port_find_retimer(struct tb_port *port, u8 index)
 /**
  * tb_retimer_scan() - Scan for on-board retimers under port
  * @port: USB4 port to scan
- * @mux_mode: stores the mux mode
  *
  * Tries to enumerate on-board retimers connected to @port. Found
  * retimers are registered as children of @port. Does not scan for cable
  * retimers for now.
  */
-int tb_retimer_scan(struct tb_port *port, u32 *mux_mode)
+int tb_retimer_scan(struct tb_port *port)
 {
-	u32 status[TB_MAX_RETIMER_INDEX] = {}, result = 0;
-	u32 mode = USB_RETIMER_FW_UPDATE_INVALID_MUX;
-	int ret, i, j = 0, last_idx = 0;
+	u32 status[TB_MAX_RETIMER_INDEX] = {};
+	int ret, i, last_idx = 0;
 
 	if (!port->cap_usb4)
 		return 0;
-
-	ret = tb_retimer_acpi_dsm_get_port_info(port->sw, &result);
-	if (ret)
-		result = 1;
-
-	/* Get the Type-C port index in j */
-	for_each_set_bit(j, (const unsigned long *)&result, BITS_PER_BYTE) {
-		/* skip non-matching USB4 ports given the Type-C port info */
-		if (port->port != (BIT(j + 1) - 1))
-			continue;
-		/* Match found */
-		break;
-	}
-
-	tb_retimer_start_io(port->sw, &mode, j);
-	if (mux_mode)
-		*mux_mode = mode;
-
-	if (mode == USB_PD_MUX_NONE) {
-		usb4_port_router_offline(port, false);
-		/* This delay helps router handle subsequent operations */
-		msleep(100);
-	}
 
 	/*
 	 * Send broadcast RT to make sure retimer indices facing this
 	 * port are set.
 	 */
 	ret = usb4_port_enumerate_retimers(port);
-	if (ret) {
-		tb_retimer_stop_io(port->sw, mode, j, port);
+	if (ret)
 		return ret;
-	}
 
 	/*
 	 * Before doing anything else, read the authentication status.
 	 * If the retimer has it set, store it for the new retimer
 	 * device instance.
 	 */
-	for (i = 1; i <= TB_MAX_RETIMER_INDEX; i++) {
-		if (mode & USB_PD_MUX_TBT_COMPAT_ENABLED ||
-		    mode & USB_PD_MUX_USB4_ENABLED ||
-		    mode == USB_PD_MUX_NONE)
-			ret = usb4_port_set_inbound_sbtx(port, i, true);
+	for (i = 1; i <= TB_MAX_RETIMER_INDEX; i++)
 		usb4_port_retimer_nvm_authenticate_status(port, i, &status[i]);
-	}
 
 	for (i = 1; i <= TB_MAX_RETIMER_INDEX; i++) {
 		/*
@@ -998,7 +966,7 @@ int tb_retimer_scan(struct tb_port *port, u32 *mux_mode)
 	}
 
 	if (!last_idx)
-		goto out_retimer_stop_io;
+		return 0;
 
 	/* Add on-board retimers if they do not exist already */
 	for (i = 1; i <= last_idx; i++) {
@@ -1010,12 +978,10 @@ int tb_retimer_scan(struct tb_port *port, u32 *mux_mode)
 		} else {
 			ret = tb_retimer_add(port, i, status[i]);
 			if (ret && ret != -EOPNOTSUPP)
-				goto out_retimer_stop_io;
+				return ret;
 		}
 	}
 
-out_retimer_stop_io:
-	tb_retimer_stop_io(port->sw, mode, j, port);
 	return 0;
 }
 
