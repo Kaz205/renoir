@@ -1063,14 +1063,6 @@ void tb_retimer_remove_all(struct tb_port *port, struct tb_switch *sw)
 	if (!port || !port->sw || !sw)
 		return;
 
-	/*
-	 * Cancel any pending work(s) on the onboard retimers, to prevent
-	 * the work item(s) from being executed after the retimer device is
-	 * removed.
-	 */
-	if (!tb_route(sw) && delayed_work_pending(&port->retimer_scan_work))
-		cancel_delayed_work_sync(&port->retimer_scan_work);
-
 	rt = tb_to_retimer(&port->sw->dev);
 	if (!rt)
 		return;
