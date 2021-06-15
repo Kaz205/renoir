@@ -681,8 +681,9 @@ static ssize_t nvm_authenticate_store(struct device *dev,
 {
 	struct tb_retimer *rt = tb_to_retimer(dev);
 	u8 port_index = 0;
+	bool val;
 	u32 mux_mode = 0;
-	int ret, val;
+	int ret;
 
 	pm_runtime_get_sync(&rt->dev);
 
@@ -696,43 +697,31 @@ static ssize_t nvm_authenticate_store(struct device *dev,
 		goto exit_unlock;
 	}
 
-	ret = kstrtoint(buf, 10, &val);
+	ret = kstrtobool(buf, &val);
 	if (ret)
 		goto exit_unlock;
 
 	/* Always clear status */
 	rt->auth_status = 0;
 
-	if (val <= 0 || val > WRITE_ONLY || !rt->nvm->buf) {
-		ret = -EINVAL;
-		goto exit_unlock;
-	}
+	if (val) {
+		if (!rt->nvm->buf) {
+			ret = -EINVAL;
+			goto exit_unlock;
+		}
 
-	if (val == WRITE_ONLY && rt->nvm->flushed)
-		goto exit_unlock;
-
-	tb_retimer_scan(rt->port, false, &mux_mode, &port_index);
-
-	if (!rt->nvm->flushed) {
+		tb_retimer_scan(rt->port, false, &mux_mode, &port_index);
 		ret = tb_retimer_nvm_validate_and_write(rt);
-		if (!ret)
-			rt->nvm->flushed = true;
+		if (ret)
+			goto exit_stop_io;
+
+		ret = usb4_port_retimer_nvm_authenticate(rt->port, rt->index);
+		if (ret)
+			goto exit_stop_io;
+
+		tb_retimer_nvm_read_version(rt);
 	}
 
-	if (ret || val == WRITE_ONLY)
-		goto exit_stop_io;
-
-	rt->nvm->authenticating = true;
-	ret = usb4_port_retimer_nvm_authenticate(rt->port, rt->index);
-	if (ret)
-		goto exit_authenticating;
-
-	tb_retimer_nvm_read_version(rt);
-
-	/* Reset these flags after an authentication */
-	rt->nvm->flushed = false;
-exit_authenticating:
-	rt->nvm->authenticating = false;
 exit_stop_io:
 	tb_retimer_stop_io(rt->port->sw, mux_mode, port_index, rt->port);
 exit_unlock:
