@@ -376,14 +376,8 @@ static int __maybe_unused tb_retimer_start_io(struct tb_switch *sw,
 	if (ret)
 		return ret;
 
-	/*
-	 * For all device attached cases, exit.
-	 * When the Type-C charger is connected in reverse,
-	 * USB_PD_MUX_POLARITY_INVERTED bit will be set. Otherwise, it
-	 * is just USB_PD_MUX_NONE.
-	 */
-	if (*mux_mode != USB_PD_MUX_NONE &&
-	    *mux_mode != USB_PD_MUX_POLARITY_INVERTED)
+	/* For all device attached cases, exit */
+	if (*mux_mode != USB_PD_MUX_NONE)
 		return 0;
 
 	/* Suspend the PD */
@@ -433,8 +427,7 @@ static int __maybe_unused tb_retimer_stop_io(struct tb_switch *sw, u32 mux_mode,
 	if (tb_route(sw))
 		return 0;
 
-	if (mux_mode != USB_PD_MUX_NONE &&
-	    mux_mode != USB_PD_MUX_POLARITY_INVERTED)
+	if (mux_mode != USB_PD_MUX_NONE)
 		return 0;
 
 	for (i = 1; i <= TB_MAX_RETIMER_INDEX; i++)
@@ -985,8 +978,7 @@ int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode,
 		if (mux_mode)
 			*mux_mode = mode;
 
-		if (mode == USB_PD_MUX_NONE ||
-		    mode == USB_PD_MUX_POLARITY_INVERTED) {
+		if (mode == USB_PD_MUX_NONE) {
 			usb4_port_router_offline(port, false);
 			/* This delay helps router handle further operations */
 			msleep(100);
@@ -1010,8 +1002,7 @@ int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode,
 		if (!tb_route(port->sw) &&
 		    (mode & USB_PD_MUX_TBT_COMPAT_ENABLED ||
 		     mode & USB_PD_MUX_USB4_ENABLED ||
-		     mode == USB_PD_MUX_NONE ||
-		     mode == USB_PD_MUX_POLARITY_INVERTED))
+		     mode == USB_PD_MUX_NONE))
 			ret = usb4_port_set_inbound_sbtx(port, i, true);
 		usb4_port_retimer_nvm_authenticate_status(port, i, &status[i]);
 	}
