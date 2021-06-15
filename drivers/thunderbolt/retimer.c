@@ -923,14 +923,13 @@ static struct tb_retimer *tb_port_find_retimer(struct tb_port *port, u8 index)
 /**
  * tb_retimer_scan() - Scan for on-board retimers under port
  * @port: USB4 port to scan
- * @enumerate: Enumerate the retimer or just scan and prepare the retimer for IO
  * @mux_mode: stores the mux mode
  *
  * Tries to enumerate on-board retimers connected to @port. Found
  * retimers are registered as children of @port. Does not scan for cable
  * retimers for now.
  */
-int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode)
+int tb_retimer_scan(struct tb_port *port, u32 *mux_mode)
 {
 	u32 status[TB_MAX_RETIMER_INDEX] = {}, result = 0;
 	u32 mode = USB_RETIMER_FW_UPDATE_INVALID_MUX;
@@ -939,7 +938,7 @@ int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode)
 	if (!port->cap_usb4)
 		return 0;
 
-	if (enumerate && port->retimer_scan_done)
+	if (port->retimer_scan_done)
 		return 0;
 
 	ret = tb_retimer_acpi_dsm_get_port_info(port->sw, &result);
@@ -1005,9 +1004,6 @@ int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode)
 	if (!last_idx)
 		goto out_retimer_stop_io;
 
-	if (!enumerate)
-		goto out;
-
 	/* Add on-board retimers if they do not exist already */
 	for (i = 1; i <= last_idx; i++) {
 		struct tb_retimer *rt;
@@ -1024,7 +1020,6 @@ int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode)
 
 out_retimer_stop_io:
 	tb_retimer_stop_io(port->sw, mode, j, port);
-out:
 	return 0;
 }
 
