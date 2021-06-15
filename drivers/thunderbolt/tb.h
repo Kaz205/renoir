@@ -937,7 +937,7 @@ struct tb_xdomain *tb_xdomain_find_by_link_depth(struct tb *tb, u8 link,
 
 int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode,
 		    u8 *typec_port_index);
-void tb_retimer_remove_all(struct tb_port *port, struct tb_switch *sw);
+void tb_retimer_remove_all(struct tb_port *port);
 
 static inline bool tb_is_retimer(const struct device *dev)
 {

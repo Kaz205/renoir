@@ -1072,24 +1072,12 @@ static int remove_retimer(struct device *dev, void *data)
 /**
  * tb_retimer_remove_all() - Remove all retimers under port
  * @port: USB4 port whose retimers to remove
- * @sw: USB4 switch whose retimers to remove
  *
- * This removes all previously added retimers under @port
- * under a given switch.
+ * This removes all previously added retimers under @port.
  */
-void tb_retimer_remove_all(struct tb_port *port, struct tb_switch *sw)
+void tb_retimer_remove_all(struct tb_port *port)
 {
-	struct tb_retimer *rt;
-
-	if (!port || !port->sw || !sw)
-		return;
-
-	rt = tb_to_retimer(&port->sw->dev);
-	if (!rt)
-		return;
-
-	/* remove the retimers that belong to the switch being removed */
-	if (port->cap_usb4 && sw == rt->port->sw)
+	if (port->cap_usb4)
 		device_for_each_child_reverse(&port->sw->dev, port,
 					      remove_retimer);
 }
