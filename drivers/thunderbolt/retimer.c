@@ -39,7 +39,7 @@ static const guid_t retimer_dsm_guid =
 
 #define RETIMER_OP_DELAY_MS	250
 
-static int tb_retimer_acpi_dsm_query_fn(struct tb_switch *sw, u32 *data)
+int tb_retimer_acpi_dsm_query_fn(struct tb_switch *sw, u32 *data)
 {
 	union acpi_object *obj;
 
@@ -59,7 +59,7 @@ static int tb_retimer_acpi_dsm_query_fn(struct tb_switch *sw, u32 *data)
 	return 0;
 }
 
-static int tb_retimer_acpi_dsm_get_power_state(struct tb_switch *sw, u8 *data)
+int tb_retimer_acpi_dsm_get_power_state(struct tb_switch *sw, u8 *data)
 {
 	union acpi_object *obj;
 
@@ -78,7 +78,7 @@ static int tb_retimer_acpi_dsm_get_power_state(struct tb_switch *sw, u8 *data)
 	return 0;
 }
 
-static int tb_retimer_acpi_dsm_set_power_state(struct tb_switch *sw, bool on)
+int tb_retimer_acpi_dsm_set_power_state(struct tb_switch *sw, bool on)
 {
 	union acpi_object *obj, tmp, argv4 = ACPI_INIT_DSM_ARGV4(1, &tmp);
 
@@ -99,7 +99,7 @@ static int tb_retimer_acpi_dsm_set_power_state(struct tb_switch *sw, bool on)
 	return 0;
 }
 
-static int tb_retimer_acpi_dsm_get_retimer_info(struct tb_switch *sw, u8 *data)
+int tb_retimer_acpi_dsm_get_retimer_info(struct tb_switch *sw, u8 *data)
 {
 	union acpi_object *obj;
 
@@ -119,7 +119,7 @@ static int tb_retimer_acpi_dsm_get_retimer_info(struct tb_switch *sw, u8 *data)
 	return 0;
 }
 
-static int tb_retimer_acpi_dsm_set_retimer_info(struct tb_switch *sw, u8 data)
+int tb_retimer_acpi_dsm_set_retimer_info(struct tb_switch *sw, u8 data)
 {
 	union acpi_object *obj, tmp, argv4 = ACPI_INIT_DSM_ARGV4(1, &tmp);
 
@@ -140,7 +140,7 @@ static int tb_retimer_acpi_dsm_set_retimer_info(struct tb_switch *sw, u8 data)
 	return 0;
 }
 
-static int tb_retimer_wait_for_value(struct tb_switch *sw, u32 value, u32 *result,
+int tb_retimer_wait_for_value(struct tb_switch *sw, u32 value, u32 *result,
 			      int timeout_msec, bool match)
 {
 	ktime_t timeout = ktime_add_ms(ktime_get(), timeout_msec);
@@ -183,7 +183,7 @@ static int tb_retimer_wait_for_value(struct tb_switch *sw, u32 value, u32 *resul
 	return -ETIMEDOUT;
 }
 
-static int tb_retimer_acpi_dsm_force_power(struct tb_switch *sw, bool on)
+int tb_retimer_acpi_dsm_force_power(struct tb_switch *sw, bool on)
 {
 	u8 data = 0;
 	int ret;
@@ -456,7 +456,61 @@ static int __maybe_unused tb_retimer_stop_io(struct tb_switch *sw, u32 mux_mode,
 
 #else
 
+int tb_retimer_acpi_dsm_query_fn(struct tb_switch *sw, u32 *data)
+{
+	return -EOPNOTSUPP;
+}
+
+int tb_retimer_acpi_dsm_get_power_state(struct tb_switch *sw, u8 *data)
+{
+	return -EOPNOTSUPP;
+}
+
+int tb_retimer_acpi_dsm_set_power_state(struct tb_switch *sw, bool on)
+{
+	return -EOPNOTSUPP;
+}
+
+int tb_retimer_acpi_dsm_get_retimer_info(struct tb_switch *sw, u8 *data)
+{
+	return -EOPNOTSUPP;
+}
+
+int tb_retimer_acpi_dsm_set_retimer_info(struct tb_switch *sw, u8 data)
+{
+	return -EOPNOTSUPP;
+}
+
+int tb_retimer_acpi_dsm_force_power(struct tb_switch *sw, bool on)
+{
+	return -EOPNOTSUPP;
+}
+
+static int tb_retimer_acpi_dsm_suspend_pd(struct tb_switch *sw, bool suspend,
+					  u8 typec_port_index)
+{
+	return -EOPNOTSUPP;
+}
+
+static int tb_retimer_acpi_dsm_get_mux(struct tb_switch *sw, u32 *result,
+				       u8 typec_port_index)
+{
+	return -EOPNOTSUPP;
+}
+
+static int tb_retimer_acpi_dsm_set_mux(struct tb_switch *sw, u8 mux_mode,
+				       u32 match, u8 typec_port_index)
+{
+	return -EOPNOTSUPP;
+}
+
 static int tb_retimer_acpi_dsm_get_port_info(struct tb_switch *sw, u32 *result)
+{
+	return -EOPNOTSUPP;
+}
+
+static int tb_retimer_enter_tbt_alt_mode(struct tb_switch *sw,
+					 u8 typec_port_index)
 {
 	return -EOPNOTSUPP;
 }
