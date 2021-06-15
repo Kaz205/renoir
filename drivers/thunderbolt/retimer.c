@@ -717,7 +717,6 @@ static ssize_t nvm_authenticate_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct tb_retimer *rt = tb_to_retimer(dev);
-	u8 port_index = 0;
 	bool val;
 	u32 mux_mode = 0;
 	int ret;
@@ -747,7 +746,7 @@ static ssize_t nvm_authenticate_store(struct device *dev,
 			goto exit_unlock;
 		}
 
-		tb_retimer_scan(rt->port, false, &mux_mode, &port_index);
+		tb_retimer_scan(rt->port, false, &mux_mode, NULL);
 		ret = tb_retimer_nvm_validate_and_write(rt);
 		if (ret)
 			goto exit_stop_io;
@@ -760,7 +759,7 @@ static ssize_t nvm_authenticate_store(struct device *dev,
 	}
 
 exit_stop_io:
-	tb_retimer_stop_io(rt->port->sw, mux_mode, port_index, rt->port);
+	tb_retimer_stop_io(rt->port->sw, mux_mode, rt->index, rt->port);
 exit_unlock:
 	mutex_unlock(&rt->tb->lock);
 exit_rpm:
