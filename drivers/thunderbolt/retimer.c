@@ -580,25 +580,6 @@ static int tb_retimer_nvm_write(void *priv, unsigned int offset, void *val,
 	return ret;
 }
 
-static int tb_retimer_nvm_read_version(struct tb_retimer *rt)
-{
-	u32 val = 0;
-	int ret;
-
-	if (!rt || !rt->nvm)
-		return -EINVAL;
-
-	ret = usb4_port_retimer_nvm_read(rt->port, rt->index, NVM_VERSION, &val,
-					 sizeof(val));
-	if (ret)
-		return ret;
-
-	rt->nvm->major = val >> 16;
-	rt->nvm->minor = val >> 8;
-
-	return 0;
-}
-
 static int tb_retimer_nvm_add(struct tb_retimer *rt)
 {
 	struct tb_nvm *nvm;
@@ -609,11 +590,13 @@ static int tb_retimer_nvm_add(struct tb_retimer *rt)
 	if (IS_ERR(nvm))
 		return PTR_ERR(nvm);
 
-	rt->nvm = nvm;
-
-	ret = tb_retimer_nvm_read_version(rt);
+	ret = usb4_port_retimer_nvm_read(rt->port, rt->index, NVM_VERSION, &val,
+					 sizeof(val));
 	if (ret)
 		goto err_nvm;
+
+	nvm->major = val >> 16;
+	nvm->minor = val >> 8;
 
 	ret = usb4_port_retimer_nvm_read(rt->port, rt->index, NVM_FLASH_SIZE,
 					 &val, sizeof(val));
@@ -631,11 +614,11 @@ static int tb_retimer_nvm_add(struct tb_retimer *rt)
 	if (ret)
 		goto err_nvm;
 
+	rt->nvm = nvm;
 	return 0;
 
 err_nvm:
 	tb_nvm_free(nvm);
-	rt->nvm = NULL;
 	return ret;
 }
 
@@ -752,10 +735,6 @@ static ssize_t nvm_authenticate_store(struct device *dev,
 			goto exit_stop_io;
 
 		ret = usb4_port_retimer_nvm_authenticate(rt->port, rt->index);
-		if (ret)
-			goto exit_stop_io;
-
-		tb_retimer_nvm_read_version(rt);
 	}
 
 exit_stop_io:
