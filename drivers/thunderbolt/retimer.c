@@ -1012,10 +1012,9 @@ int tb_retimer_scan(struct tb_port *port, bool enumerate, u32 *mux_mode,
 	 * device instance.
 	 */
 	for (i = 1; i <= TB_MAX_RETIMER_INDEX; i++) {
-		if (!tb_route(port->sw) &&
-		    (mode & USB_PD_MUX_TBT_COMPAT_ENABLED ||
-		     mode & USB_PD_MUX_USB4_ENABLED ||
-		     mode == USB_PD_MUX_NONE))
+		if (mode & USB_PD_MUX_TBT_COMPAT_ENABLED ||
+		    mode & USB_PD_MUX_USB4_ENABLED ||
+		    mode == USB_PD_MUX_NONE)
 			ret = usb4_port_set_inbound_sbtx(port, i, true);
 		usb4_port_retimer_nvm_authenticate_status(port, i, &status[i]);
 	}
