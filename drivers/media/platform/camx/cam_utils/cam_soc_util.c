@@ -1171,51 +1171,9 @@ static int cam_soc_util_get_dt_power_domain_info
 		return -EINVAL;
 	}
 
-	of_node = soc_info->dev->of_node;
+	pm_runtime_enable(soc_info->dev);
 
-	soc_info->num_pds = 0;
-	count = of_property_count_strings(of_node, "power-domain-names");
-	if (count != -EINVAL) {
-		if (count <= 0) {
-			CAM_ERR(CAM_UTIL, "no power domains found");
-			count = 0;
-			return -EINVAL;
-		}
-
-		soc_info->num_pds = count;
-
-	} else {
-		CAM_DBG(CAM_UTIL, "No power-domain node found");
-		return 0;
-	}
-
-	for (i = 0; i < soc_info->num_pds; i++) {
-		rc = of_property_read_string_index(of_node,
-			"power-domain-names", i, &soc_info->pds_name[i]);
-		CAM_DBG(CAM_UTIL, "pds_name[%d] = %s",
-			i, soc_info->pds_name[i]);
-		if (rc) {
-			CAM_ERR(CAM_UTIL, "no power domain resource at cnt=%d",
-				i);
-			return -ENODEV;
-		}
-
-		soc_info->pds[i] = genpd_dev_pm_attach_by_id(soc_info->dev, i);
-		if (!soc_info->pds[i])
-			rc = -ENODEV;
-		else
-			rc = IS_ERR(soc_info->pds[i]) ?
-				    PTR_ERR(soc_info->pds[i]) : 0;
-		if (rc == -EPROBE_DEFER) {
-			return rc;
-		} else if (rc < 0) {
-			CAM_ERR(CAM_ISP, "Failed to attach power domain %s: %d",
-				soc_info->pds_name[i], rc);
-			return rc;
-		}
-	}
-
-	return rc;
+	return 0;
 }
 
 int cam_soc_util_get_dt_properties(struct cam_hw_soc_info *soc_info)
@@ -1472,14 +1430,9 @@ static void cam_soc_util_regulator_disable_default(
 void cam_soc_util_power_domain_disable_default(
 	struct cam_hw_soc_info *soc_info)
 {
-	int j = 0;
-	uint32_t num_pds = soc_info->num_pds;
-
-	for (j = num_pds-1; j >= 0; j--) {
-		if (soc_info->pds[j]) {
-			dev_pm_genpd_set_performance_state(soc_info->pds[j], 0);
-			pm_runtime_put(soc_info->pds[j]);
-		}
+	if (soc_info->dev) {
+		dev_pm_genpd_set_performance_state(soc_info->dev, 0);
+		pm_runtime_put(soc_info->dev);
 	}
 }
 
@@ -1532,32 +1485,21 @@ disable_rgltr:
 int cam_soc_util_power_domain_enable_default(
 	struct cam_hw_soc_info *soc_info)
 {
-	int j = 0, rc = 0;
-	uint32_t num_pds = soc_info->num_pds;
+	int rc = 0;
 
-	for (j = 0; j < num_pds; j++) {
-		if (soc_info->pds[j]) {
-			dev_pm_genpd_set_performance_state(soc_info->pds[j],
-				INT_MAX);
-			rc = pm_runtime_get_sync(soc_info->pds[j]);
-			if (rc) {
-				CAM_ERR(CAM_UTIL, "%s enable failed",
-					soc_info->pds_name[j]);
-				goto disable_pds;
-			}
+	if (soc_info->dev) {
+		dev_pm_genpd_set_performance_state(soc_info->dev,
+			INT_MAX);
+		rc = pm_runtime_get_sync(soc_info->dev);
+		if (rc < 0) {
+			CAM_ERR(CAM_UTIL, "pd enable failed");
+			pm_runtime_put(soc_info->dev);
+			dev_pm_genpd_set_performance_state(soc_info->dev, 0);
+			return rc;
 		}
 	}
 
-	return rc;
-
-disable_pds:
-	for (j--; j >= 0; j--) {
-		if (soc_info->pds[j]) {
-			dev_pm_genpd_set_performance_state(soc_info->pds[j], 0);
-			pm_runtime_put(soc_info->pds[j]);
-		}
-	}
-	return rc;
+	return 0;
 }
 
 int cam_soc_util_request_platform_resource(
@@ -1713,6 +1655,8 @@ int cam_soc_util_release_platform_resource(struct cam_hw_soc_info *soc_info)
 			soc_info->rgltr[i] = NULL;
 		}
 	}
+
+	pm_runtime_disable(soc_info->dev);
 
 	for (i = soc_info->num_reg_map - 1; i >= 0; i--) {
 		iounmap(soc_info->reg_map[i].mem_base);
