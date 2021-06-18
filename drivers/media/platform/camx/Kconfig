@@ -8,7 +8,6 @@ menuconfig SPECTRA_CAMERA
 	depends on (MEDIA_SUPPORT && MEDIA_CONTROLLER && V4L_PLATFORM_DRIVERS)
 	depends on (VIDEO_DEV && VIDEO_V4L2=y)
 	depends on ARM64
-	depends on !COMPILE_TEST
 	depends on SC_CAMCC_7180
 	help
 	  Say Y here to enable selecting the video adapters for
