@@ -234,9 +234,9 @@ static int cam_vfe_bus_acquire_rm(
 	uint32_t                                 *client_done_mask,
 	uint32_t                                  is_dual)
 {
-	uint32_t rm_idx = 0;
 	struct cam_isp_resource_node              *rm_res_local = NULL;
 	struct cam_vfe_bus_rd_ver1_rm_resource_data *rsrc_data = NULL;
+	int rm_idx;
 
 	*rm_res = NULL;
 	*client_done_mask = 0;

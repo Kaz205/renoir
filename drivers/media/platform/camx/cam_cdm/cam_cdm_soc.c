@@ -109,39 +109,29 @@ permission_error:
 int cam_cdm_soc_load_dt_private(struct platform_device *pdev,
 	struct cam_cdm_private_dt_data *ptr)
 {
-	int i, rc = -EINVAL;
+	int i, rc;
 
-	ptr->dt_num_supported_clients = of_property_count_strings(
-						pdev->dev.of_node,
-						"cdm-client-names");
-	CAM_DBG(CAM_CDM, "Num supported cdm_client = %d",
-		ptr->dt_num_supported_clients);
-	if (ptr->dt_num_supported_clients >
-		CAM_PER_CDM_MAX_REGISTERED_CLIENTS) {
-		CAM_ERR(CAM_CDM, "Invalid count of client names count=%d",
-			ptr->dt_num_supported_clients);
-		rc = -EINVAL;
-		return rc;
+	rc = of_property_count_strings(pdev->dev.of_node, "cdm-client-names");
+	CAM_DBG(CAM_CDM, "Num supported cdm_client = %d", rc);
+	if (rc < 1 || rc > CAM_PER_CDM_MAX_REGISTERED_CLIENTS) {
+		CAM_ERR(CAM_CDM, "Invalid count of client names: %d", rc);
+		return -EINVAL;
 	}
-	if (ptr->dt_num_supported_clients < 0) {
-		CAM_DBG(CAM_CDM, "No cdm client names found");
-		ptr->dt_num_supported_clients = 0;
-		ptr->dt_cdm_shared = false;
-	} else {
-		ptr->dt_cdm_shared = true;
-	}
+
+	ptr->dt_num_supported_clients = rc;
+	ptr->dt_cdm_shared = true;
 	for (i = 0; i < ptr->dt_num_supported_clients; i++) {
 		rc = of_property_read_string_index(pdev->dev.of_node,
-			"cdm-client-names", i, &(ptr->dt_cdm_client_name[i]));
-		CAM_DBG(CAM_CDM, "cdm-client-names[%d] = %s",	i,
-			ptr->dt_cdm_client_name[i]);
+			"cdm-client-names", i, &ptr->dt_cdm_client_name[i]);
 		if (rc < 0) {
 			CAM_ERR(CAM_CDM, "Reading cdm-client-names failed");
-			break;
+			return rc;
 		}
+		CAM_DBG(CAM_CDM, "cdm-client-names[%d] = %s", i,
+			ptr->dt_cdm_client_name[i]);
 	}
 
-	return rc;
+	return 0;
 }
 
 int cam_hw_cdm_soc_get_dt_properties(struct cam_hw_info *cdm_hw,

@@ -1609,16 +1609,14 @@ static int32_t cam_cci_i2c_set_sync_prms(struct v4l2_subdev *sd,
 
 static int32_t cam_cci_release(struct v4l2_subdev *sd)
 {
-	uint8_t rc = 0;
+	int rc;
 	struct cci_device *cci_dev;
 
 	cci_dev = v4l2_get_subdevdata(sd);
 
 	rc = cam_cci_soc_release(cci_dev);
-	if (rc < 0) {
+	if (rc < 0)
 		CAM_ERR(CAM_CCI, "Failed in releasing the cci: %d", rc);
-		return rc;
-	}
 
 	return rc;
 }

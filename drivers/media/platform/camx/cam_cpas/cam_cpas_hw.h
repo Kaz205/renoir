@@ -30,7 +30,7 @@
 #define CAM_CPAS_GET_CLIENT_HANDLE(indx) (indx)
 
 #define CAM_CPAS_CLIENT_VALID(indx) \
-	((indx >= 0) && (indx < CAM_CPAS_MAX_CLIENTS))
+	(indx < CAM_CPAS_MAX_CLIENTS)
 #define CAM_CPAS_CLIENT_REGISTERED(cpas_core, indx)        \
 	((CAM_CPAS_CLIENT_VALID(indx)) && \
 	(cpas_core->cpas_client[indx]))

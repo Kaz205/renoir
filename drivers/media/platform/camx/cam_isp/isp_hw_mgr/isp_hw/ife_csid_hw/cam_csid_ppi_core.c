@@ -63,7 +63,7 @@ static int cam_csid_ppi_reset(struct cam_csid_ppi_hw *ppi_hw)
 static int cam_csid_ppi_enable_hw(struct cam_csid_ppi_hw  *ppi_hw)
 {
 	int rc = 0;
-	uint32_t i;
+	int i;
 	uint64_t val;
 	const struct cam_csid_ppi_reg_offset *ppi_reg;
 	struct cam_hw_soc_info               *soc_info;

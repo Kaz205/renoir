@@ -357,18 +357,17 @@ static int cam_cdm_util_reg_cont_write(void __iomem *base_addr,
 	uint32_t *data;
 	struct cdm_regcontinuous_cmd *reg_cont;
 
-	if ((cmd_buf_size < cdm_get_cmd_header_size(CAM_CDM_CMD_REG_CONT)) ||
-		(!base_addr)) {
+	if (cmd_buf_size < cdm_get_cmd_header_size(CAM_CDM_CMD_REG_CONT) ||
+	    !base_addr) {
 		CAM_ERR(CAM_CDM, "invalid base addr and data length  %d %pK",
 			cmd_buf_size, base_addr);
 		return -EINVAL;
 	}
 
 	reg_cont = (struct cdm_regcontinuous_cmd *)cmd_buf;
-	if ((!reg_cont->count) || (reg_cont->count > 0x10000) ||
-		(((reg_cont->count * sizeof(uint32_t)) +
-			cdm_get_cmd_header_size(CAM_CDM_CMD_REG_CONT)) >
-			cmd_buf_size)) {
+	if (!reg_cont->count ||
+	    reg_cont->count * sizeof(uint32_t) +
+	     cdm_get_cmd_header_size(CAM_CDM_CMD_REG_CONT) > cmd_buf_size) {
 		CAM_ERR(CAM_CDM, "buffer size %d is not sufficient for count%d",
 			cmd_buf_size, reg_cont->count);
 		return -EINVAL;
@@ -377,8 +376,8 @@ static int cam_cdm_util_reg_cont_write(void __iomem *base_addr,
 	cam_io_memcpy(base_addr + reg_cont->offset,	data,
 		reg_cont->count * sizeof(uint32_t));
 
-	*used_bytes = (reg_cont->count * sizeof(uint32_t)) +
-		(4 * cdm_get_cmd_header_size(CAM_CDM_CMD_REG_CONT));
+	*used_bytes = reg_cont->count * sizeof(uint32_t) +
+		      cdm_get_cmd_header_size(CAM_CDM_CMD_REG_CONT) * 4;
 
 	return ret;
 }
@@ -396,10 +395,10 @@ static int cam_cdm_util_reg_random_write(void __iomem *base_addr,
 	}
 
 	reg_random = (struct cdm_regrandom_cmd *) cmd_buf;
-	if ((!reg_random->count) || (reg_random->count > 0x10000) ||
-		(((reg_random->count * (sizeof(uint32_t) * 2)) +
-		cdm_get_cmd_header_size(CAM_CDM_CMD_REG_RANDOM)) >
-			cmd_buf_size)) {
+	if (!reg_random->count ||
+	    (((reg_random->count * (sizeof(uint32_t) * 2)) +
+	      cdm_get_cmd_header_size(CAM_CDM_CMD_REG_RANDOM)) >
+	     cmd_buf_size)) {
 		CAM_ERR(CAM_CDM, "invalid reg_count  %d cmd_buf_size %d",
 			reg_random->count, cmd_buf_size);
 		return -EINVAL;
