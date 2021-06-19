@@ -1163,8 +1163,6 @@ static int cam_soc_util_get_dt_regulator_info
 static int cam_soc_util_get_dt_power_domain_info
 	(struct cam_hw_soc_info *soc_info)
 {
-	int rc = 0, count = 0, i = 0;
-	struct device_node *of_node = NULL;
 
 	if (!soc_info || !soc_info->dev) {
 		CAM_ERR(CAM_UTIL, "Invalid parameters");
