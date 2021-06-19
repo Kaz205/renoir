@@ -496,7 +496,7 @@ int cam_cdm_util_cmd_buf_write(void __iomem **current_device_base,
 			break;
 		case CAM_CDM_CMD_SWD_DMI_32:
 		case CAM_CDM_CMD_SWD_DMI_64: {
-			if (*current_device_base == 0) {
+			if (!*current_device_base) {
 				CAM_ERR(CAM_CDM,
 					"Got SWI DMI cmd =%d for invalid hw",
 					cdm_cmd_type);

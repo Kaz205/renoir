@@ -43,7 +43,7 @@ static void cam_req_mgr_core_link_reset(struct cam_req_mgr_core_link *link)
 	link->parent = NULL;
 	link->subscribe_event = 0;
 	link->trigger_mask = 0;
-	link->sync_link = 0;
+	link->sync_link = NULL;
 	link->sync_link_sof_skip = false;
 	link->open_req_cnt = 0;
 	link->last_flush_id = 0;
