@@ -64,8 +64,8 @@ static int session_info_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static ssize_t session_info_read(struct file *t_file, char *t_char,
-	size_t t_size_t, loff_t *t_loff_t)
+static ssize_t session_info_read(struct file *t_file, char __user *t_char,
+				 size_t t_size_t, loff_t *t_loff_t)
 {
 	int i;
 	char *out_buffer = sess_info_buffer;
@@ -105,7 +105,7 @@ static ssize_t session_info_read(struct file *t_file, char *t_char,
 }
 
 static ssize_t session_info_write(struct file *t_file,
-	const char *t_char, size_t t_size_t, loff_t *t_loff_t)
+	const char __user *t_char, size_t t_size_t, loff_t *t_loff_t)
 {
 	memset(sess_info_buffer, 0, MAX_SESS_INFO_LINE_BUFF_LEN);
 

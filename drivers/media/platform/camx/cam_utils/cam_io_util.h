@@ -80,7 +80,7 @@ uint32_t cam_io_r_mb(void __iomem *addr);
  * @return:             Success or Failure
  */
 int cam_io_memcpy(void __iomem *dest_addr,
-		void __iomem *src_addr, uint32_t len);
+		void *src_addr, uint32_t len);
 
 /**
  * cam_io_memcpy_mb()
@@ -98,7 +98,7 @@ int cam_io_memcpy(void __iomem *dest_addr,
  * @return:             Success or Failure
  */
 int cam_io_memcpy_mb(void __iomem *dest_addr,
-	void __iomem *src_addr, uint32_t len);
+	void *src_addr, uint32_t len);
 
 /**
  * cam_io_poll_value_wmask()

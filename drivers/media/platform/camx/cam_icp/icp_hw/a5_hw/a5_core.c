@@ -144,7 +144,7 @@ static int32_t cam_icp_program_fw(const uint8_t *elf,
 	uint32_t num_prg_hdrs;
 	unsigned char *icp_prg_hdr_tbl;
 	int32_t i = 0;
-	u8 *dest;
+	u8 __iomem *dest;
 	u8 *src;
 	struct elf32_hdr *elf_hdr;
 	struct elf32_phdr *prg_hdr;
@@ -167,8 +167,9 @@ static int32_t cam_icp_program_fw(const uint8_t *elf,
 			prg_hdr->p_filesz);
 		if (prg_hdr->p_filesz != 0) {
 			src = (u8 *)((u8 *)elf + prg_hdr->p_offset);
-			dest = (u8 *)(((u8 *)core_info->fw_kva_addr) +
-				prg_hdr->p_vaddr);
+			dest = (u8 __iomem *)
+				(((u8 __iomem *)core_info->fw_kva_addr) +
+				 prg_hdr->p_vaddr);
 
 			memcpy_toio(dest, src, prg_hdr->p_filesz);
 		}
