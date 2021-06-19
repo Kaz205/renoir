@@ -676,11 +676,11 @@ static int cam_vfe_camif_handle_irq_bottom_half(void *handler_priv,
 int cam_vfe_camif_ver2_init(
 	struct cam_hw_intf            *hw_intf,
 	struct cam_hw_soc_info        *soc_info,
-	void                          *camif_hw_info,
+	const void                    *camif_hw_info,
 	struct cam_isp_resource_node  *camif_node)
 {
 	struct cam_vfe_mux_camif_data     *camif_priv = NULL;
-	struct cam_vfe_camif_ver2_hw_info *camif_info = camif_hw_info;
+	const struct cam_vfe_camif_ver2_hw_info *camif_info = camif_hw_info;
 
 	camif_priv = kzalloc(sizeof(struct cam_vfe_mux_camif_data),
 		GFP_KERNEL);

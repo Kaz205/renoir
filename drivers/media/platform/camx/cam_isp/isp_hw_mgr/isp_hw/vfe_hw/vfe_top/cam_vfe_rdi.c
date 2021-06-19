@@ -254,11 +254,11 @@ static int cam_vfe_rdi_handle_irq_bottom_half(void *handler_priv,
 int cam_vfe_rdi_ver2_init(
 	struct cam_hw_intf            *hw_intf,
 	struct cam_hw_soc_info        *soc_info,
-	void                          *rdi_hw_info,
+	const void                    *rdi_hw_info,
 	struct cam_isp_resource_node  *rdi_node)
 {
 	struct cam_vfe_mux_rdi_data     *rdi_priv = NULL;
-	struct cam_vfe_rdi_ver2_hw_info *rdi_info = rdi_hw_info;
+	const struct cam_vfe_rdi_ver2_hw_info *rdi_info = rdi_hw_info;
 
 	rdi_priv = kzalloc(sizeof(struct cam_vfe_mux_rdi_data),
 			GFP_KERNEL);

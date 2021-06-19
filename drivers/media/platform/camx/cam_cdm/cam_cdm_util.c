@@ -308,7 +308,7 @@ static void cdm_write_genirq(uint32_t *pCmdBuffer, uint32_t userdata)
 	pHeader->userdata = userdata;
 }
 
-struct cam_cdm_utils_ops CDM170_ops = {
+static const struct cam_cdm_utils_ops CDM170_ops = {
 	cdm_get_cmd_header_size,
 	cdm_required_size_reg_continuous,
 	cdm_required_size_reg_random,

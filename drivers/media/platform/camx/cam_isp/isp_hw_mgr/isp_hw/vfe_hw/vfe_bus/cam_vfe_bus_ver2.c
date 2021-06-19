@@ -106,7 +106,7 @@ struct cam_vfe_bus_ver2_common_data {
 	struct cam_hw_intf                         *hw_intf;
 	void                                       *bus_irq_controller;
 	void                                       *vfe_irq_controller;
-	struct cam_vfe_bus_ver2_reg_offset_common  *common_reg;
+	const struct cam_vfe_bus_ver2_reg_offset_common *common_reg;
 	struct cam_vfe_bus_ver2_reg_data           *reg_data;
 	uint32_t                                    io_buf_update[
 		MAX_REG_VAL_PAIR_SIZE];
@@ -120,7 +120,7 @@ struct cam_vfe_bus_ver2_common_data {
 	uint32_t                                    num_sec_out;
 	uint32_t                                    addr_no_sync;
 	uint32_t                                    camera_hw_version;
-	struct cam_vfe_bus_ver2_stats_cfg_info     *stats_data;
+	const struct cam_vfe_bus_ver2_stats_cfg_info *stats_data;
 	uint32_t                                    enable_dmi_dump;
 };
 
@@ -1386,7 +1386,7 @@ static int cam_vfe_bus_err_bottom_half(void *ctx_priv,
 {
 	struct cam_vfe_bus_irq_evt_payload *evt_payload;
 	struct cam_vfe_bus_ver2_common_data *common_data;
-	struct cam_vfe_bus_ver2_stats_cfg_offset *stats_cfg;
+	const struct cam_vfe_bus_ver2_stats_cfg_offset *stats_cfg;
 	struct cam_vfe_bus_ver2_dmi_offset_common dmi_cfg;
 	uint32_t val = 0;
 	uint32_t enable_dmi_dump;

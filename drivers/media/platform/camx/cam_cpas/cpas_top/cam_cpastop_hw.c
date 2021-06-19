@@ -28,7 +28,7 @@
 #include "cpastop_v175_101.h"
 #include "cpastop_v175_120.h"
 
-struct cam_camnoc_info *camnoc_info;
+static const struct cam_camnoc_info *camnoc_info;
 
 #define CAMNOC_SLAVE_MAX_ERR_CODE 7
 static const char * const camnoc_salve_err_code[] = {
@@ -581,7 +581,7 @@ static int cam_cpastop_poweroff(struct cam_hw_info *cpas_hw)
 static int cam_cpastop_init_hw_version(struct cam_hw_info *cpas_hw,
 	struct cam_cpas_hw_caps *hw_caps)
 {
-	struct cam_hw_soc_info *soc_info = &cpas_hw->soc_info;
+	const struct cam_hw_soc_info *soc_info = &cpas_hw->soc_info;
 
 	CAM_DBG(CAM_CPAS,
 		"hw_version=0x%x Camera Version %d.%d.%d, cpas version %d.%d.%d",

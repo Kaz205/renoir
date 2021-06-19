@@ -42,7 +42,7 @@ int cam_vfe_rdi_ver2_acquire_resource(
 int cam_vfe_rdi_ver2_init(
 	struct cam_hw_intf            *hw_intf,
 	struct cam_hw_soc_info        *soc_info,
-	void                          *rdi_hw_info,
+	const void                    *rdi_hw_info,
 	struct cam_isp_resource_node  *rdi_node);
 
 int cam_vfe_rdi_ver2_deinit(

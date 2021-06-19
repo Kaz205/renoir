@@ -580,11 +580,11 @@ static int cam_vfe_fe_handle_irq_bottom_half(void *handler_priv,
 int cam_vfe_fe_ver1_init(
 	struct cam_hw_intf            *hw_intf,
 	struct cam_hw_soc_info        *soc_info,
-	void                          *fe_hw_info,
+	const void                    *fe_hw_info,
 	struct cam_isp_resource_node  *fe_node)
 {
 	struct cam_vfe_mux_fe_data     *fe_priv = NULL;
-	struct cam_vfe_fe_ver1_hw_info *fe_info = fe_hw_info;
+	const struct cam_vfe_fe_ver1_hw_info *fe_info = fe_hw_info;
 
 	fe_priv = kzalloc(sizeof(struct cam_vfe_mux_fe_data),
 		GFP_KERNEL);

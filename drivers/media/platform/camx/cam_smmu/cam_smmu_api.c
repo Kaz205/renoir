@@ -49,7 +49,7 @@ struct firmware_alloc_info {
 	struct page **pages;
 };
 
-struct firmware_alloc_info icp_fw;
+static struct firmware_alloc_info icp_fw;
 
 struct cam_smmu_work_payload {
 	int idx;

@@ -28,8 +28,8 @@
 struct cam_vfe_top_ver2_common_data {
 	struct cam_hw_soc_info                     *soc_info;
 	struct cam_hw_intf                         *hw_intf;
-	struct cam_vfe_top_ver2_reg_offset_common  *common_reg;
-	struct cam_vfe_top_dump_data               *dump_data;
+	const struct cam_vfe_top_ver2_reg_offset_common *common_reg;
+	const struct cam_vfe_top_dump_data         *dump_data;
 };
 
 struct cam_vfe_top_ver2_priv {
@@ -484,14 +484,12 @@ static int cam_vfe_get_irq_register_dump(
 
 static int cam_vfe_hw_dump(
 	struct cam_vfe_top_ver2_priv *top_priv,
-	void *cmd_args,
+	struct cam_isp_hw_dump_args *dump_args,
 	uint32_t arg_size)
 {
-	struct cam_isp_hw_dump_args *dump_args =
-		(struct cam_isp_hw_dump_args *)cmd_args;
 	struct cam_hw_soc_info            *soc_info;
 	uint32_t i, j;
-	struct cam_vfe_top_dump_data *dump_data;
+	const struct cam_vfe_top_dump_data *dump_data;
 	uint32_t reg_dump_size = 0, lut_dump_size = 0;
 	uint32_t reg_start_offset;
 	uint32_t val = 0;
@@ -586,8 +584,9 @@ static int cam_vfe_hw_dump(
 			}
 		}
 		hdr->size = hdr->word_size * (addr - start);
-		dump_args->offset +=  hdr->size +
-			sizeof(struct cam_isp_hw_dump_header);
+		//FIXME ribalda
+		//dump_args->offset +=  hdr->size +
+		//	sizeof(struct cam_isp_hw_dump_header);
 	}
 	CAM_DBG(CAM_ISP, "offset %d", dump_args->offset);
 	return 0;
@@ -614,7 +613,7 @@ static int cam_vfe_top_reset(void *device_priv, void *reset_core_args,
 {
 	struct cam_vfe_top_ver2_priv   *top_priv = device_priv;
 	struct cam_hw_soc_info         *soc_info = NULL;
-	struct cam_vfe_top_ver2_reg_offset_common *reg_common = NULL;
+	const struct cam_vfe_top_ver2_reg_offset_common *reg_common = NULL;
 	uint32_t *reset_reg_args = reset_core_args;
 	uint32_t reset_reg_val;
 
@@ -884,7 +883,7 @@ static int cam_vfe_top_process_cmd(void *device_priv, uint32_t cmd_type,
 		break;
 	case CAM_ISP_HW_CMD_DUMP_HW:
 		rc = cam_vfe_hw_dump(top_priv,
-			cmd_args, arg_size);
+			(struct cam_isp_hw_dump_args *)cmd_args, arg_size);
 		break;
 	case CAM_ISP_HW_CMD_GET_RDI_IRQ_MASK:
 		rc = cam_vfe_top_mux_get_rdi_irq_mask(top_priv, cmd_args,
@@ -902,12 +901,12 @@ static int cam_vfe_top_process_cmd(void *device_priv, uint32_t cmd_type,
 int cam_vfe_top_ver2_init(
 	struct cam_hw_soc_info                 *soc_info,
 	struct cam_hw_intf                     *hw_intf,
-	void                                   *top_hw_info,
+	const void                             *top_hw_info,
 	struct cam_vfe_top                    **vfe_top_ptr)
 {
 	int i, j, rc = 0;
 	struct cam_vfe_top_ver2_priv           *top_priv = NULL;
-	struct cam_vfe_top_ver2_hw_info        *ver2_hw_info = top_hw_info;
+	const struct cam_vfe_top_ver2_hw_info  *ver2_hw_info = top_hw_info;
 	struct cam_vfe_top                     *vfe_top;
 	struct cam_vfe_soc_private             *soc_private = NULL;
 

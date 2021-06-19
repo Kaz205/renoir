@@ -26,7 +26,7 @@
 #include "cam_cpas_api.h"
 #include "cam_debug_util.h"
 
-struct cam_ipe_device_hw_info cam_ipe_hw_info[] = {
+static const struct cam_ipe_device_hw_info cam_ipe_hw_info[] = {
 	{
 		.hw_idx = 0,
 		.pwr_ctrl = 0x4c,
@@ -73,7 +73,7 @@ static int cam_ipe_probe(struct platform_device *pdev)
 	struct cam_hw_intf            *ipe_dev_intf = NULL;
 	const struct of_device_id         *match_dev = NULL;
 	struct cam_ipe_device_core_info   *core_info = NULL;
-	struct cam_ipe_device_hw_info     *hw_info = NULL;
+	const struct cam_ipe_device_hw_info     *hw_info = NULL;
 	int                                rc = 0;
 	struct cam_cpas_query_cap query;
 	uint32_t cam_caps;

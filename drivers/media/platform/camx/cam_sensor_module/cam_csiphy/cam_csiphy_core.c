@@ -288,7 +288,7 @@ cam_csiphy_cphy_data_rate_config(struct csiphy_device *csiphy_device)
 	uint64_t phy_data_rate = 0;
 	void __iomem *csiphybase = NULL;
 	ssize_t num_table_entries = 0;
-	struct data_rate_settings_t *settings_table = NULL;
+	const struct data_rate_settings_t *settings_table = NULL;
 
 	if ((csiphy_device == NULL) ||
 		(csiphy_device->ctrl_reg == NULL) ||
@@ -308,7 +308,7 @@ cam_csiphy_cphy_data_rate_config(struct csiphy_device *csiphy_device)
 
 	CAM_DBG(CAM_CSIPHY, "required data rate : %llu", phy_data_rate);
 	for (i = 0; i < num_table_entries; i++) {
-		struct data_rate_reg_info_t *drate_settings =
+		const struct data_rate_reg_info_t *drate_settings =
 			settings_table->data_rate_settings;
 		uint64_t bandwidth =
 			drate_settings[i].bandwidth;
@@ -388,8 +388,8 @@ static int32_t cam_csiphy_config_dev(struct csiphy_device *csiphy_dev)
 	u8           lane_pos = 0;
 	uint16_t     settle_cnt = 0;
 	void __iomem *csiphybase;
-	struct csiphy_reg_t *csiphy_common_reg = NULL;
-	struct csiphy_reg_t (*reg_array)[MAX_SETTINGS_PER_LANE];
+	const struct csiphy_reg_t *csiphy_common_reg = NULL;
+	const struct csiphy_reg_t (*reg_array)[MAX_SETTINGS_PER_LANE];
 
 	csiphybase = csiphy_dev->soc_info.reg_map[0].mem_base;
 
