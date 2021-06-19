@@ -394,7 +394,6 @@ static int cam_lrme_mgr_util_get_frame_req(
 static int cam_lrme_mgr_util_submit_req(void *priv, void *data)
 {
 	struct cam_lrme_device *hw_device;
-	struct cam_lrme_hw_mgr *hw_mgr;
 	struct cam_lrme_frame_request *frame_req = NULL;
 	struct cam_lrme_hw_submit_args submit_args;
 	struct cam_lrme_mgr_work_data *work_data;
@@ -406,7 +405,6 @@ static int cam_lrme_mgr_util_submit_req(void *priv, void *data)
 		return -EINVAL;
 	}
 
-	hw_mgr = (struct cam_lrme_hw_mgr *)priv;
 	work_data = (struct cam_lrme_mgr_work_data *)data;
 	hw_device = work_data->hw_device;
 

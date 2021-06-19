@@ -574,7 +574,6 @@ static int cam_lrme_hw_util_flush_ctx(struct cam_hw_info *lrme_hw,
 	struct cam_lrme_core *lrme_core = lrme_hw->core_info;
 	struct cam_lrme_hw_cb_args cb_args;
 	struct cam_lrme_frame_request *req_proc, *req_submit;
-	struct cam_lrme_hw_submit_args submit_args;
 
 	rc = cam_lrme_hw_util_reset(lrme_hw, CAM_LRME_HW_RESET_TYPE_HW_RESET);
 	if (rc) {
@@ -595,10 +594,6 @@ static int cam_lrme_hw_util_flush_ctx(struct cam_hw_info *lrme_hw,
 			lrme_core->hw_mgr_cb.cam_lrme_hw_mgr_cb(
 				lrme_core->hw_mgr_cb.data, &cb_args);
 	} else if (req_submit) {
-		submit_args.frame_req = req_submit;
-		submit_args.hw_update_entries = req_submit->hw_update_entries;
-		submit_args.num_hw_update_entries =
-			req_submit->num_hw_update_entries;
 		rc = cam_lrme_hw_util_submit_req(lrme_core, req_submit);
 		if (rc)
 			CAM_ERR(CAM_LRME, "Submit failed");
@@ -614,10 +609,6 @@ static int cam_lrme_hw_util_flush_ctx(struct cam_hw_info *lrme_hw,
 			lrme_core->hw_mgr_cb.cam_lrme_hw_mgr_cb(
 				lrme_core->hw_mgr_cb.data, &cb_args);
 	} else if (req_proc) {
-		submit_args.frame_req = req_proc;
-		submit_args.hw_update_entries = req_proc->hw_update_entries;
-		submit_args.num_hw_update_entries =
-			req_proc->num_hw_update_entries;
 		rc = cam_lrme_hw_util_submit_req(lrme_core, req_proc);
 		if (rc)
 			CAM_ERR(CAM_LRME, "Submit failed");
@@ -636,7 +627,6 @@ static int cam_lrme_hw_util_flush_req(struct cam_hw_info *lrme_hw,
 	struct cam_lrme_core *lrme_core = lrme_hw->core_info;
 	struct cam_lrme_hw_cb_args cb_args;
 	struct cam_lrme_frame_request *req_proc, *req_submit;
-	struct cam_lrme_hw_submit_args submit_args;
 
 	rc = cam_lrme_hw_util_reset(lrme_hw, CAM_LRME_HW_RESET_TYPE_HW_RESET);
 	if (rc) {
@@ -657,10 +647,6 @@ static int cam_lrme_hw_util_flush_req(struct cam_hw_info *lrme_hw,
 			lrme_core->hw_mgr_cb.cam_lrme_hw_mgr_cb(
 				lrme_core->hw_mgr_cb.data, &cb_args);
 	} else if (req_submit) {
-		submit_args.frame_req = req_submit;
-		submit_args.hw_update_entries = req_submit->hw_update_entries;
-		submit_args.num_hw_update_entries =
-			req_submit->num_hw_update_entries;
 		rc = cam_lrme_hw_util_submit_req(lrme_core, req_submit);
 		if (rc)
 			CAM_ERR(CAM_LRME, "Submit failed");
@@ -676,10 +662,6 @@ static int cam_lrme_hw_util_flush_req(struct cam_hw_info *lrme_hw,
 			lrme_core->hw_mgr_cb.cam_lrme_hw_mgr_cb(
 				lrme_core->hw_mgr_cb.data, &cb_args);
 	} else if (req_proc) {
-		submit_args.frame_req = req_proc;
-		submit_args.hw_update_entries = req_proc->hw_update_entries;
-		submit_args.num_hw_update_entries =
-			req_proc->num_hw_update_entries;
 		rc = cam_lrme_hw_util_submit_req(lrme_core, req_proc);
 		if (rc)
 			CAM_ERR(CAM_LRME, "Submit failed");
@@ -1368,14 +1350,12 @@ int cam_lrme_hw_process_cmd(void *hw_priv, uint32_t cmd_type,
 
 	case CAM_LRME_HW_CMD_REGISTER_CB: {
 		struct cam_lrme_hw_cmd_set_cb *cb_args;
-		struct cam_lrme_device *hw_device;
 		struct cam_lrme_core *lrme_core =
 			(struct cam_lrme_core *)lrme_hw->core_info;
 		cb_args = (struct cam_lrme_hw_cmd_set_cb *)cmd_args;
 		lrme_core->hw_mgr_cb.cam_lrme_hw_mgr_cb =
 			cb_args->cam_lrme_hw_mgr_cb;
 		lrme_core->hw_mgr_cb.data = cb_args->data;
-		hw_device = cb_args->data;
 		rc = 0;
 		break;
 	}

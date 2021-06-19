@@ -785,15 +785,13 @@ int cam_hw_cdm_deinit(void *hw_priv,
 	void *init_hw_args, uint32_t arg_size)
 {
 	struct cam_hw_info *cdm_hw = hw_priv;
-	struct cam_hw_soc_info *soc_info = NULL;
-	struct cam_cdm *cdm_core = NULL;
+	struct cam_hw_soc_info *soc_info;
 	int rc = 0;
 
 	if (!hw_priv)
 		return -EINVAL;
 
 	soc_info = &cdm_hw->soc_info;
-	cdm_core = cdm_hw->core_info;
 	rc = cam_soc_util_disable_platform_resource(soc_info, true, true);
 	if (rc) {
 		CAM_ERR(CAM_CDM, "disable platform failed");

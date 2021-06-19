@@ -1566,14 +1566,12 @@ static int cam_ife_hw_mgr_acquire_res_ife_csid_pxl(
 	int i;
 	int master_idx = -1;
 
-	struct cam_ife_hw_mgr                    *ife_hw_mgr;
 	struct cam_ife_hw_mgr_res                *csid_res;
 	struct cam_ife_hw_mgr_res                *cid_res;
 	struct cam_hw_intf                       *hw_intf;
 	struct cam_csid_hw_reserve_resource_args  csid_acquire;
 	enum cam_ife_pix_path_res_id              path_res_id;
 
-	ife_hw_mgr = ife_ctx->hw_mgr;
 	/* get cid resource */
 	if (is_ipp)
 		path_res_id = CAM_IFE_PIX_PATH_RES_IPP;
@@ -1706,15 +1704,12 @@ static int cam_ife_hw_mgr_acquire_res_ife_csid_rdi(
 	int rc = -EINVAL;
 	int i;
 
-	struct cam_ife_hw_mgr               *ife_hw_mgr;
 	struct cam_ife_hw_mgr_res           *csid_res;
 	struct cam_ife_hw_mgr_res           *cid_res;
 	struct cam_hw_intf                  *hw_intf;
 	struct cam_isp_out_port_info        *out_port;
 	struct cam_csid_hw_reserve_resource_args  csid_acquire;
 	enum cam_ife_pix_path_res_id         path_res_id;
-
-	ife_hw_mgr = ife_ctx->hw_mgr;
 
 	for (i = 0; i < in_port->num_out_res; i++) {
 		out_port = &in_port->data[i];
@@ -1889,9 +1884,6 @@ static int cam_ife_hw_mgr_preprocess_port(
 	int ife_rd_num     = 0;
 	uint32_t i;
 	struct cam_isp_out_port_info      *out_port;
-	struct cam_ife_hw_mgr             *ife_hw_mgr;
-
-	ife_hw_mgr = ife_ctx->hw_mgr;
 
 	if (in_port->res_type == CAM_ISP_IFE_IN_RES_RD) {
 		ife_rd_num++;
@@ -1927,13 +1919,10 @@ static int cam_ife_mgr_acquire_hw_for_ctx(
 	uint32_t  *num_pix_port, uint32_t  *num_rdi_port)
 {
 	int rc                                    = -1;
-	int is_dual_vfe                           = 0;
 	int ipp_count                             = 0;
 	int rdi_count                             = 0;
 	int ppp_count                             = 0;
 	int ife_rd_count                          = 0;
-
-	is_dual_vfe = in_port->usage_type;
 
 	/* get root node resource */
 	rc = cam_ife_hw_mgr_acquire_res_root(ife_ctx, in_port);
@@ -5874,7 +5863,6 @@ static int cam_ife_hw_mgr_handle_buf_done_for_hw_res(
 	struct cam_hw_event_recovery_data    recovery_data;
 	struct cam_isp_hw_done_event_data    buf_done_event_data = {0};
 	struct cam_isp_hw_error_event_data   error_event_data = {0};
-	uint32_t  error_resc_handle[CAM_IFE_HW_OUT_RES_MAX];
 	uint32_t  num_of_error_handles = 0;
 
 	CAM_DBG(CAM_ISP, "Enter");
@@ -5924,9 +5912,6 @@ static int cam_ife_hw_mgr_handle_buf_done_for_hw_res(
 			 * to generate composite done irq within the VBI time.
 			 */
 
-			error_resc_handle[num_of_error_handles++] =
-					isp_ife_out_res->res_id;
-
 			if (num_of_error_handles > 0) {
 				error_event_data.error_type =
 					CAM_ISP_HW_ERROR_BUSIF_OVERFLOW;
@@ -5958,8 +5943,6 @@ static int cam_ife_hw_mgr_handle_buf_done_for_hw_res(
 			break;
 		default:
 			/* Do NOTHING */
-			error_resc_handle[num_of_error_handles++] =
-				isp_ife_out_res->res_id;
 			if (num_of_error_handles > 0) {
 				error_event_data.error_type =
 					CAM_ISP_HW_ERROR_BUSIF_OVERFLOW;

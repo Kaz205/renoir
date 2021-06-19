@@ -1342,7 +1342,6 @@ static int cam_ife_csid_tpg_start(struct cam_ife_csid_hw   *csid_hw,
 static int cam_ife_csid_tpg_stop(struct cam_ife_csid_hw   *csid_hw,
 	struct cam_isp_resource_node       *res)
 {
-	int rc = 0;
 	struct cam_hw_soc_info                 *soc_info;
 	const struct cam_ife_csid_reg_offset   *csid_reg = NULL;
 
@@ -1362,8 +1361,8 @@ static int cam_ife_csid_tpg_stop(struct cam_ife_csid_hw   *csid_hw,
 
 		/* Disable the IFE force clock on for dual isp case */
 		if (csid_hw->tpg_cfg.usage_type)
-			rc = cam_ife_csid_disable_ife_force_clock_on(soc_info,
-				csid_reg->tpg_reg->tpg_cpas_ife_reg_offset);
+			cam_ife_csid_disable_ife_force_clock_on(soc_info,
+				    csid_reg->tpg_reg->tpg_cpas_ife_reg_offset);
 
 		/*stop the TPG */
 		cam_io_w_mb(0,  soc_info->reg_map[0].mem_base +
@@ -2879,7 +2878,6 @@ static int cam_ife_csid_init_hw(void *hw_priv,
 	struct cam_ife_csid_hw                 *csid_hw;
 	struct cam_hw_info                     *csid_hw_info;
 	struct cam_isp_resource_node           *res;
-	const struct cam_ife_csid_reg_offset   *csid_reg;
 	unsigned long                           flags;
 
 	if (!hw_priv || !init_args ||
@@ -2891,7 +2889,6 @@ static int cam_ife_csid_init_hw(void *hw_priv,
 	csid_hw_info = (struct cam_hw_info  *)hw_priv;
 	csid_hw = (struct cam_ife_csid_hw   *)csid_hw_info->core_info;
 	res      = (struct cam_isp_resource_node *)init_args;
-	csid_reg = csid_hw->csid_info->csid_reg;
 
 	mutex_lock(&csid_hw->hw_info->hw_mutex);
 	if ((res->res_type == CAM_ISP_RESOURCE_CID &&
@@ -3022,7 +3019,6 @@ static int cam_ife_csid_start(void *hw_priv, void *start_args,
 	struct cam_ife_csid_hw                 *csid_hw;
 	struct cam_hw_info                     *csid_hw_info;
 	struct cam_isp_resource_node           *res;
-	const struct cam_ife_csid_reg_offset   *csid_reg;
 
 	if (!hw_priv || !start_args ||
 		(arg_size != sizeof(struct cam_isp_resource_node))) {
@@ -3033,7 +3029,6 @@ static int cam_ife_csid_start(void *hw_priv, void *start_args,
 	csid_hw_info = (struct cam_hw_info  *)hw_priv;
 	csid_hw = (struct cam_ife_csid_hw   *)csid_hw_info->core_info;
 	res = (struct cam_isp_resource_node *)start_args;
-	csid_reg = csid_hw->csid_info->csid_reg;
 
 	if ((res->res_type == CAM_ISP_RESOURCE_CID &&
 		res->res_id >= CAM_IFE_CSID_CID_MAX) ||

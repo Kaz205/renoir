@@ -199,7 +199,6 @@ static int __cam_req_mgr_traverse(struct cam_req_mgr_traverse *traverse_data)
 	int32_t                      curr_idx = traverse_data->idx;
 	struct cam_req_mgr_req_tbl  *tbl;
 	struct cam_req_mgr_apply    *apply_data;
-	struct cam_req_mgr_tbl_slot *slot = NULL;
 
 	if (!traverse_data->tbl || !traverse_data->apply_data) {
 		CAM_ERR(CAM_CRM, "NULL pointer %pK %pK",
@@ -210,7 +209,6 @@ static int __cam_req_mgr_traverse(struct cam_req_mgr_traverse *traverse_data)
 
 	tbl = traverse_data->tbl;
 	apply_data = traverse_data->apply_data;
-	slot = &tbl->slot[curr_idx];
 	CAM_DBG(CAM_CRM,
 		"Enter pd %d idx %d state %d skip %d status %d skip_idx %d",
 		tbl->pd, curr_idx, tbl->slot[curr_idx].state,
@@ -1190,7 +1188,7 @@ static int __cam_req_mgr_check_sync_req_is_ready(
 static int __cam_req_mgr_process_req(struct cam_req_mgr_core_link *link,
 	struct cam_req_mgr_trigger_notify *trigger_data)
 {
-	int                                  rc = 0, idx, last_app_idx;
+	int                                  rc = 0, idx;
 	int                                  reset_step = 0;
 	uint32_t                             trigger = trigger_data->trigger;
 	struct cam_req_mgr_slot             *slot = NULL;
@@ -1350,10 +1348,8 @@ static int __cam_req_mgr_process_req(struct cam_req_mgr_core_link *link,
 			 * CRM. Below code retains the last applied request.
 			 */
 
-			if (slot->req_id > 0) {
-				last_app_idx = in_q->last_applied_idx;
+			if (slot->req_id > 0)
 				in_q->last_applied_idx = idx;
-			}
 
 			__cam_req_mgr_dec_idx(
 				&idx, reset_step + 1,

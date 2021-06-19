@@ -435,7 +435,6 @@ static int cam_vfe_camif_irq_reg_dump(
 	struct cam_isp_resource_node *camif_res)
 {
 	struct cam_vfe_mux_camif_data *camif_priv;
-	struct cam_vfe_soc_private *soc_private;
 	int rc = 0;
 
 	if (!camif_res) {
@@ -450,7 +449,6 @@ static int cam_vfe_camif_irq_reg_dump(
 	}
 
 	camif_priv = (struct cam_vfe_mux_camif_data *)camif_res->res_priv;
-	soc_private = camif_priv->soc_info->soc_private;
 
 	CAM_INFO(CAM_ISP,
 		"Core Id =%d Mask reg: offset 0x%x val 0x%x offset 0x%x val 0x%x",
@@ -469,7 +467,6 @@ static int cam_vfe_camif_resource_stop(
 	struct cam_isp_resource_node        *camif_res)
 {
 	struct cam_vfe_mux_camif_data       *camif_priv;
-	struct cam_vfe_camif_ver2_reg       *camif_reg;
 	int rc = 0;
 	uint32_t val = 0;
 
@@ -483,7 +480,6 @@ static int cam_vfe_camif_resource_stop(
 		return 0;
 
 	camif_priv = (struct cam_vfe_mux_camif_data *)camif_res->res_priv;
-	camif_reg = camif_priv->camif_reg;
 
 	if ((camif_priv->dsp_mode >= CAM_ISP_DSP_MODE_ONE_WAY) &&
 		(camif_priv->dsp_mode <= CAM_ISP_DSP_MODE_ROUND)) {

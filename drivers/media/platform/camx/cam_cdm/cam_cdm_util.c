@@ -463,10 +463,8 @@ int cam_cdm_util_cmd_buf_write(void __iomem **current_device_base,
 	uint32_t base_array_size, uint8_t bl_tag)
 {
 	int ret = 0;
-	uint32_t cdm_cmd_type = 0, total_cmd_buf_size = 0;
 	uint32_t used_bytes = 0;
-
-	total_cmd_buf_size = cmd_buf_size;
+	u32 cdm_cmd_type;
 
 	while (cmd_buf_size > 0) {
 		CAM_DBG(CAM_CDM, "cmd data=%x", *cmd_buf);

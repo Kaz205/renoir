@@ -409,10 +409,9 @@ static int32_t cam_icp_ctx_timer(void *priv, void *data)
 		(struct cam_icp_hw_ctx_data *)task_data->data;
 	struct cam_icp_hw_mgr *hw_mgr = &icp_hw_mgr;
 	uint32_t id;
-	struct cam_hw_intf *ipe0_dev_intf = NULL;
-	struct cam_hw_intf *ipe1_dev_intf = NULL;
-	struct cam_hw_intf *bps_dev_intf = NULL;
-	struct cam_hw_intf *dev_intf = NULL;
+	struct cam_hw_intf *ipe0_dev_intf;
+	struct cam_hw_intf *bps_dev_intf;
+	struct cam_hw_intf *dev_intf;
 	struct cam_icp_clk_info *clk_info;
 	struct cam_icp_cpas_vote clk_update;
 
@@ -445,7 +444,6 @@ static int32_t cam_icp_ctx_timer(void *priv, void *data)
 		ctx_data->clk_info.curr_fc, ctx_data->clk_info.base_clk);
 
 	ipe0_dev_intf = hw_mgr->ipe0_dev_intf;
-	ipe1_dev_intf = hw_mgr->ipe1_dev_intf;
 	bps_dev_intf = hw_mgr->bps_dev_intf;
 
 	if ((!ipe0_dev_intf) || (!bps_dev_intf)) {
@@ -1067,15 +1065,13 @@ static int cam_icp_update_cpas_vote(struct cam_icp_hw_mgr *hw_mgr,
 	struct cam_icp_hw_ctx_data *ctx_data)
 {
 	uint32_t id;
-	struct cam_hw_intf *ipe0_dev_intf = NULL;
-	struct cam_hw_intf *ipe1_dev_intf = NULL;
-	struct cam_hw_intf *bps_dev_intf = NULL;
-	struct cam_hw_intf *dev_intf = NULL;
+	struct cam_hw_intf *ipe0_dev_intf;
+	struct cam_hw_intf *bps_dev_intf;
+	struct cam_hw_intf *dev_intf;
 	struct cam_icp_clk_info *clk_info;
 	struct cam_icp_cpas_vote clk_update;
 
 	ipe0_dev_intf = hw_mgr->ipe0_dev_intf;
-	ipe1_dev_intf = hw_mgr->ipe1_dev_intf;
 	bps_dev_intf = hw_mgr->bps_dev_intf;
 
 	if ((!ipe0_dev_intf) || (!bps_dev_intf)) {
@@ -1476,14 +1472,12 @@ static int cam_icp_mgr_process_cmd(void *priv, void *data)
 {
 	int rc;
 	struct hfi_cmd_work_data *task_data = NULL;
-	struct cam_icp_hw_mgr *hw_mgr;
 
 	if (!data || !priv) {
 		CAM_ERR(CAM_ICP, "Invalid params%pK %pK", data, priv);
 		return -EINVAL;
 	}
 
-	hw_mgr = priv;
 	task_data = (struct hfi_cmd_work_data *)data;
 
 	rc = hfi_write_cmd(task_data->data);
@@ -1851,8 +1845,7 @@ static int cam_icp_mgr_process_direct_ack_msg(uint32_t *msg_ptr)
 {
 	struct cam_icp_hw_ctx_data *ctx_data = NULL;
 	struct hfi_msg_ipebps_async_ack *ioconfig_ack = NULL;
-	struct cam_hw_intf *a5_dev_intf = NULL;
-	struct cam_hw_info *a5_dev = NULL;
+	struct cam_hw_intf *a5_dev_intf;
 	int rc = 0;
 
 	a5_dev_intf = icp_hw_mgr.a5_dev_intf;
@@ -1860,7 +1853,6 @@ static int cam_icp_mgr_process_direct_ack_msg(uint32_t *msg_ptr)
 		CAM_ERR(CAM_ICP, "a5_dev_intf is invalid");
 		return -EINVAL;
 	}
-	a5_dev = (struct cam_hw_info *)a5_dev_intf->hw_priv;
 	switch (msg_ptr[ICP_PACKET_OPCODE]) {
 	case HFI_IPEBPS_CMD_OPCODE_IPE_ABORT:
 	case HFI_IPEBPS_CMD_OPCODE_BPS_ABORT:
@@ -3305,7 +3297,6 @@ static int cam_icp_mgr_enqueue_config(struct cam_icp_hw_mgr *hw_mgr,
 	uint64_t request_id = 0;
 	struct crm_workq_task *task;
 	struct hfi_cmd_work_data *task_data;
-	struct hfi_cmd_ipebps_async *hfi_cmd;
 	struct cam_hw_update_entry *hw_update_entries;
 	struct icp_frame_info *frame_info = NULL;
 
@@ -3322,7 +3313,6 @@ static int cam_icp_mgr_enqueue_config(struct cam_icp_hw_mgr *hw_mgr,
 
 	task_data = (struct hfi_cmd_work_data *)task->payload;
 	task_data->data = (void *)hw_update_entries->addr;
-	hfi_cmd = (struct hfi_cmd_ipebps_async *)hw_update_entries->addr;
 	task_data->request_id = request_id;
 	task_data->type = ICP_WORKQ_TASK_CMD_TYPE;
 	task->process_cb = cam_icp_mgr_process_cmd;

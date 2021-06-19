@@ -581,7 +581,6 @@ static int cam_cpastop_poweroff(struct cam_hw_info *cpas_hw)
 static int cam_cpastop_init_hw_version(struct cam_hw_info *cpas_hw,
 	struct cam_cpas_hw_caps *hw_caps)
 {
-	int rc = 0;
 	struct cam_hw_soc_info *soc_info = &cpas_hw->soc_info;
 
 	CAM_DBG(CAM_CPAS,
@@ -621,7 +620,6 @@ static int cam_cpastop_init_hw_version(struct cam_hw_info *cpas_hw,
 			hw_caps->camera_version.major,
 			hw_caps->camera_version.minor,
 			hw_caps->camera_version.incr);
-		rc = -EINVAL;
 		break;
 	}
 

@@ -403,7 +403,6 @@ int cam_cdm_process_cmd(void *hw_priv,
 	uint32_t cmd, void *cmd_args, uint32_t arg_size)
 {
 	struct cam_hw_info *cdm_hw = hw_priv;
-	struct cam_hw_soc_info *soc_data = NULL;
 	struct cam_cdm *core = NULL;
 	int rc = -EINVAL;
 
@@ -411,7 +410,6 @@ int cam_cdm_process_cmd(void *hw_priv,
 		(cmd >= CAM_CDM_HW_INTF_CMD_INVALID))
 		return rc;
 
-	soc_data = &cdm_hw->soc_info;
 	core = (struct cam_cdm *)cdm_hw->core_info;
 	switch (cmd) {
 	case CAM_CDM_HW_INTF_CMD_SUBMIT_BL: {

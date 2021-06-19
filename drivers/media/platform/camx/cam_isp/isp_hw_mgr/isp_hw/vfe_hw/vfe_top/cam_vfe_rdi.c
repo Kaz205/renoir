@@ -155,7 +155,6 @@ static int cam_vfe_rdi_resource_start(
 static int cam_vfe_rdi_resource_stop(
 	struct cam_isp_resource_node        *rdi_res)
 {
-	struct cam_vfe_mux_rdi_data           *rdi_priv;
 	int rc = 0;
 
 	if (!rdi_res) {
@@ -167,7 +166,6 @@ static int cam_vfe_rdi_resource_stop(
 		rdi_res->res_state == CAM_ISP_RESOURCE_STATE_AVAILABLE)
 		return 0;
 
-	rdi_priv = (struct cam_vfe_mux_rdi_data *)rdi_res->res_priv;
 
 	if (rdi_res->res_state == CAM_ISP_RESOURCE_STATE_STREAMING)
 		rdi_res->res_state = CAM_ISP_RESOURCE_STATE_RESERVED;

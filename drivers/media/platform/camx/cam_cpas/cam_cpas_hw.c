@@ -956,7 +956,6 @@ static int cam_cpas_hw_start(void *hw_priv, void *start_args,
 	struct cam_axi_vote *axi_vote;
 	enum cam_vote_level applied_level = CAM_SVS_VOTE;
 	int rc;
-	struct cam_cpas_private_soc *soc_private = NULL;
 
 	if (!hw_priv || !start_args) {
 		CAM_ERR(CAM_CPAS, "Invalid arguments %pK %pK",
@@ -972,8 +971,6 @@ static int cam_cpas_hw_start(void *hw_priv, void *start_args,
 
 	cpas_hw = (struct cam_hw_info *)hw_priv;
 	cpas_core = (struct cam_cpas *) cpas_hw->core_info;
-	soc_private = (struct cam_cpas_private_soc *)
-		cpas_hw->soc_info.soc_private;
 	cmd_hw_start = (struct cam_cpas_hw_cmd_start *)start_args;
 	client_indx = CAM_CPAS_GET_CLIENT_IDX(cmd_hw_start->client_handle);
 	ahb_vote = cmd_hw_start->ahb_vote;
@@ -1089,7 +1086,6 @@ static int cam_cpas_hw_stop(void *hw_priv, void *stop_args,
 	struct cam_cpas_client *cpas_client;
 	struct cam_ahb_vote ahb_vote;
 	struct cam_axi_vote axi_vote;
-	struct cam_cpas_private_soc *soc_private = NULL;
 	int rc = 0;
 	long result;
 
@@ -1107,8 +1103,6 @@ static int cam_cpas_hw_stop(void *hw_priv, void *stop_args,
 
 	cpas_hw = (struct cam_hw_info *)hw_priv;
 	cpas_core = (struct cam_cpas *) cpas_hw->core_info;
-	soc_private = (struct cam_cpas_private_soc *)
-		cpas_hw->soc_info.soc_private;
 	cmd_hw_stop = (struct cam_cpas_hw_cmd_stop *)stop_args;
 	client_indx = CAM_CPAS_GET_CLIENT_IDX(cmd_hw_stop->client_handle);
 

@@ -2491,8 +2491,7 @@ static int cam_vfe_bus_start_vfe_out(
 	struct cam_isp_resource_node          *vfe_out)
 {
 	int rc = 0, i;
-	struct cam_vfe_bus_ver2_vfe_out_data  *rsrc_data = NULL;
-	struct cam_vfe_bus_ver2_common_data   *common_data = NULL;
+	struct cam_vfe_bus_ver2_vfe_out_data  *rsrc_data;
 
 	if (!vfe_out) {
 		CAM_ERR(CAM_ISP, "Invalid input");
@@ -2500,7 +2499,6 @@ static int cam_vfe_bus_start_vfe_out(
 	}
 
 	rsrc_data = vfe_out->res_priv;
-	common_data = rsrc_data->common_data;
 
 	CAM_DBG(CAM_ISP, "Start resource index %d", rsrc_data->out_type);
 
@@ -2731,11 +2729,9 @@ static void cam_vfe_bus_update_ubwc_meta_addr(
 {
 	struct cam_vfe_bus_ver2_reg_offset_ubwc_client *ubwc_regs;
 	struct cam_vfe_bus_ver2_reg_offset_ubwc_3_client *ubwc_3_regs;
-	int rc = 0;
 
 	if (!regs || !reg_val_pair || !j) {
 		CAM_ERR(CAM_ISP, "Invalid args");
-		rc = -EINVAL;
 		goto end;
 	}
 
@@ -3038,18 +3034,15 @@ end:
 static int cam_vfe_bus_update_wm(void *priv, void *cmd_args,
 	uint32_t arg_size)
 {
-	struct cam_vfe_bus_ver2_priv             *bus_priv;
 	struct cam_isp_hw_get_cmd_update         *update_buf;
 	struct cam_buf_io_cfg                    *io_cfg;
 	struct cam_vfe_bus_ver2_vfe_out_data     *vfe_out_data = NULL;
 	struct cam_vfe_bus_ver2_wm_resource_data *wm_data = NULL;
-	struct cam_vfe_bus_ver2_reg_offset_ubwc_client *ubwc_client = NULL;
 	uint32_t *reg_val_pair;
 	uint32_t  i, j, k, size = 0;
 	uint32_t  frame_inc = 0, val;
 	uint32_t loop_size = 0;
 
-	bus_priv = (struct cam_vfe_bus_ver2_priv  *) priv;
 	update_buf =  (struct cam_isp_hw_get_cmd_update *) cmd_args;
 
 	vfe_out_data = (struct cam_vfe_bus_ver2_vfe_out_data *)
@@ -3079,7 +3072,6 @@ static int cam_vfe_bus_update_wm(void *priv, void *cmd_args,
 		}
 
 		wm_data = vfe_out_data->wm_res[i]->res_priv;
-		ubwc_client = wm_data->hw_regs->ubwc_regs;
 		/* update width register */
 		CAM_VFE_ADD_REG_VAL_PAIR(reg_val_pair, j,
 			wm_data->hw_regs->buffer_width_cfg,
@@ -3200,7 +3192,6 @@ static int cam_vfe_bus_update_wm(void *priv, void *cmd_args,
 static int cam_vfe_bus_update_hfr(void *priv, void *cmd_args,
 	uint32_t arg_size)
 {
-	struct cam_vfe_bus_ver2_priv             *bus_priv;
 	struct cam_isp_hw_get_cmd_update         *update_hfr;
 	struct cam_vfe_bus_ver2_vfe_out_data     *vfe_out_data = NULL;
 	struct cam_vfe_bus_ver2_wm_resource_data *wm_data = NULL;
@@ -3208,7 +3199,6 @@ static int cam_vfe_bus_update_hfr(void *priv, void *cmd_args,
 	uint32_t *reg_val_pair;
 	uint32_t  i, j, size = 0;
 
-	bus_priv = (struct cam_vfe_bus_ver2_priv  *) priv;
 	update_hfr =  (struct cam_isp_hw_get_cmd_update *) cmd_args;
 
 	vfe_out_data = (struct cam_vfe_bus_ver2_vfe_out_data *)
@@ -3355,14 +3345,12 @@ end:
 static int cam_vfe_bus_update_stripe_cfg(void *priv, void *cmd_args,
 	uint32_t arg_size)
 {
-	struct cam_vfe_bus_ver2_priv                *bus_priv;
 	struct cam_isp_hw_dual_isp_update_args      *stripe_args;
 	struct cam_vfe_bus_ver2_vfe_out_data        *vfe_out_data = NULL;
 	struct cam_vfe_bus_ver2_wm_resource_data    *wm_data = NULL;
 	struct cam_isp_dual_stripe_config           *stripe_config;
 	uint32_t outport_id, ports_plane_idx, i;
 
-	bus_priv = (struct cam_vfe_bus_ver2_priv  *) priv;
 	stripe_args = (struct cam_isp_hw_dual_isp_update_args *)cmd_args;
 
 	vfe_out_data = (struct cam_vfe_bus_ver2_vfe_out_data *)

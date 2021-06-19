@@ -385,13 +385,12 @@ static int32_t cam_csiphy_config_dev(struct csiphy_device *csiphy_dev)
 	int32_t      rc = 0;
 	uint32_t     lane_enable = 0, mask = 1, size = 0;
 	uint16_t     lane_mask = 0, i = 0, cfg_size = 0, temp = 0;
-	uint8_t      lane_cnt, lane_pos = 0;
+	u8           lane_pos = 0;
 	uint16_t     settle_cnt = 0;
 	void __iomem *csiphybase;
 	struct csiphy_reg_t *csiphy_common_reg = NULL;
 	struct csiphy_reg_t (*reg_array)[MAX_SETTINGS_PER_LANE];
 
-	lane_cnt = csiphy_dev->csiphy_info.lane_cnt;
 	csiphybase = csiphy_dev->soc_info.reg_map[0].mem_base;
 
 	if (!csiphybase) {
