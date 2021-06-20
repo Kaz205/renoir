@@ -578,7 +578,7 @@ static int cam_jpeg_mgr_config_hw(void *hw_mgr_priv, void *config_hw_args)
 
 	request_id = (uintptr_t)config_args->priv;
 	p_cfg_req->req_id = request_id;
-	CAM_DBG(CAM_JPEG, "ctx_data = %pK req_id = %lld %zd",
+	CAM_DBG(CAM_JPEG, "ctx_data = %pK req_id = %lu %zd",
 		ctx_data, request_id, (uintptr_t)config_args->priv);
 	task = cam_req_mgr_workq_get_task(g_jpeg_hw_mgr.work_process_frame);
 	if (!task) {
@@ -1235,7 +1235,7 @@ static int cam_jpeg_mgr_release_hw(void *hw_mgr_priv, void *release_hw_args)
 
 	kfree(ctx_data->cdm_cmd);
 	ctx_data->cdm_cmd = NULL;
-	CAM_DBG(CAM_JPEG, "handle %llu", ctx_data);
+	CAM_DBG(CAM_JPEG, "handle %p", ctx_data);
 
 	return rc;
 }

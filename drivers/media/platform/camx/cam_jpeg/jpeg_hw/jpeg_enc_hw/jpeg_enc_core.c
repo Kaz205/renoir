@@ -463,7 +463,7 @@ static int cam_jpeg_enc_hw_dump(struct cam_hw_info *jpeg_enc_dev,
 	hdr->size = hdr->word_size * (addr - start);
 	dump_args->offset += hdr->size +
 		sizeof(struct cam_jpeg_hw_dump_header);
-	CAM_DBG(CAM_JPEG, "offset %d", dump_args->offset);
+	CAM_DBG(CAM_JPEG, "offset %lld", dump_args->offset);
 
 	return 0;
 }

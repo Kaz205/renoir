@@ -2649,7 +2649,7 @@ static int cam_vfe_bus_deinit_vfe_out_resource(
 		 * This is not error. It can happen if the resource is
 		 * never supported in the HW.
 		 */
-		CAM_DBG(CAM_ISP, "HW%d Res %d already deinitialized");
+		CAM_DBG(CAM_ISP, "HW already deinitialized");
 		return 0;
 	}
 

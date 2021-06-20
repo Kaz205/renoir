@@ -276,7 +276,7 @@ static int32_t cam_actuator_apply_settings(struct cam_actuator_ctrl_t *a_ctrl,
 				rc);
 		} else {
 			CAM_DBG(CAM_ACTUATOR,
-				"Success:request ID: %d",
+				"Success:request ID: %lld",
 				i2c_set->request_id);
 		}
 	}
@@ -483,7 +483,7 @@ static int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 		csl_packet->header.request_id <= a_ctrl->last_flush_req
 		&& a_ctrl->last_flush_req != 0) {
 		CAM_DBG(CAM_ACTUATOR,
-			"reject request %lld, last request to flush %lld",
+			"reject request %lld, last request to flush %u",
 			csl_packet->header.request_id, a_ctrl->last_flush_req);
 		rc = -EINVAL;
 		goto rel_pkt_buf;

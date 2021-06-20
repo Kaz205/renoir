@@ -243,7 +243,7 @@ static void __cam_isp_ctx_dump_state_monitor_array(
 
 		if (log_rate_limit) {
 			CAM_DBG(CAM_ISP,
-			"time[%lld] last reported req_id[%u] frame id[%lld] applied id[%lld] current state[%s] next state[%s] hw_event[%s]",
+			"time[%lld] last reported req_id[%lld] frame id[%lld] applied id[%lld] current state[%s] next state[%s] hw_event[%s]",
 			ctx_monitor[index].evt_time_stamp,
 			ctx_monitor[index].last_reported_id,
 			ctx_monitor[index].frame_id,
@@ -413,7 +413,7 @@ static int __cam_isp_ctx_enqueue_init_request(
 	spin_lock_bh(&ctx->lock);
 	if (list_empty(&ctx->pending_req_list)) {
 		list_add_tail(&req->list, &ctx->pending_req_list);
-		CAM_DBG(CAM_ISP, "INIT packet added req id= %d",
+		CAM_DBG(CAM_ISP, "INIT packet added req id= %llu",
 			req->request_id);
 		goto end;
 	}
@@ -998,7 +998,7 @@ static int __cam_isp_ctx_notify_sof_in_activated_state(
 		} else if (req_isp->bubble_detected) {
 			ctx_isp->bubble_frame_cnt++;
 			CAM_DBG(CAM_ISP,
-				"Waiting on bufdone for bubble req: %lld, since frame_cnt = %lld",
+				"Waiting on bufdone for bubble req: %lld, since frame_cnt = %u",
 				req->request_id, ctx_isp->bubble_frame_cnt);
 		} else
 			CAM_DBG(CAM_ISP, "Delayed bufdone for req: %lld",
@@ -1425,7 +1425,7 @@ static int __cam_isp_ctx_epoch_in_bubble_applied(
 	 * function handles the rest.
 	 */
 	CAM_DBG(CAM_ISP, "move request %lld to active list(cnt = %d) ctx %u",
-		req->request_id, ctx_isp->active_req_cnt);
+		req->request_id, ctx_isp->active_req_cnt, ctx->ctx_id);
 	ctx_isp->active_req_cnt++;
 	list_del_init(&req->list);
 	list_add_tail(&req->list, &ctx->active_req_list);

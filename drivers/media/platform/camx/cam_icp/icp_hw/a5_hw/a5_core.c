@@ -438,7 +438,7 @@ int cam_a5_process_cmd(void *device_priv, uint32_t cmd_type,
 		core_info->fw_kva_addr = fw_buf_info->kva;
 		core_info->fw_buf_len = fw_buf_info->len;
 
-		CAM_DBG(CAM_ICP, "fw buf info = %x %llx %lld",
+		CAM_DBG(CAM_ICP, "fw buf info = %x %lx %lld",
 			core_info->fw_buf, core_info->fw_kva_addr,
 			core_info->fw_buf_len);
 		break;

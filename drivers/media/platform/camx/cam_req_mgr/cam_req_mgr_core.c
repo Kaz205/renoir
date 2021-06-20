@@ -745,7 +745,7 @@ static int __cam_req_mgr_check_sync_for_mslave(
 		(req_id - sync_link->req.in_q->slot[sync_rd_idx].req_id >
 		link->max_delay - sync_link->max_delay)) {
 		CAM_DBG(CAM_CRM,
-			"Req: %lld on link:%x need to hold for link: %x req:%d",
+			"Req: %lld on link:%x need to hold for link: %x req:%lld",
 			req_id,
 			link->link_hdl,
 			sync_link->link_hdl,
@@ -989,7 +989,7 @@ static int __cam_req_mgr_check_sync_req_is_ready(
 		sync_frame_duration = DEFAULT_FRAME_DURATION;
 
 	CAM_DBG(CAM_CRM,
-		"sync link %x last frame duration is %d ns",
+		"sync link %x last frame duration is %lld ns",
 		sync_link->link_hdl, sync_frame_duration);
 
 	if (link->initial_skip) {
@@ -1326,7 +1326,7 @@ static int __cam_req_mgr_process_req(struct cam_req_mgr_core_link *link,
 		if (link->trigger_mask == link->subscribe_event) {
 			slot->status = CRM_SLOT_STATUS_REQ_APPLIED;
 			link->trigger_mask = 0;
-			CAM_DBG(CAM_CRM, "req %d is applied on link %x",
+			CAM_DBG(CAM_CRM, "req %lld is applied on link %x",
 				slot->req_id,
 				link->link_hdl);
 			idx = in_q->rd_idx;
@@ -1815,7 +1815,7 @@ static void __cam_req_mgr_free_link(struct cam_req_mgr_core_link *link)
 	kfree(link->req.in_q);
 	link->req.in_q = NULL;
 	i = link - g_links;
-	CAM_DBG(CAM_CRM, "free link index %d", i);
+	CAM_DBG(CAM_CRM, "free link index %td", i);
 	atomic_set(&g_links[i].is_used, 0);
 }
 
@@ -2093,7 +2093,7 @@ static int cam_req_mgr_process_add_req(void *priv, void *data)
 		slot->dev_hdl = add_req->dev_hdl;
 		if (add_req->skip_before_applying & SKIP_NEXT_FRAME)
 			slot->skip_next_frame = true;
-		CAM_DBG(CAM_CRM, "Req_id %llu injecting delay %llu",
+		CAM_DBG(CAM_CRM, "Req_id %llu injecting delay %u",
 			add_req->req_id,
 			(add_req->skip_before_applying & 0xFF));
 	}

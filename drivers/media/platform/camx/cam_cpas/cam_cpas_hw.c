@@ -158,8 +158,8 @@ static int _cpas_vote_bus_level(struct cam_cpas_bus_client *bus_client,
 	if (tbl_idx > 0 && tbl_idx < bus_client->bw_tbl_size)
 		aver_bw = (ahb_bus_bw_kbps_tbl[tbl_idx - 1] + peak_bw) >> 1;
 
-	CAM_DBG(CAM_CPAS, "Client:%s RPMH level:%d, Aver BW:%ld Peak BW:%ld",
-		 bus_client->name, level, aver_bw, peak_bw);
+	CAM_DBG(CAM_CPAS, "Client:%s RPMH level:%d, Aver BW:%u Peak BW:%u",
+		bus_client->name, level, aver_bw, peak_bw);
 
 	return icc_set_bw(bus_client->path, aver_bw, peak_bw);
 }

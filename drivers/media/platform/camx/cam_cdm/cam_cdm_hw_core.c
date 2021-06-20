@@ -323,7 +323,7 @@ static int cam_hw_cdm_submit_gen_irq(struct cam_hw_info *cdm_hw,
 		rc = -EINVAL;
 		goto end;
 	}
-	CAM_DBG(CAM_CDM, "CDM write BL last cmd tag=%x total=%d cookie=%d",
+	CAM_DBG(CAM_CDM, "CDM write BL last cmd tag=%x total=%d cookie=%llu",
 		core->bl_tag, req->data->cmd_arrary_count, req->data->cookie);
 	node = kzalloc(sizeof(struct cam_cdm_bl_cb_request_entry),
 			GFP_KERNEL);

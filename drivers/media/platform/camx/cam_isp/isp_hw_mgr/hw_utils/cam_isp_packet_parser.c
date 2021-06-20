@@ -663,7 +663,7 @@ int cam_isp_add_io_buffers(
 					io_cfg[i].mem_handle[plane_id]);
 
 				CAM_DBG(CAM_ISP,
-					"mmu_hdl=0x%x, size=%d, end=0x%x",
+					"mmu_hdl=0x%x, size=%d, end=0x%llx",
 					mmu_hdl, (int)size,
 					io_addr[plane_id]+size);
 
@@ -773,7 +773,7 @@ int cam_isp_add_io_buffers(
 					io_cfg[i].mem_handle[plane_id]);
 
 				CAM_DBG(CAM_ISP,
-					"mmu_hdl=0x%x, size=%d, end=0x%x",
+					"mmu_hdl=0x%x, size=%d, end=0x%llx",
 					mmu_hdl, (int)size,
 					io_addr[plane_id]+size);
 

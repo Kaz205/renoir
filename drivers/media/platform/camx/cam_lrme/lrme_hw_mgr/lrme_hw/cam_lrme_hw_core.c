@@ -68,7 +68,7 @@ static int  cam_lrme_dump_regs_to_buf(
 	hdr->size = hdr->word_size * (addr - start);
 	dump_args->offset += hdr->size +
 		sizeof(struct cam_lrme_hw_dump_header);
-	CAM_DBG(CAM_LRME, "offset %d", dump_args->offset);
+	CAM_DBG(CAM_LRME, "offset %lld", dump_args->offset);
 	return 0;
 }
 

@@ -268,7 +268,7 @@ static int cam_vfe_bus_acquire_rm(
 	*client_done_mask = (1 << rm_idx);
 	*rm_res = rm_res_local;
 
-	CAM_DBG(CAM_ISP, "RM %d: Acquired");
+	CAM_DBG(CAM_ISP, "RM: Acquired");
 	return 0;
 }
 
@@ -718,7 +718,7 @@ static int cam_vfe_bus_deinit_vfe_bus_rd_resource(
 		 * This is not error. It can happen if the resource is
 		 * never supported in the HW.
 		 */
-		CAM_DBG(CAM_ISP, "HW%d Res %d already deinitialized");
+		CAM_DBG(CAM_ISP, "HW already deinitialized");
 		return 0;
 	}
 

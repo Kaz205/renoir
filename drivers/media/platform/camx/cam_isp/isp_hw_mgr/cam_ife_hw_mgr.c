@@ -3734,7 +3734,7 @@ static int cam_isp_blob_clock_update(
 	ctx = prepare->ctxt_to_hw_map;
 
 	CAM_DBG(CAM_PERF,
-		"usage=%u left_clk= %lu right_clk=%lu",
+		"usage=%u left_clk= %llu right_clk=%llu",
 		clock_config->usage_type,
 		clock_config->left_pix_hz,
 		clock_config->right_pix_hz);
@@ -6214,7 +6214,7 @@ static int cam_ife_get_bus_dmi_debug(void *data, u64 *val)
 {
 	*val = g_ife_hw_mgr.debug_cfg.enable_dmi_dump;
 	CAM_DBG(CAM_ISP,
-		"Get bus enable_dmi_dump_status value :%lld",
+		"Get bus enable_dmi_dump_status value :%u",
 		g_ife_hw_mgr.debug_cfg.enable_dmi_dump);
 	return 0;
 }

@@ -164,7 +164,7 @@ int cam_mem_get_io_buf(int32_t buf_handle, int32_t mmu_handle,
 	}
 
 	CAM_DBG(CAM_MEM,
-		"handle:0x%x fd:%d iova_ptr:%pK len_ptr:%llu",
+		"handle:0x%x fd:%d iova_ptr:%pK len_ptr:%zu",
 		mmu_handle, tbl.bufq[idx].fd, iova_ptr, *len_ptr);
 handle_mismatch:
 	mutex_unlock(&tbl.m_lock);

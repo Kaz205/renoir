@@ -1215,7 +1215,7 @@ int cam_smmu_get_io_region_info(int32_t smmu_hdl,
 	*len = iommu_cb_set.cb_info[idx].io_info.iova_len;
 
 	CAM_DBG(CAM_SMMU,
-		"I/O area for hdl = %x start addr = %pK len = %zu",
+		"I/O area for hdl = %x start addr = %llx len = %zu",
 		smmu_hdl, *iova, *len);
 	mutex_unlock(&iommu_cb_set.cb_info[idx].lock);
 
@@ -1369,7 +1369,7 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 			goto err_free_iova;
 		}
 
-		CAM_DBG(CAM_SMMU, "iommu_map_sg returned iova=%pK, size=%zu",
+		CAM_DBG(CAM_SMMU, "iommu_map_sg returned iova=%x, size=%zu",
 			iova, size);
 		*paddr_ptr = iova;
 		*len_ptr = size;
@@ -1379,7 +1379,7 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 		*len_ptr = (size_t)buf->size;
 	}
 
-	CAM_DBG(CAM_SMMU, "iova=%pK, region_id=%d, paddr=%pK, len=%d",
+	CAM_DBG(CAM_SMMU, "iova=%x, region_id=%d, paddr=%llx, len=%zu",
 		iova, region_id, *paddr_ptr, *len_ptr);
 
 	if (IS_ERR_OR_NULL(table->sgl)) {

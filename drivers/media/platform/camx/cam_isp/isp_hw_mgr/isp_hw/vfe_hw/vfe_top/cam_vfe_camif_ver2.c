@@ -661,8 +661,7 @@ static int cam_vfe_camif_handle_irq_bottom_half(void *handler_priv,
 			CAMIF_DEBUG_ENABLE_SENSOR_DIAG_STATUS) {
 			val = cam_io_r(camif_priv->mem_base +
 				camif_priv->camif_reg->vfe_diag_sensor_status);
-			CAM_DBG(CAM_ISP, "VFE_DIAG_SENSOR_STATUS: 0x%x",
-				camif_priv->mem_base, val);
+			CAM_DBG(CAM_ISP, "VFE_DIAG_SENSOR_STATUS: 0x%x", val);
 		}
 		break;
 	default:

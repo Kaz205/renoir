@@ -95,7 +95,8 @@ static int cam_lrme_mgr_util_packet_validate(struct cam_packet *packet,
 		return -EINVAL;
 	}
 
-	CAM_DBG(CAM_LRME, "Packet request=%d, op_code=0x%x, size=%d, flags=%d",
+	CAM_DBG(CAM_LRME,
+		"Packet request=%llu, op_code=0x%x, size=%d, flags=%d",
 		packet->header.request_id, packet->header.op_code,
 		packet->header.size, packet->header.flags);
 	CAM_DBG(CAM_LRME,
@@ -632,7 +633,7 @@ static int cam_lrme_mgr_hw_acquire(void *hw_mgr_priv, void *hw_acquire_args)
 
 	device_index = cam_lrme_mgr_util_reserve_device(hw_mgr,
 		&lrme_acquire_args);
-	CAM_DBG(CAM_LRME, "Get device id %llu", device_index);
+	CAM_DBG(CAM_LRME, "Get device id %lu", device_index);
 
 	if (device_index >= hw_mgr->device_count) {
 		CAM_ERR(CAM_LRME, "Get wrong device id %lu", device_index);

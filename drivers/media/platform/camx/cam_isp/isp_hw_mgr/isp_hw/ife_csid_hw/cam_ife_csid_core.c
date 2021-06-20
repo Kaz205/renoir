@@ -2609,7 +2609,7 @@ static int cam_ife_csid_set_csid_debug(struct cam_ife_csid_hw   *csid_hw,
 
 	csid_debug = (uint32_t  *) cmd_args;
 	csid_hw->csid_debug = *csid_debug;
-	CAM_DBG(CAM_ISP, "CSID:%d set csid debug value:%d",
+	CAM_DBG(CAM_ISP, "CSID:%d set csid debug value:%llu",
 		csid_hw->hw_intf->hw_idx, csid_hw->csid_debug);
 
 	return 0;

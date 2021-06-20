@@ -436,7 +436,7 @@ static int32_t cam_icp_ctx_timer(void *priv, void *data)
 	}
 
 	CAM_DBG(CAM_ICP,
-		"E :ctx_id %d, ubw %lld, cbw %lld, cbw_a %ld, curr_fc %u, bc %u",
+		"E :ctx_id %d, ubw %lld, cbw %lld, cbw_a %llu, curr_fc %u, bc %u",
 		ctx_data->ctx_id,
 		ctx_data->clk_info.uncompressed_bw,
 		ctx_data->clk_info.compressed_bw,
@@ -920,7 +920,7 @@ static bool cam_icp_update_bw(struct cam_icp_hw_mgr *hw_mgr,
 				ctx->clk_info.compressed_bw;
 			hw_mgr_clk_info->compressed_bw_ab +=
 				ctx->clk_info.compressed_bw_ab;
-			CAM_DBG(CAM_ICP, "ubw = %lld, cbw = %lld cbw_ab",
+			CAM_DBG(CAM_ICP, "ubw = %lld, cbw = %lld cbw_ab %lld",
 				hw_mgr_clk_info->uncompressed_bw,
 				hw_mgr_clk_info->compressed_bw,
 				hw_mgr_clk_info->compressed_bw_ab);
@@ -2233,7 +2233,7 @@ static int cam_icp_alloc_sfr_mem(struct cam_mem_mgr_memory_desc *sfr)
 		return rc;
 
 	*sfr = out;
-	CAM_DBG(CAM_ICP, "kva: %llX, iova: %x, hdl: %x, len: %lld",
+	CAM_DBG(CAM_ICP, "kva: %lX, iova: %x, hdl: %x, len: %lld",
 		out.kva, out.iova, out.mem_handle, out.len);
 
 	return rc;
@@ -2257,7 +2257,7 @@ static int cam_icp_alloc_shared_mem(struct cam_mem_mgr_memory_desc *qtbl)
 		return rc;
 
 	*qtbl = out;
-	CAM_DBG(CAM_ICP, "kva: %llX, iova: %x, hdl: %x, len: %lld",
+	CAM_DBG(CAM_ICP, "kva: %lX, iova: %x, hdl: %x, len: %lld",
 		out.kva, out.iova, out.mem_handle, out.len);
 
 	return rc;
@@ -2575,31 +2575,31 @@ static int cam_icp_mgr_hfi_resume(struct cam_icp_hw_mgr *hw_mgr)
 	hfi_mem.qtbl.kva = icp_hw_mgr.hfi_mem.qtbl.kva;
 	hfi_mem.qtbl.iova = icp_hw_mgr.hfi_mem.qtbl.iova;
 	hfi_mem.qtbl.len = icp_hw_mgr.hfi_mem.qtbl.len;
-	 CAM_DBG(CAM_ICP, "qtbl kva = %llX IOVA = %X length = %lld\n",
+	CAM_DBG(CAM_ICP, "qtbl kva = %lX IOVA = %X length = %lld\n",
 		hfi_mem.qtbl.kva, hfi_mem.qtbl.iova, hfi_mem.qtbl.len);
 
 	hfi_mem.cmd_q.kva = icp_hw_mgr.hfi_mem.cmd_q.kva;
 	hfi_mem.cmd_q.iova = icp_hw_mgr.hfi_mem.cmd_q.iova;
 	hfi_mem.cmd_q.len = icp_hw_mgr.hfi_mem.cmd_q.len;
-	CAM_DBG(CAM_ICP, "cmd_q kva = %llX IOVA = %X length = %lld\n",
+	CAM_DBG(CAM_ICP, "cmd_q kva = %lX IOVA = %X length = %lld\n",
 		hfi_mem.cmd_q.kva, hfi_mem.cmd_q.iova, hfi_mem.cmd_q.len);
 
 	hfi_mem.msg_q.kva = icp_hw_mgr.hfi_mem.msg_q.kva;
 	hfi_mem.msg_q.iova = icp_hw_mgr.hfi_mem.msg_q.iova;
 	hfi_mem.msg_q.len = icp_hw_mgr.hfi_mem.msg_q.len;
-	CAM_DBG(CAM_ICP, "msg_q kva = %llX IOVA = %X length = %lld\n",
+	CAM_DBG(CAM_ICP, "msg_q kva = %lX IOVA = %X length = %lld\n",
 		hfi_mem.msg_q.kva, hfi_mem.msg_q.iova, hfi_mem.msg_q.len);
 
 	hfi_mem.dbg_q.kva = icp_hw_mgr.hfi_mem.dbg_q.kva;
 	hfi_mem.dbg_q.iova = icp_hw_mgr.hfi_mem.dbg_q.iova;
 	hfi_mem.dbg_q.len = icp_hw_mgr.hfi_mem.dbg_q.len;
-	CAM_DBG(CAM_ICP, "dbg_q kva = %llX IOVA = %X length = %lld\n",
+	CAM_DBG(CAM_ICP, "dbg_q kva = %lX IOVA = %X length = %lld\n",
 		hfi_mem.dbg_q.kva, hfi_mem.dbg_q.iova, hfi_mem.dbg_q.len);
 
 	hfi_mem.sfr_buf.kva = icp_hw_mgr.hfi_mem.sfr_buf.kva;
 	hfi_mem.sfr_buf.iova = icp_hw_mgr.hfi_mem.sfr_buf.iova;
 	hfi_mem.sfr_buf.len = icp_hw_mgr.hfi_mem.sfr_buf.len;
-	CAM_DBG(CAM_ICP, "sfr kva = %llX IOVA = %X length = %lld\n",
+	CAM_DBG(CAM_ICP, "sfr kva = %lX IOVA = %X length = %lld\n",
 		hfi_mem.sfr_buf.kva, hfi_mem.sfr_buf.iova,
 		hfi_mem.sfr_buf.len);
 
@@ -3844,7 +3844,7 @@ static int cam_icp_process_stream_settings(
 			(cmd_mem_regions->map_info_array[i].offset);
 		map_cmd->mem_map_region_sets[i].len = (uint32_t) len;
 
-		CAM_DBG(CAM_ICP, "Region %u mem_handle %d iova %pK len %u",
+		CAM_DBG(CAM_ICP, "Region %u mem_handle %d iova %x len %u",
 			(i+1), cmd_mem_regions->map_info_array[i].mem_handle,
 			(uint32_t)iova, (uint32_t)len);
 	}
@@ -3936,7 +3936,7 @@ static int cam_icp_packet_generic_blob_handler(void *user_data,
 
 		soc_req = (struct cam_icp_clk_bw_request *)blob_data;
 		*clk_info = *soc_req;
-		CAM_DBG(CAM_ICP, "%llu %llu %d %d %d",
+		CAM_DBG(CAM_ICP, "%llu %u %d %lld %lld",
 			clk_info->budget_ns, clk_info->frame_cycles,
 			clk_info->rt_flag, clk_info->uncompressed_bw,
 			clk_info->compressed_bw);
@@ -4635,7 +4635,7 @@ static int cam_icp_mgr_hw_flush(void *hw_priv, void *hw_flush_args)
 	}
 
 	ctx_data->last_flush_req = flush_args->last_flush_req;
-	CAM_DBG(CAM_REQ, "ctx_id %d Flush type %d last_flush_req %u",
+	CAM_DBG(CAM_REQ, "ctx_id %d Flush type %d last_flush_req %llu",
 		ctx_data->ctx_id, flush_args->flush_type,
 		ctx_data->last_flush_req);
 

@@ -101,7 +101,7 @@ static int cam_csid_ppi_enable_hw(struct cam_csid_ppi_hw  *ppi_hw)
 		ppi_reg->ppi_irq_cmd_addr);
 	val = cam_io_r_mb(soc_info->reg_map[0].mem_base +
 		ppi_reg->ppi_hw_version_addr);
-	CAM_DBG(CAM_ISP, "PPI:%d PPI HW version: 0x%x",
+	CAM_DBG(CAM_ISP, "PPI:%d PPI HW version: 0x%llx",
 		ppi_hw->hw_intf->hw_idx, val);
 	ppi_hw->device_enabled = 1;
 
