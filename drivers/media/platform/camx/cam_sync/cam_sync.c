@@ -15,6 +15,7 @@
 #include <linux/module.h>
 #include <linux/irqflags.h>
 #include <linux/module.h>
+#include <linux/poll.h>
 #include <linux/platform_device.h>
 #include <linux/debugfs.h>
 #include "cam_sync_util.h"
@@ -793,21 +794,20 @@ static long cam_sync_dev_ioctl(struct file *filep, void *fh,
 	return rc;
 }
 
-static unsigned int cam_sync_poll(struct file *f,
+static __poll_t cam_sync_poll(struct file *f,
 	struct poll_table_struct *pll_table)
 {
-	int rc = 0;
 	struct v4l2_fh *eventq = f->private_data;
 
 	if (!eventq)
-		return -EINVAL;
+		return EPOLLERR | EPOLLNVAL;
 
 	poll_wait(f, &eventq->wait, pll_table);
 
 	if (v4l2_event_pending(eventq))
-		rc = POLLPRI;
+		return EPOLLPRI;
 
-	return rc;
+	return 0;
 }
 
 static int cam_sync_open(struct file *filep)

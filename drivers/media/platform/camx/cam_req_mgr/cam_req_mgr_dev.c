@@ -12,6 +12,7 @@
  */
 
 #include <linux/module.h>
+#include <linux/poll.h>
 #include <linux/slab.h>
 #include <linux/platform_device.h>
 #include <media/v4l2-fh.h>
@@ -131,20 +132,19 @@ end:
 	return rc;
 }
 
-static unsigned int cam_req_mgr_poll(struct file *f,
+static __poll_t cam_req_mgr_poll(struct file *f,
 	struct poll_table_struct *pll_table)
 {
-	int rc = 0;
 	struct v4l2_fh *eventq = f->private_data;
 
 	if (!eventq)
-		return -EINVAL;
+		return EPOLLERR | EPOLLNVAL;
 
 	poll_wait(f, &eventq->wait, pll_table);
 	if (v4l2_event_pending(eventq))
-		rc = POLLPRI;
+		return EPOLLPRI;
 
-	return rc;
+	return 0;
 }
 
 static int cam_req_mgr_close(struct file *filep)
