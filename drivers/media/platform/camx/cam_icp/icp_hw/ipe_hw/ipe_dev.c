@@ -40,7 +40,6 @@ static const struct cam_ipe_device_hw_info cam_ipe_hw_info[] = {
 		.reserved = 0,
 	},
 };
-EXPORT_SYMBOL(cam_ipe_hw_info);
 
 static char ipe_dev_name[8];
 
