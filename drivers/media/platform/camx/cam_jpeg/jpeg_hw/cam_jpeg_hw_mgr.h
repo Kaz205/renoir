@@ -73,7 +73,7 @@ struct cam_jpeg_process_irq_work_data_t {
 struct cam_jpeg_hw_cdm_info_t {
 	int ref_cnt;
 	uint32_t cdm_handle;
-	struct cam_cdm_utils_ops *cdm_ops;
+	const struct cam_cdm_utils_ops *cdm_ops;
 };
 
 /**

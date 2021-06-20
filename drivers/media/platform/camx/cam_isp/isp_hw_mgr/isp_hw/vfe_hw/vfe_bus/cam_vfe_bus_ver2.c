@@ -197,7 +197,7 @@ struct cam_vfe_bus_ver2_vfe_out_data {
 	uint32_t                         format;
 	uint32_t                         max_width;
 	uint32_t                         max_height;
-	struct cam_cdm_utils_ops        *cdm_util_ops;
+	const struct cam_cdm_utils_ops   *cdm_util_ops;
 	uint32_t                         secure_mode;
 };
 

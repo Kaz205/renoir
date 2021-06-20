@@ -326,6 +326,11 @@ static const struct cam_cdm_utils_ops CDM170_ops = {
 	cdm_write_genirq,
 };
 
+const struct cam_cdm_utils_ops *cam_cdm_util_get_cmd170_ops(void)
+{
+	return &CDM170_ops;
+}
+
 static int
 cam_cdm_get_ioremap_from_base(
 			uint32_t hw_base,

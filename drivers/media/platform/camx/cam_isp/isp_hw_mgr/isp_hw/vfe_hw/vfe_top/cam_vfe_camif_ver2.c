@@ -78,7 +78,7 @@ static int cam_vfe_camif_get_reg_update(
 	uint32_t                          size = 0;
 	uint32_t                          reg_val_pair[2];
 	struct cam_isp_hw_get_cmd_update *cdm_args = cmd_args;
-	struct cam_cdm_utils_ops         *cdm_util_ops = NULL;
+	const struct cam_cdm_utils_ops   *cdm_util_ops;
 	struct cam_vfe_mux_camif_data    *rsrc_data = NULL;
 
 	if (arg_size != sizeof(struct cam_isp_hw_get_cmd_update)) {
@@ -91,7 +91,7 @@ static int cam_vfe_camif_get_reg_update(
 		return -EINVAL;
 	}
 
-	cdm_util_ops = (struct cam_cdm_utils_ops *)cdm_args->res->cdm_ops;
+	cdm_util_ops = cdm_args->res->cdm_ops;
 
 	if (!cdm_util_ops) {
 		CAM_ERR(CAM_ISP, "Invalid CDM ops");

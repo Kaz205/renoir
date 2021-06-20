@@ -207,5 +207,6 @@ void cam_cdm_util_dump_cmd_buf(
 void cam_cdm_util_dump_cmd_bufs_v2(
 	struct cam_cdm_cmd_buf_dump_info *dump_info);
 
+const struct cam_cdm_utils_ops *cam_cdm_util_get_cmd170_ops(void);
 
 #endif /* _CAM_CDM_UTIL_H_ */

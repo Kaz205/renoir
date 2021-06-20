@@ -54,7 +54,7 @@ static int cam_vfe_top_mux_get_base(struct cam_vfe_top_ver2_priv *top_priv,
 	uint32_t                          size = 0;
 	uint32_t                          mem_base = 0;
 	struct cam_isp_hw_get_cmd_update *cdm_args  = cmd_args;
-	struct cam_cdm_utils_ops         *cdm_util_ops = NULL;
+	const struct cam_cdm_utils_ops   *cdm_util_ops;
 
 	if (arg_size != sizeof(struct cam_isp_hw_get_cmd_update)) {
 		CAM_ERR(CAM_ISP, "Error! Invalid cmd size");
@@ -67,8 +67,7 @@ static int cam_vfe_top_mux_get_base(struct cam_vfe_top_ver2_priv *top_priv,
 		return -EINVAL;
 	}
 
-	cdm_util_ops =
-		(struct cam_cdm_utils_ops *)cdm_args->res->cdm_ops;
+	cdm_util_ops = cdm_args->res->cdm_ops;
 
 	if (!cdm_util_ops) {
 		CAM_ERR(CAM_ISP, "Invalid CDM ops");

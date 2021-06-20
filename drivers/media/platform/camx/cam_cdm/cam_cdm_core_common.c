@@ -79,14 +79,16 @@ bool cam_cdm_cpas_cb(uint32_t client_handle, void *userdata,
 	return false;
 }
 
-struct cam_cdm_utils_ops *cam_cdm_get_ops(
-	uint32_t ver, struct cam_hw_version *cam_version, bool by_cam_version)
+const
+struct cam_cdm_utils_ops *cam_cdm_get_ops(u32 ver,
+					  struct cam_hw_version *cam_version,
+					  bool by_cam_version)
 {
 	if (by_cam_version == false) {
 		switch (ver) {
 		case CAM_CDM170_VERSION:
 		case CAM_CDM175_VERSION:
-			return &CDM170_ops;
+			return cam_cdm_util_get_cmd170_ops();
 		default:
 			CAM_ERR(CAM_CDM, "CDM Version=%x not supported in util",
 				ver);
@@ -103,7 +105,7 @@ struct cam_cdm_utils_ops *cam_cdm_get_ops(
 				"cam_hw_version=%x:%x:%x supported",
 				cam_version->major, cam_version->minor,
 				cam_version->incr);
-			return &CDM170_ops;
+			return cam_cdm_util_get_cmd170_ops();
 		}
 
 		CAM_ERR(CAM_CDM, "cam_hw_version=%x:%x:%x not supported",

@@ -86,7 +86,7 @@ struct cam_cdm_acquire_data {
 	uint32_t base_array_cnt;
 	struct cam_soc_reg_map *base_array[CAM_SOC_MAX_BLOCK];
 	struct cam_hw_version cdm_version;
-	struct cam_cdm_utils_ops *ops;
+	const struct cam_cdm_utils_ops *ops;
 	uint32_t handle;
 };
 
