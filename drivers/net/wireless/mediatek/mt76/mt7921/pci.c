@@ -148,7 +148,7 @@ static void mt7921_pci_config_L1ss(struct pci_dev *pdev, u8 enable)
 	pci_write_config_dword(pdev, pos + PCI_L1SS_CTL1, reg32);
 }
 
-void mt7921_pci_enable_aspm(struct pci_dev *pdev)
+static void mt7921_pci_enable_aspm(struct pci_dev *pdev)
 {
 	mt7921_pci_config_L1ss(pdev, true);
 	mt7921_pci_config_L1(pdev, true);
