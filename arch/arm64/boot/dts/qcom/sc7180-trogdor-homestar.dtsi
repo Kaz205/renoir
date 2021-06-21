@@ -16,6 +16,21 @@ ap_h1_spi: &spi0 {};
 #include "sc7180-trogdor-mipi-camera.dtsi"
 
 / {
+	max98360a_1: max98360a_1 {
+		compatible = "maxim,max98360a";
+		#sound-dai-cells = <0>;
+	};
+
+	max98360a_2: max98360a_2 {
+		compatible = "maxim,max98360a";
+		#sound-dai-cells = <0>;
+	};
+
+	max98360a_3: max98360a_3 {
+		compatible = "maxim,max98360a";
+		#sound-dai-cells = <0>;
+	};
+
 	pp3300_touch: pp3300-touch {
 		compatible = "regulator-fixed";
 		regulator-name = "pp3300_touch";
@@ -85,6 +100,10 @@ ap_ts_pen_1v8: &i2c4 {
 
 &sn65dsi86_bridge {
 		use-aux-backlight;
+};
+
+&sound_multimedia1_codec {
+	sound-dai = <&max98360a>, <&max98360a_1>, <&max98360a_2>, <&max98360a_3> ;
 };
 
 /* PINCTRL - modifications to sc7180-trogdor.dtsi */
