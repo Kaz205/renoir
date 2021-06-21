@@ -169,11 +169,6 @@ static uint32_t cdm_get_cmd_header_size(unsigned int command)
 	return CDMCmdHeaderSizes[command];
 }
 
-static uint32_t cdm_required_size_reg_continuous(uint32_t numVals)
-{
-	return cdm_get_cmd_header_size(CAM_CDM_CMD_REG_CONT) + numVals;
-}
-
 static uint32_t cdm_required_size_reg_random(uint32_t numRegVals)
 {
 	return cdm_get_cmd_header_size(CAM_CDM_CMD_REG_RANDOM) +
@@ -190,47 +185,9 @@ static uint32_t cdm_required_size_genirq(void)
 	return cdm_get_cmd_header_size(CAM_CDM_CMD_GEN_IRQ);
 }
 
-static uint32_t cdm_required_size_indirect(void)
-{
-	return cdm_get_cmd_header_size(CAM_CDM_CMD_BUFF_INDIRECT);
-}
-
 static uint32_t cdm_required_size_changebase(void)
 {
 	return cdm_get_cmd_header_size(CAM_CDM_CMD_CHANGE_BASE);
-}
-
-static uint32_t cdm_offsetof_dmi_addr(void)
-{
-	return offsetof(struct cdm_dmi_cmd, addr);
-}
-
-static uint32_t cdm_offsetof_indirect_addr(void)
-{
-	return offsetof(struct cdm_indirect_cmd, addr);
-}
-
-static uint32_t *cdm_write_regcontinuous(uint32_t *pCmdBuffer, uint32_t reg,
-					 uint32_t numVals, uint32_t *pVals)
-{
-	uint32_t i;
-	struct cdm_regcontinuous_cmd *pHeader =
-		(struct cdm_regcontinuous_cmd *)pCmdBuffer;
-
-	pHeader->count = numVals;
-	pHeader->cmd = CAM_CDM_CMD_REG_CONT;
-	pHeader->reserved0 = 0;
-	pHeader->reserved1 = 0;
-	pHeader->offset = reg;
-
-	pCmdBuffer += cdm_get_cmd_header_size(CAM_CDM_CMD_REG_CONT);
-
-	for (i = 0; i < numVals; i++)
-		(((uint32_t *)pCmdBuffer)[i]) = (((uint32_t *)pVals)[i]);
-
-	pCmdBuffer += numVals;
-
-	return pCmdBuffer;
 }
 
 static uint32_t *cdm_write_regrandom(uint32_t *pCmdBuffer, uint32_t numRegVals,
@@ -256,38 +213,6 @@ static uint32_t *cdm_write_regrandom(uint32_t *pCmdBuffer, uint32_t numRegVals,
 	return dst;
 }
 
-static uint32_t *cdm_write_dmi(uint32_t *pCmdBuffer, uint8_t dmiCmd,
-			       uint32_t DMIAddr, uint8_t DMISel,
-			       uint32_t dmiBufferAddr, uint32_t length)
-{
-	struct cdm_dmi_cmd *pHeader = (struct cdm_dmi_cmd *)pCmdBuffer;
-
-	pHeader->cmd        = dmiCmd;
-	pHeader->addr = dmiBufferAddr;
-	pHeader->length = length - 1;
-	pHeader->DMIAddr = DMIAddr;
-	pHeader->DMISel = DMISel;
-
-	pCmdBuffer += cdm_get_cmd_header_size(CAM_CDM_CMD_DMI);
-
-	return pCmdBuffer;
-}
-
-static uint32_t *cdm_write_indirect(uint32_t *pCmdBuffer,
-				    uint32_t indirectBufAddr, uint32_t length)
-{
-	struct cdm_indirect_cmd *pHeader =
-		(struct cdm_indirect_cmd *)pCmdBuffer;
-
-	pHeader->cmd = CAM_CDM_CMD_BUFF_INDIRECT;
-	pHeader->addr = indirectBufAddr;
-	pHeader->length = length - 1;
-
-	pCmdBuffer += cdm_get_cmd_header_size(CAM_CDM_CMD_BUFF_INDIRECT);
-
-	return pCmdBuffer;
-}
-
 static uint32_t *cdm_write_changebase(uint32_t *pCmdBuffer, uint32_t base)
 {
 	struct cdm_changebase_cmd *pHeader =
@@ -309,21 +234,12 @@ static void cdm_write_genirq(uint32_t *pCmdBuffer, uint32_t userdata)
 }
 
 static const struct cam_cdm_utils_ops CDM170_ops = {
-	cdm_get_cmd_header_size,
-	cdm_required_size_reg_continuous,
-	cdm_required_size_reg_random,
-	cdm_required_size_dmi,
-	cdm_required_size_genirq,
-	cdm_required_size_indirect,
-	cdm_required_size_changebase,
-	cdm_offsetof_dmi_addr,
-	cdm_offsetof_indirect_addr,
-	cdm_write_regcontinuous,
-	cdm_write_regrandom,
-	cdm_write_dmi,
-	cdm_write_indirect,
-	cdm_write_changebase,
-	cdm_write_genirq,
+	.cdm_required_size_reg_random	  = cdm_required_size_reg_random,
+	.cdm_required_size_genirq	  = cdm_required_size_genirq,
+	.cdm_required_size_changebase	  = cdm_required_size_changebase,
+	.cdm_write_regrandom		  = cdm_write_regrandom,
+	.cdm_write_changebase		  = cdm_write_changebase,
+	.cdm_write_genirq		  = cdm_write_genirq,
 };
 
 const struct cam_cdm_utils_ops *cam_cdm_util_get_cmd170_ops(void)
