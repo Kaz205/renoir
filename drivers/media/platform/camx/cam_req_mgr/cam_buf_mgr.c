@@ -311,7 +311,7 @@ static struct sg_table *_op_dma_buf_map(struct dma_buf_attachment *attachment,
 
 	table = a->table;
 
-	map_attrs = attachment->dma_map_attrs | DMA_ATTR_SKIP_CPU_SYNC;
+	map_attrs = DMA_ATTR_SKIP_CPU_SYNC;
 
 	mutex_lock(&buffer->b_lock);
 	table->nents = dma_map_sg_attrs(attachment->dev, table->sgl,
@@ -334,7 +334,7 @@ static void _op_dma_buf_unmap(struct dma_buf_attachment *attachment,
 	int map_attrs;
 	struct cmm_buffer *buffer = attachment->dmabuf->priv;
 
-	map_attrs = attachment->dma_map_attrs | DMA_ATTR_SKIP_CPU_SYNC;
+	map_attrs = DMA_ATTR_SKIP_CPU_SYNC;
 
 	mutex_lock(&buffer->b_lock);
 	dma_unmap_sg_attrs(attachment->dev, table->sgl, table->orig_nents,
