@@ -4798,7 +4798,6 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	const struct cpumask *smt_mask;
 	int i, j, cpu, occ = 0;
 	bool need_sync = false;
-	bool fi_before = false;
 
 	cpu = cpu_of(rq);
 	if (cpu_is_offline(cpu))
@@ -4862,16 +4861,6 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 
 		if (i != cpu)
 			update_rq_clock(rq_i);
-	}
-
-	fi_before = need_sync;
-	if (!need_sync) {
-		for_each_cpu(i, smt_mask) {
-			struct rq *rq_i = cpu_rq(i);
-
-			/* Reset the snapshot if core is no longer in force-idle. */
-			rq_i->cfs.min_vruntime_fi = rq_i->cfs.min_vruntime;
-		}
 	}
 
 	/*
@@ -4983,7 +4972,6 @@ next_class:;
 	 * their task. This ensures there is no inter-sibling overlap between
 	 * non-matching user state.
 	 */
-	need_sync = false;
 	for_each_cpu(i, smt_mask) {
 		struct rq *rq_i = cpu_rq(i);
 
@@ -4992,10 +4980,8 @@ next_class:;
 
 		WARN_ON_ONCE(!rq_i->core_pick);
 
-		if (is_idle_task(rq_i->core_pick) && rq_i->nr_running) {
+		if (is_idle_task(rq_i->core_pick) && rq_i->nr_running)
 			rq_i->core_forceidle = true;
-			need_sync = true;
-		}
 
 		rq_i->core_pick->core_occupation = occ;
 
@@ -5009,14 +4995,6 @@ next_class:;
 		WARN_ON_ONCE(!cookie_match(next, rq_i->core_pick));
 	}
 
-	if (!fi_before && need_sync) {
-		for_each_cpu(i, smt_mask) {
-			struct rq *rq_i = cpu_rq(i);
-
-			/* Snapshot if core is in force-idle. */
-			rq_i->cfs.min_vruntime_fi = rq_i->cfs.min_vruntime;
-		}
-	}
 done:
 	set_next_task(rq, next);
 	return next;
