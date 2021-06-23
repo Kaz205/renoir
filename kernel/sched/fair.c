@@ -459,6 +459,13 @@ static inline bool is_root_cfs_rq(struct cfs_rq *cfs_rq)
 	return cfs_rq == root_cfs_rq(cfs_rq);
 }
 
+#ifdef CONFIG_SCHED_CORE
+static inline struct cfs_rq *core_cfs_rq(struct cfs_rq *cfs_rq)
+{
+	return &rq_of(cfs_rq)->core->cfs;
+}
+#endif
+
 static inline u64 cfs_rq_min_vruntime(struct cfs_rq *cfs_rq)
 {
 	return cfs_rq->min_vruntime;
