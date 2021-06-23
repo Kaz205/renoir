@@ -54,18 +54,6 @@ uint32_t cam_common_util_remove_duplicate_arr(int32_t *array,
 	uint32_t num);
 
 /**
- * cam_common_util_get_time_diff()
- *
- * @brief                  Get the time difference between 2 timestamps in usecs
- *
- * @t1:                    Pointer to the later time
- * @t2:                    Pointer to the prev
- *
- * @return:                differnce in usecs
- */
-uint64_t cam_common_util_get_time_diff(struct timeval *t1, struct timeval *t2);
-
-/**
  * cam_comomon_util_get_curr_timestamp()
  *
  * @brief                 Get the current timestamp
@@ -74,5 +62,5 @@ uint64_t cam_common_util_get_time_diff(struct timeval *t1, struct timeval *t2);
  *
  * @return:               void
  */
-void cam_common_util_get_curr_timestamp(struct timeval *time_stamp);
+ktime_t cam_common_util_get_curr_timestamp(void);
 #endif /* _CAM_COMMON_UTIL_H_ */

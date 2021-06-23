@@ -3436,8 +3436,8 @@ static int cam_icp_mgr_config_hw(void *hw_mgr_priv, void *config_hw_args)
 	idx = cam_icp_clk_idx_from_req_id(ctx_data, req_id);
 	cam_icp_mgr_ipe_bps_clk_update(hw_mgr, ctx_data, idx);
 	ctx_data->hfi_frame_process.fw_process_flag[idx] = true;
-	cam_common_util_get_curr_timestamp(
-		&ctx_data->hfi_frame_process.submit_timestamp[idx]);
+	ctx_data->hfi_frame_process.submit_timestamp[idx] =
+		cam_common_util_get_curr_timestamp();
 	CAM_DBG(CAM_ICP, "req_id %llu, io config %llu", req_id,
 		frame_info->io_config);
 
@@ -4526,13 +4526,14 @@ static int cam_icp_mgr_hw_dump(void *hw_priv, void *hw_dump_args)
 	int rc = 0;
 	struct cam_icp_hw_ctx_data *ctx_data;
 	struct hfi_frame_process_info *frm_process;
-	struct timeval cur_time;
-	uint64_t diff;
+	ktime_t cur_time;
+	s64 diff;
 	int i;
 	struct cam_icp_dump_header *hdr;
 	uint64_t *addr, *start;
 	uint8_t *dst;
 	uint32_t min_len, remain_len;
+	struct timespec64 tm, cur_tm;
 
 	if ((!hw_priv) || (!hw_dump_args)) {
 		CAM_ERR(CAM_ICP, "Input params are Null:");
@@ -4549,25 +4550,25 @@ static int cam_icp_mgr_hw_dump(void *hw_priv, void *hw_dump_args)
 	}
 	return 0;
 hw_dump:
-	cam_common_util_get_curr_timestamp(&cur_time);
-	diff = cam_common_util_get_time_diff(
-		&cur_time,
-		&frm_process->submit_timestamp[i]);
+	cur_time = cam_common_util_get_curr_timestamp();
+	diff = ktime_us_delta(cur_time, frm_process->submit_timestamp[i]);
+	tm = ktime_to_timespec64(frm_process->submit_timestamp[i]);
+	cur_tm = ktime_to_timespec64(cur_time);
 	if (diff < CAM_ICP_CTX_RESPONSE_TIME_THRESHOLD) {
 		CAM_INFO(CAM_ICP, "No Error req %lld %ld:%06ld %ld:%06ld",
 			dump_args->request_id,
-			frm_process->submit_timestamp[i].tv_sec,
-			frm_process->submit_timestamp[i].tv_usec,
-			cur_time.tv_sec,
-			cur_time.tv_usec);
+			tm.tv_sec,
+			tm.tv_nsec / NSEC_PER_USEC,
+			cur_tm.tv_sec,
+			cur_tm.tv_nsec / NSEC_PER_USEC);
 		return 0;
 	}
 	CAM_INFO(CAM_ICP, "Error req %lld %ld:%06ld %ld:%06ld",
 		dump_args->request_id,
-		frm_process->submit_timestamp[i].tv_sec,
-		frm_process->submit_timestamp[i].tv_usec,
-		cur_time.tv_sec,
-		cur_time.tv_usec);
+		tm.tv_sec,
+		tm.tv_nsec / NSEC_PER_USEC,
+		cur_tm.tv_sec,
+		cur_tm.tv_nsec / NSEC_PER_USEC);
 	rc  = cam_mem_get_cpu_buf(dump_args->buf_handle,
 		&icp_dump_args.cpu_addr, &icp_dump_args.buf_len);
 	if (!icp_dump_args.cpu_addr || !icp_dump_args.buf_len || rc) {
@@ -4591,10 +4592,10 @@ hw_dump:
 	addr = (uint64_t *)(dst + sizeof(struct cam_icp_dump_header));
 	start = addr;
 	*addr++ = frm_process->request_id[i];
-	*addr++ = frm_process->submit_timestamp[i].tv_sec;
-	*addr++ = frm_process->submit_timestamp[i].tv_usec;
-	*addr++ = cur_time.tv_sec;
-	*addr++ = cur_time.tv_usec;
+	*addr++ = tm.tv_sec;
+	*addr++ = tm.tv_nsec / NSEC_PER_USEC;
+	*addr++ = cur_tm.tv_sec;
+	*addr++ = cur_tm.tv_nsec / NSEC_PER_USEC;
 	hdr->size = hdr->word_size * (addr - start);
 	dump_args->offset += (hdr->size + sizeof(struct cam_icp_dump_header));
 	/* Dumping the fw image*/
