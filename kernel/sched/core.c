@@ -4857,7 +4857,6 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 
 		if (rq_i->core_forceidle) {
 			need_sync = true;
-			fi_before = true;
 			rq_i->core_forceidle = false;
 		}
 
@@ -4865,7 +4864,8 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 			update_rq_clock(rq_i);
 	}
 
-	if (!fi_before) {
+	fi_before = need_sync;
+	if (!need_sync) {
 		for_each_cpu(i, smt_mask) {
 			struct rq *rq_i = cpu_rq(i);
 
