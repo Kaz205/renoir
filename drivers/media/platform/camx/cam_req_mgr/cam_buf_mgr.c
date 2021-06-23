@@ -422,22 +422,6 @@ static void _op_dma_buf_vunmap(struct dma_buf *dmabuf, void *vaddr)
 	mutex_unlock(&buffer->b_lock);
 }
 
-static void *_op_dma_buf_kmap(struct dma_buf *dmabuf, unsigned long offset)
-{
-	void *vaddr = _op_dma_buf_vmap(dmabuf);
-
-	if (IS_ERR_OR_NULL(vaddr))
-		return ERR_CAST(vaddr);
-
-	return vaddr + offset * PAGE_SIZE;
-}
-
-static void _op_dma_buf_kunmap(struct dma_buf *dmabuf, unsigned long offset,
-			       void *ptr)
-{
-	_op_dma_buf_vunmap(dmabuf, ptr);
-}
-
 static int _op_dma_buf_beg_cpu_access(struct dma_buf *dmabuf,
 				      enum dma_data_direction direction)
 {
@@ -468,15 +452,6 @@ static int _op_dma_buf_end_cpu_access(struct dma_buf *dmabuf,
 	return ret;
 }
 
-static int _op_dma_buf_get_flags(struct dma_buf *dmabuf,
-				 unsigned long *flags)
-{
-	struct cmm_buffer *buffer = dmabuf->priv;
-	*flags = buffer->flags;
-
-	return 0;
-}
-
 static const struct dma_buf_ops cmm_dma_buf_ops = {
 	.map_dma_buf	  = _op_dma_buf_map,
 	.unmap_dma_buf	  = _op_dma_buf_unmap,
@@ -486,11 +461,8 @@ static const struct dma_buf_ops cmm_dma_buf_ops = {
 	.detach		  = _op_dma_buf_detatch,
 	.begin_cpu_access = _op_dma_buf_beg_cpu_access,
 	.end_cpu_access   = _op_dma_buf_end_cpu_access,
-	.map		  = _op_dma_buf_kmap,
-	.unmap		  = _op_dma_buf_kunmap,
 	.vmap		  = _op_dma_buf_vmap,
 	.vunmap		  = _op_dma_buf_vunmap,
-	.get_flags	  = _op_dma_buf_get_flags,
 };
 
 struct dma_buf *cmm_alloc_buffer(size_t len, unsigned int flags)
