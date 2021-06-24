@@ -113,7 +113,7 @@ static inline int __task_prio(struct task_struct *p)
  */
 
 /* real prio, less is less */
-static inline bool prio_less(struct task_struct *a, struct task_struct *b)
+static inline bool prio_less(struct task_struct *a, struct task_struct *b, bool in_fi)
 {
 
 	int pa = __task_prio(a), pb = __task_prio(b);
@@ -127,19 +127,8 @@ static inline bool prio_less(struct task_struct *a, struct task_struct *b)
 	if (pa == -1) /* dl_prio() doesn't work because of stop_class above */
 		return !dl_time_before(a->dl.deadline, b->dl.deadline);
 
-	if (pa == MAX_RT_PRIO + MAX_NICE)  { /* fair */
-		u64 vruntime = b->se.vruntime;
-
-		/*
-		 * Normalize the vruntime if tasks are in different cpus.
-		 */
-		if (task_cpu(a) != task_cpu(b)) {
-			vruntime -= task_cfs_rq(b)->min_vruntime;
-			vruntime += task_cfs_rq(a)->min_vruntime;
-		}
-
-		return !((s64)(a->se.vruntime - vruntime) <= 0);
-	}
+	if (pa == MAX_RT_PRIO + MAX_NICE)	/* fair */
+		return cfs_prio_less(a, b, in_fi);
 
 	return false;
 }
@@ -153,7 +142,7 @@ static inline bool __sched_core_less(struct task_struct *a, struct task_struct *
 		return false;
 
 	/* flip prio, so high prio is leftmost */
-	if (prio_less(b, a))
+	if (prio_less(b, a, task_rq(a)->core->core_forceidle))
 		return true;
 
 	return false;
@@ -4522,6 +4511,28 @@ static inline void schedule_debug(struct task_struct *prev, bool preempt)
 	schedstat_inc(this_rq()->sched_count);
 }
 
+static void put_prev_task_balance(struct rq *rq, struct task_struct *prev,
+				  struct rq_flags *rf)
+{
+#ifdef CONFIG_SMP
+	const struct sched_class *class;
+	/*
+	 * We must do the balancing pass before put_prev_task(), such
+	 * that when we release the rq->lock the task is in the same
+	 * state as before we took rq->lock.
+	 *
+	 * We can terminate the balance pass as soon as we know there is
+	 * a runnable task of @class priority or higher.
+	 */
+	for_class_range(class, prev->sched_class, &idle_sched_class) {
+		if (class->balance(rq, prev, rf))
+			break;
+	}
+#endif
+
+	put_prev_task(rq, prev);
+}
+
 /*
  * Pick up the highest-prio task:
  */
@@ -4555,22 +4566,7 @@ __pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	}
 
 restart:
-#ifdef CONFIG_SMP
-	/*
-	 * We must do the balancing pass before put_next_task(), such
-	 * that when we release the rq->lock the task is in the same
-	 * state as before we took rq->lock.
-	 *
-	 * We can terminate the balance pass as soon as we know there is
-	 * a runnable task of @class priority or higher.
-	 */
-	for_class_range(class, prev->sched_class, &idle_sched_class) {
-		if (class->balance(rq, prev, rf))
-			break;
-	}
-#endif
-
-	put_prev_task(rq, prev);
+	put_prev_task_balance(rq, prev, rf);
 
 	for_each_class(class) {
 		p = class->pick_next_task(rq);
@@ -4583,19 +4579,6 @@ restart:
 }
 
 #ifdef CONFIG_SCHED_CORE
-
-static inline bool cookie_equals(struct task_struct *a, unsigned long cookie)
-{
-	return is_idle_task(a) || (a->core_cookie == cookie);
-}
-
-static inline bool cookie_match(struct task_struct *a, struct task_struct *b)
-{
-	if (is_idle_task(a) || is_idle_task(b))
-		return true;
-
-	return a->core_cookie == b->core_cookie;
-}
 
 /*
  * Helper function to pause the caller's hyperthread until the task can
@@ -4750,6 +4733,26 @@ void sched_core_irq_exit(void)
 	smp_store_release(&rq->core->core_irq_nest, nest - 1);
 	raw_spin_unlock(rq_lockp(rq));
 }
+#endif
+
+#ifdef CONFIG_SCHED_CORE
+static inline bool is_task_rq_idle(struct task_struct *t)
+{
+	return (task_rq(t)->idle == t);
+}
+
+static inline bool cookie_equals(struct task_struct *a, unsigned long cookie)
+{
+	return is_task_rq_idle(a) || (a->core_cookie == cookie);
+}
+
+static inline bool cookie_match(struct task_struct *a, struct task_struct *b)
+{
+	if (is_task_rq_idle(a) || is_task_rq_idle(b))
+		return true;
+
+	return a->core_cookie == b->core_cookie;
+}
 
 // XXX fairness/fwd progress conditions
 /*
@@ -4760,7 +4763,7 @@ void sched_core_irq_exit(void)
  * - Else returns idle_task.
  */
 static struct task_struct *
-pick_task(struct rq *rq, const struct sched_class *class, struct task_struct *max)
+pick_task(struct rq *rq, const struct sched_class *class, struct task_struct *max, bool in_fi)
 {
 	struct task_struct *class_pick, *cookie_pick;
 	unsigned long cookie = rq->core->core_cookie;
@@ -4775,7 +4778,7 @@ pick_task(struct rq *rq, const struct sched_class *class, struct task_struct *ma
 		 * higher priority than max.
 		 */
 		if (max && class_pick->core_cookie &&
-		    prio_less(class_pick, max))
+		    prio_less(class_pick, max, in_fi))
 			return idle_sched_class.pick_task(rq);
 
 		return class_pick;
@@ -4794,12 +4797,14 @@ pick_task(struct rq *rq, const struct sched_class *class, struct task_struct *ma
 	 * the core (so far) and it must be selected, otherwise we must go with
 	 * the cookie pick in order to satisfy the constraint.
 	 */
-	if (prio_less(cookie_pick, class_pick) &&
-	    (!max || prio_less(max, class_pick)))
+	if (prio_less(cookie_pick, class_pick, in_fi) &&
+	    (!max || prio_less(max, class_pick, in_fi)))
 		return class_pick;
 
 	return cookie_pick;
 }
+
+extern void task_vruntime_update(struct rq *rq, struct task_struct *p, bool in_fi);
 
 static struct task_struct *
 pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
@@ -4807,23 +4812,38 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	struct task_struct *next, *max = NULL;
 	const struct sched_class *class;
 	const struct cpumask *smt_mask;
+	bool fi_before = false;
 	int i, j, cpu, occ = 0;
-	bool need_sync = false;
-
-	cpu = cpu_of(rq);
-	if (cpu_is_offline(cpu))
-		return idle_sched_class.pick_next_task(rq);
+	bool need_sync;
 
 	if (!sched_core_enabled(rq))
 		return __pick_next_task(rq, prev, rf);
+
+	cpu = cpu_of(rq);
+
+	/* Stopper task is switching into idle, no need core-wide selection. */
+	if (cpu_is_offline(cpu)) {
+		/*
+		 * Reset core_pick so that we don't enter the fastpath when
+		 * coming online. core_pick would already be migrated to
+		 * another cpu during offline.
+		 */
+		rq->core_pick = NULL;
+		return __pick_next_task(rq, prev, rf);
+	}
 
 	/*
 	 * If there were no {en,de}queues since we picked (IOW, the task
 	 * pointers are all still valid), and we haven't scheduled the last
 	 * pick yet, do so now.
+	 *
+	 * rq->core_pick can be NULL if no selection was made for a CPU because
+	 * it was either offline or went offline during a sibling's core-wide
+	 * selection. In this case, do a core-wide selection.
 	 */
 	if (rq->core->core_pick_seq == rq->core->core_task_seq &&
-	    rq->core->core_pick_seq != rq->core_sched_seq) {
+	    rq->core->core_pick_seq != rq->core_sched_seq &&
+	    rq->core_pick) {
 		WRITE_ONCE(rq->core_sched_seq, rq->core->core_pick_seq);
 
 		next = rq->core_pick;
@@ -4831,19 +4851,23 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 			put_prev_task(rq, prev);
 			set_next_task(rq, next);
 		}
+
+		rq->core_pick = NULL;
 		return next;
 	}
 
-
-#ifdef CONFIG_SMP
-	for_class_range(class, prev->sched_class, &idle_sched_class) {
-		if (class->balance(rq, prev, rf))
-			break;
-	}
-#endif
-	put_prev_task(rq, prev);
+	put_prev_task_balance(rq, prev, rf);
 
 	smt_mask = cpu_smt_mask(cpu);
+	need_sync = !!rq->core->core_cookie;
+
+	/* reset state */
+	rq->core->core_cookie = 0UL;
+	if (rq->core->core_forceidle) {
+		need_sync = true;
+		fi_before = true;
+		rq->core->core_forceidle = false;
+	}
 
 	/*
 	 * core->core_task_seq, core->core_pick_seq, rq->core_sched_seq
@@ -4856,26 +4880,41 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	 * 'Fix' this by also increasing @task_seq for every pick.
 	 */
 	rq->core->core_task_seq++;
-	need_sync = !!rq->core->core_cookie;
 
-	/* reset state */
-	rq->core->core_cookie = 0UL;
+	/*
+	 * Optimize for common case where this CPU has no cookies
+	 * and there are no cookied tasks running on siblings.
+	 */
+	if (!need_sync) {
+		for_each_class(class) {
+			next = class->pick_task(rq);
+			if (next)
+				break;
+		}
+
+		if (!next->core_cookie) {
+			rq->core_pick = NULL;
+			/*
+			 * For robustness, update the min_vruntime_fi for
+			 * unconstrained picks as well.
+			 */
+			WARN_ON_ONCE(fi_before);
+			task_vruntime_update(rq, next, false);
+			goto done;
+		}
+	}
+
 	for_each_cpu(i, smt_mask) {
 		struct rq *rq_i = cpu_rq(i);
 
 		rq_i->core_pick = NULL;
-
-		if (rq_i->core_forceidle) {
-			need_sync = true;
-			rq_i->core_forceidle = false;
-		}
 
 		if (i != cpu)
 			update_rq_clock(rq_i);
 	}
 
 	/*
-	 * Try and select tasks for each sibling in decending sched_class
+	 * Try and select tasks for each sibling in descending sched_class
 	 * order.
 	 */
 	for_each_class(class) {
@@ -4884,52 +4923,28 @@ again:
 			struct rq *rq_i = cpu_rq(i);
 			struct task_struct *p;
 
-			if (cpu_is_offline(i)) {
-				rq_i->core_pick = rq_i->idle;
-				continue;
-			}
-
 			if (rq_i->core_pick)
 				continue;
 
 			/*
 			 * If this sibling doesn't yet have a suitable task to
-			 * run; ask for the most elegible task, given the
+			 * run; ask for the most eligible task, given the
 			 * highest priority task already selected for this
 			 * core.
 			 */
-			p = pick_task(rq_i, class, max);
-			if (!p) {
-				/*
-				 * If there weren't no cookies; we don't need
-				 * to bother with the other siblings.
-				 * If the rest of the core is not running a
-				 * tagged task, i.e.  need_sync == 0, and the
-				 * current CPU which called into the schedule()
-				 * loop does not have any tasks for this class,
-				 * skip selecting for other siblings since
-				 * there's no point. We don't skip for RT/DL
-				 * because that could make CFS force-idle RT.
-				 */
-				if (i == cpu && !need_sync && class == &fair_sched_class)
-					goto next_class;
-
+			p = pick_task(rq_i, class, max, fi_before);
+			if (!p)
 				continue;
-			}
 
-			/*
-			 * Optimize the 'normal' case where there aren't any
-			 * cookies and we don't need to sync up.
-			 */
-			if (i == cpu && !need_sync && !p->core_cookie) {
-				next = p;
-				goto done;
-			}
-
-			if (!is_idle_task(p))
+			if (!is_task_rq_idle(p))
 				occ++;
 
 			rq_i->core_pick = p;
+			if (rq_i->idle == p && rq_i->nr_running) {
+				rq->core->core_forceidle = true;
+				if (!fi_before)
+					rq->core->core_forceidle_seq++;
+			}
 
 			/*
 			 * If this new candidate is of higher priority than the
@@ -4948,6 +4963,7 @@ again:
 				max = p;
 
 				if (old_max) {
+					rq->core->core_forceidle = false;
 					for_each_cpu(j, smt_mask) {
 						if (j == i)
 							continue;
@@ -4956,24 +4972,17 @@ again:
 					}
 					occ = 1;
 					goto again;
-				} else {
-					/*
-					 * Once we select a task for a cpu, we
-					 * should not be doing an unconstrained
-					 * pick because it might starve a task
-					 * on a forced idle cpu.
-					 */
-					need_sync = true;
 				}
-
 			}
 		}
-next_class:;
 	}
 
 	rq->core->core_pick_seq = rq->core->core_task_seq;
 	next = rq->core_pick;
 	rq->core_sched_seq = rq->core->core_pick_seq;
+
+	/* Something should have been selected for current CPU */
+	WARN_ON_ONCE(!next);
 
 	/*
 	 * Reschedule siblings
@@ -4986,24 +4995,43 @@ next_class:;
 	for_each_cpu(i, smt_mask) {
 		struct rq *rq_i = cpu_rq(i);
 
-		if (cpu_is_offline(i))
+		/*
+		 * An online sibling might have gone offline before a task
+		 * could be picked for it, or it might be offline but later
+		 * happen to come online, but its too late and nothing was
+		 * picked for it.  That's Ok - it will pick tasks for itself,
+		 * so ignore it.
+		 */
+		if (!rq_i->core_pick)
 			continue;
 
-		WARN_ON_ONCE(!rq_i->core_pick);
-
-		if (is_idle_task(rq_i->core_pick) && rq_i->nr_running)
-			rq_i->core_forceidle = true;
+		/*
+		 * Update for new !FI->FI transitions, or if continuing to be in !FI:
+		 * fi_before     fi      update?
+		 *  0            0       1
+		 *  0            1       1
+		 *  1            0       1
+		 *  1            1       0
+		 */
+		if (!(fi_before && rq->core->core_forceidle))
+			task_vruntime_update(rq_i, rq_i->core_pick, rq->core->core_forceidle);
 
 		rq_i->core_pick->core_occupation = occ;
 
-		if (i == cpu)
+		if (i == cpu) {
+			rq_i->core_pick = NULL;
 			continue;
-
-		if (rq_i->curr != rq_i->core_pick)
-			resched_curr(rq_i);
+		}
 
 		/* Did we break L1TF mitigation requirements? */
 		WARN_ON_ONCE(!cookie_match(next, rq_i->core_pick));
+
+		if (rq_i->curr == rq_i->core_pick) {
+			rq_i->core_pick = NULL;
+			continue;
+		}
+
+		resched_curr(rq_i);
 	}
 
 done:

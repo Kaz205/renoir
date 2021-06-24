@@ -503,6 +503,11 @@ struct cfs_rq {
 
 	u64			exec_clock;
 	u64			min_vruntime;
+#ifdef CONFIG_SCHED_CORE
+	unsigned int		forceidle_seq;
+	u64			min_vruntime_fi;
+#endif
+
 #ifndef CONFIG_64BIT
 	u64			min_vruntime_copy;
 #endif
@@ -1025,7 +1030,6 @@ struct rq {
 	unsigned int		core_enabled;
 	unsigned int		core_sched_seq;
 	struct rb_root		core_tree;
-	bool			core_forceidle;
 	unsigned char		core_pause_pending;
 	unsigned int		core_this_irq_nest;
 
@@ -1034,6 +1038,8 @@ struct rq {
 	unsigned int		core_pick_seq;
 	unsigned long		core_cookie;
 	unsigned int		core_irq_nest;
+	bool			core_forceidle;
+	unsigned int		core_forceidle_seq;
 #endif
 };
 
@@ -2719,6 +2725,8 @@ static inline bool sched_energy_enabled(void)
 static inline bool sched_energy_enabled(void) { return false; }
 
 #endif /* CONFIG_ENERGY_MODEL && CONFIG_CPU_FREQ_GOV_SCHEDUTIL */
+
+bool cfs_prio_less(struct task_struct *a, struct task_struct *b, bool in_fi);
 
 #ifdef CONFIG_MEMBARRIER
 /*
