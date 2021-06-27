@@ -31,6 +31,7 @@
 
 #include <asm/cmpxchg.h>
 #include <asm/fixmap.h>
+#include <asm/cpufeature.h>
 #include <linux/mmdebug.h>
 #include <linux/mm_types.h>
 #include <linux/sched.h>
@@ -840,6 +841,12 @@ static inline pmd_t pmdp_establish(struct vm_area_struct *vma,
 #define MAX_SWAPFILES_CHECK() BUILD_BUG_ON(MAX_SWAPFILES_SHIFT > __SWP_TYPE_BITS)
 
 extern int kern_addr_valid(unsigned long addr);
+
+static inline bool arch_has_hw_pte_young(void)
+{
+	return system_has_hw_af();
+}
+#define arch_has_hw_pte_young arch_has_hw_pte_young
 
 #include <asm-generic/pgtable.h>
 
