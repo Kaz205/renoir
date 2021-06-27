@@ -58,6 +58,7 @@
 #define ARM64_HAS_AMU_EXTN			48
 
 /* kabi: reserve 49 - 62 for future cpu capabilities */
-#define ARM64_NCAPS				62
+#define ARM64_HW_AF				62
+#define ARM64_NCAPS				63
 
 #endif /* __ASM_CPUCAPS_H */
