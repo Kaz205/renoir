@@ -178,6 +178,7 @@ static const struct of_device_id qcom_smmu_client_of_match[] __maybe_unused = {
 static const struct of_device_id qcom_smmu_nonstrict_of_match[] __maybe_unused = {
 	{ .compatible = "qcom,sdhci-msm-v4" },
 	{ .compatible = "qcom,sdhci-msm-v5" },
+	{ .compatible = "snps,dwc3" },
 	{ }
 };
 
