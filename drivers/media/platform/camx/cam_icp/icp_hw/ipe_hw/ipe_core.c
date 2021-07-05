@@ -153,7 +153,7 @@ static int cam_ipe_handle_pc(struct cam_hw_info *ipe_dev)
 {
 	struct cam_hw_soc_info *soc_info = NULL;
 	struct cam_ipe_device_core_info *core_info = NULL;
-	struct cam_ipe_device_hw_info *hw_info = NULL;
+	const struct cam_ipe_device_hw_info *hw_info = NULL;
 	int pwr_ctrl;
 	int pwr_status;
 
@@ -194,7 +194,7 @@ static int cam_ipe_handle_resume(struct cam_hw_info *ipe_dev)
 {
 	struct cam_hw_soc_info *soc_info = NULL;
 	struct cam_ipe_device_core_info *core_info = NULL;
-	struct cam_ipe_device_hw_info *hw_info = NULL;
+	const struct cam_ipe_device_hw_info *hw_info = NULL;
 	int pwr_ctrl;
 	int pwr_status;
 	int rc = 0;
@@ -308,7 +308,7 @@ int cam_ipe_process_cmd(void *device_priv, uint32_t cmd_type,
 	struct cam_hw_info *ipe_dev = device_priv;
 	struct cam_hw_soc_info *soc_info = NULL;
 	struct cam_ipe_device_core_info *core_info = NULL;
-	struct cam_ipe_device_hw_info *hw_info = NULL;
+	const struct cam_ipe_device_hw_info *hw_info = NULL;
 	int rc = 0;
 
 	if (!device_priv) {

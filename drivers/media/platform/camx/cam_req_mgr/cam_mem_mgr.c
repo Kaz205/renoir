@@ -163,16 +163,8 @@ int cam_mem_get_io_buf(int32_t buf_handle, int32_t mmu_handle,
 		goto handle_mismatch;
 	}
 
-	rc = dma_buf_begin_cpu_access(tbl.bufq[idx].dma_buf, DMA_BIDIRECTIONAL);
-	if (rc)
-		CAM_ERR(CAM_MEM, "dma begin access failed rc=%d", rc);
-
-	rc = dma_buf_end_cpu_access(tbl.bufq[idx].dma_buf, DMA_BIDIRECTIONAL);
-	if (rc)
-		CAM_ERR(CAM_MEM, "dma end access failed rc=%d", rc);
-
 	CAM_DBG(CAM_MEM,
-		"handle:0x%x fd:%d iova_ptr:%pK len_ptr:%llu",
+		"handle:0x%x fd:%d iova_ptr:%pK len_ptr:%zu",
 		mmu_handle, tbl.bufq[idx].fd, iova_ptr, *len_ptr);
 handle_mismatch:
 	mutex_unlock(&tbl.m_lock);
@@ -1000,8 +992,7 @@ void cam_mem_mgr_close(void)
 	struct cam_mem_mgr_release_cmd cmd;
         int i = 1;
 
-        for_each_set_bit_from(i, tbl.bitmap,
-                              BITS_TO_LONGS(CAM_MEM_BUFQ_MAX) * sizeof(long)) {
+        for_each_set_bit_from(i, tbl.bitmap, tbl.bits) {
 		mutex_lock(&tbl.m_lock);
                 if (tbl.bufq[i].active) {
                         CAM_DBG(CAM_MEM, "Active buffer idx=%d", i);

@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  * Copyright (c) 2020 Linaro Limited
+ *
+ * Based on original driver:
+ * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  */
-
 #include <linux/bitfield.h>
 #include <linux/iio/adc/qcom-vadc-common.h>
 #include <linux/iio/consumer.h>
@@ -14,6 +15,16 @@
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/thermal.h>
+
+/*
+ * Thermal monitoring block consists of 8 (ADC_TM5_NUM_CHANNELS) channels. Each
+ * channel is programmed to use one of ADC channels for voltage comparison.
+ * Voltages are programmed using ADC codes, so we have to convert temp to
+ * voltage and then to ADC code value.
+ *
+ * Configuration of TM channels must match configuration of corresponding ADC
+ * channels.
+ */
 
 #define ADC5_MAX_CHANNEL                        0xc0
 #define ADC_TM5_NUM_CHANNELS		8
@@ -154,17 +165,17 @@ static irqreturn_t adc_tm5_isr(int irq, void *data)
 {
 	struct adc_tm5_chip *chip = data;
 	u8 status_low, status_high, ctl;
-	int ret = 0, i = 0;
+	int ret, i;
 
 	ret = adc_tm5_read(chip, ADC_TM5_STATUS_LOW, &status_low, sizeof(status_low));
 	if (unlikely(ret)) {
-		dev_err(chip->dev, "read status low failed with %d\n", ret);
+		dev_err(chip->dev, "read status low failed: %d\n", ret);
 		return IRQ_HANDLED;
 	}
 
 	ret = adc_tm5_read(chip, ADC_TM5_STATUS_HIGH, &status_high, sizeof(status_high));
 	if (unlikely(ret)) {
-		dev_err(chip->dev, "read status high failed with %d\n", ret);
+		dev_err(chip->dev, "read status high failed: %d\n", ret);
 		return IRQ_HANDLED;
 	}
 
@@ -172,14 +183,13 @@ static irqreturn_t adc_tm5_isr(int irq, void *data)
 		bool upper_set = false, lower_set = false;
 		unsigned int ch = chip->channels[i].channel;
 
-		if (!chip->channels[i].tzd) {
-			dev_err_once(chip->dev, "thermal device not found\n");
+		/* No TZD, we warned at the boot time */
+		if (!chip->channels[i].tzd)
 			continue;
-		}
 
 		ret = adc_tm5_read(chip, ADC_TM5_M_EN(ch), &ctl, sizeof(ctl));
 		if (unlikely(ret)) {
-			dev_err(chip->dev, "ctl read failed with %d\n", ret);
+			dev_err(chip->dev, "ctl read failed: %d, channel %d\n", ret, i);
 			continue;
 		}
 
@@ -212,6 +222,9 @@ static int adc_tm5_get_temp(void *data, int *temp)
 	if (ret < 0)
 		return ret;
 
+	if (ret != IIO_VAL_INT)
+		return -EINVAL;
+
 	return 0;
 }
 
@@ -229,46 +242,45 @@ static int adc_tm5_disable_channel(struct adc_tm5_channel *channel)
 
 static int adc_tm5_enable(struct adc_tm5_chip *chip)
 {
-	int ret = 0;
-	u8 data = 0;
+	int ret;
+	u8 data;
 
 	data = ADC_TM_EN;
 	ret = adc_tm5_write(chip, ADC_TM_EN_CTL1, &data, sizeof(data));
 	if (ret < 0) {
-		pr_err("adc-tm enable failed\n");
+		dev_err(chip->dev, "adc-tm enable failed\n");
 		return ret;
 	}
 
 	data = ADC_TM_CONV_REQ_EN;
 	ret = adc_tm5_write(chip, ADC_TM_CONV_REQ, &data, sizeof(data));
 	if (ret < 0) {
-		pr_err("adc-tm request conversion failed\n");
+		dev_err(chip->dev, "adc-tm request conversion failed\n");
 		return ret;
 	}
 
-	return ret;
+	return 0;
 }
 
-static int adc_tm5_configure(struct adc_tm5_channel *channel, int low_temp, int high_temp)
+static int adc_tm5_configure(struct adc_tm5_channel *channel, int low, int high)
 {
 	struct adc_tm5_chip *chip = channel->chip;
 	u8 buf[8];
 	u16 reg = ADC_TM5_M_ADC_CH_SEL_CTL(channel->channel);
-	int ret = 0;
+	int ret;
 
 	ret = adc_tm5_read(chip, reg, buf, sizeof(buf));
 	if (ret) {
-		dev_err(chip->dev, "block read failed with %d\n", ret);
+		dev_err(chip->dev, "channel %d params read failed: %d\n", channel->channel, ret);
 		return ret;
 	}
 
-	/* Update ADC channel select */
 	buf[0] = channel->adc_channel;
 
-	/* Warm temperature corresponds to low voltage threshold */
-	if (high_temp != INT_MAX) {
+	/* High temperature corresponds to low voltage threshold */
+	if (high != INT_MAX) {
 		u16 adc_code = qcom_adc_tm5_temp_volt_scale(channel->prescale,
-				chip->data->full_scale_code_volt, high_temp);
+				chip->data->full_scale_code_volt, high);
 
 		buf[1] = adc_code & 0xff;
 		buf[2] = adc_code >> 8;
@@ -277,10 +289,10 @@ static int adc_tm5_configure(struct adc_tm5_channel *channel, int low_temp, int 
 		buf[7] &= ~ADC_TM5_M_LOW_THR_INT_EN;
 	}
 
-	/* Cool temperature corresponds to high voltage threshold */
-	if (low_temp != -INT_MAX) {
+	/* Low temperature corresponds to high voltage threshold */
+	if (low != -INT_MAX) {
 		u16 adc_code = qcom_adc_tm5_temp_volt_scale(channel->prescale,
-				chip->data->full_scale_code_volt, low_temp);
+				chip->data->full_scale_code_volt, low);
 
 		buf[3] = adc_code & 0xff;
 		buf[4] = adc_code >> 8;
@@ -289,7 +301,6 @@ static int adc_tm5_configure(struct adc_tm5_channel *channel, int low_temp, int 
 		buf[7] &= ~ADC_TM5_M_HIGH_THR_INT_EN;
 	}
 
-	/* Update timer select */
 	buf[5] = ADC5_TIMER_SEL_2;
 
 	/* Set calibration select, hw_settle delay */
@@ -302,14 +313,14 @@ static int adc_tm5_configure(struct adc_tm5_channel *channel, int low_temp, int 
 
 	ret = adc_tm5_write(chip, reg, buf, sizeof(buf));
 	if (ret) {
-		dev_err(chip->dev, "buf write failed\n");
+		dev_err(chip->dev, "channel %d params write failed: %d\n", channel->channel, ret);
 		return ret;
 	}
 
 	return adc_tm5_enable(chip);
 }
 
-static int adc_tm5_set_trips(void *data, int low_temp, int high_temp)
+static int adc_tm5_set_trips(void *data, int low, int high)
 {
 	struct adc_tm5_channel *channel = data;
 	struct adc_tm5_chip *chip;
@@ -319,13 +330,13 @@ static int adc_tm5_set_trips(void *data, int low_temp, int high_temp)
 		return -EINVAL;
 
 	chip = channel->chip;
-	dev_dbg(chip->dev, "%d:low_temp(mdegC):%d, high_temp(mdegC):%d\n",
-		channel->channel, low_temp, high_temp);
+	dev_dbg(chip->dev, "%d:low(mdegC):%d, high(mdegC):%d\n",
+		channel->channel, low, high);
 
-	if (high_temp == INT_MAX && low_temp <= -INT_MAX)
+	if (high == INT_MAX && low <= -INT_MAX)
 		ret = adc_tm5_disable_channel(channel);
 	else
-		ret = adc_tm5_configure(channel, low_temp, high_temp);
+		ret = adc_tm5_configure(channel, low, high);
 
 	return ret;
 }
@@ -348,9 +359,9 @@ static int adc_tm5_register_tzd(struct adc_tm5_chip *adc_tm)
 							   &adc_tm->channels[i],
 							   &adc_tm5_ops);
 		if (IS_ERR(tzd)) {
-			dev_err(adc_tm->dev, "Error registering TZ zone:%ld for channel:%d\n",
-				PTR_ERR(tzd), adc_tm->channels[i].channel);
-			continue;
+			dev_err(adc_tm->dev, "Error registering TZ zone for channel %d: %ld\n",
+				adc_tm->channels[i].channel, PTR_ERR(tzd));
+			return PTR_ERR(tzd);
 		}
 		adc_tm->channels[i].tzd = tzd;
 	}
@@ -371,28 +382,23 @@ static int adc_tm5_init(struct adc_tm5_chip *chip)
 		return ret;
 	}
 
-	/* Select decimation */
-	buf[0] = chip->decimation;
-
-	/* Select number of samples in fast average mode */
-	buf[1] = chip->avg_samples | ADC_TM5_FAST_AVG_EN;
-
-	/* Select timer1 */
-	buf[2] = ADC_TM5_TIMER1;
-
-	/* Select timer2 and timer3 */
-	buf[3] = FIELD_PREP(ADC_TM5_MEAS_INTERVAL_CTL2_MASK, ADC_TM5_TIMER2) |
-		 FIELD_PREP(ADC_TM5_MEAS_INTERVAL_CTL3_MASK, ADC_TM5_TIMER3);
-
-	ret = adc_tm5_write(chip, ADC_TM5_ADC_DIG_PARAM, buf, sizeof(buf));
-	if (ret)
-		dev_err(chip->dev, "block write failed with %d\n", ret);
-
 	for (i = 0; i < chip->nchannels; i++) {
 		if (chip->channels[i].channel >= channels_available) {
 			dev_err(chip->dev, "Invalid channel %d\n", chip->channels[i].channel);
 			return -EINVAL;
 		}
+	}
+
+	buf[0] = chip->decimation;
+	buf[1] = chip->avg_samples | ADC_TM5_FAST_AVG_EN;
+	buf[2] = ADC_TM5_TIMER1;
+	buf[3] = FIELD_PREP(ADC_TM5_MEAS_INTERVAL_CTL2_MASK, ADC_TM5_TIMER2) |
+		 FIELD_PREP(ADC_TM5_MEAS_INTERVAL_CTL3_MASK, ADC_TM5_TIMER3);
+
+	ret = adc_tm5_write(chip, ADC_TM5_ADC_DIG_PARAM, buf, sizeof(buf));
+	if (ret) {
+		dev_err(chip->dev, "block write failed: %d\n", ret);
+		return ret;
 	}
 
 	return ret;
@@ -410,16 +416,15 @@ static int adc_tm5_get_dt_channel_data(struct adc_tm5_chip *adc_tm,
 
 	ret = of_property_read_u32(node, "reg", &chan);
 	if (ret) {
-		dev_err(dev, "%s: invalid channel number (%d)\n", name, ret);
+		dev_err(dev, "%s: invalid channel number %d\n", name, ret);
 		return ret;
 	}
 
 	if (chan >= ADC_TM5_NUM_CHANNELS) {
-		dev_err(dev, "%s: invalid channel number %d\n", name, chan);
+		dev_err(dev, "%s: channel number too big: %d\n", name, chan);
 		return -EINVAL;
 	}
 
-	/* the channel has DT description */
 	channel->channel = chan;
 
 	/*
@@ -429,21 +434,20 @@ static int adc_tm5_get_dt_channel_data(struct adc_tm5_chip *adc_tm,
 	 */
 	ret = of_parse_phandle_with_fixed_args(node, "io-channels", 1, 0, &args);
 	if (ret < 0) {
-		dev_err(dev, "%s: invalid ADC channel number %d: %d\n", name, chan, ret);
+		dev_err(dev, "%s: error parsing ADC channel number %d: %d\n", name, chan, ret);
 		return ret;
 	}
 	of_node_put(args.np);
 
 	if (args.args_count != 1 || args.args[0] >= ADC5_MAX_CHANNEL) {
 		dev_err(dev, "%s: invalid ADC channel number %d\n", name, chan);
-		return ret;
+		return -EINVAL;
 	}
 	channel->adc_channel = args.args[0];
 
 	channel->iio = devm_of_iio_channel_get_by_name(adc_tm->dev, node, NULL);
 	if (IS_ERR(channel->iio)) {
 		ret = PTR_ERR(channel->iio);
-		channel->iio = NULL;
 		if (ret != -EPROBE_DEFER)
 			dev_err(dev, "%s: error getting channel: %d\n", name, ret);
 		return ret;

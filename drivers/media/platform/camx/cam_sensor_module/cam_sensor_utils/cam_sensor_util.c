@@ -71,12 +71,12 @@ int32_t delete_request(struct i2c_settings_array *i2c_array)
 	return rc;
 }
 
-int32_t cam_sensor_handle_delay(
-	uint32_t **cmd_buf,
-	uint16_t generic_op_code,
-	struct i2c_settings_array *i2c_reg_settings,
-	uint32_t offset, uint32_t *byte_cnt,
-	struct list_head *list_ptr)
+static int32_t
+cam_sensor_handle_delay(uint32_t **cmd_buf,
+			uint16_t generic_op_code,
+			struct i2c_settings_array *i2c_reg_settings,
+			uint32_t offset, uint32_t *byte_cnt,
+			struct list_head *list_ptr)
 {
 	int32_t rc = 0;
 	struct cam_cmd_unconditional_wait *cmd_uncond_wait =
@@ -111,11 +111,11 @@ int32_t cam_sensor_handle_delay(
 	return rc;
 }
 
-int32_t cam_sensor_handle_poll(
-	uint32_t **cmd_buf,
-	struct i2c_settings_array *i2c_reg_settings,
-	uint32_t *byte_cnt, int32_t *offset,
-	struct list_head **list_ptr)
+static int32_t
+cam_sensor_handle_poll(uint32_t **cmd_buf,
+		       struct i2c_settings_array *i2c_reg_settings,
+		       uint32_t *byte_cnt, int32_t *offset,
+		       struct list_head **list_ptr)
 {
 	struct i2c_settings_list  *i2c_list;
 	int32_t rc = 0;
@@ -151,11 +151,12 @@ int32_t cam_sensor_handle_poll(
 	return rc;
 }
 
-int32_t cam_sensor_handle_random_write(
-	struct cam_cmd_i2c_random_wr *cam_cmd_i2c_random_wr,
-	struct i2c_settings_array *i2c_reg_settings,
-	uint16_t *cmd_length_in_bytes, int32_t *offset,
-	struct list_head **list)
+static int32_t
+cam_sensor_handle_random_write(
+			struct cam_cmd_i2c_random_wr *cam_cmd_i2c_random_wr,
+			struct i2c_settings_array *i2c_reg_settings,
+			uint16_t *cmd_length_in_bytes, int32_t *offset,
+			struct list_head **list)
 {
 	struct i2c_settings_list  *i2c_list;
 	int32_t rc = 0, cnt;
@@ -1458,8 +1459,10 @@ int cam_sensor_bob_pwm_mode_switch(struct cam_hw_soc_info *soc_info,
 	return rc;
 }
 
-int msm_cam_sensor_handle_reg_gpio(int seq_type,
-	struct msm_camera_gpio_num_info *gpio_num_info, int val)
+static int
+msm_cam_sensor_handle_reg_gpio(int seq_type,
+			       struct msm_camera_gpio_num_info *gpio_num_info,
+			       int val)
 {
 	int gpio_offset = -1;
 
@@ -1657,6 +1660,11 @@ int cam_sensor_core_power_up(struct cam_sensor_power_ctrl_t *ctrl,
 			if (power_setting->config_val)
 				soc_info->clk_rate[0][power_setting->seq_val] =
 					power_setting->config_val;
+			rc = cam_soc_util_power_domain_enable_default(soc_info);
+			if (rc) {
+				CAM_ERR(CAM_SENSOR, "CCI Power domains enable failed");
+				goto power_up_failed;
+			}
 
 			for (j = 0; j < soc_info->num_clk; j++) {
 				rc = cam_soc_util_clk_enable(soc_info->clk[j],
@@ -1793,6 +1801,7 @@ power_up_failed:
 				cam_soc_util_clk_disable(soc_info->clk[i],
 					soc_info->clk_name[i]);
 			}
+			cam_soc_util_power_domain_disable_default(soc_info);
 			ret = cam_config_mclk_reg(ctrl, soc_info, index);
 			if (ret < 0) {
 				CAM_ERR(CAM_SENSOR,
@@ -1960,6 +1969,7 @@ int cam_sensor_util_power_down(struct cam_sensor_power_ctrl_t *ctrl,
 					soc_info->clk_name[i]);
 			}
 
+			cam_soc_util_power_domain_disable_default(soc_info);
 			ret = cam_config_mclk_reg(ctrl, soc_info, index);
 			if (ret < 0) {
 				CAM_ERR(CAM_SENSOR,

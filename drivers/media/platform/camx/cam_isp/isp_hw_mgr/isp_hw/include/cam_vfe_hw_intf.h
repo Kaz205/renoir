@@ -122,7 +122,7 @@ struct cam_vfe_hw_vfe_out_acquire_args {
 	enum cam_isp_hw_split_id           split_id;
 	uint32_t                           is_master;
 	uint32_t                           dual_slave_core;
-	struct cam_cdm_utils_ops          *cdm_ops;
+	const struct cam_cdm_utils_ops     *cdm_ops;
 	void                              *ctx;
 };
 
@@ -141,7 +141,7 @@ struct cam_vfe_hw_vfe_out_acquire_args {
 struct cam_vfe_hw_vfe_in_acquire_args {
 	struct cam_isp_resource_node         *rsrc_node;
 	uint32_t                              res_id;
-	void                                 *cdm_ops;
+	const struct cam_cdm_utils_ops       *cdm_ops;
 	enum cam_isp_hw_sync_mode             sync_mode;
 	struct cam_isp_in_port_info          *in_port;
 };

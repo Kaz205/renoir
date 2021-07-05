@@ -26,13 +26,12 @@
 #include "cam_cpas_api.h"
 #include "cam_debug_util.h"
 
-struct cam_bps_device_hw_info cam_bps_hw_info = {
+static const struct cam_bps_device_hw_info cam_bps_hw_info = {
 	.hw_idx = 0,
 	.pwr_ctrl = 0x5c,
 	.pwr_status = 0x58,
 	.reserved = 0,
 };
-EXPORT_SYMBOL(cam_bps_hw_info);
 
 static char bps_dev_name[8];
 
@@ -70,9 +69,9 @@ static bool cam_bps_cpas_cb(uint32_t client_handle, void *userdata,
 	return error_handled;
 }
 
-int cam_bps_register_cpas(struct cam_hw_soc_info *soc_info,
-			struct cam_bps_device_core_info *core_info,
-			uint32_t hw_idx)
+static int cam_bps_register_cpas(struct cam_hw_soc_info *soc_info,
+				 struct cam_bps_device_core_info *core_info,
+				 uint32_t hw_idx)
 {
 	struct cam_cpas_register_params cpas_register_params;
 	int rc;
@@ -93,13 +92,13 @@ int cam_bps_register_cpas(struct cam_hw_soc_info *soc_info,
 	return rc;
 }
 
-int cam_bps_probe(struct platform_device *pdev)
+static int cam_bps_probe(struct platform_device *pdev)
 {
 	struct cam_hw_info            *bps_dev = NULL;
 	struct cam_hw_intf            *bps_dev_intf = NULL;
 	const struct of_device_id         *match_dev = NULL;
 	struct cam_bps_device_core_info   *core_info = NULL;
-	struct cam_bps_device_hw_info     *hw_info = NULL;
+	const struct cam_bps_device_hw_info     *hw_info = NULL;
 	int                                rc = 0;
 	struct device_node *cpas_intf;
 	struct platform_device *cpas_pdev;

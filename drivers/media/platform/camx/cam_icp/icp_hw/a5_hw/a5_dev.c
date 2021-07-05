@@ -26,10 +26,9 @@
 #include "cam_cpas_api.h"
 #include "cam_debug_util.h"
 
-struct a5_soc_info cam_a5_soc_info;
-EXPORT_SYMBOL(cam_a5_soc_info);
+static struct a5_soc_info cam_a5_soc_info;
 
-struct cam_a5_device_hw_info cam_a5_hw_info = {
+static const struct cam_a5_device_hw_info cam_a5_hw_info = {
 	.hw_ver = 0x0,
 	.nsec_reset = 0x4,
 	.a5_control = 0x8,
@@ -49,7 +48,6 @@ struct cam_a5_device_hw_info cam_a5_hw_info = {
 	.uncached_heap_size = 0x60,
 	.a5_status = 0x200,
 };
-EXPORT_SYMBOL(cam_a5_hw_info);
 
 static bool cam_a5_cpas_cb(uint32_t client_handle, void *userdata,
 	struct cam_cpas_irq_data *irq_data)
@@ -85,9 +83,9 @@ static bool cam_a5_cpas_cb(uint32_t client_handle, void *userdata,
 	return error_handled;
 }
 
-int cam_a5_register_cpas(struct cam_hw_soc_info *soc_info,
-			struct cam_a5_device_core_info *core_info,
-			uint32_t hw_idx)
+static int cam_a5_register_cpas(struct cam_hw_soc_info *soc_info,
+				struct cam_a5_device_core_info *core_info,
+				uint32_t hw_idx)
 {
 	struct cam_cpas_register_params cpas_register_params;
 	int rc;
@@ -108,7 +106,7 @@ int cam_a5_register_cpas(struct cam_hw_soc_info *soc_info,
 	return rc;
 }
 
-int cam_a5_probe(struct platform_device *pdev)
+static int cam_a5_probe(struct platform_device *pdev)
 {
 	int rc = 0;
 	struct cam_hw_info *a5_dev = NULL;

@@ -192,7 +192,7 @@ static const int imx208_test_pattern_val[] = {
 };
 
 /* Configurations for supported link frequencies */
-#define IMX208_MHZ			(1000*1000ULL)
+#define IMX208_MHZ			(1000 * 1000ULL)
 #define IMX208_LINK_FREQ_384MHZ		(384ULL * IMX208_MHZ)
 #define IMX208_LINK_FREQ_96MHZ		(96ULL * IMX208_MHZ)
 
@@ -370,7 +370,7 @@ static int imx208_write_reg(struct imx208 *imx208, u16 reg, u32 len, u32 val)
 
 /* Write a list of registers */
 static int imx208_write_regs(struct imx208 *imx208,
-			      const struct imx208_reg *regs, u32 len)
+			     const struct imx208_reg *regs, u32 len)
 {
 	struct i2c_client *client = v4l2_get_subdevdata(&imx208->sd);
 	unsigned int i;
@@ -380,10 +380,9 @@ static int imx208_write_regs(struct imx208 *imx208,
 		ret = imx208_write_reg(imx208, regs[i].address, 1,
 				       regs[i].val);
 		if (ret) {
-			dev_err_ratelimited(
-				&client->dev,
-				"Failed to write reg 0x%4.4x. error = %d\n",
-				regs[i].address, ret);
+			dev_err_ratelimited(&client->dev,
+					    "Failed to write reg 0x%4.4x. error = %d\n",
+					    regs[i].address, ret);
 
 			return ret;
 		}
@@ -501,8 +500,8 @@ static const struct v4l2_ctrl_config imx208_digital_gain_control = {
 };
 
 static int imx208_enum_mbus_code(struct v4l2_subdev *sd,
-				  struct v4l2_subdev_pad_config *cfg,
-				  struct v4l2_subdev_mbus_code_enum *code)
+				 struct v4l2_subdev_pad_config *cfg,
+				 struct v4l2_subdev_mbus_code_enum *code)
 {
 	struct imx208 *imx208 = to_imx208(sd);
 
@@ -515,8 +514,8 @@ static int imx208_enum_mbus_code(struct v4l2_subdev *sd,
 }
 
 static int imx208_enum_frame_size(struct v4l2_subdev *sd,
-				   struct v4l2_subdev_pad_config *cfg,
-				   struct v4l2_subdev_frame_size_enum *fse)
+				  struct v4l2_subdev_pad_config *cfg,
+				  struct v4l2_subdev_frame_size_enum *fse)
 {
 	struct imx208 *imx208 = to_imx208(sd);
 
@@ -535,8 +534,8 @@ static int imx208_enum_frame_size(struct v4l2_subdev *sd,
 }
 
 static void imx208_mode_to_pad_format(struct imx208 *imx208,
-					const struct imx208_mode *mode,
-					struct v4l2_subdev_format *fmt)
+				      const struct imx208_mode *mode,
+				      struct v4l2_subdev_format *fmt)
 {
 	fmt->format.width = mode->width;
 	fmt->format.height = mode->height;
@@ -545,8 +544,8 @@ static void imx208_mode_to_pad_format(struct imx208 *imx208,
 }
 
 static int __imx208_get_pad_format(struct imx208 *imx208,
-				     struct v4l2_subdev_pad_config *cfg,
-				     struct v4l2_subdev_format *fmt)
+				   struct v4l2_subdev_pad_config *cfg,
+				   struct v4l2_subdev_format *fmt)
 {
 	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY)
 		fmt->format = *v4l2_subdev_get_try_format(&imx208->sd, cfg,
@@ -558,8 +557,8 @@ static int __imx208_get_pad_format(struct imx208 *imx208,
 }
 
 static int imx208_get_pad_format(struct v4l2_subdev *sd,
-				  struct v4l2_subdev_pad_config *cfg,
-				  struct v4l2_subdev_format *fmt)
+				 struct v4l2_subdev_pad_config *cfg,
+				 struct v4l2_subdev_format *fmt)
 {
 	struct imx208 *imx208 = to_imx208(sd);
 	int ret;
@@ -572,8 +571,8 @@ static int imx208_get_pad_format(struct v4l2_subdev *sd,
 }
 
 static int imx208_set_pad_format(struct v4l2_subdev *sd,
-		       struct v4l2_subdev_pad_config *cfg,
-		       struct v4l2_subdev_format *fmt)
+				 struct v4l2_subdev_pad_config *cfg,
+				 struct v4l2_subdev_format *fmt)
 {
 	struct imx208 *imx208 = to_imx208(sd);
 	const struct imx208_mode *mode;
@@ -586,9 +585,9 @@ static int imx208_set_pad_format(struct v4l2_subdev *sd,
 	mutex_lock(&imx208->imx208_mx);
 
 	fmt->format.code = imx208_get_format_code(imx208);
-	mode = v4l2_find_nearest_size(
-		supported_modes, ARRAY_SIZE(supported_modes), width, height,
-		fmt->format.width, fmt->format.height);
+	mode = v4l2_find_nearest_size(supported_modes,
+				      ARRAY_SIZE(supported_modes), width, height,
+				      fmt->format.width, fmt->format.height);
 	imx208_mode_to_pad_format(imx208, mode, fmt);
 	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
 		*v4l2_subdev_get_try_format(sd, cfg, fmt->pad) = fmt->format;
@@ -603,10 +602,9 @@ static int imx208_set_pad_format(struct v4l2_subdev *sd,
 			     imx208->cur_mode->height;
 		vblank_min = imx208->cur_mode->vts_min -
 			     imx208->cur_mode->height;
-		__v4l2_ctrl_modify_range(
-			imx208->vblank, vblank_min,
-			IMX208_VTS_MAX - imx208->cur_mode->height, 1,
-			vblank_def);
+		__v4l2_ctrl_modify_range(imx208->vblank, vblank_min,
+					 IMX208_VTS_MAX - imx208->cur_mode->height,
+					 1, vblank_def);
 		__v4l2_ctrl_s_ctrl(imx208->vblank, vblank_def);
 		h_blank =
 			link_freq_configs[mode->link_freq_index].pixels_per_line
@@ -856,6 +854,7 @@ static ssize_t otp_read(struct file *filp, struct kobject *kobj,
 	memcpy(buf, &imx208->otp_data[off], count);
 	return count;
 }
+
 static const BIN_ATTR_RO(otp, IMX208_OTP_SIZE);
 
 /* Initialize control handlers */
@@ -876,46 +875,46 @@ static int imx208_init_controls(struct imx208 *imx208)
 
 	mutex_init(&imx208->imx208_mx);
 	ctrl_hdlr->lock = &imx208->imx208_mx;
-	imx208->link_freq = v4l2_ctrl_new_int_menu(ctrl_hdlr,
-				&imx208_ctrl_ops,
-				V4L2_CID_LINK_FREQ,
-				ARRAY_SIZE(link_freq_menu_items) - 1,
-				0, link_freq_menu_items);
+	imx208->link_freq =
+		v4l2_ctrl_new_int_menu(ctrl_hdlr,
+				       &imx208_ctrl_ops,
+				       V4L2_CID_LINK_FREQ,
+				       ARRAY_SIZE(link_freq_menu_items) - 1,
+				       0, link_freq_menu_items);
 
 	if (imx208->link_freq)
 		imx208->link_freq->flags |= V4L2_CTRL_FLAG_READ_ONLY;
 
 	pixel_rate_max = link_freq_to_pixel_rate(link_freq_menu_items[0]);
-	pixel_rate_min = link_freq_to_pixel_rate(
-			 link_freq_menu_items[ARRAY_SIZE(
-			 link_freq_menu_items) - 1]);
+	pixel_rate_min =
+		link_freq_to_pixel_rate(link_freq_menu_items[ARRAY_SIZE(link_freq_menu_items) - 1]);
 	/* By default, PIXEL_RATE is read only */
 	imx208->pixel_rate = v4l2_ctrl_new_std(ctrl_hdlr, &imx208_ctrl_ops,
-					V4L2_CID_PIXEL_RATE,
-					pixel_rate_min, pixel_rate_max,
-					1, pixel_rate_max);
+					       V4L2_CID_PIXEL_RATE,
+					       pixel_rate_min, pixel_rate_max,
+					       1, pixel_rate_max);
 
 	vblank_def = imx208->cur_mode->vts_def - imx208->cur_mode->height;
 	vblank_min = imx208->cur_mode->vts_min - imx208->cur_mode->height;
-	imx208->vblank = v4l2_ctrl_new_std(
-				ctrl_hdlr, &imx208_ctrl_ops, V4L2_CID_VBLANK,
-				vblank_min,
-				IMX208_VTS_MAX - imx208->cur_mode->height, 1,
-				vblank_def);
+	imx208->vblank =
+		v4l2_ctrl_new_std(ctrl_hdlr, &imx208_ctrl_ops, V4L2_CID_VBLANK,
+				  vblank_min,
+				  IMX208_VTS_MAX - imx208->cur_mode->height, 1,
+				  vblank_def);
 
-	imx208->hblank = v4l2_ctrl_new_std(
-				ctrl_hdlr, &imx208_ctrl_ops, V4L2_CID_HBLANK,
-				IMX208_PPL_384MHZ - imx208->cur_mode->width,
-				IMX208_PPL_384MHZ - imx208->cur_mode->width,
-				1,
-				IMX208_PPL_384MHZ - imx208->cur_mode->width);
+	imx208->hblank =
+		v4l2_ctrl_new_std(ctrl_hdlr, &imx208_ctrl_ops, V4L2_CID_HBLANK,
+				  IMX208_PPL_384MHZ - imx208->cur_mode->width,
+				  IMX208_PPL_384MHZ - imx208->cur_mode->width,
+				  1,
+				  IMX208_PPL_384MHZ - imx208->cur_mode->width);
 
 	if (imx208->hblank)
 		imx208->hblank->flags |= V4L2_CTRL_FLAG_READ_ONLY;
 
 	exposure_max = imx208->cur_mode->vts_def - 8;
 	v4l2_ctrl_new_std(ctrl_hdlr, &imx208_ctrl_ops, V4L2_CID_EXPOSURE,
-			  IMX208_EXPOSURE_MIN, IMX208_EXPOSURE_MAX,
+			  IMX208_EXPOSURE_MIN, exposure_max,
 			  IMX208_EXPOSURE_STEP, IMX208_EXPOSURE_DEFAULT);
 
 	imx208->hflip = v4l2_ctrl_new_std(ctrl_hdlr, &imx208_ctrl_ops,

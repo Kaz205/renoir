@@ -144,7 +144,7 @@ static int32_t cam_icp_program_fw(const uint8_t *elf,
 	uint32_t num_prg_hdrs;
 	unsigned char *icp_prg_hdr_tbl;
 	int32_t i = 0;
-	u8 *dest;
+	u8 __iomem *dest;
 	u8 *src;
 	struct elf32_hdr *elf_hdr;
 	struct elf32_phdr *prg_hdr;
@@ -167,8 +167,9 @@ static int32_t cam_icp_program_fw(const uint8_t *elf,
 			prg_hdr->p_filesz);
 		if (prg_hdr->p_filesz != 0) {
 			src = (u8 *)((u8 *)elf + prg_hdr->p_offset);
-			dest = (u8 *)(((u8 *)core_info->fw_kva_addr) +
-				prg_hdr->p_vaddr);
+			dest = (u8 __iomem *)
+				(((u8 __iomem *)core_info->fw_kva_addr) +
+				 prg_hdr->p_vaddr);
 
 			memcpy_toio(dest, src, prg_hdr->p_filesz);
 		}
@@ -185,9 +186,7 @@ static int32_t cam_a5_download_fw(void *device_priv)
 	struct cam_hw_info *a5_dev = device_priv;
 	struct cam_hw_soc_info *soc_info = NULL;
 	struct cam_a5_device_core_info *core_info = NULL;
-	struct cam_a5_device_hw_info *hw_info = NULL;
 	struct platform_device         *pdev = NULL;
-	struct a5_soc_info *cam_a5_soc_info = NULL;
 
 	if (!device_priv) {
 		CAM_ERR(CAM_ICP, "Invalid cam_dev_info");
@@ -196,9 +195,7 @@ static int32_t cam_a5_download_fw(void *device_priv)
 
 	soc_info = &a5_dev->soc_info;
 	core_info = (struct cam_a5_device_core_info *)a5_dev->core_info;
-	hw_info = core_info->a5_hw_info;
 	pdev = soc_info->pdev;
-	cam_a5_soc_info = soc_info->soc_private;
 
 	rc = request_firmware(&core_info->fw_elf,
 			      "qcom/sc7180-trogdor/camera/CAMERA_ICP.elf",
@@ -371,7 +368,6 @@ irqreturn_t cam_a5_irq(int irq_num, void *data)
 	struct cam_hw_info *a5_dev = data;
 	struct cam_hw_soc_info *soc_info = NULL;
 	struct cam_a5_device_core_info *core_info = NULL;
-	struct cam_a5_device_hw_info *hw_info = NULL;
 	uint32_t irq_status = 0;
 
 	if (!data) {
@@ -381,7 +377,6 @@ irqreturn_t cam_a5_irq(int irq_num, void *data)
 
 	soc_info = &a5_dev->soc_info;
 	core_info = (struct cam_a5_device_core_info *)a5_dev->core_info;
-	hw_info = core_info->a5_hw_info;
 
 	irq_status = cam_io_r_mb(soc_info->reg_map[A5_SIERRA_BASE].mem_base +
 				core_info->a5_hw_info->a5_host_int_status);
@@ -410,7 +405,6 @@ int cam_a5_process_cmd(void *device_priv, uint32_t cmd_type,
 	struct cam_hw_info *a5_dev = device_priv;
 	struct cam_hw_soc_info *soc_info = NULL;
 	struct cam_a5_device_core_info *core_info = NULL;
-	struct cam_a5_device_hw_info *hw_info = NULL;
 	struct a5_soc_info *a5_soc = NULL;
 	unsigned long flags;
 	int rc = 0;
@@ -427,7 +421,6 @@ int cam_a5_process_cmd(void *device_priv, uint32_t cmd_type,
 
 	soc_info = &a5_dev->soc_info;
 	core_info = (struct cam_a5_device_core_info *)a5_dev->core_info;
-	hw_info = core_info->a5_hw_info;
 
 	switch (cmd_type) {
 	case CAM_ICP_A5_CMD_FW_DOWNLOAD:
@@ -445,7 +438,7 @@ int cam_a5_process_cmd(void *device_priv, uint32_t cmd_type,
 		core_info->fw_kva_addr = fw_buf_info->kva;
 		core_info->fw_buf_len = fw_buf_info->len;
 
-		CAM_DBG(CAM_ICP, "fw buf info = %x %llx %lld",
+		CAM_DBG(CAM_ICP, "fw buf info = %x %lx %lld",
 			core_info->fw_buf, core_info->fw_kva_addr,
 			core_info->fw_buf_len);
 		break;

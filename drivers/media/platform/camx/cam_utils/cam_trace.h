@@ -309,7 +309,7 @@ TRACE_EVENT(cam_isp_irq_delay_detect,
 		__entry->ts = timestamp;
 	),
 	TP_printk(
-		"ISP: %s ctx=%u dev_id=%u req_id=%lld substate=%u event=%u delay_by=%llu",
+		"ISP: %s ctx=%u dev_id=%llu req_id=%lld substate=%u delay_by=%llu",
 			__get_str(text), __entry->ctx_id, __entry->dev_id,
 			__entry->req_id, __entry->substate, __entry->ts
 	)

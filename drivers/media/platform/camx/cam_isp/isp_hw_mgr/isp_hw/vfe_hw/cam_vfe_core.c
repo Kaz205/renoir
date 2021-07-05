@@ -120,8 +120,8 @@ int cam_vfe_get_hw_caps(void *hw_priv, void *get_hw_cap_args, uint32_t arg_size)
 	return rc;
 }
 
-int cam_vfe_reset_irq_top_half(uint32_t    evt_id,
-	struct cam_irq_th_payload         *th_payload)
+static int cam_vfe_reset_irq_top_half(uint32_t evt_id,
+				      struct cam_irq_th_payload *th_payload)
 {
 	int32_t                            rc = -EINVAL;
 	struct cam_vfe_irq_handler_priv   *handler_priv;
@@ -435,9 +435,9 @@ int cam_vfe_reset(void *hw_priv, void *reset_core_args, uint32_t arg_size)
 
 void cam_isp_hw_get_timestamp(struct cam_isp_timestamp *time_stamp)
 {
-	struct timespec ts;
+	struct timespec64 ts;
 
-	getboottime(&ts);
+	ts = ktime_to_timespec64(ktime_get_boottime());
 	time_stamp->mono_time.tv_sec    = ts.tv_sec;
 	time_stamp->mono_time.tv_usec   = ts.tv_nsec/1000;
 	time_stamp->time_usecs =  ts.tv_sec * 1000000 +
@@ -451,7 +451,6 @@ static int cam_vfe_irq_top_half(uint32_t    evt_id,
 	int                                  i;
 	struct cam_vfe_irq_handler_priv     *handler_priv;
 	struct cam_vfe_top_irq_evt_payload  *evt_payload;
-	struct cam_vfe_hw_core_info         *core_info;
 
 	handler_priv = th_payload->handler_priv;
 
@@ -468,7 +467,6 @@ static int cam_vfe_irq_top_half(uint32_t    evt_id,
 		return rc;
 	}
 
-	core_info =  handler_priv->core_info;
 	cam_isp_hw_get_timestamp(&evt_payload->ts);
 
 	evt_payload->core_index = handler_priv->core_index;
@@ -751,9 +749,7 @@ int cam_vfe_process_cmd(void *hw_priv, uint32_t cmd_type,
 	void *cmd_args, uint32_t arg_size)
 {
 	struct cam_hw_info                *vfe_hw = hw_priv;
-	struct cam_hw_soc_info            *soc_info = NULL;
-	struct cam_vfe_hw_core_info       *core_info = NULL;
-	struct cam_vfe_hw_info            *hw_info = NULL;
+	struct cam_vfe_hw_core_info       *core_info;
 	int rc = 0;
 
 	if (!hw_priv) {
@@ -761,9 +757,7 @@ int cam_vfe_process_cmd(void *hw_priv, uint32_t cmd_type,
 		return -EINVAL;
 	}
 
-	soc_info = &vfe_hw->soc_info;
 	core_info = (struct cam_vfe_hw_core_info *)vfe_hw->core_info;
-	hw_info = core_info->vfe_hw_info;
 
 	switch (cmd_type) {
 	case CAM_ISP_HW_CMD_GET_CHANGE_BASE:

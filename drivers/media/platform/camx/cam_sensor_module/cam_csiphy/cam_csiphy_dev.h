@@ -203,15 +203,17 @@ struct data_rate_settings_t {
  */
 struct csiphy_ctrl_t {
 	struct csiphy_reg_parms_t csiphy_reg;
-	struct csiphy_reg_t *csiphy_common_reg;
-	struct csiphy_reg_t *csiphy_irq_reg;
-	struct csiphy_reg_t *csiphy_reset_reg;
-	struct csiphy_reg_t (*csiphy_2ph_reg)[MAX_SETTINGS_PER_LANE];
-	struct csiphy_reg_t (*csiphy_2ph_combo_mode_reg)[MAX_SETTINGS_PER_LANE];
-	struct csiphy_reg_t (*csiphy_3ph_reg)[MAX_SETTINGS_PER_LANE];
-	struct csiphy_reg_t (*csiphy_2ph_3ph_mode_reg)[MAX_SETTINGS_PER_LANE];
-	enum   cam_vote_level (*getclockvoting)(struct csiphy_device *phy_dev);
-	struct data_rate_settings_t *data_rates_settings_table;
+	const struct csiphy_reg_t *csiphy_common_reg;
+	const struct csiphy_reg_t *csiphy_irq_reg;
+	const struct csiphy_reg_t *csiphy_reset_reg;
+	const struct csiphy_reg_t (*csiphy_2ph_reg)[MAX_SETTINGS_PER_LANE];
+	const struct csiphy_reg_t
+			(*csiphy_2ph_combo_mode_reg)[MAX_SETTINGS_PER_LANE];
+	const struct csiphy_reg_t (*csiphy_3ph_reg)[MAX_SETTINGS_PER_LANE];
+	const struct csiphy_reg_t
+			(*csiphy_2ph_3ph_mode_reg)[MAX_SETTINGS_PER_LANE];
+	enum cam_vote_level (*getclockvoting)(struct csiphy_device *phy_dev);
+	const struct data_rate_settings_t *data_rates_settings_table;
 };
 
 /**

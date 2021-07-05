@@ -78,7 +78,7 @@ static int cam_vfe_camif_get_reg_update(
 	uint32_t                          size = 0;
 	uint32_t                          reg_val_pair[2];
 	struct cam_isp_hw_get_cmd_update *cdm_args = cmd_args;
-	struct cam_cdm_utils_ops         *cdm_util_ops = NULL;
+	const struct cam_cdm_utils_ops   *cdm_util_ops;
 	struct cam_vfe_mux_camif_data    *rsrc_data = NULL;
 
 	if (arg_size != sizeof(struct cam_isp_hw_get_cmd_update)) {
@@ -91,7 +91,7 @@ static int cam_vfe_camif_get_reg_update(
 		return -EINVAL;
 	}
 
-	cdm_util_ops = (struct cam_cdm_utils_ops *)cdm_args->res->cdm_ops;
+	cdm_util_ops = cdm_args->res->cdm_ops;
 
 	if (!cdm_util_ops) {
 		CAM_ERR(CAM_ISP, "Invalid CDM ops");
@@ -342,14 +342,15 @@ static int cam_vfe_camif_reg_dump(
 	for (wm_idx = 0; wm_idx <= 23; wm_idx++) {
 		offset = 0x2214 + 0x100 * wm_idx;
 		CAM_INFO(CAM_ISP,
-			"BUS_WM%u offset 0x%x val 0x%x offset 0x%x val 0x%x",
-			wm_idx, offset,
-			cam_io_r_mb(camif_priv->mem_base + offset),
-			offset + 4, cam_io_r_mb(camif_priv->mem_base +
-			offset + 4), offset + 8,
-			cam_io_r_mb(camif_priv->mem_base + offset + 8),
-			offset + 12, cam_io_r_mb(camif_priv->mem_base +
-			offset + 12));
+			 "BUS_WM%u offset 0x%x val 0x%x offset 0x%x val 0x%x offset 0x%x val 0x%x offset 0x%x val 0x%x",
+			 wm_idx, offset,
+			 cam_io_r_mb(camif_priv->mem_base + offset),
+			 offset + 4,
+			 cam_io_r_mb(camif_priv->mem_base + offset + 4),
+			 offset + 8,
+			 cam_io_r_mb(camif_priv->mem_base + offset + 8),
+			 offset + 12,
+			 cam_io_r_mb(camif_priv->mem_base + offset + 12));
 	}
 
 	offset = 0x420;
@@ -434,7 +435,6 @@ static int cam_vfe_camif_irq_reg_dump(
 	struct cam_isp_resource_node *camif_res)
 {
 	struct cam_vfe_mux_camif_data *camif_priv;
-	struct cam_vfe_soc_private *soc_private;
 	int rc = 0;
 
 	if (!camif_res) {
@@ -449,7 +449,6 @@ static int cam_vfe_camif_irq_reg_dump(
 	}
 
 	camif_priv = (struct cam_vfe_mux_camif_data *)camif_res->res_priv;
-	soc_private = camif_priv->soc_info->soc_private;
 
 	CAM_INFO(CAM_ISP,
 		"Core Id =%d Mask reg: offset 0x%x val 0x%x offset 0x%x val 0x%x",
@@ -468,7 +467,6 @@ static int cam_vfe_camif_resource_stop(
 	struct cam_isp_resource_node        *camif_res)
 {
 	struct cam_vfe_mux_camif_data       *camif_priv;
-	struct cam_vfe_camif_ver2_reg       *camif_reg;
 	int rc = 0;
 	uint32_t val = 0;
 
@@ -482,7 +480,6 @@ static int cam_vfe_camif_resource_stop(
 		return 0;
 
 	camif_priv = (struct cam_vfe_mux_camif_data *)camif_res->res_priv;
-	camif_reg = camif_priv->camif_reg;
 
 	if ((camif_priv->dsp_mode >= CAM_ISP_DSP_MODE_ONE_WAY) &&
 		(camif_priv->dsp_mode <= CAM_ISP_DSP_MODE_ROUND)) {
@@ -664,8 +661,7 @@ static int cam_vfe_camif_handle_irq_bottom_half(void *handler_priv,
 			CAMIF_DEBUG_ENABLE_SENSOR_DIAG_STATUS) {
 			val = cam_io_r(camif_priv->mem_base +
 				camif_priv->camif_reg->vfe_diag_sensor_status);
-			CAM_DBG(CAM_ISP, "VFE_DIAG_SENSOR_STATUS: 0x%x",
-				camif_priv->mem_base, val);
+			CAM_DBG(CAM_ISP, "VFE_DIAG_SENSOR_STATUS: 0x%x", val);
 		}
 		break;
 	default:
@@ -679,11 +675,11 @@ static int cam_vfe_camif_handle_irq_bottom_half(void *handler_priv,
 int cam_vfe_camif_ver2_init(
 	struct cam_hw_intf            *hw_intf,
 	struct cam_hw_soc_info        *soc_info,
-	void                          *camif_hw_info,
+	const void                    *camif_hw_info,
 	struct cam_isp_resource_node  *camif_node)
 {
 	struct cam_vfe_mux_camif_data     *camif_priv = NULL;
-	struct cam_vfe_camif_ver2_hw_info *camif_info = camif_hw_info;
+	const struct cam_vfe_camif_ver2_hw_info *camif_info = camif_hw_info;
 
 	camif_priv = kzalloc(sizeof(struct cam_vfe_mux_camif_data),
 		GFP_KERNEL);

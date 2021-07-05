@@ -1,7 +1,4 @@
-ccflags-y += -I$(srctree)/drivers/media/platform/camx/isp/isp_hw/include
 ccflags-y += -I$(srctree)/drivers/media/platform/camx/cam_icp/icp_hw/include
-ccflags-y += -I$(srctree)/drivers/media/platform/camx/isp/isp_hw/hw_utils/include
-ccflags-y += -I$(srctree)/drivers/media/platform/camx/isp/isp_hw/isp_hw_mgr/
 ccflags-y += -I$(srctree)/drivers/media/platform/camx/cam_icp/icp_hw/icp_hw_mgr/
 ccflags-y += -I$(srctree)/drivers/media/platform/camx/cam_icp/fw_inc/
 ccflags-y += -I$(srctree)/drivers/media/platform/camx/cam_smmu/

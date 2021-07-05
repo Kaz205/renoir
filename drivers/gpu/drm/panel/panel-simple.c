@@ -2967,8 +2967,8 @@ static const struct panel_desc samsung_atna33xc20 = {
 		.height = 165,
 	},
 	.delay = {
-		.disable_to_power_off = 150,
-		.power_to_enable = 150,
+		.disable_to_power_off = 200,
+		.power_to_enable = 400,
 		.hpd_absent_delay = 200,
 		.unprepare = 500,
 	},

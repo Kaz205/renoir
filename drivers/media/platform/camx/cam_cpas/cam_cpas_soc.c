@@ -23,8 +23,9 @@
 #include "cam_cpas_hw.h"
 #include "cam_cpas_soc.h"
 
-int cam_cpas_get_custom_dt_info(struct platform_device *pdev,
-	struct cam_cpas_private_soc *soc_private)
+static int
+cam_cpas_get_custom_dt_info(struct platform_device *pdev,
+			    struct cam_cpas_private_soc *soc_private)
 {
 	struct device_node *of_node;
 	int count = 0, i = 0, rc = 0;

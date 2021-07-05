@@ -235,8 +235,6 @@ static int32_t cam_actuator_platform_remove(struct platform_device *pdev)
 {
 	int32_t rc = 0;
 	struct cam_actuator_ctrl_t      *a_ctrl;
-	struct cam_actuator_soc_private *soc_private;
-	struct cam_sensor_power_ctrl_t  *power_info;
 
 	a_ctrl = platform_get_drvdata(pdev);
 	if (!a_ctrl) {
@@ -249,10 +247,6 @@ static int32_t cam_actuator_platform_remove(struct platform_device *pdev)
 	cam_actuator_shutdown(a_ctrl);
 	mutex_unlock(&(a_ctrl->actuator_mutex));
 	cam_unregister_subdev(&(a_ctrl->v4l2_dev_str));
-
-	soc_private =
-		(struct cam_actuator_soc_private *)a_ctrl->soc_info.soc_private;
-	power_info = &soc_private->power_info;
 
 	kfree(a_ctrl->io_master_info.cci_client);
 	a_ctrl->io_master_info.cci_client = NULL;
@@ -271,8 +265,6 @@ static int32_t cam_actuator_driver_i2c_remove(struct i2c_client *client)
 {
 	struct cam_actuator_ctrl_t      *a_ctrl =
 		i2c_get_clientdata(client);
-	struct cam_actuator_soc_private *soc_private;
-	struct cam_sensor_power_ctrl_t  *power_info;
 
 	/* Handle I2C Devices */
 	if (!a_ctrl) {
@@ -285,9 +277,6 @@ static int32_t cam_actuator_driver_i2c_remove(struct i2c_client *client)
 	cam_actuator_shutdown(a_ctrl);
 	mutex_unlock(&(a_ctrl->actuator_mutex));
 	cam_unregister_subdev(&(a_ctrl->v4l2_dev_str));
-	soc_private =
-		(struct cam_actuator_soc_private *)a_ctrl->soc_info.soc_private;
-	power_info = &soc_private->power_info;
 
 	/*Free Allocated Mem */
 	kfree(a_ctrl->i2c_data.per_frame);

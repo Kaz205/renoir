@@ -27,7 +27,7 @@
 static struct cam_req_mgr_core_device *g_crm_core_dev;
 static struct cam_req_mgr_core_link g_links[MAXIMUM_LINKS_PER_SESSION];
 
-void cam_req_mgr_core_link_reset(struct cam_req_mgr_core_link *link)
+static void cam_req_mgr_core_link_reset(struct cam_req_mgr_core_link *link)
 {
 	link->link_hdl = 0;
 	link->num_devs = 0;
@@ -43,7 +43,7 @@ void cam_req_mgr_core_link_reset(struct cam_req_mgr_core_link *link)
 	link->parent = NULL;
 	link->subscribe_event = 0;
 	link->trigger_mask = 0;
-	link->sync_link = 0;
+	link->sync_link = NULL;
 	link->sync_link_sof_skip = false;
 	link->open_req_cnt = 0;
 	link->last_flush_id = 0;
@@ -199,7 +199,6 @@ static int __cam_req_mgr_traverse(struct cam_req_mgr_traverse *traverse_data)
 	int32_t                      curr_idx = traverse_data->idx;
 	struct cam_req_mgr_req_tbl  *tbl;
 	struct cam_req_mgr_apply    *apply_data;
-	struct cam_req_mgr_tbl_slot *slot = NULL;
 
 	if (!traverse_data->tbl || !traverse_data->apply_data) {
 		CAM_ERR(CAM_CRM, "NULL pointer %pK %pK",
@@ -210,7 +209,6 @@ static int __cam_req_mgr_traverse(struct cam_req_mgr_traverse *traverse_data)
 
 	tbl = traverse_data->tbl;
 	apply_data = traverse_data->apply_data;
-	slot = &tbl->slot[curr_idx];
 	CAM_DBG(CAM_CRM,
 		"Enter pd %d idx %d state %d skip %d status %d skip_idx %d",
 		tbl->pd, curr_idx, tbl->slot[curr_idx].state,
@@ -747,7 +745,7 @@ static int __cam_req_mgr_check_sync_for_mslave(
 		(req_id - sync_link->req.in_q->slot[sync_rd_idx].req_id >
 		link->max_delay - sync_link->max_delay)) {
 		CAM_DBG(CAM_CRM,
-			"Req: %lld on link:%x need to hold for link: %x req:%d",
+			"Req: %lld on link:%x need to hold for link: %x req:%lld",
 			req_id,
 			link->link_hdl,
 			sync_link->link_hdl,
@@ -991,7 +989,7 @@ static int __cam_req_mgr_check_sync_req_is_ready(
 		sync_frame_duration = DEFAULT_FRAME_DURATION;
 
 	CAM_DBG(CAM_CRM,
-		"sync link %x last frame duration is %d ns",
+		"sync link %x last frame duration is %lld ns",
 		sync_link->link_hdl, sync_frame_duration);
 
 	if (link->initial_skip) {
@@ -1190,7 +1188,7 @@ static int __cam_req_mgr_check_sync_req_is_ready(
 static int __cam_req_mgr_process_req(struct cam_req_mgr_core_link *link,
 	struct cam_req_mgr_trigger_notify *trigger_data)
 {
-	int                                  rc = 0, idx, last_app_idx;
+	int                                  rc = 0, idx;
 	int                                  reset_step = 0;
 	uint32_t                             trigger = trigger_data->trigger;
 	struct cam_req_mgr_slot             *slot = NULL;
@@ -1328,7 +1326,7 @@ static int __cam_req_mgr_process_req(struct cam_req_mgr_core_link *link,
 		if (link->trigger_mask == link->subscribe_event) {
 			slot->status = CRM_SLOT_STATUS_REQ_APPLIED;
 			link->trigger_mask = 0;
-			CAM_DBG(CAM_CRM, "req %d is applied on link %x",
+			CAM_DBG(CAM_CRM, "req %lld is applied on link %x",
 				slot->req_id,
 				link->link_hdl);
 			idx = in_q->rd_idx;
@@ -1350,10 +1348,8 @@ static int __cam_req_mgr_process_req(struct cam_req_mgr_core_link *link,
 			 * CRM. Below code retains the last applied request.
 			 */
 
-			if (slot->req_id > 0) {
-				last_app_idx = in_q->last_applied_idx;
+			if (slot->req_id > 0)
 				in_q->last_applied_idx = idx;
-			}
 
 			__cam_req_mgr_dec_idx(
 				&idx, reset_step + 1,
@@ -1819,7 +1815,7 @@ static void __cam_req_mgr_free_link(struct cam_req_mgr_core_link *link)
 	kfree(link->req.in_q);
 	link->req.in_q = NULL;
 	i = link - g_links;
-	CAM_DBG(CAM_CRM, "free link index %d", i);
+	CAM_DBG(CAM_CRM, "free link index %td", i);
 	atomic_set(&g_links[i].is_used, 0);
 }
 
@@ -1871,37 +1867,6 @@ static void __cam_req_mgr_unreserve_link(
 /* Workqueue context processing section */
 
 /**
- * cam_req_mgr_process_send_req()
- *
- * @brief: This runs in workque thread context. Call core funcs to send
- *         apply request id to drivers.
- * @priv : link information.
- * @data : contains information about frame_id, link etc.
- *
- * @return: 0 on success.
- */
-int cam_req_mgr_process_send_req(void *priv, void *data)
-{
-	int                                 rc = 0;
-	struct cam_req_mgr_core_link        *link = NULL;
-	struct cam_req_mgr_send_request     *send_req = NULL;
-	struct cam_req_mgr_req_queue        *in_q = NULL;
-
-	if (!data || !priv) {
-		CAM_ERR(CAM_CRM, "input args NULL %pK %pK", data, priv);
-		rc = -EINVAL;
-		goto end;
-	}
-	link = (struct cam_req_mgr_core_link *)priv;
-	send_req = (struct cam_req_mgr_send_request *)data;
-	in_q = send_req->in_q;
-
-	rc = __cam_req_mgr_send_req(link, in_q, CAM_TRIGGER_POINT_SOF);
-end:
-	return rc;
-}
-
-/**
  * cam_req_mgr_process_flush_req()
  *
  * @brief: This runs in workque thread context. Call core funcs to check
@@ -1911,7 +1876,7 @@ end:
  *
  * @return: 0 on success.
  */
-int cam_req_mgr_process_flush_req(void *priv, void *data)
+static int cam_req_mgr_process_flush_req(void *priv, void *data)
 {
 	int                                  rc = 0, i = 0, idx = -1;
 	struct cam_req_mgr_flush_info       *flush_info = NULL;
@@ -2002,7 +1967,7 @@ end:
  *
  * @return: 0 on success.
  */
-int cam_req_mgr_process_sched_req(void *priv, void *data)
+static int cam_req_mgr_process_sched_req(void *priv, void *data)
 {
 	int                               rc = 0;
 	struct cam_req_mgr_sched_request *sched_req = NULL;
@@ -2067,7 +2032,7 @@ end:
  *
  * @return: 0 on success.
  */
-int cam_req_mgr_process_add_req(void *priv, void *data)
+static int cam_req_mgr_process_add_req(void *priv, void *data)
 {
 	int                                  rc = 0, i = 0, idx;
 	struct cam_req_mgr_add_request      *add_req = NULL;
@@ -2128,7 +2093,7 @@ int cam_req_mgr_process_add_req(void *priv, void *data)
 		slot->dev_hdl = add_req->dev_hdl;
 		if (add_req->skip_before_applying & SKIP_NEXT_FRAME)
 			slot->skip_next_frame = true;
-		CAM_DBG(CAM_CRM, "Req_id %llu injecting delay %llu",
+		CAM_DBG(CAM_CRM, "Req_id %llu injecting delay %u",
 			add_req->req_id,
 			(add_req->skip_before_applying & 0xFF));
 	}
@@ -2171,7 +2136,7 @@ end:
  *
  * @return: 0 on success.
  */
-int cam_req_mgr_process_error(void *priv, void *data)
+static int cam_req_mgr_process_error(void *priv, void *data)
 {
 	int                                  rc = 0, idx = -1, i;
 	struct cam_req_mgr_error_notify     *err_info = NULL;

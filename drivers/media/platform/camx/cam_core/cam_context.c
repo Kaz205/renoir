@@ -627,7 +627,7 @@ void cam_context_putref(struct cam_context *ctx)
 {
 	kref_put(&ctx->refcount, cam_node_put_ctxt_to_free_list);
 	CAM_DBG(CAM_CORE,
-		"ctx device hdl %ld, ref count %d, dev_name %s",
+		"ctx device hdl %d, ref count %d, dev_name %s",
 		ctx->dev_hdl, refcount_read(&(ctx->refcount.refcount)),
 		ctx->dev_name);
 }
@@ -639,7 +639,7 @@ void cam_context_getref(struct cam_context *ctx)
 		WARN(1, "%s fail\n", __func__);
 	}
 	CAM_DBG(CAM_CORE,
-		"ctx device hdl %ld, ref count %d, dev_name %s",
+		"ctx device hdl %d, ref count %d, dev_name %s",
 		ctx->dev_hdl, refcount_read(&(ctx->refcount.refcount)),
 		ctx->dev_name);
 }

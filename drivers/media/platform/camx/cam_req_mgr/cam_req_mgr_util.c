@@ -129,7 +129,7 @@ static int32_t cam_get_free_handle_index(void)
 	return idx;
 }
 
-void cam_dump_tbl_info(void)
+static void cam_dump_tbl_info(void)
 {
 	int i;
 

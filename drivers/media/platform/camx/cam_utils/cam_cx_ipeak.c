@@ -19,6 +19,7 @@
 #if defined(CONFIG_ARCH_SM6150)
 #include <soc/qcom/cx_ipeak.h>
 #endif
+#include "cam_cx_ipeak.h"
 #include "cam_soc_util.h"
 #include "cam_debug_util.h"
 

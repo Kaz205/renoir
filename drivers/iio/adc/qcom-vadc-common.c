@@ -378,34 +378,20 @@ static int qcom_vadc_map_voltage_temp(const struct vadc_map_pt *pts,
 static s32 qcom_vadc_map_temp_voltage(const struct vadc_map_pt *pts,
 				      u32 tablesize, int input)
 {
-	bool descending = 1;
 	u32 i = 0;
 
-	/* Check if table is descending or ascending */
-	if (tablesize > 1) {
-		if (pts[0].y < pts[1].y)
-			descending = 0;
-	}
-
-	while (i < tablesize) {
-		if (descending && pts[i].y < input) {
-			/* table entry is less than measured*/
-			 /* value and table is descending, stop */
-			break;
-		} else if ((!descending) && pts[i].y > input) {
-			/* table entry is greater than measured*/
-			/*value and table is ascending, stop */
-			break;
-		}
+	/*
+	 * Table must be sorted, find the interval of 'y' which contains value
+	 * 'input' and map it to proper 'x' value
+	 */
+	while (i < tablesize && pts[i].y < input)
 		i++;
-	}
 
 	if (i == 0)
 		return pts[0].x;
 	if (i == tablesize)
 		return pts[tablesize - 1].x;
 
-	/* result is between search_index and search_index-1 */
 	/* interpolate linearly */
 	return fixp_linear_interpolate(pts[i - 1].y, pts[i - 1].x,
 			pts[i].y, pts[i].x, input);
@@ -509,12 +495,14 @@ static int qcom_vadc_scale_chg_temp(const struct vadc_linear_graph *calib_graph,
 	return 0;
 }
 
-static u16 qcom_vadc_scale_voltage_code(int voltage,
+/* convert voltage to ADC code, using 1.875V reference */
+static u16 qcom_vadc_scale_voltage_code(s32 voltage,
 					const struct vadc_prescale_ratio *prescale,
 					const u32 full_scale_code_volt,
 					unsigned int factor)
 {
-	s64 volt = voltage, adc_vdd_ref_mv = 1875;
+	s64 volt = voltage;
+	s64 adc_vdd_ref_mv = 1875; /* reference voltage */
 
 	volt *= prescale->num * factor * full_scale_code_volt;
 	volt = div64_s64(volt, (s64)prescale->den * adc_vdd_ref_mv * 1000);

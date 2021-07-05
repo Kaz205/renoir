@@ -230,6 +230,38 @@ reg_alloc_error:
 	return rc;
 }
 
+static int
+_cam_irq_controller_subscribe_irq(struct cam_irq_controller  *controller,
+				  enum cam_irq_priority_level priority,
+				  u32 *evt_bit_mask_arr,
+				  struct cam_irq_evt_handler *evt_handler)
+{
+	int i;
+	u32 irq_mask;
+
+	for (i = 0; i < controller->num_registers; i++) {
+		struct cam_irq_register_obj *irq_register;
+
+		irq_register = &controller->irq_register_arr[i];
+		irq_register->top_half_enable_mask[priority] |=
+							evt_bit_mask_arr[i];
+
+		irq_mask = cam_io_r_mb(controller->mem_base +
+				       irq_register->mask_reg_offset);
+		irq_mask |= evt_bit_mask_arr[i];
+
+		cam_io_w_mb(irq_mask, controller->mem_base +
+			    irq_register->mask_reg_offset);
+	}
+
+	list_add_tail(&evt_handler->list_node,
+		      &controller->evt_handler_list_head);
+	list_add_tail(&evt_handler->th_list_node,
+		      &controller->th_list_head[priority]);
+
+	return evt_handler->index;
+}
+
 int cam_irq_controller_subscribe_irq(void *irq_controller,
 	enum cam_irq_priority_level        priority,
 	uint32_t                          *evt_bit_mask_arr,
@@ -243,9 +275,7 @@ int cam_irq_controller_subscribe_irq(void *irq_controller,
 	struct cam_irq_evt_handler *evt_handler = NULL;
 	int                         i;
 	int                         rc = 0;
-	uint32_t                    irq_mask;
 	unsigned long               flags = 0;
-	bool                        need_lock;
 
 	if (!controller || !handler_priv || !evt_bit_mask_arr) {
 		CAM_ERR(CAM_IRQ_CTRL,
@@ -321,30 +351,21 @@ int cam_irq_controller_subscribe_irq(void *irq_controller,
 	if (controller->hdl_idx > 0x3FFFFFFF)
 		controller->hdl_idx = 1;
 
-	need_lock = !in_irq();
-	if (need_lock)
+	if (!in_irq()) {
 		spin_lock_irqsave(&controller->lock, flags);
-	for (i = 0; i < controller->num_registers; i++) {
-		controller->irq_register_arr[i].top_half_enable_mask[priority]
-			|= evt_bit_mask_arr[i];
-
-		irq_mask = cam_io_r_mb(controller->mem_base +
-			controller->irq_register_arr[i].mask_reg_offset);
-		irq_mask |= evt_bit_mask_arr[i];
-
-		cam_io_w_mb(irq_mask, controller->mem_base +
-			controller->irq_register_arr[i].mask_reg_offset);
+		rc = _cam_irq_controller_subscribe_irq(controller,
+						       priority,
+						       evt_bit_mask_arr,
+						       evt_handler);
+		spin_unlock_irqrestore(&controller->lock, flags);
+	} else {
+		rc = _cam_irq_controller_subscribe_irq(controller,
+						       priority,
+						       evt_bit_mask_arr,
+						       evt_handler);
 	}
 
-	list_add_tail(&evt_handler->list_node,
-		&controller->evt_handler_list_head);
-	list_add_tail(&evt_handler->th_list_node,
-		&controller->th_list_head[priority]);
-
-	if (need_lock)
-		spin_unlock_irqrestore(&controller->lock, flags);
-
-	return evt_handler->index;
+	return rc;
 
 free_evt_handler:
 	kfree(evt_handler);
@@ -353,26 +374,18 @@ free_evt_handler:
 	return rc;
 }
 
-int cam_irq_controller_enable_irq(void *irq_controller, uint32_t handle)
+static int
+_cam_irq_controller_enable_irq(struct cam_irq_controller *controller,
+			       uint32_t handle)
 {
-	struct cam_irq_controller   *controller  = irq_controller;
 	struct cam_irq_evt_handler  *evt_handler = NULL;
 	struct cam_irq_evt_handler  *evt_handler_temp;
 	struct cam_irq_register_obj *irq_register = NULL;
 	enum cam_irq_priority_level priority;
-	unsigned long               flags = 0;
 	unsigned int                i;
 	uint32_t                    irq_mask;
 	uint32_t                    found = 0;
 	int                         rc = -EINVAL;
-	bool                        need_lock;
-
-	if (!controller)
-		return rc;
-
-	need_lock = !in_irq();
-	if (need_lock)
-		spin_lock_irqsave(&controller->lock, flags);
 
 	list_for_each_entry_safe(evt_handler, evt_handler_temp,
 		&controller->evt_handler_list_head, list_node) {
@@ -384,11 +397,8 @@ int cam_irq_controller_enable_irq(void *irq_controller, uint32_t handle)
 		}
 	}
 
-	if (!found) {
-		if (need_lock)
-			spin_unlock_irqrestore(&controller->lock, flags);
+	if (!found)
 		return rc;
-	}
 
 	priority = evt_handler->priority;
 	for (i = 0; i < controller->num_registers; i++) {
@@ -403,32 +413,44 @@ int cam_irq_controller_enable_irq(void *irq_controller, uint32_t handle)
 		cam_io_w_mb(irq_mask, controller->mem_base +
 		controller->irq_register_arr[i].mask_reg_offset);
 	}
-	if (need_lock)
-		spin_unlock_irqrestore(&controller->lock, flags);
 
 	return rc;
 }
 
-int cam_irq_controller_disable_irq(void *irq_controller, uint32_t handle)
+int cam_irq_controller_enable_irq(void *irq_controller, uint32_t handle)
 {
-	struct cam_irq_controller   *controller  = irq_controller;
+	struct cam_irq_controller *controller;
+	unsigned long flags;
+	int rc;
+
+	if (!irq_controller)
+		return -EINVAL;
+
+	controller = irq_controller;
+
+	if (!in_irq()) {
+		spin_lock_irqsave(&controller->lock, flags);
+		rc = _cam_irq_controller_enable_irq(controller, handle);
+		spin_unlock_irqrestore(&controller->lock, flags);
+	} else {
+		rc = _cam_irq_controller_enable_irq(controller, handle);
+	}
+
+	return rc;
+}
+
+static int
+_cam_irq_controller_disable_irq(struct cam_irq_controller *controller,
+				uint32_t handle)
+{
 	struct cam_irq_evt_handler  *evt_handler = NULL;
 	struct cam_irq_evt_handler  *evt_handler_temp;
 	struct cam_irq_register_obj *irq_register;
 	enum cam_irq_priority_level priority;
-	unsigned long               flags = 0;
 	unsigned int                i;
 	uint32_t                    irq_mask;
 	uint32_t                    found = 0;
 	int                         rc = -EINVAL;
-	bool                        need_lock;
-
-	if (!controller)
-		return rc;
-
-	need_lock = !in_irq();
-	if (need_lock)
-		spin_lock_irqsave(&controller->lock, flags);
 
 	list_for_each_entry_safe(evt_handler, evt_handler_temp,
 		&controller->evt_handler_list_head, list_node) {
@@ -440,11 +462,8 @@ int cam_irq_controller_disable_irq(void *irq_controller, uint32_t handle)
 		}
 	}
 
-	if (!found) {
-		if (need_lock)
-			spin_unlock_irqrestore(&controller->lock, flags);
+	if (!found)
 		return rc;
-	}
 
 	priority = evt_handler->priority;
 	for (i = 0; i < controller->num_registers; i++) {
@@ -474,16 +493,36 @@ int cam_irq_controller_disable_irq(void *irq_controller, uint32_t handle)
 				controller->mem_base +
 				controller->global_clear_offset);
 	}
-	if (need_lock)
-		spin_unlock_irqrestore(&controller->lock, flags);
 
 	return rc;
 }
 
-int cam_irq_controller_unsubscribe_irq(void *irq_controller,
-	uint32_t handle)
+int cam_irq_controller_disable_irq(void *irq_controller, uint32_t handle)
 {
-	struct cam_irq_controller   *controller  = irq_controller;
+	struct cam_irq_controller *controller;
+	unsigned long flags;
+	int rc;
+
+	if (!irq_controller)
+		return -EINVAL;
+
+	controller = irq_controller;
+
+	if (!in_irq()) {
+		spin_lock_irqsave(&controller->lock, flags);
+		rc = _cam_irq_controller_disable_irq(irq_controller, handle);
+		spin_unlock_irqrestore(&controller->lock, flags);
+	} else {
+		rc = _cam_irq_controller_disable_irq(irq_controller, handle);
+	}
+
+	return rc;
+}
+
+static int
+_cam_irq_controller_unsubscribe_irq(struct cam_irq_controller *controller,
+				    uint32_t handle)
+{
 	struct cam_irq_evt_handler  *evt_handler = NULL;
 	struct cam_irq_evt_handler  *evt_handler_temp;
 	struct cam_irq_register_obj *irq_register;
@@ -491,13 +530,7 @@ int cam_irq_controller_unsubscribe_irq(void *irq_controller,
 	uint32_t                    i;
 	uint32_t                    found = 0;
 	uint32_t                    irq_mask;
-	unsigned long               flags = 0;
 	int                         rc = -EINVAL;
-	bool                        need_lock;
-
-	need_lock = !in_irq();
-	if (need_lock)
-		spin_lock_irqsave(&controller->lock, flags);
 
 	list_for_each_entry_safe(evt_handler, evt_handler_temp,
 		&controller->evt_handler_list_head, list_node) {
@@ -540,8 +573,30 @@ int cam_irq_controller_unsubscribe_irq(void *irq_controller,
 		kfree(evt_handler);
 	}
 
-	if (need_lock)
+	return rc;
+}
+
+int cam_irq_controller_unsubscribe_irq(void *irq_controller,
+				       uint32_t handle)
+{
+	struct cam_irq_controller *controller;
+	unsigned long flags;
+	int rc;
+
+	if (!irq_controller)
+		return -EINVAL;
+
+	controller = irq_controller;
+
+	if (!in_irq()) {
+		spin_lock_irqsave(&controller->lock, flags);
+		rc = _cam_irq_controller_unsubscribe_irq(irq_controller,
+							 handle);
 		spin_unlock_irqrestore(&controller->lock, flags);
+	} else {
+		rc = _cam_irq_controller_unsubscribe_irq(irq_controller,
+							 handle);
+	}
 
 	return rc;
 }

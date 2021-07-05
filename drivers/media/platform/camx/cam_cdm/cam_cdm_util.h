@@ -39,50 +39,17 @@ enum cam_cdm_command {
 /**
  * struct cam_cdm_utils_ops - Camera CDM util ops
  *
- * @cdm_get_cmd_header_size: Returns the size of the given command header
- *                           in DWORDs.
- *      @command Command ID
- *      @return Size of the command in DWORDs
- *
- * @cdm_required_size_reg_continuous: Calculates the size of a reg-continuous
- *                                    command in dwords.
- *      @numVals Number of continuous values
- *      @return Size in dwords
- *
  * @cdm_required_size_reg_random: Calculates the size of a reg-random command
  *                                in dwords.
  *      @numRegVals  Number of register/value pairs
  *      @return Size in dwords
  *
- * @cdm_required_size_dmi: Calculates the size of a DMI command in dwords.
- *      @return Size in dwords
- *
  * @cdm_required_size_genirq: Calculates size of a Genirq command in dwords.
- *      @return Size in dwords
- *
- * @cdm_required_size_indirect: Calculates the size of an indirect command
- *                              in dwords.
  *      @return Size in dwords
  *
  * @cdm_required_size_changebase: Calculates the size of a change-base command
  *                                in dwords.
  *      @return Size in dwords
- *
- * @cdm_offsetof_dmi_addr: Returns the offset of address field in the DMI
- *                         command header.
- *      @return Offset of addr field
- *
- * @cdm_offsetof_indirect_addr: Returns the offset of address field in the
- *                              indirect command header.
- *      @return Offset of addr field
- *
- * @cdm_write_regcontinuous: Writes a command into the command buffer.
- *      @pCmdBuffer:  Pointer to command buffer
- *      @reg: Beginning of the register address range where
- *            values will be written.
- *      @numVals: Number of values (registers) that will be written
- *      @pVals : An array of values that will be written
- *      @return Pointer in command buffer pointing past the written commands
  *
  * @cdm_write_regrandom: Writes a command into the command buffer in
  *                       register/value pairs.
@@ -91,20 +58,6 @@ enum cam_cdm_command {
  *      @pRegVals: An array of register/value pairs that will be written
  *                 The even indices are registers and the odd indices
  *                 arevalues, e.g., {reg1, val1, reg2, val2, ...}.
- *      @return Pointer in command buffer pointing past the written commands
- *
- * @cdm_write_dmi: Writes a DMI command into the command bufferM.
- *      @pCmdBuffer: Pointer to command buffer
- *      @dmiCmd: DMI command
- *      @DMIAddr: Address of the DMI
- *      @DMISel: Selected bank that the DMI will write to
- *      @length: Size of data in bytes
- *      @return Pointer in command buffer pointing past the written commands
- *
- * @cdm_write_indirect: Writes a indirect command into the command buffer.
- *      @pCmdBuffer: Pointer to command buffer
- *      @indirectBufferAddr: Device address of the indirect cmd buffer.
- *      @length: Size of data in bytes
  *      @return Pointer in command buffer pointing past the written commands
  *
  * @cdm_write_changebase: Writes a changing CDM (address) base command into
@@ -118,35 +71,13 @@ enum cam_cdm_command {
  *      @userdata: userdata or cookie return by hardware during irq.
  */
 struct cam_cdm_utils_ops {
-uint32_t (*cdm_get_cmd_header_size)(unsigned int command);
-uint32_t (*cdm_required_size_reg_continuous)(uint32_t  numVals);
 uint32_t (*cdm_required_size_reg_random)(uint32_t numRegVals);
-uint32_t (*cdm_required_size_dmi)(void);
 uint32_t (*cdm_required_size_genirq)(void);
-uint32_t (*cdm_required_size_indirect)(void);
 uint32_t (*cdm_required_size_changebase)(void);
-uint32_t (*cdm_offsetof_dmi_addr)(void);
-uint32_t (*cdm_offsetof_indirect_addr)(void);
-uint32_t* (*cdm_write_regcontinuous)(
-	uint32_t *pCmdBuffer,
-	uint32_t reg,
-	uint32_t numVals,
-	uint32_t *pVals);
 uint32_t *(*cdm_write_regrandom)(
 	uint32_t *pCmdBuffer,
 	uint32_t numRegVals,
 	uint32_t *pRegVals);
-uint32_t *(*cdm_write_dmi)(
-	uint32_t *pCmdBuffer,
-	uint8_t  dmiCmd,
-	uint32_t DMIAddr,
-	uint8_t  DMISel,
-	uint32_t dmiBufferAddr,
-	uint32_t length);
-uint32_t *(*cdm_write_indirect)(
-	uint32_t *pCmdBuffer,
-	uint32_t indirectBufferAddr,
-	uint32_t length);
 uint32_t *(*cdm_write_changebase)(
 	uint32_t *pCmdBuffer,
 	uint32_t base);
@@ -207,5 +138,6 @@ void cam_cdm_util_dump_cmd_buf(
 void cam_cdm_util_dump_cmd_bufs_v2(
 	struct cam_cdm_cmd_buf_dump_info *dump_info);
 
+const struct cam_cdm_utils_ops *cam_cdm_util_get_cmd170_ops(void);
 
 #endif /* _CAM_CDM_UTIL_H_ */

@@ -377,6 +377,20 @@ static struct ctl_table kern_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec,
 	},
+	{
+		.procname	= "iowait_reset_ticks",
+		.data		= &sysctl_iowait_reset_ticks,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec,
+	},
+	{
+		.procname	= "iowait_apply_ticks",
+		.data		= &sysctl_iowait_apply_ticks,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec,
+	},
 #ifdef CONFIG_SCHEDSTATS
 	{
 		.procname	= "sched_schedstats",
@@ -1749,7 +1763,7 @@ static struct ctl_table vm_table[] = {
 		.data		= &min_filelist_kbytes,
 		.maxlen		= sizeof(min_filelist_kbytes),
 		.mode		= 0644,
-		.proc_handler	= proc_dointvec,
+		.proc_handler	= min_filelist_kbytes_handler,
 	},
 #ifdef CONFIG_HAVE_ARCH_MMAP_RND_BITS
 	{

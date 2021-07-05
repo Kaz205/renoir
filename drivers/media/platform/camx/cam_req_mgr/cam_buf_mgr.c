@@ -501,12 +501,12 @@ struct dma_buf *cmm_alloc_buffer(size_t len, unsigned int flags)
 
 	len = PAGE_ALIGN(len);
 	if (!len) {
-		CAM_ERR(CAM_MEM, "Invalid buffer size: %d", len);
+		CAM_ERR(CAM_MEM, "Invalid buffer size: %zu", len);
 		return ERR_PTR(-EINVAL);
 	}
 
 	if (len > MAX_BUFFER_SIZE) {
-		CAM_ERR(CAM_MEM, "Buffer size is over limit: %d", len);
+		CAM_ERR(CAM_MEM, "Buffer size is over limit: %zu", len);
 		return ERR_PTR(-EINVAL);
 	}
 

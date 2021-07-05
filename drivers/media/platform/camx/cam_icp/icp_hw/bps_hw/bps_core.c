@@ -155,7 +155,7 @@ static int cam_bps_handle_pc(struct cam_hw_info *bps_dev)
 {
 	struct cam_hw_soc_info *soc_info = NULL;
 	struct cam_bps_device_core_info *core_info = NULL;
-	struct cam_bps_device_hw_info *hw_info = NULL;
+	const struct cam_bps_device_hw_info *hw_info = NULL;
 	int pwr_ctrl;
 	int pwr_status;
 
@@ -196,7 +196,7 @@ static int cam_bps_handle_resume(struct cam_hw_info *bps_dev)
 {
 	struct cam_hw_soc_info *soc_info = NULL;
 	struct cam_bps_device_core_info *core_info = NULL;
-	struct cam_bps_device_hw_info *hw_info = NULL;
+	const struct cam_bps_device_hw_info *hw_info = NULL;
 	int pwr_ctrl;
 	int pwr_status;
 	int rc = 0;
@@ -309,7 +309,7 @@ int cam_bps_process_cmd(void *device_priv, uint32_t cmd_type,
 	struct cam_hw_info *bps_dev = device_priv;
 	struct cam_hw_soc_info *soc_info = NULL;
 	struct cam_bps_device_core_info *core_info = NULL;
-	struct cam_bps_device_hw_info *hw_info = NULL;
+	const struct cam_bps_device_hw_info *hw_info = NULL;
 	int rc = 0;
 
 	if (!device_priv) {

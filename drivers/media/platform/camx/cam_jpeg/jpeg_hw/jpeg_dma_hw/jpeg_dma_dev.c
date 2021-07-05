@@ -27,10 +27,9 @@
 #include "cam_cpas_api.h"
 #include "cam_debug_util.h"
 
-struct cam_jpeg_dma_device_hw_info cam_jpeg_dma_hw_info = {
+static const struct cam_jpeg_dma_device_hw_info cam_jpeg_dma_hw_info = {
 	.reserved = 0,
 };
-EXPORT_SYMBOL(cam_jpeg_dma_hw_info);
 
 static int cam_jpeg_dma_register_cpas(struct cam_hw_soc_info *soc_info,
 	struct cam_jpeg_dma_device_core_info *core_info,

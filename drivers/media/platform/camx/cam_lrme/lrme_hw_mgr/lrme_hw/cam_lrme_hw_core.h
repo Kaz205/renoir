@@ -65,7 +65,7 @@ enum cam_lrme_irq_set {
  */
 struct cam_lrme_cdm_info {
 	uint32_t                   cdm_handle;
-	struct cam_cdm_utils_ops  *cdm_ops;
+	const struct cam_cdm_utils_ops  *cdm_ops;
 	struct cam_cdm_bl_request *cdm_cmd;
 };
 

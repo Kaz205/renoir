@@ -158,8 +158,8 @@ static int _cpas_vote_bus_level(struct cam_cpas_bus_client *bus_client,
 	if (tbl_idx > 0 && tbl_idx < bus_client->bw_tbl_size)
 		aver_bw = (ahb_bus_bw_kbps_tbl[tbl_idx - 1] + peak_bw) >> 1;
 
-	CAM_DBG(CAM_CPAS, "Client:%s RPMH level:%d, Aver BW:%ld Peak BW:%ld",
-		 bus_client->name, level, aver_bw, peak_bw);
+	CAM_DBG(CAM_CPAS, "Client:%s RPMH level:%d, Aver BW:%u Peak BW:%u",
+		bus_client->name, level, aver_bw, peak_bw);
 
 	return icc_set_bw(bus_client->path, aver_bw, peak_bw);
 }
@@ -956,7 +956,6 @@ static int cam_cpas_hw_start(void *hw_priv, void *start_args,
 	struct cam_axi_vote *axi_vote;
 	enum cam_vote_level applied_level = CAM_SVS_VOTE;
 	int rc;
-	struct cam_cpas_private_soc *soc_private = NULL;
 
 	if (!hw_priv || !start_args) {
 		CAM_ERR(CAM_CPAS, "Invalid arguments %pK %pK",
@@ -972,8 +971,6 @@ static int cam_cpas_hw_start(void *hw_priv, void *start_args,
 
 	cpas_hw = (struct cam_hw_info *)hw_priv;
 	cpas_core = (struct cam_cpas *) cpas_hw->core_info;
-	soc_private = (struct cam_cpas_private_soc *)
-		cpas_hw->soc_info.soc_private;
 	cmd_hw_start = (struct cam_cpas_hw_cmd_start *)start_args;
 	client_indx = CAM_CPAS_GET_CLIENT_IDX(cmd_hw_start->client_handle);
 	ahb_vote = cmd_hw_start->ahb_vote;
@@ -1089,7 +1086,6 @@ static int cam_cpas_hw_stop(void *hw_priv, void *stop_args,
 	struct cam_cpas_client *cpas_client;
 	struct cam_ahb_vote ahb_vote;
 	struct cam_axi_vote axi_vote;
-	struct cam_cpas_private_soc *soc_private = NULL;
 	int rc = 0;
 	long result;
 
@@ -1107,8 +1103,6 @@ static int cam_cpas_hw_stop(void *hw_priv, void *stop_args,
 
 	cpas_hw = (struct cam_hw_info *)hw_priv;
 	cpas_core = (struct cam_cpas *) cpas_hw->core_info;
-	soc_private = (struct cam_cpas_private_soc *)
-		cpas_hw->soc_info.soc_private;
 	cmd_hw_stop = (struct cam_cpas_hw_cmd_stop *)stop_args;
 	client_indx = CAM_CPAS_GET_CLIENT_IDX(cmd_hw_stop->client_handle);
 
@@ -1234,7 +1228,8 @@ static int cam_cpas_hw_register_client(struct cam_hw_info *cpas_hw,
 	int rc;
 	struct cam_cpas_client *cpas_client;
 	char client_name[CAM_HW_IDENTIFIER_LENGTH + 3];
-	int32_t client_indx = -1;
+	u32 client_indx;
+	s32 idx = -1;
 	struct cam_cpas *cpas_core = (struct cam_cpas *)cpas_hw->core_info;
 	struct cam_cpas_private_soc *soc_private =
 		(struct cam_cpas_private_soc *) cpas_hw->soc_info.soc_private;
@@ -1253,7 +1248,7 @@ static int cam_cpas_hw_register_client(struct cam_hw_info *cpas_hw,
 	mutex_lock(&cpas_hw->hw_mutex);
 
 	rc = cam_common_util_get_string_index(soc_private->client_name,
-		soc_private->num_clients, client_name, &client_indx);
+		soc_private->num_clients, client_name, &idx);
 
 	if (rc) {
 		CAM_ERR(CAM_CPAS, "No match found for client %s",
@@ -1262,17 +1257,24 @@ static int cam_cpas_hw_register_client(struct cam_hw_info *cpas_hw,
 		return rc;
 	}
 
+	client_indx = idx;
+	if (idx < 0 || !CAM_CPAS_CLIENT_VALID(client_indx)) {
+		CAM_ERR(CAM_CPAS,
+			"Inval client %s %d : %d",
+			register_params->identifier,
+			register_params->cell_index, idx);
+		mutex_unlock(&cpas_hw->hw_mutex);
+		return -EPERM;
+	}
+
 	mutex_lock(&cpas_core->client_mutex[client_indx]);
 
-	if (rc || !CAM_CPAS_CLIENT_VALID(client_indx) ||
-		CAM_CPAS_CLIENT_REGISTERED(cpas_core, client_indx)) {
+	if (CAM_CPAS_CLIENT_REGISTERED(cpas_core, client_indx)) {
 		CAM_ERR(CAM_CPAS,
-			"Inval client %s %d : %d %d %pK %d",
+			"Client already registered %s %d : %pK",
 			register_params->identifier,
 			register_params->cell_index,
-			CAM_CPAS_CLIENT_VALID(client_indx),
-			CAM_CPAS_CLIENT_REGISTERED(cpas_core, client_indx),
-			cpas_core->cpas_client[client_indx], rc);
+			cpas_core->cpas_client[client_indx]);
 		mutex_unlock(&cpas_core->client_mutex[client_indx]);
 		mutex_unlock(&cpas_hw->hw_mutex);
 		return -EPERM;

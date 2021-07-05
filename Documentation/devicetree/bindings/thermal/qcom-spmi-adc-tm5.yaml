@@ -125,7 +125,6 @@ examples:
             #address-cells = <1>;
             #size-cells = <0>;
             #io-channel-cells = <1>;
-            io-channel-ranges;
 
             /* Other propreties are omitted */
             conn-therm@4f {

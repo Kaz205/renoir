@@ -34,9 +34,7 @@ static int cam_jpeg_context_dump_active_request(void *data, unsigned long iova,
 	struct cam_ctx_request          *req_temp = NULL;
 	struct cam_hw_mgr_dump_pf_data  *pf_dbg_entry = NULL;
 	int rc = 0;
-	int closest_port;
 	bool b_mem_found = false;
-
 
 	if (!ctx) {
 		CAM_ERR(CAM_JPEG, "Invalid ctx");
@@ -49,7 +47,6 @@ static int cam_jpeg_context_dump_active_request(void *data, unsigned long iova,
 	list_for_each_entry_safe(req, req_temp,
 			&ctx->active_req_list, list) {
 		pf_dbg_entry = &(req->pf_data);
-		closest_port = -1;
 		CAM_INFO(CAM_JPEG, "req_id : %lld ", req->request_id);
 
 		rc = cam_context_dump_pf_info_to_hw(ctx, pf_dbg_entry->packet,

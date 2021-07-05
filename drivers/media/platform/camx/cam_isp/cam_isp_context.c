@@ -243,7 +243,7 @@ static void __cam_isp_ctx_dump_state_monitor_array(
 
 		if (log_rate_limit) {
 			CAM_DBG(CAM_ISP,
-			"time[%lld] last reported req_id[%u] frame id[%lld] applied id[%lld] current state[%s] next state[%s] hw_event[%s]",
+			"time[%lld] last reported req_id[%lld] frame id[%lld] applied id[%lld] current state[%s] next state[%s] hw_event[%s]",
 			ctx_monitor[index].evt_time_stamp,
 			ctx_monitor[index].last_reported_id,
 			ctx_monitor[index].frame_id,
@@ -257,7 +257,7 @@ static void __cam_isp_ctx_dump_state_monitor_array(
 
 		} else {
 			CAM_INFO(CAM_ISP,
-			"time[%lld] last reported req_id[%u] frame id[%lld] applied id[%lld] current state[%s] next state[%s] hw_event[%s]",
+			"time[%lld] last reported req_id[%llu] frame id[%lld] applied id[%lld] current state[%s] next state[%s] hw_event[%s]",
 			ctx_monitor[index].evt_time_stamp,
 			ctx_monitor[index].last_reported_id,
 			ctx_monitor[index].frame_id,
@@ -413,7 +413,7 @@ static int __cam_isp_ctx_enqueue_init_request(
 	spin_lock_bh(&ctx->lock);
 	if (list_empty(&ctx->pending_req_list)) {
 		list_add_tail(&req->list, &ctx->pending_req_list);
-		CAM_DBG(CAM_ISP, "INIT packet added req id= %d",
+		CAM_DBG(CAM_ISP, "INIT packet added req id= %llu",
 			req->request_id);
 		goto end;
 	}
@@ -791,7 +791,7 @@ static void __cam_isp_ctx_send_sof_boot_timestamp(
 	req_msg.u.frame_msg.sof_status = sof_event_status;
 
 	CAM_DBG(CAM_ISP,
-		"request id:%lld frame number:%lld boot time stamp:0x%llx",
+		"request id:%lld frame number:%lld boot time stamp:%lld",
 		request_id, ctx_isp->frame_id,
 		ctx_isp->boot_timestamp);
 
@@ -820,7 +820,7 @@ static void __cam_isp_ctx_send_sof_timestamp(
 	req_msg.u.frame_msg.sof_status = sof_event_status;
 
 	CAM_DBG(CAM_ISP,
-		"request id:%lld frame number:%lld SOF time stamp:0x%llx",
+		"request id:%lld frame number:%lld SOF time stamp:%lld",
 		request_id, ctx_isp->frame_id,
 		ctx_isp->sof_timestamp_val);
 	CAM_DBG(CAM_ISP, "sof status:%d", sof_event_status);
@@ -998,7 +998,7 @@ static int __cam_isp_ctx_notify_sof_in_activated_state(
 		} else if (req_isp->bubble_detected) {
 			ctx_isp->bubble_frame_cnt++;
 			CAM_DBG(CAM_ISP,
-				"Waiting on bufdone for bubble req: %lld, since frame_cnt = %lld",
+				"Waiting on bufdone for bubble req: %lld, since frame_cnt = %u",
 				req->request_id, ctx_isp->bubble_frame_cnt);
 		} else
 			CAM_DBG(CAM_ISP, "Delayed bufdone for req: %lld",
@@ -1138,7 +1138,7 @@ static int __cam_isp_ctx_sof_in_activated_state(
 
 	ctx_isp->irq_timestamps = sof_event_data->irq_mono_boot_time;
 
-	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:0x%llx, ctx %u",
+	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:0x%lld, ctx %u",
 		ctx_isp->frame_id, ctx_isp->sof_timestamp_val, ctx->ctx_id);
 
 	return rc;
@@ -1425,7 +1425,7 @@ static int __cam_isp_ctx_epoch_in_bubble_applied(
 	 * function handles the rest.
 	 */
 	CAM_DBG(CAM_ISP, "move request %lld to active list(cnt = %d) ctx %u",
-		req->request_id, ctx_isp->active_req_cnt);
+		req->request_id, ctx_isp->active_req_cnt, ctx->ctx_id);
 	ctx_isp->active_req_cnt++;
 	list_del_init(&req->list);
 	list_add_tail(&req->list, &ctx->active_req_list);
@@ -1730,7 +1730,7 @@ static int __cam_isp_ctx_fs2_sof_in_sof_state(
 	ctx_isp->sof_timestamp_val = sof_event_data->timestamp;
 	ctx_isp->boot_timestamp = sof_event_data->boot_time;
 
-	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:0x%llx",
+	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:%lld",
 		ctx_isp->frame_id, ctx_isp->sof_timestamp_val);
 
 	if (!(list_empty(&ctx->wait_req_list)))
@@ -2264,7 +2264,6 @@ static int __cam_isp_ctx_dump_req_info(struct cam_context *ctx,
 {
 	int rc = 0;
 	struct cam_isp_ctx_req *req_isp;
-	struct cam_isp_context *ctx_isp;
 	int i;
 	struct cam_isp_context_dump_header *hdr;
 	int32_t *addr, *start;
@@ -2276,7 +2275,6 @@ static int __cam_isp_ctx_dump_req_info(struct cam_context *ctx,
 		return -EINVAL;
 	}
 	req_isp = (struct cam_isp_ctx_req *)req->req_priv;
-	ctx_isp = (struct cam_isp_context *)ctx->ctx_priv;
 	dst = (char *)cpu_addr + *offset;
 	hdr = (struct cam_isp_context_dump_header *)dst;
 	hdr->word_size = sizeof(int32_t);
@@ -2722,7 +2720,7 @@ static int __cam_isp_ctx_rdi_only_sof_in_top_state(
 	ctx_isp->sof_timestamp_val = sof_event_data->timestamp;
 	ctx_isp->boot_timestamp = sof_event_data->boot_time;
 
-	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:0x%llx",
+	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:%lld",
 		ctx_isp->frame_id, ctx_isp->sof_timestamp_val);
 
 	/*
@@ -2778,7 +2776,7 @@ static int __cam_isp_ctx_rdi_only_sof_in_applied_state(
 	ctx_isp->frame_id++;
 	ctx_isp->sof_timestamp_val = sof_event_data->timestamp;
 	ctx_isp->boot_timestamp = sof_event_data->boot_time;
-	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:0x%llx",
+	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:%lld",
 		ctx_isp->frame_id, ctx_isp->sof_timestamp_val);
 
 	ctx_isp->substate_activated = CAM_ISP_CTX_ACTIVATED_BUBBLE_APPLIED;
@@ -2802,7 +2800,7 @@ static int __cam_isp_ctx_rdi_only_sof_in_bubble_applied(
 	 * the previous sof time stamp that got captured in the
 	 * sof in applied state.
 	 */
-	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:0x%llx",
+	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:%lld",
 		ctx_isp->frame_id, ctx_isp->sof_timestamp_val);
 	__cam_isp_ctx_send_sof_timestamp(ctx_isp, request_id,
 		CAM_REQ_MGR_SOF_EVENT_SUCCESS);
@@ -2810,7 +2808,7 @@ static int __cam_isp_ctx_rdi_only_sof_in_bubble_applied(
 	ctx_isp->frame_id++;
 	ctx_isp->sof_timestamp_val = sof_event_data->timestamp;
 	ctx_isp->boot_timestamp = sof_event_data->boot_time;
-	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:0x%llx",
+	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:%lld",
 		ctx_isp->frame_id, ctx_isp->sof_timestamp_val);
 
 	if (list_empty(&ctx->wait_req_list)) {
@@ -2903,7 +2901,7 @@ static int __cam_isp_ctx_rdi_only_sof_in_bubble_state(
 	ctx_isp->frame_id++;
 	ctx_isp->sof_timestamp_val = sof_event_data->timestamp;
 	ctx_isp->boot_timestamp = sof_event_data->boot_time;
-	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:0x%llx",
+	CAM_DBG(CAM_ISP, "frame id: %lld time stamp:%lld",
 		ctx_isp->frame_id, ctx_isp->sof_timestamp_val);
 	/*
 	 * Signal all active requests with error and move the  all the active
@@ -4344,8 +4342,6 @@ static int cam_isp_context_dump_active_request(void *data, unsigned long iova,
 	struct cam_context *ctx = (struct cam_context *)data;
 	struct cam_ctx_request *req = NULL;
 	struct cam_ctx_request *req_temp = NULL;
-	struct cam_isp_ctx_req *req_isp  = NULL;
-	struct cam_isp_prepare_hw_update_data *hw_update_data = NULL;
 	struct cam_hw_mgr_dump_pf_data *pf_dbg_entry = NULL;
 	bool mem_found = false;
 	int rc = 0;
@@ -4363,8 +4359,6 @@ static int cam_isp_context_dump_active_request(void *data, unsigned long iova,
 
 	list_for_each_entry_safe(req, req_temp,
 		&ctx->active_req_list, list) {
-		req_isp = (struct cam_isp_ctx_req *) req->req_priv;
-		hw_update_data = &req_isp->hw_update_data;
 		pf_dbg_entry = &(req->pf_data);
 		CAM_INFO(CAM_ISP, "req_id : %lld ", req->request_id);
 
@@ -4383,8 +4377,6 @@ static int cam_isp_context_dump_active_request(void *data, unsigned long iova,
 
 	list_for_each_entry_safe(req, req_temp,
 		&ctx->wait_req_list, list) {
-		req_isp = (struct cam_isp_ctx_req *) req->req_priv;
-		hw_update_data = &req_isp->hw_update_data;
 		pf_dbg_entry = &(req->pf_data);
 		CAM_INFO(CAM_ISP, "req_id : %lld ", req->request_id);
 

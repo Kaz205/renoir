@@ -2654,19 +2654,23 @@ DEFINE_EVENT(netdev_frame_event, cfg80211_rx_mlme_mgmt,
 );
 
 TRACE_EVENT(cfg80211_tx_mlme_mgmt,
-	TP_PROTO(struct net_device *netdev, const u8 *buf, int len),
-	TP_ARGS(netdev, buf, len),
+	TP_PROTO(struct net_device *netdev, const u8 *buf, int len,
+		 bool reconnect),
+	TP_ARGS(netdev, buf, len, reconnect),
 	TP_STRUCT__entry(
 		NETDEV_ENTRY
 		__dynamic_array(u8, frame, len)
+		__field(int, reconnect)
 	),
 	TP_fast_assign(
 		NETDEV_ASSIGN;
 		memcpy(__get_dynamic_array(frame), buf, len);
+		__entry->reconnect = reconnect;
 	),
-	TP_printk(NETDEV_PR_FMT ", ftype:0x%.2x",
+	TP_printk(NETDEV_PR_FMT ", ftype:0x%.2x reconnect:%d",
 		  NETDEV_PR_ARG,
-		  le16_to_cpup((__le16 *)__get_dynamic_array(frame)))
+		  le16_to_cpup((__le16 *)__get_dynamic_array(frame)),
+		  __entry->reconnect)
 );
 
 DECLARE_EVENT_CLASS(netdev_mac_evt,
@@ -3479,6 +3483,44 @@ TRACE_EVENT(rdev_set_sar_specs,
 	),
 	TP_printk(WIPHY_PR_FMT ", Set type:%d, num_specs:%d",
 		  WIPHY_PR_ARG, __entry->type, __entry->num)
+);
+
+TRACE_EVENT(rdev_set_tid_config,
+	TP_PROTO(struct wiphy *wiphy, struct net_device *netdev,
+		 struct cfg80211_tid_config *tid_conf),
+	TP_ARGS(wiphy, netdev, tid_conf),
+	TP_STRUCT__entry(
+		WIPHY_ENTRY
+		NETDEV_ENTRY
+		MAC_ENTRY(peer)
+	),
+	TP_fast_assign(
+		WIPHY_ASSIGN;
+		NETDEV_ASSIGN;
+		MAC_ASSIGN(peer, tid_conf->peer);
+	),
+	TP_printk(WIPHY_PR_FMT ", " NETDEV_PR_FMT ", peer: " MAC_PR_FMT,
+		  WIPHY_PR_ARG, NETDEV_PR_ARG, MAC_PR_ARG(peer))
+);
+
+TRACE_EVENT(rdev_reset_tid_config,
+	TP_PROTO(struct wiphy *wiphy, struct net_device *netdev,
+		 const u8 *peer, u8 tids),
+	TP_ARGS(wiphy, netdev, peer, tids),
+	TP_STRUCT__entry(
+		WIPHY_ENTRY
+		NETDEV_ENTRY
+		MAC_ENTRY(peer)
+		__field(u8, tids)
+	),
+	TP_fast_assign(
+		WIPHY_ASSIGN;
+		NETDEV_ASSIGN;
+		MAC_ASSIGN(peer, peer);
+		__entry->tids = tids;
+	),
+	TP_printk(WIPHY_PR_FMT ", " NETDEV_PR_FMT ", peer: " MAC_PR_FMT ", tids: 0x%x",
+		  WIPHY_PR_ARG, NETDEV_PR_ARG, MAC_PR_ARG(peer), __entry->tids)
 );
 
 #endif /* !__RDEV_OPS_TRACE || TRACE_HEADER_MULTI_READ */
