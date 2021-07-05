@@ -101,7 +101,7 @@ static long cam_subdev_compat_ioctl(struct v4l2_subdev *sd,
 }
 #endif
 
-const struct v4l2_subdev_core_ops cam_subdev_core_ops = {
+static const struct v4l2_subdev_core_ops cam_subdev_core_ops = {
 	.ioctl = cam_subdev_ioctl,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl32 = cam_subdev_compat_ioctl,

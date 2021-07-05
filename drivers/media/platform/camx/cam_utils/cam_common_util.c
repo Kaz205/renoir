@@ -68,9 +68,9 @@ uint64_t cam_common_util_get_time_diff(struct timeval *t1, struct timeval *t2)
 
 void cam_common_util_get_curr_timestamp(struct timeval *time_stamp)
 {
-	struct timespec ts;
+	struct timespec64 ts;
 
-	getboottime(&ts);
+	ts = ktime_to_timespec64(ktime_get_boottime());
 	time_stamp->tv_sec    = ts.tv_sec;
 	time_stamp->tv_usec   = ts.tv_nsec/1000;
 }

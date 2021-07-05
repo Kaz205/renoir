@@ -65,7 +65,7 @@
  *
  */
 void cam_debug_log(unsigned int module_id, const char *func, const int line,
-	const char *fmt, ...);
+	const char *fmt, ...) __printf(4, 5);
 
 /*
  * cam_get_module_name()

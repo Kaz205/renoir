@@ -126,7 +126,7 @@ static int cti_plat_create_v8_etm_connection(struct device *dev,
 
 	/* Can optionally have an etm node - return if not  */
 	cs_fwnode = fwnode_find_reference(root_fwnode, CTI_DT_CSDEV_ASSOC, 0);
-	if (IS_ERR_OR_NULL(cs_fwnode))
+	if (IS_ERR(cs_fwnode))
 		return 0;
 
 	/* allocate memory */
@@ -343,7 +343,6 @@ static int cti_plat_create_connection(struct device *dev,
 {
 	struct cti_trig_con *tc = NULL;
 	int cpuid = -1, err = 0;
-	struct fwnode_handle *cs_fwnode = NULL;
 	struct coresight_device *csdev = NULL;
 	const char *assoc_name = "unknown";
 	char cpu_name_str[16];
@@ -397,9 +396,10 @@ static int cti_plat_create_connection(struct device *dev,
 		assoc_name = cpu_name_str;
 	} else {
 		/* associated device ? */
-		cs_fwnode = fwnode_find_reference(fwnode,
-						  CTI_DT_CSDEV_ASSOC, 0);
-		if (!IS_ERR_OR_NULL(cs_fwnode)) {
+		struct fwnode_handle *cs_fwnode = fwnode_find_reference(fwnode,
+									CTI_DT_CSDEV_ASSOC,
+									0);
+		if (!IS_ERR(cs_fwnode)) {
 			assoc_name = cti_plat_get_csdev_or_node_name(cs_fwnode,
 								     &csdev);
 			fwnode_handle_put(cs_fwnode);

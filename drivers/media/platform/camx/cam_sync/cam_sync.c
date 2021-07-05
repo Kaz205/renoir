@@ -15,6 +15,7 @@
 #include <linux/module.h>
 #include <linux/irqflags.h>
 #include <linux/module.h>
+#include <linux/poll.h>
 #include <linux/platform_device.h>
 #include <linux/debugfs.h>
 #include "cam_sync_util.h"
@@ -30,7 +31,7 @@ struct sync_device *sync_dev;
  */
 static bool trigger_cb_without_switch;
 
-void cam_sync_print_fence_table(void)
+static void cam_sync_print_fence_table(void)
 {
 	int cnt;
 
@@ -40,7 +41,7 @@ void cam_sync_print_fence_table(void)
 			sync_dev->sync_table[cnt].name,
 			sync_dev->sync_table[cnt].type,
 			sync_dev->sync_table[cnt].state,
-			sync_dev->sync_table[cnt].ref_cnt);
+			atomic_read(&sync_dev->sync_table[cnt].ref_cnt));
 	}
 }
 
@@ -54,7 +55,7 @@ int cam_sync_create(int32_t *sync_obj, const char *name)
 		idx = find_first_zero_bit(sync_dev->bitmap, CAM_SYNC_MAX_OBJS);
 		if (idx >= CAM_SYNC_MAX_OBJS) {
 			CAM_ERR(CAM_SYNC,
-				"Error: Unable to Create Sync Idx = %d Reached Max!!",
+				"Error: Unable to Create Sync Idx = %ld Reached Max!!",
 				idx);
 			sync_dev->err_cnt++;
 			if (sync_dev->err_cnt == 1)
@@ -793,21 +794,20 @@ static long cam_sync_dev_ioctl(struct file *filep, void *fh,
 	return rc;
 }
 
-static unsigned int cam_sync_poll(struct file *f,
+static __poll_t cam_sync_poll(struct file *f,
 	struct poll_table_struct *pll_table)
 {
-	int rc = 0;
 	struct v4l2_fh *eventq = f->private_data;
 
 	if (!eventq)
-		return -EINVAL;
+		return EPOLLERR | EPOLLNVAL;
 
 	poll_wait(f, &eventq->wait, pll_table);
 
 	if (v4l2_event_pending(eventq))
-		rc = POLLPRI;
+		return EPOLLPRI;
 
-	return rc;
+	return 0;
 }
 
 static int cam_sync_open(struct file *filep)
@@ -907,21 +907,16 @@ static int cam_sync_close(struct file *filep)
 	return rc;
 }
 
-int cam_sync_subscribe_event(struct v4l2_fh *fh,
-		const struct v4l2_event_subscription *sub)
+static int
+cam_sync_subscribe_event(struct v4l2_fh *fh,
+			 const struct v4l2_event_subscription *sub)
 {
 	return v4l2_event_subscribe(fh, sub, CAM_SYNC_MAX_V4L2_EVENTS, NULL);
 }
 
-int cam_sync_unsubscribe_event(struct v4l2_fh *fh,
-		const struct v4l2_event_subscription *sub)
-{
-	return v4l2_event_unsubscribe(fh, sub);
-}
-
 static const struct v4l2_ioctl_ops g_cam_sync_ioctl_ops = {
 	.vidioc_subscribe_event = cam_sync_subscribe_event,
-	.vidioc_unsubscribe_event = cam_sync_unsubscribe_event,
+	.vidioc_unsubscribe_event = v4l2_event_unsubscribe,
 	.vidioc_default = cam_sync_dev_ioctl,
 };
 

@@ -147,9 +147,6 @@ struct cam_soc_gpio_data {
  * @rgltr_type:             Array of regulator names
  * @rgltr:                  Array of associated regulator resources
  * @rgltr_delay:            Array of regulator delay values
- * @num_pds:                Number of power domains
- * @pds_name:               Array of power domain names
- * @pds:                    Array of associated power domain resources
  * @num_clk:                Number of clocks
  * @clk_name:               Array of clock names
  * @clk:                    Array of associated clock resources
@@ -194,10 +191,6 @@ struct cam_hw_soc_info {
 	uint32_t                        rgltr_type[CAM_SOC_MAX_REGULATOR];
 	struct regulator               *rgltr[CAM_SOC_MAX_REGULATOR];
 	uint32_t                        rgltr_delay[CAM_SOC_MAX_REGULATOR];
-
-	uint32_t                        num_pds;
-	const char                     *pds_name[CAM_SOC_MAX_POWER_DOMAINS];
-	struct device                  *pds[CAM_SOC_MAX_POWER_DOMAINS];
 
 	uint32_t                        use_shared_clk;
 	uint32_t                        num_clk;
@@ -644,4 +637,6 @@ int cam_soc_util_clk_enable_default(struct cam_hw_soc_info *soc_info,
 uint32_t cam_soc_util_get_vote_level(struct cam_hw_soc_info *soc_info,
 	uint64_t clock_rate);
 
+int cam_soc_util_power_domain_enable_default(struct cam_hw_soc_info *soc_info);
+void cam_soc_util_power_domain_disable_default(struct cam_hw_soc_info *soc_info);
 #endif /* _CAM_SOC_UTIL_H_ */

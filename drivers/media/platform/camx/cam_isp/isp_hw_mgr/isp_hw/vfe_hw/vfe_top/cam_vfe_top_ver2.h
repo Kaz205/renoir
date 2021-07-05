@@ -71,7 +71,7 @@ struct cam_vfe_top_ver2_reg_offset_common {
 	uint32_t color_feature;
 	uint32_t zoom_feature;
 	uint32_t global_reset_cmd;
-	struct cam_vfe_top_ver2_reg_offset_module_ctrl
+	const struct cam_vfe_top_ver2_reg_offset_module_ctrl
 		*module_ctrl[CAM_VFE_TOP_VER2_MODULE_MAX];
 	uint32_t bus_cgc_ovd;
 	uint32_t core_cfg;
@@ -81,18 +81,18 @@ struct cam_vfe_top_ver2_reg_offset_common {
 };
 
 struct cam_vfe_top_ver2_hw_info {
-	struct cam_vfe_top_ver2_reg_offset_common  *common_reg;
-	struct cam_vfe_camif_ver2_hw_info           camif_hw_info;
-	struct cam_vfe_camif_lite_ver2_hw_info      camif_lite_hw_info;
-	struct cam_vfe_rdi_ver2_hw_info             rdi_hw_info;
-	struct cam_vfe_fe_ver1_hw_info              fe_hw_info;
-	struct cam_vfe_top_dump_data                dump_data;
+	const struct cam_vfe_top_ver2_reg_offset_common  *common_reg;
+	const struct cam_vfe_camif_ver2_hw_info           camif_hw_info;
+	const struct cam_vfe_camif_lite_ver2_hw_info      camif_lite_hw_info;
+	const struct cam_vfe_rdi_ver2_hw_info             rdi_hw_info;
+	const struct cam_vfe_fe_ver1_hw_info              fe_hw_info;
+	const struct cam_vfe_top_dump_data                dump_data;
 	uint32_t mux_type[CAM_VFE_TOP_VER2_MUX_MAX];
 };
 
 int cam_vfe_top_ver2_init(struct cam_hw_soc_info     *soc_info,
 	struct cam_hw_intf                           *hw_intf,
-	void                                         *top_hw_info,
+	const void                                   *top_hw_info,
 	struct cam_vfe_top                          **vfe_top);
 
 int cam_vfe_top_ver2_deinit(struct cam_vfe_top      **vfe_top);

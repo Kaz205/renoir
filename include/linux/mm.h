@@ -1001,6 +1001,8 @@ vm_fault_t finish_mkwrite_fault(struct vm_fault *vmf);
 #define ZONES_PGOFF		(NODES_PGOFF - ZONES_WIDTH)
 #define LAST_CPUPID_PGOFF	(ZONES_PGOFF - LAST_CPUPID_WIDTH)
 #define KASAN_TAG_PGOFF		(LAST_CPUPID_PGOFF - KASAN_TAG_WIDTH)
+#define LRU_GEN_PGOFF		(KASAN_TAG_PGOFF - LRU_GEN_WIDTH)
+#define LRU_USAGE_PGOFF		(LRU_GEN_PGOFF - LRU_USAGE_WIDTH)
 
 /*
  * Define the bit shifts to access each section.  For non-existent
@@ -1404,7 +1406,6 @@ static inline struct mem_cgroup *page_memcg(struct page *page)
 }
 static inline struct mem_cgroup *page_memcg_rcu(struct page *page)
 {
-	WARN_ON_ONCE(!rcu_read_lock_held());
 	return NULL;
 }
 #endif
@@ -1537,6 +1538,7 @@ struct zap_details {
 	struct address_space *check_mapping;	/* Check page->mapping if set */
 	pgoff_t	first_index;			/* Lowest page->index to unmap */
 	pgoff_t last_index;			/* Highest page->index to unmap */
+	struct page *single_page;		/* Locked page to be unmapped */
 };
 
 static inline void INIT_VMA(struct vm_area_struct *vma)
@@ -1633,10 +1635,28 @@ static inline vm_fault_t handle_speculative_fault(struct mm_struct *mm,
 extern int fixup_user_fault(struct task_struct *tsk, struct mm_struct *mm,
 			    unsigned long address, unsigned int fault_flags,
 			    bool *unlocked);
+void unmap_mapping_page(struct page *page);
 void unmap_mapping_pages(struct address_space *mapping,
 		pgoff_t start, pgoff_t nr, bool even_cows);
 void unmap_mapping_range(struct address_space *mapping,
 		loff_t const holebegin, loff_t const holelen, int even_cows);
+
+static inline void task_enter_user_fault(void)
+{
+	WARN_ON(current->in_user_fault);
+	current->in_user_fault = 1;
+}
+
+static inline void task_exit_user_fault(void)
+{
+	WARN_ON(!current->in_user_fault);
+	current->in_user_fault = 0;
+}
+
+static inline bool task_in_user_fault(void)
+{
+	return current->in_user_fault;
+}
 #else
 static inline vm_fault_t handle_mm_fault(struct vm_area_struct *vma,
 		unsigned long address, unsigned int flags)
@@ -1653,10 +1673,24 @@ static inline int fixup_user_fault(struct task_struct *tsk,
 	BUG();
 	return -EFAULT;
 }
+static inline void unmap_mapping_page(struct page *page) { }
 static inline void unmap_mapping_pages(struct address_space *mapping,
 		pgoff_t start, pgoff_t nr, bool even_cows) { }
 static inline void unmap_mapping_range(struct address_space *mapping,
 		loff_t const holebegin, loff_t const holelen, int even_cows) { }
+
+static inline void task_enter_user_fault(void)
+{
+}
+
+static inline void task_exit_user_fault(void)
+{
+}
+
+static inline bool task_in_user_fault(void)
+{
+	return false;
+}
 #endif
 
 static inline void unmap_shared_mapping_range(struct address_space *mapping,
@@ -3111,6 +3145,8 @@ static inline int pages_identical(struct page *page1, struct page *page2)
 }
 
 extern int min_filelist_kbytes;
+extern int min_filelist_kbytes_handler(struct ctl_table *table, int write,
+		void __user *buf, size_t *len, loff_t *pos);
 
 /**
  * seal_check_future_write - Check for F_SEAL_FUTURE_WRITE flag and handle it

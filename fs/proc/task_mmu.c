@@ -1377,7 +1377,7 @@ static ssize_t clear_refs_write(struct file *file, const char __user *buf,
 			count = -EINTR;
 			goto out_mm;
 		}
-		tlb_gather_mmu(&tlb, mm, 0, mm->highest_vm_end);
+		tlb_gather_mmu(&tlb, mm, 0, -1);
 		if (type == CLEAR_REFS_SOFT_DIRTY) {
 			for (vma = mm->mmap; vma; vma = vma->vm_next) {
 				if (!(vma->vm_flags & VM_SOFTDIRTY))
@@ -1424,7 +1424,7 @@ static ssize_t clear_refs_write(struct file *file, const char __user *buf,
 				&cp);
 		if (type == CLEAR_REFS_SOFT_DIRTY)
 			mmu_notifier_invalidate_range_end(&range);
-		tlb_finish_mmu(&tlb, 0, mm->highest_vm_end);
+		tlb_finish_mmu(&tlb, 0, -1);
 		up_read(&mm->mmap_sem);
 out_mm:
 		mmput(mm);
@@ -2095,7 +2095,6 @@ static ssize_t reclaim_write(struct file *file, const char __user *buf,
 	struct vm_area_struct *vma;
 	enum reclaim_type type;
 	char *type_buf;
-	struct mmu_gather tlb;
 
 	memset(buffer, 0, sizeof(buffer));
 	if (count > sizeof(buffer) - 1)
@@ -2133,7 +2132,6 @@ static ssize_t reclaim_write(struct file *file, const char __user *buf,
 		};
 
 		down_read(&mm->mmap_sem);
-		tlb_gather_mmu(&tlb, mm, 0, mm->highest_vm_end);
 		for (vma = mm->mmap; vma; vma = vma->vm_next) {
 			if (is_vm_hugetlb_page(vma))
 				continue;
@@ -2169,7 +2167,7 @@ static ssize_t reclaim_write(struct file *file, const char __user *buf,
 			walk_page_range(mm, vma->vm_start, vma->vm_end,
 					&reclaim_walk, (void*)&reclaim_data);
 		}
-		tlb_finish_mmu(&tlb, 0, mm->highest_vm_end);
+		flush_tlb_mm(mm);
 		up_read(&mm->mmap_sem);
 		mmput(mm);
 	}

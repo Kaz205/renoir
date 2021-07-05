@@ -59,6 +59,9 @@ const_debug unsigned int sysctl_sched_features =
  */
 const_debug unsigned int sysctl_sched_nr_migrate = 32;
 
+unsigned int sysctl_iowait_reset_ticks = 20;
+unsigned int sysctl_iowait_apply_ticks = 10;
+
 /*
  * period over which we measure -rt task CPU usage in us.
  * default: 1s
@@ -3978,6 +3981,7 @@ context_switch(struct rq *rq, struct task_struct *prev,
 		 * finish_task_switch()'s mmdrop().
 		 */
 		switch_mm_irqs_off(prev->active_mm, next->mm, next);
+		lru_gen_switch_mm(prev->active_mm, next->mm);
 
 		if (!prev->mm) {                        // from kernel
 			/* will mmdrop() in finish_task_switch(). */
@@ -7427,6 +7431,7 @@ void idle_task_exit(void)
 
 	if (mm != &init_mm) {
 		switch_mm(mm, &init_mm, current);
+		lru_gen_switch_mm(mm, &init_mm);
 		finish_arch_post_lock_switch();
 	}
 

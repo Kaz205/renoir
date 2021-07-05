@@ -219,7 +219,7 @@ struct cam_cdm {
 	uint32_t hw_family_version;
 	struct cam_iommu_handle iommu_hdl;
 	struct cam_cdm_reg_offset_table *offset_tbl;
-	struct cam_cdm_utils_ops *ops;
+	const struct cam_cdm_utils_ops *ops;
 	struct cam_cdm_client *clients[CAM_PER_CDM_MAX_REGISTERED_CLIENTS];
 	uint8_t bl_tag;
 	atomic_t error;

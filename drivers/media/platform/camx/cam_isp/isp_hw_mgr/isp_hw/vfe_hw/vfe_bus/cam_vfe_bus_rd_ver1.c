@@ -129,7 +129,7 @@ struct cam_vfe_bus_rd_ver1_vfe_bus_rd_data {
 	uint32_t                         format;
 	uint32_t                         max_width;
 	uint32_t                         max_height;
-	struct cam_cdm_utils_ops        *cdm_util_ops;
+	const struct cam_cdm_utils_ops   *cdm_util_ops;
 	uint32_t                         secure_mode;
 };
 
@@ -234,9 +234,9 @@ static int cam_vfe_bus_acquire_rm(
 	uint32_t                                 *client_done_mask,
 	uint32_t                                  is_dual)
 {
-	uint32_t rm_idx = 0;
 	struct cam_isp_resource_node              *rm_res_local = NULL;
 	struct cam_vfe_bus_rd_ver1_rm_resource_data *rsrc_data = NULL;
+	int rm_idx;
 
 	*rm_res = NULL;
 	*client_done_mask = 0;
@@ -268,7 +268,7 @@ static int cam_vfe_bus_acquire_rm(
 	*client_done_mask = (1 << rm_idx);
 	*rm_res = rm_res_local;
 
-	CAM_DBG(CAM_ISP, "RM %d: Acquired");
+	CAM_DBG(CAM_ISP, "RM: Acquired");
 	return 0;
 }
 
@@ -602,8 +602,7 @@ static int cam_vfe_bus_start_vfe_bus_rd(
 	struct cam_isp_resource_node          *vfe_out)
 {
 	int rc = 0, i;
-	struct cam_vfe_bus_rd_ver1_vfe_bus_rd_data  *rsrc_data = NULL;
-	struct cam_vfe_bus_rd_ver1_common_data   *common_data = NULL;
+	struct cam_vfe_bus_rd_ver1_vfe_bus_rd_data  *rsrc_data;
 
 	if (!vfe_out) {
 		CAM_ERR(CAM_ISP, "Invalid input");
@@ -611,7 +610,6 @@ static int cam_vfe_bus_start_vfe_bus_rd(
 	}
 
 	rsrc_data = vfe_out->res_priv;
-	common_data = rsrc_data->common_data;
 
 	CAM_DBG(CAM_ISP, "Start resource type: %x", rsrc_data->bus_rd_type);
 
@@ -720,7 +718,7 @@ static int cam_vfe_bus_deinit_vfe_bus_rd_resource(
 		 * This is not error. It can happen if the resource is
 		 * never supported in the HW.
 		 */
-		CAM_DBG(CAM_ISP, "HW%d Res %d already deinitialized");
+		CAM_DBG(CAM_ISP, "HW already deinitialized");
 		return 0;
 	}
 
@@ -744,9 +742,6 @@ static int cam_vfe_bus_deinit_vfe_bus_rd_resource(
 static int cam_vfe_bus_rd_ver1_handle_irq(uint32_t    evt_id,
 	struct cam_irq_th_payload                 *th_payload)
 {
-	struct cam_vfe_bus_rd_ver1_priv          *bus_priv;
-
-	bus_priv     = th_payload->handler_priv;
 	CAM_DBG(CAM_ISP, "BUS READ IRQ Received");
 	return 0;
 }
@@ -754,7 +749,6 @@ static int cam_vfe_bus_rd_ver1_handle_irq(uint32_t    evt_id,
 static int cam_vfe_bus_rd_update_rm(void *priv, void *cmd_args,
 	uint32_t arg_size)
 {
-	struct cam_vfe_bus_rd_ver1_priv          *bus_priv;
 	struct cam_isp_hw_get_cmd_update         *update_buf;
 	struct cam_buf_io_cfg                    *io_cfg;
 	struct cam_vfe_bus_rd_ver1_vfe_bus_rd_data     *vfe_bus_rd_data = NULL;
@@ -764,7 +758,6 @@ static int cam_vfe_bus_rd_update_rm(void *priv, void *cmd_args,
 	uint32_t  val;
 	uint32_t buf_size = 0;
 
-	bus_priv = (struct cam_vfe_bus_rd_ver1_priv  *) priv;
 	update_buf =  (struct cam_isp_hw_get_cmd_update *) cmd_args;
 
 	vfe_bus_rd_data = (struct cam_vfe_bus_rd_ver1_vfe_bus_rd_data *)
@@ -870,7 +863,6 @@ static int cam_vfe_bus_rd_update_fs_cfg(void *priv, void *cmd_args,
 	struct cam_vfe_bus_rd_ver1_rm_resource_data  *rm_data = NULL;
 	struct cam_vfe_fe_update_args                *fe_upd_args;
 	struct cam_fe_config                         *fe_cfg;
-	struct cam_vfe_bus_rd_ver1_common_data        *common_data;
 	int i = 0;
 
 	bus_priv = (struct cam_vfe_bus_rd_ver1_priv  *) priv;
@@ -889,7 +881,6 @@ static int cam_vfe_bus_rd_update_fs_cfg(void *priv, void *cmd_args,
 	for (i = 0; i < vfe_bus_rd_data->num_rm; i++) {
 
 		rm_data = vfe_bus_rd_data->rm_res[i]->res_priv;
-		common_data = rm_data->common_data;
 
 		rm_data->format = fe_cfg->format;
 		CAM_DBG(CAM_ISP, "format: 0x%x", rm_data->format);

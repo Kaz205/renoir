@@ -13,6 +13,5 @@ obj-$(CONFIG_QTI_CPAS) += cam_cpas/ cam_cdm/
 obj-$(CONFIG_QTI_ISP) += cam_isp/
 obj-$(CONFIG_QTI_ICP_A5) += cam_icp/
 obj-$(CONFIG_QTI_JPEG) += cam_jpeg/
-obj-$(CONFIG_QTI_FD) += cam_fd/
 obj-$(CONFIG_QTI_LRME) += cam_lrme/
 obj-$(CONFIG_QTI_SENSORS) += cam_sensor_module/

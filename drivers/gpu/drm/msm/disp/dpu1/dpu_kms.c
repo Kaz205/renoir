@@ -18,6 +18,7 @@
 #include "msm_drv.h"
 #include "msm_mmu.h"
 #include "msm_gem.h"
+#include "disp/msm_disp_snapshot.h"
 
 #include "dpu_kms.h"
 #include "dpu_core_irq.h"
@@ -583,6 +584,9 @@ static int _dpu_kms_drm_obj_init(struct dpu_kms *dpu_kms)
 	struct drm_plane *primary_planes[MAX_PLANES], *plane;
 	struct drm_plane *cursor_planes[MAX_PLANES] = { NULL };
 	struct drm_crtc *crtc;
+	unsigned cursor_idx = 0;
+	unsigned primary_idx = 0;
+	bool pin_overlays;
 
 	struct msm_drm_private *priv;
 	struct dpu_mdss_cfg *catalog;
@@ -592,6 +596,8 @@ static int _dpu_kms_drm_obj_init(struct dpu_kms *dpu_kms)
 	dev = dpu_kms->dev;
 	priv = dev->dev_private;
 	catalog = dpu_kms->catalog;
+
+	pin_overlays = !of_property_read_bool(dpu_kms->pdev->dev.of_node, "chromium-enable-overlays");
 
 	/*
 	 * Create encoder and query display drivers to create
@@ -606,21 +612,31 @@ static int _dpu_kms_drm_obj_init(struct dpu_kms *dpu_kms)
 	/* Create the planes, keeping track of one primary/cursor per crtc */
 	for (i = 0; i < catalog->sspp_count; i++) {
 		enum drm_plane_type type;
+		unsigned possible_crtcs;
 
 		if ((catalog->sspp[i].features & BIT(DPU_SSPP_CURSOR))
-			&& cursor_planes_idx < max_crtc_count)
+			&& cursor_planes_idx < max_crtc_count) {
 			type = DRM_PLANE_TYPE_CURSOR;
-		else if (primary_planes_idx < max_crtc_count)
+			possible_crtcs = BIT(cursor_idx);
+			cursor_idx++;
+		} else if (primary_planes_idx < max_crtc_count) {
 			type = DRM_PLANE_TYPE_PRIMARY;
-		else
+			possible_crtcs = BIT(primary_idx);
+			primary_idx++;
+		} else {
 			type = DRM_PLANE_TYPE_OVERLAY;
+			possible_crtcs = (1UL << max_crtc_count) - 1;
+		}
 
 		DPU_DEBUG("Create plane type %d with features %lx (cur %lx)\n",
 			  type, catalog->sspp[i].features,
 			  catalog->sspp[i].features & BIT(DPU_SSPP_CURSOR));
 
+		if (!pin_overlays)
+			possible_crtcs = (1UL << max_crtc_count) - 1;
+
 		plane = dpu_plane_init(dev, catalog->sspp[i].id, type,
-				       (1UL << max_crtc_count) - 1, 0);
+				       possible_crtcs, 0);
 		if (IS_ERR(plane)) {
 			DPU_ERROR("dpu_plane_init failed\n");
 			ret = PTR_ERR(plane);
@@ -796,6 +812,51 @@ static void dpu_irq_uninstall(struct msm_kms *kms)
 	dpu_core_irq_uninstall(dpu_kms);
 }
 
+static void dpu_kms_mdp_snapshot(struct msm_disp_state *disp_state, struct msm_kms *kms)
+{
+	int i;
+	struct dpu_kms *dpu_kms;
+	struct dpu_mdss_cfg *cat;
+	struct dpu_hw_mdp *top;
+
+	dpu_kms = to_dpu_kms(kms);
+
+	cat = dpu_kms->catalog;
+	top = dpu_kms->hw_mdp;
+
+	pm_runtime_get_sync(&dpu_kms->pdev->dev);
+
+	/* dump CTL sub-blocks HW regs info */
+	for (i = 0; i < cat->ctl_count; i++)
+		msm_disp_snapshot_add_block(disp_state, cat->ctl[i].len,
+				dpu_kms->mmio + cat->ctl[i].base, "ctl_%d", i);
+
+	/* dump DSPP sub-blocks HW regs info */
+	for (i = 0; i < cat->dspp_count; i++)
+		msm_disp_snapshot_add_block(disp_state, cat->dspp[i].len,
+				dpu_kms->mmio + cat->dspp[i].base, "dspp_%d", i);
+
+	/* dump INTF sub-blocks HW regs info */
+	for (i = 0; i < cat->intf_count; i++)
+		msm_disp_snapshot_add_block(disp_state, cat->intf[i].len,
+				dpu_kms->mmio + cat->intf[i].base, "intf_%d", i);
+
+	/* dump PP sub-blocks HW regs info */
+	for (i = 0; i < cat->pingpong_count; i++)
+		msm_disp_snapshot_add_block(disp_state, cat->pingpong[i].len,
+				dpu_kms->mmio + cat->pingpong[i].base, "pingpong_%d", i);
+
+	/* dump SSPP sub-blocks HW regs info */
+	for (i = 0; i < cat->sspp_count; i++)
+		msm_disp_snapshot_add_block(disp_state, cat->sspp[i].len,
+				dpu_kms->mmio + cat->sspp[i].base, "sspp_%d", i);
+
+	msm_disp_snapshot_add_block(disp_state, top->hw.length,
+			dpu_kms->mmio + top->hw.blk_off, "top");
+
+	pm_runtime_put_sync(&dpu_kms->pdev->dev);
+}
+
 static const struct msm_kms_funcs kms_funcs = {
 	.hw_init         = dpu_kms_hw_init,
 	.irq_preinstall  = dpu_irq_preinstall,
@@ -816,6 +877,7 @@ static const struct msm_kms_funcs kms_funcs = {
 	.round_pixclk    = dpu_kms_round_pixclk,
 	.destroy         = dpu_kms_destroy,
 	.set_encoder_mode = _dpu_kms_set_encoder_mode,
+	.snapshot        = dpu_kms_mdp_snapshot,
 #ifdef CONFIG_DEBUG_FS
 	.debugfs_init    = dpu_kms_debugfs_init,
 #endif
@@ -1220,6 +1282,9 @@ static const struct dev_pm_ops dpu_pm_ops = {
 static const struct of_device_id dpu_dt_match[] = {
 	{ .compatible = "qcom,sdm845-dpu", },
 	{ .compatible = "qcom,sc7180-dpu", },
+	{ .compatible = "qcom,sc7280-dpu", },
+	{ .compatible = "qcom,sm8150-dpu", },
+	{ .compatible = "qcom,sm8250-dpu", },
 	{}
 };
 MODULE_DEVICE_TABLE(of, dpu_dt_match);

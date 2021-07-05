@@ -292,7 +292,6 @@
 			reg-cam-base = <0x48000>;
 			interrupts = <GIC_SPI 469 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "cpas-cdm0";
-			power-domains = <&camcc TITAN_TOP_GDSC>;
 			clock-names = "gcc_camera_ahb",
 				"gcc_camera_axi",
 				"cam_cc_soc_ahb_clk",
@@ -326,7 +325,6 @@
 			reg-cam-base = <0x65000>;
 			interrupts = <GIC_SPI 477 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "cam-csiphy0";
-			power-domains = <&camcc TITAN_TOP_GDSC>;
 			clocks = <&camcc CAM_CC_CAMNOC_AXI_CLK>,
 				<&camcc CAM_CC_SOC_AHB_CLK>,
 				<&camcc CAM_CC_SLOW_AHB_CLK_SRC>,
@@ -360,7 +358,6 @@
 			reg-cam-base = <0x66000>;
 			interrupts = <GIC_SPI 478 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "cam-csiphy1";
-			power-domains = <&camcc TITAN_TOP_GDSC>;
 			clocks = <&camcc CAM_CC_CAMNOC_AXI_CLK>,
 				<&camcc CAM_CC_SOC_AHB_CLK>,
 				<&camcc CAM_CC_SLOW_AHB_CLK_SRC>,
@@ -394,7 +391,6 @@
 			reg-cam-base = <0x67000>;
 			interrupts = <GIC_SPI 479 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "cam-csiphy2";
-			power-domains = <&camcc TITAN_TOP_GDSC>;
 			clocks = <&camcc CAM_CC_CAMNOC_AXI_CLK>,
 				<&camcc CAM_CC_SOC_AHB_CLK>,
 				<&camcc CAM_CC_SLOW_AHB_CLK_SRC>,
@@ -428,7 +424,6 @@
 			reg-cam-base = <0x68000>;
 			interrupts = <GIC_SPI 461 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "cam-csiphy3";
-			power-domains = <&camcc TITAN_TOP_GDSC>;
 			clocks = <&camcc CAM_CC_CAMNOC_AXI_CLK>,
 				<&camcc CAM_CC_SOC_AHB_CLK>,
 				<&camcc CAM_CC_SLOW_AHB_CLK_SRC>,
@@ -517,9 +512,7 @@
 			reg-cam-base = <0xb3000>;
 			interrupt-names = "cam-csid0";
 			interrupts = <GIC_SPI 464 IRQ_TYPE_LEVEL_HIGH>;
-			power-domains = <&camcc TITAN_TOP_GDSC>,
-				<&camcc IFE_0_GDSC>;
-			power-domain-names = "titan_top", "csid0";
+			power-domains = <&camcc IFE_0_GDSC>;
 			clock-names = "camera_ahb",
 				"camera_axi",
 				"soc_ahb_clk",
@@ -563,9 +556,7 @@
 			reg-cam-base = <0xba000>;
 			interrupt-names = "cam-csid1";
 			interrupts = <GIC_SPI 466 IRQ_TYPE_LEVEL_HIGH>;
-			power-domains = <&camcc TITAN_TOP_GDSC>,
-				<&camcc IFE_1_GDSC>;
-			power-domain-names = "titan_top", "csid1";
+			power-domains = <&camcc IFE_1_GDSC>;
 			clock-names = "camera_ahb",
 				"camera_axi",
 				"soc_ahb_clk",
@@ -609,7 +600,6 @@
 			reg-cam-base = <0xc8000>;
 			interrupt-names = "cam-csid-lite";
 			interrupts = <GIC_SPI 473 IRQ_TYPE_LEVEL_HIGH>;
-			power-domains = <&camcc TITAN_TOP_GDSC>;
 			clock-names = "camera_ahb",
 				"camera_axi",
 				"soc_ahb_clk",
@@ -652,9 +642,7 @@
 			reg-cam-base = <0xaf000 0 0x42000>;
 			interrupt-names = "cam-vfe0";
 			interrupts = <GIC_SPI 465 IRQ_TYPE_LEVEL_HIGH>;
-			power-domains = <&camcc TITAN_TOP_GDSC>,
-				<&camcc IFE_0_GDSC>;
-			power-domain-names = "titan_top", "vfe0";
+			power-domains = <&camcc IFE_0_GDSC>;
 			clock-names = "camera_ahb",
 				"camera_axi",
 				"soc_ahb_clk",
@@ -693,9 +681,7 @@
 			reg-cam-base = <0xb6000 0x42000>;
 			interrupt-names = "cam-vfe1";
 			interrupts = <GIC_SPI 467 IRQ_TYPE_LEVEL_HIGH>;
-			power-domains = <&camcc TITAN_TOP_GDSC>,
-				<&camcc IFE_1_GDSC>;
-			power-domain-names = "titan_top", "vfe1";
+			power-domains = <&camcc IFE_1_GDSC>;
 			clock-names = "camera_ahb",
 				"camera_axi",
 				"soc_ahb_clk",
@@ -733,7 +719,6 @@
 			reg-cam-base = <0xc4000>;
 			interrupt-names = "cam-vfe-lite";
 			interrupts = <GIC_SPI 472 IRQ_TYPE_LEVEL_HIGH>;
-			power-domains = <&camcc TITAN_TOP_GDSC>;
 			clock-names = "camera_ahb",
 				"camera_axi",
 				"soc_ahb_clk",
@@ -782,7 +767,6 @@
 		reg-cam-base = <0x00000 0x10000 0x18000>;
 		interrupts = <GIC_SPI 463 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "a5";
-		power-domains = <&camcc TITAN_TOP_GDSC>;
 		clock-names = "gcc_cam_ahb_clk",
 			"gcc_cam_axi_clk",
 			"soc_fast_ahb",
@@ -814,9 +798,7 @@
 		reg = <0 0xac6f000 0 0x3000>;
 		reg-names = "bps_top";
 		reg-cam-base = <0x6f000>;
-		power-domains = <&camcc TITAN_TOP_GDSC>,
-			<&camcc BPS_GDSC>;
-		power-domain-names = "titan_top", "bps";
+		power-domains = <&camcc BPS_GDSC>;
 		clock-names = "bps_ahb_clk",
 			"bps_areg_clk",
 			"bps_axi_clk",
@@ -845,9 +827,7 @@
 		reg = <0 0xac87000 0 0x3000>;
 		reg-names = "ipe0_top";
 		reg-cam-base = <0x87000>;
-		power-domains = <&camcc TITAN_TOP_GDSC>,
-			<&camcc IPE_0_GDSC>;
-		power-domain-names = "titan_top", "ipe0";
+		power-domains = <&camcc IPE_0_GDSC>;
 		clock-names = "ipe_0_ahb_clk",
 			"ipe_0_areg_clk",
 			"ipe_0_axi_clk",
@@ -888,7 +868,6 @@
 			reg-cam-base = <0x4e000>;
 			interrupt-names = "cam-jpeg-enc";
 			interrupts = <GIC_SPI 474 IRQ_TYPE_LEVEL_HIGH>;
-			power-domains = <&camcc TITAN_TOP_GDSC>;
 			clock-names = "camera_ahb",
 				"camera_axi",
 				"soc_ahb_clk",
@@ -917,7 +896,6 @@
 			reg-cam-base = <0x52000>;
 			interrupt-names = "cam-jpeg-dma";
 			interrupts = <GIC_SPI 475 IRQ_TYPE_LEVEL_HIGH>;
-			power-domains = <&camcc TITAN_TOP_GDSC>;
 			clock-names = "camera_ahb",
 				"camera_axi",
 				"soc_ahb_clk",
@@ -955,7 +933,6 @@
 			reg-cam-base = <0x6b000>;
 			interrupt-names = "lrme";
 			interrupts = <GIC_SPI 476 IRQ_TYPE_LEVEL_HIGH>;
-			power-domains = <&camcc TITAN_TOP_GDSC>;
 			clock-names = "camera_ahb",
 				"camera_axi",
 				"soc_ahb_clk",
@@ -995,7 +972,6 @@
 		reg-cam-base = <0 0x4a000>;
 		interrupt-names = "cam-cci0";
 		interrupts = <GIC_SPI 468 IRQ_TYPE_LEVEL_HIGH>;
-		power-domains = <&camcc TITAN_TOP_GDSC>;
 		clocks = <&camcc CAM_CC_CAMNOC_AXI_CLK>,
 			<&camcc CAM_CC_SOC_AHB_CLK>,
 			<&camcc CAM_CC_SLOW_AHB_CLK_SRC>,
@@ -1081,7 +1057,6 @@
 		reg-cam-base = <0 0x4b000>;
 		interrupt-names = "cam-cci1";
 		interrupts = <GIC_SPI 462 IRQ_TYPE_LEVEL_HIGH>;
-		power-domains = <&camcc TITAN_TOP_GDSC>;
 		clocks = <&camcc CAM_CC_CAMNOC_AXI_CLK>,
 			<&camcc CAM_CC_SOC_AHB_CLK>,
 			<&camcc CAM_CC_SLOW_AHB_CLK_SRC>,

@@ -86,6 +86,13 @@ int drm_dp_aux_backlight_enable(struct drm_dp_aux_backlight *aux_bl)
 	if (ret < 0)
 		return ret;
 
+	aux_bl->enabled = true;
+
+	ret = backlight_enable(aux_bl->bd);
+	if (ret < 0)
+		DRM_DEV_INFO(aux_bl->dev, "failed to enable backlight: %d\n",
+			     ret);
+
 	/* Enable backlight */
 	ret = drm_dp_dpcd_readb(aux_bl->aux, DP_EDP_DISPLAY_CONTROL_REGISTER,
 				&val);
@@ -97,13 +104,6 @@ int drm_dp_aux_backlight_enable(struct drm_dp_aux_backlight *aux_bl)
 				 val);
 	if (ret < 0)
 		return ret;
-
-	ret = backlight_enable(aux_bl->bd);
-	if (ret < 0)
-		DRM_DEV_INFO(aux_bl->dev, "failed to enable backlight: %d\n",
-			     ret);
-
-	aux_bl->enabled = true;
 
 	return 0;
 }

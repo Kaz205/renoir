@@ -1039,6 +1039,33 @@ int dp_display_get_test_bpp(struct msm_dp *dp)
 		dp_display->link->test_video.test_bit_depth);
 }
 
+void msm_dp_snapshot(struct msm_disp_state *disp_state, struct msm_dp *dp)
+{
+	struct dp_display_private *dp_display;
+	struct drm_device *drm;
+
+	dp_display = container_of(dp, struct dp_display_private, dp_display);
+	drm = dp->drm_dev;
+
+	/*
+	 * if we are reading registers we need the link clocks to be on
+	 * however till DP cable is connected this will not happen as we
+	 * do not know the resolution to power up with. Hence check the
+	 * power_on status before dumping DP registers to avoid crash due
+	 * to unclocked access
+	 */
+	mutex_lock(&dp_display->event_mutex);
+
+	if (!dp->power_on) {
+		mutex_unlock(&dp_display->event_mutex);
+		return;
+	}
+
+	dp_catalog_snapshot(dp_display->catalog, disp_state);
+
+	mutex_unlock(&dp_display->event_mutex);
+}
+
 static void dp_display_config_hpd(struct dp_display_private *dp)
 {
 
@@ -1327,8 +1354,13 @@ static int dp_pm_suspend(struct device *dev)
 
 	mutex_lock(&dp->event_mutex);
 
-	if (dp->core_initialized == true)
+	if (dp->core_initialized == true) {
+		/* mainlink enabled */
+		if (dp_power_clk_status(dp->power, DP_CTRL_PM))
+			dp_ctrl_off_link_stream(dp->ctrl);
+
 		dp_display_host_deinit(dp);
+	}
 
 	dp->hpd_state = ST_SUSPENDED;
 

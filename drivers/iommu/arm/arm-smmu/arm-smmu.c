@@ -341,6 +341,12 @@ static void arm_smmu_tlb_add_page_s1(struct iommu_iotlb_gather *gather,
 				  ARM_SMMU_CB_S1_TLBIVAL);
 }
 
+static void arm_smmu_tlb_inv_walk_impl_s1(unsigned long iova, size_t size,
+				     size_t granule, void *cookie)
+{
+	arm_smmu_tlb_inv_context_s1(cookie);
+}
+
 static void arm_smmu_tlb_inv_walk_s2(unsigned long iova, size_t size,
 				     size_t granule, void *cookie)
 {
@@ -385,6 +391,12 @@ static void arm_smmu_tlb_add_page_s2_v1(struct iommu_iotlb_gather *gather,
 static const struct iommu_flush_ops arm_smmu_s1_tlb_ops = {
 	.tlb_flush_all	= arm_smmu_tlb_inv_context_s1,
 	.tlb_flush_walk	= arm_smmu_tlb_inv_walk_s1,
+	.tlb_add_page	= arm_smmu_tlb_add_page_s1,
+};
+
+const struct iommu_flush_ops arm_smmu_s1_tlb_impl_ops = {
+	.tlb_flush_all	= arm_smmu_tlb_inv_context_s1,
+	.tlb_flush_walk	= arm_smmu_tlb_inv_walk_impl_s1,
 	.tlb_add_page	= arm_smmu_tlb_add_page_s1,
 };
 
@@ -703,7 +715,10 @@ static int arm_smmu_init_domain_context(struct iommu_domain *domain,
 			ias = min(ias, 32UL);
 			oas = min(oas, 32UL);
 		}
-		smmu_domain->flush_ops = &arm_smmu_s1_tlb_ops;
+		if (smmu_domain->pgtbl_cfg.quirks & IO_PGTABLE_QUIRK_NON_STRICT)
+			smmu_domain->flush_ops = &arm_smmu_s1_tlb_impl_ops;
+		else
+			smmu_domain->flush_ops = &arm_smmu_s1_tlb_ops;
 		break;
 	case ARM_SMMU_DOMAIN_NESTED:
 		/*

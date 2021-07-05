@@ -61,11 +61,13 @@ mt7921_init_wiphy(struct ieee80211_hw *hw)
 	hw->vif_data_size = sizeof(struct mt7921_vif);
 
 	wiphy->iface_combinations = if_comb;
+	wiphy->flags &= ~WIPHY_FLAG_IBSS_RSN;
+	wiphy->interface_modes = BIT(NL80211_IFTYPE_STATION);
 	wiphy->n_iface_combinations = ARRAY_SIZE(if_comb);
 	wiphy->max_scan_ie_len = MT76_CONNAC_SCAN_IE_LEN;
 	wiphy->max_scan_ssids = 4;
 	wiphy->max_sched_scan_plan_interval =
-		MT76_CONNAC_MAX_SCHED_SCAN_INTERVAL;
+		MT76_CONNAC_MAX_TIME_SCHED_SCAN_INTERVAL;
 	wiphy->max_sched_scan_ie_len = IEEE80211_MAX_DATA_LEN;
 	wiphy->max_sched_scan_ssids = MT76_CONNAC_MAX_SCHED_SCAN_SSID;
 	wiphy->max_match_sets = MT76_CONNAC_MAX_SCAN_MATCH;
@@ -73,7 +75,8 @@ mt7921_init_wiphy(struct ieee80211_hw *hw)
 	wiphy->flags |= WIPHY_FLAG_HAS_CHANNEL_SWITCH;
 	wiphy->reg_notifier = mt7921_regd_notifier;
 
-	wiphy->features |= NL80211_FEATURE_SCAN_RANDOM_MAC_ADDR;
+	wiphy->features |= NL80211_FEATURE_SCHED_SCAN_RANDOM_MAC_ADDR |
+			   NL80211_FEATURE_SCAN_RANDOM_MAC_ADDR;
 	wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_SET_SCAN_DWELL);
 
 	ieee80211_hw_set(hw, SINGLE_SCAN_ON_ALL_BANDS);
@@ -106,7 +109,7 @@ mt7921_mac_init_band(struct mt7921_dev *dev, u8 band)
 	mt76_clear(dev, MT_DMA_DCR0(band), MT_DMA_DCR0_RXD_G5_EN);
 }
 
-void mt7921_mac_init(struct mt7921_dev *dev)
+int mt7921_mac_init(struct mt7921_dev *dev)
 {
 	int i;
 
@@ -121,7 +124,9 @@ void mt7921_mac_init(struct mt7921_dev *dev)
 	for (i = 0; i < 2; i++)
 		mt7921_mac_init_band(dev, i);
 
-	mt76_connac_mcu_set_rts_thresh(&dev->mt76, 0x92b, 0);
+	dev->mt76.rxfilter = mt76_rr(dev, MT_WF_RFCR(0));
+
+	return mt76_connac_mcu_set_rts_thresh(&dev->mt76, 0x92b, 0);
 }
 
 static int mt7921_init_hardware(struct mt7921_dev *dev)
@@ -161,9 +166,7 @@ static int mt7921_init_hardware(struct mt7921_dev *dev)
 	dev->mt76.global_wcid.tx_info |= MT_WCID_TX_INFO_SET;
 	rcu_assign_pointer(dev->mt76.wcid[idx], &dev->mt76.global_wcid);
 
-	mt7921_mac_init(dev);
-
-	return 0;
+	return mt7921_mac_init(dev);
 }
 
 int mt7921_register_device(struct mt7921_dev *dev)
@@ -197,6 +200,7 @@ int mt7921_register_device(struct mt7921_dev *dev)
 	dev->pm.stats.last_wake_event = jiffies;
 	dev->pm.stats.last_doze_event = jiffies;
 	dev->pm.enable = true;
+	dev->pm.ds_enable = true;
 
 	ret = mt7921_init_hardware(dev);
 	if (ret)
@@ -211,7 +215,11 @@ int mt7921_register_device(struct mt7921_dev *dev)
 			IEEE80211_HT_CAP_MAX_AMSDU;
 	dev->mphy.sband_5g.sband.vht_cap.cap |=
 			IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_7991 |
-			IEEE80211_VHT_CAP_MAX_A_MPDU_LENGTH_EXPONENT_MASK;
+			IEEE80211_VHT_CAP_MAX_A_MPDU_LENGTH_EXPONENT_MASK |
+			IEEE80211_VHT_CAP_SU_BEAMFORMEE_CAPABLE |
+			IEEE80211_VHT_CAP_MU_BEAMFORMEE_CAPABLE |
+			(3 << IEEE80211_VHT_CAP_BEAMFORMEE_STS_SHIFT);
+
 	dev->mphy.hw->wiphy->available_antennas_rx = dev->mphy.chainmask;
 	dev->mphy.hw->wiphy->available_antennas_tx = dev->mphy.chainmask;
 
@@ -227,7 +235,7 @@ int mt7921_register_device(struct mt7921_dev *dev)
 	if (ret)
 		return ret;
 
-	return mt76_connac_mcu_set_deep_sleep(&dev->mt76, dev->pm.enable);
+	return mt76_connac_mcu_set_deep_sleep(&dev->mt76, dev->pm.ds_enable);
 }
 
 void mt7921_unregister_device(struct mt7921_dev *dev)

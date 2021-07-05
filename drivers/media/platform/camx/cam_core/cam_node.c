@@ -598,8 +598,7 @@ int cam_node_deinit(struct cam_node *node)
 
 int cam_node_shutdown(struct cam_node *node)
 {
-	int i = 0;
-	int rc = 0;
+	int i;
 
 	if (!node)
 		return -EINVAL;
@@ -609,7 +608,7 @@ int cam_node_shutdown(struct cam_node *node)
 			CAM_DBG(CAM_CORE,
 				"Node [%s] invoking shutdown on context [%d]",
 				node->name, i);
-			rc = cam_context_shutdown(&(node->ctx_list[i]));
+			cam_context_shutdown(&node->ctx_list[i]);
 		}
 	}
 

@@ -8274,6 +8274,13 @@ S:	Maintained
 F:	Documentation/fb/intelfb.rst
 F:	drivers/video/fbdev/intelfb/
 
+INTEL GNA PCI DRIVER
+M:     Maciej Kwapulinski <maciej.kwapulinski@linux.intel.com>
+S:     Maintained
+F:     Documentation/misc-devices/intel/gna.rst
+F:     drivers/misc/intel/gna/*
+F:     include/uapi/misc/intel/gna.h
+
 INTEL GPIO DRIVERS
 M:	Andy Shevchenko <andriy.shevchenko@linux.intel.com>
 L:	linux-gpio@vger.kernel.org

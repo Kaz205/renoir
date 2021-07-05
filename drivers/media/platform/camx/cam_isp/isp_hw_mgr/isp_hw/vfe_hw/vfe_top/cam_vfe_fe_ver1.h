@@ -86,7 +86,7 @@ int cam_vfe_fe_ver1_acquire_resource(
 int cam_vfe_fe_ver1_init(
 	struct cam_hw_intf            *hw_intf,
 	struct cam_hw_soc_info        *soc_info,
-	void                          *camif_hw_info,
+	const void                    *camif_hw_info,
 	struct cam_isp_resource_node  *camif_node);
 
 int cam_vfe_fe_ver1_deinit(

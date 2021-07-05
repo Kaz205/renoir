@@ -364,6 +364,7 @@ enum rtw_flags {
 	RTW_FLAG_BUSY_TRAFFIC,
 	RTW_FLAG_WOWLAN,
 	RTW_FLAG_RESTARTING,
+	RTW_FLAG_USE_LOWEST_RATE,
 
 	NUM_OF_RTW_FLAGS,
 };
@@ -609,6 +610,8 @@ struct rtw_tx_pkt_info {
 	bool dis_qselseq;
 	bool en_hwseq;
 	u8 hw_ssn_sel;
+	bool nav_use_hdr;
+	bool bt_null;
 };
 
 struct rtw_rx_pkt_stat {

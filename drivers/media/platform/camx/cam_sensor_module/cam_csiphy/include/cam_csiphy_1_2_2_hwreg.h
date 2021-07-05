@@ -16,7 +16,7 @@
 
 #include "../cam_csiphy_dev.h"
 
-struct csiphy_reg_parms_t csiphy_v1_2_2 = {
+static const struct csiphy_reg_parms_t csiphy_v1_2_2 = {
 	.mipi_csiphy_interrupt_status0_addr = 0x8B0,
 	.mipi_csiphy_interrupt_clear0_addr = 0x858,
 	.mipi_csiphy_glbl_irq_cmd_addr = 0x828,
@@ -28,7 +28,7 @@ struct csiphy_reg_parms_t csiphy_v1_2_2 = {
 	.csiphy_2ph_combo_ck_ln = 0x10,
 };
 
-struct csiphy_reg_t csiphy_common_reg_1_2_2[] = {
+static const struct csiphy_reg_t csiphy_common_reg_1_2_2[] = {
 	{0x0814, 0xd5, 0x00, CSIPHY_LANE_ENABLE},
 	{0x0818, 0x01, 0x00, CSIPHY_DEFAULT_PARAMS},
 	{0x081C, 0x52, 0x00, CSIPHY_DEFAULT_PARAMS},
@@ -37,7 +37,7 @@ struct csiphy_reg_t csiphy_common_reg_1_2_2[] = {
 	{0x0800, 0x0E, 0x00, CSIPHY_3PH_REGS},
 };
 
-struct csiphy_reg_t csiphy_reset_reg_1_2_2[] = {
+static const struct csiphy_reg_t csiphy_reset_reg_1_2_2[] = {
 	{0x0814, 0x00, 0x05, CSIPHY_LANE_ENABLE},
 	{0x0818, 0x00, 0x00, CSIPHY_DEFAULT_PARAMS},
 	{0x081C, 0x00, 0x00, CSIPHY_DEFAULT_PARAMS},
@@ -45,7 +45,7 @@ struct csiphy_reg_t csiphy_reset_reg_1_2_2[] = {
 	{0x0800, 0x00, 0x00, CSIPHY_DEFAULT_PARAMS},
 };
 
-struct csiphy_reg_t csiphy_irq_reg_1_2_2[] = {
+static const struct csiphy_reg_t csiphy_irq_reg_1_2_2[] = {
 	{0x082c, 0xFF, 0x00, CSIPHY_DEFAULT_PARAMS},
 	{0x0830, 0xFF, 0x00, CSIPHY_DEFAULT_PARAMS},
 	{0x0834, 0xFB, 0x00, CSIPHY_DEFAULT_PARAMS},
@@ -59,7 +59,7 @@ struct csiphy_reg_t csiphy_irq_reg_1_2_2[] = {
 	{0x0854, 0xFF, 0x00, CSIPHY_DEFAULT_PARAMS},
 };
 
-struct
+static const struct
 csiphy_reg_t csiphy_2ph_v1_2_2_reg[MAX_LANES][MAX_SETTINGS_PER_LANE] = {
 	{
 		{0x0030, 0x00, 0x00, CSIPHY_DEFAULT_PARAMS},
@@ -188,7 +188,7 @@ csiphy_reg_t csiphy_2ph_v1_2_2_reg[MAX_LANES][MAX_SETTINGS_PER_LANE] = {
 	},
 };
 
-struct csiphy_reg_t
+static const struct csiphy_reg_t
 	csiphy_2ph_v1_2_2_combo_mode_reg[MAX_LANES][MAX_SETTINGS_PER_LANE] = {
 	{
 		{0x0030, 0x00, 0x00, CSIPHY_DEFAULT_PARAMS},
@@ -317,7 +317,7 @@ struct csiphy_reg_t
 	},
 };
 
-struct
+static const struct
 csiphy_reg_t csiphy_3ph_v1_2_2_reg[MAX_LANES][MAX_SETTINGS_PER_LANE] = {
 	{
 		{0x015C, 0x46, 0x00, CSIPHY_DEFAULT_PARAMS},
@@ -417,7 +417,7 @@ csiphy_reg_t csiphy_3ph_v1_2_2_reg[MAX_LANES][MAX_SETTINGS_PER_LANE] = {
 	},
 };
 
-struct data_rate_settings_t data_rate_delta_table_1_2_2 = {
+static const struct data_rate_settings_t data_rate_delta_table_1_2_2 = {
 	.num_data_rate_settings = 3,
 	.data_rate_settings = {
 		{

@@ -74,7 +74,7 @@ static int mt7921_poll_tx(struct napi_struct *napi, int budget)
 	mt7921_tx_cleanup(dev);
 	if (napi_complete(napi))
 		mt7921_irq_enable(dev, MT_INT_TX_DONE_ALL);
-	mt76_connac_pm_unref(&dev->pm);
+	mt76_connac_pm_unref(&dev->mphy, &dev->pm);
 
 	return 0;
 }
@@ -92,7 +92,7 @@ static int mt7921_poll_rx(struct napi_struct *napi, int budget)
 		return 0;
 	}
 	done = mt76_dma_rx_poll(napi, budget);
-	mt76_connac_pm_unref(&dev->pm);
+	mt76_connac_pm_unref(&dev->mphy, &dev->pm);
 
 	return done;
 }
@@ -399,6 +399,10 @@ int mt7921_dma_init(struct mt7921_dev *dev)
 	mt76_dma_attach(&dev->mt76);
 
 	ret = mt7921_dma_disable(dev, true);
+	if (ret)
+		return ret;
+
+	ret = mt7921_wfsys_reset(dev);
 	if (ret)
 		return ret;
 

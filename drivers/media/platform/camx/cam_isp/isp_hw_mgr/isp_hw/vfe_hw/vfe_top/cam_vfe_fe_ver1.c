@@ -115,7 +115,7 @@ static int cam_vfe_fe_get_reg_update(
 	uint32_t                          size = 0;
 	uint32_t                          reg_val_pair[2];
 	struct cam_isp_hw_get_cmd_update *cdm_args = cmd_args;
-	struct cam_cdm_utils_ops         *cdm_util_ops = NULL;
+	const struct cam_cdm_utils_ops   *cdm_util_ops;
 	struct cam_vfe_mux_fe_data    *rsrc_data = NULL;
 
 	if (arg_size != sizeof(struct cam_isp_hw_get_cmd_update)) {
@@ -128,7 +128,7 @@ static int cam_vfe_fe_get_reg_update(
 		return -EINVAL;
 	}
 
-	cdm_util_ops = (struct cam_cdm_utils_ops *)cdm_args->res->cdm_ops;
+	cdm_util_ops = cdm_args->res->cdm_ops;
 
 	if (!cdm_util_ops) {
 		CAM_ERR(CAM_ISP, "Invalid CDM ops");
@@ -412,7 +412,6 @@ static int cam_vfe_fe_resource_stop(
 	struct cam_isp_resource_node        *fe_res)
 {
 	struct cam_vfe_mux_fe_data       *fe_priv;
-	struct cam_vfe_fe_ver1_reg       *fe_reg;
 	int rc = 0;
 	uint32_t val = 0;
 
@@ -426,7 +425,6 @@ static int cam_vfe_fe_resource_stop(
 		return 0;
 
 	fe_priv = (struct cam_vfe_mux_fe_data *)fe_res->res_priv;
-	fe_reg = fe_priv->fe_reg;
 
 	if ((fe_priv->dsp_mode >= CAM_ISP_DSP_MODE_ONE_WAY) &&
 		(fe_priv->dsp_mode <= CAM_ISP_DSP_MODE_ROUND)) {
@@ -582,11 +580,11 @@ static int cam_vfe_fe_handle_irq_bottom_half(void *handler_priv,
 int cam_vfe_fe_ver1_init(
 	struct cam_hw_intf            *hw_intf,
 	struct cam_hw_soc_info        *soc_info,
-	void                          *fe_hw_info,
+	const void                    *fe_hw_info,
 	struct cam_isp_resource_node  *fe_node)
 {
 	struct cam_vfe_mux_fe_data     *fe_priv = NULL;
-	struct cam_vfe_fe_ver1_hw_info *fe_info = fe_hw_info;
+	const struct cam_vfe_fe_ver1_hw_info *fe_info = fe_hw_info;
 
 	fe_priv = kzalloc(sizeof(struct cam_vfe_mux_fe_data),
 		GFP_KERNEL);

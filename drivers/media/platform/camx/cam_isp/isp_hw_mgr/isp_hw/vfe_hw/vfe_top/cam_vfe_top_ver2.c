@@ -28,8 +28,8 @@
 struct cam_vfe_top_ver2_common_data {
 	struct cam_hw_soc_info                     *soc_info;
 	struct cam_hw_intf                         *hw_intf;
-	struct cam_vfe_top_ver2_reg_offset_common  *common_reg;
-	struct cam_vfe_top_dump_data               *dump_data;
+	const struct cam_vfe_top_ver2_reg_offset_common *common_reg;
+	const struct cam_vfe_top_dump_data         *dump_data;
 };
 
 struct cam_vfe_top_ver2_priv {
@@ -54,7 +54,7 @@ static int cam_vfe_top_mux_get_base(struct cam_vfe_top_ver2_priv *top_priv,
 	uint32_t                          size = 0;
 	uint32_t                          mem_base = 0;
 	struct cam_isp_hw_get_cmd_update *cdm_args  = cmd_args;
-	struct cam_cdm_utils_ops         *cdm_util_ops = NULL;
+	const struct cam_cdm_utils_ops   *cdm_util_ops;
 
 	if (arg_size != sizeof(struct cam_isp_hw_get_cmd_update)) {
 		CAM_ERR(CAM_ISP, "Error! Invalid cmd size");
@@ -67,8 +67,7 @@ static int cam_vfe_top_mux_get_base(struct cam_vfe_top_ver2_priv *top_priv,
 		return -EINVAL;
 	}
 
-	cdm_util_ops =
-		(struct cam_cdm_utils_ops *)cdm_args->res->cdm_ops;
+	cdm_util_ops = cdm_args->res->cdm_ops;
 
 	if (!cdm_util_ops) {
 		CAM_ERR(CAM_ISP, "Invalid CDM ops");
@@ -111,7 +110,7 @@ static int cam_vfe_top_set_hw_clk_rate(
 	if (max_clk_rate == top_priv->hw_clk_rate)
 		return 0;
 
-	CAM_DBG(CAM_ISP, "VFE: Clock name=%s idx=%d clk=%llu",
+	CAM_DBG(CAM_ISP, "VFE: Clock name=%s idx=%d clk=%lu",
 		soc_info->clk_name[soc_info->src_clk_idx],
 		soc_info->src_clk_idx, max_clk_rate);
 
@@ -484,14 +483,12 @@ static int cam_vfe_get_irq_register_dump(
 
 static int cam_vfe_hw_dump(
 	struct cam_vfe_top_ver2_priv *top_priv,
-	void *cmd_args,
+	struct cam_isp_hw_dump_args *dump_args,
 	uint32_t arg_size)
 {
-	struct cam_isp_hw_dump_args *dump_args =
-		(struct cam_isp_hw_dump_args *)cmd_args;
 	struct cam_hw_soc_info            *soc_info;
 	uint32_t i, j;
-	struct cam_vfe_top_dump_data *dump_data;
+	const struct cam_vfe_top_dump_data *dump_data;
 	uint32_t reg_dump_size = 0, lut_dump_size = 0;
 	uint32_t reg_start_offset;
 	uint32_t val = 0;
@@ -586,21 +583,22 @@ static int cam_vfe_hw_dump(
 			}
 		}
 		hdr->size = hdr->word_size * (addr - start);
-		dump_args->offset +=  hdr->size +
-			sizeof(struct cam_isp_hw_dump_header);
+		//FIXME ribalda
+		//dump_args->offset +=  hdr->size +
+		//	sizeof(struct cam_isp_hw_dump_header);
 	}
 	CAM_DBG(CAM_ISP, "offset %d", dump_args->offset);
 	return 0;
 }
 
-int cam_vfe_top_get_hw_caps(void *device_priv,
-	void *get_hw_cap_args, uint32_t arg_size)
+static int cam_vfe_top_get_hw_caps(void *device_priv, void *get_hw_cap_args,
+				   uint32_t arg_size)
 {
 	return -EPERM;
 }
 
-int cam_vfe_top_init_hw(void *device_priv,
-	void *init_hw_args, uint32_t arg_size)
+static int cam_vfe_top_init_hw(void *device_priv, void *init_hw_args,
+			       uint32_t arg_size)
 {
 	struct cam_vfe_top_ver2_priv   *top_priv = device_priv;
 
@@ -609,12 +607,12 @@ int cam_vfe_top_init_hw(void *device_priv,
 	return 0;
 }
 
-int cam_vfe_top_reset(void *device_priv,
-	void *reset_core_args, uint32_t arg_size)
+static int cam_vfe_top_reset(void *device_priv, void *reset_core_args,
+			     uint32_t arg_size)
 {
 	struct cam_vfe_top_ver2_priv   *top_priv = device_priv;
 	struct cam_hw_soc_info         *soc_info = NULL;
-	struct cam_vfe_top_ver2_reg_offset_common *reg_common = NULL;
+	const struct cam_vfe_top_ver2_reg_offset_common *reg_common = NULL;
 	uint32_t *reset_reg_args = reset_core_args;
 	uint32_t reset_reg_val;
 
@@ -649,8 +647,8 @@ int cam_vfe_top_reset(void *device_priv,
 	return 0;
 }
 
-int cam_vfe_top_reserve(void *device_priv,
-	void *reserve_args, uint32_t arg_size)
+static int cam_vfe_top_reserve(void *device_priv,
+			       void *reserve_args, uint32_t arg_size)
 {
 	struct cam_vfe_top_ver2_priv            *top_priv;
 	struct cam_vfe_acquire_args             *args;
@@ -714,10 +712,9 @@ int cam_vfe_top_reserve(void *device_priv,
 
 }
 
-int cam_vfe_top_release(void *device_priv,
-	void *release_args, uint32_t arg_size)
+static int cam_vfe_top_release(void *device_priv, void *release_args,
+			       uint32_t arg_size)
 {
-	struct cam_vfe_top_ver2_priv            *top_priv;
 	struct cam_isp_resource_node            *mux_res;
 
 	if (!device_priv || !release_args) {
@@ -725,7 +722,6 @@ int cam_vfe_top_release(void *device_priv,
 		return -EINVAL;
 	}
 
-	top_priv = (struct cam_vfe_top_ver2_priv   *)device_priv;
 	mux_res = (struct cam_isp_resource_node *)release_args;
 
 	CAM_DBG(CAM_ISP, "Resource in state %d", mux_res->res_state);
@@ -739,8 +735,8 @@ int cam_vfe_top_release(void *device_priv,
 	return 0;
 }
 
-int cam_vfe_top_start(void *device_priv,
-	void *start_args, uint32_t arg_size)
+static int cam_vfe_top_start(void *device_priv, void *start_args,
+			     uint32_t arg_size)
 {
 	struct cam_vfe_top_ver2_priv            *top_priv;
 	struct cam_isp_resource_node            *mux_res;
@@ -786,12 +782,11 @@ int cam_vfe_top_start(void *device_priv,
 	return rc;
 }
 
-int cam_vfe_top_stop(void *device_priv,
-	void *stop_args, uint32_t arg_size)
+static int cam_vfe_top_stop(void *device_priv, void *stop_args,
+			    uint32_t arg_size)
 {
 	struct cam_vfe_top_ver2_priv            *top_priv;
 	struct cam_isp_resource_node            *mux_res;
-	struct cam_hw_info                      *hw_info = NULL;
 	int i, rc = 0;
 
 	if (!device_priv || !stop_args) {
@@ -801,7 +796,6 @@ int cam_vfe_top_stop(void *device_priv,
 
 	top_priv = (struct cam_vfe_top_ver2_priv   *)device_priv;
 	mux_res = (struct cam_isp_resource_node *)stop_args;
-	hw_info = (struct cam_hw_info  *)mux_res->hw_intf->hw_priv;
 
 	if ((mux_res->res_id == CAM_ISP_HW_VFE_IN_CAMIF) ||
 		(mux_res->res_id == CAM_ISP_HW_VFE_IN_CAMIF_LITE) ||
@@ -831,20 +825,20 @@ int cam_vfe_top_stop(void *device_priv,
 	return rc;
 }
 
-int cam_vfe_top_read(void *device_priv,
-	void *read_args, uint32_t arg_size)
+static int cam_vfe_top_read(void *device_priv, void *read_args,
+			    uint32_t arg_size)
 {
 	return -EPERM;
 }
 
-int cam_vfe_top_write(void *device_priv,
-	void *write_args, uint32_t arg_size)
+static int cam_vfe_top_write(void *device_priv, void *write_args,
+			     uint32_t arg_size)
 {
 	return -EPERM;
 }
 
-int cam_vfe_top_process_cmd(void *device_priv, uint32_t cmd_type,
-	void *cmd_args, uint32_t arg_size)
+static int cam_vfe_top_process_cmd(void *device_priv, uint32_t cmd_type,
+				   void *cmd_args, uint32_t arg_size)
 {
 	int rc = 0;
 	struct cam_vfe_top_ver2_priv            *top_priv;
@@ -888,7 +882,7 @@ int cam_vfe_top_process_cmd(void *device_priv, uint32_t cmd_type,
 		break;
 	case CAM_ISP_HW_CMD_DUMP_HW:
 		rc = cam_vfe_hw_dump(top_priv,
-			cmd_args, arg_size);
+			(struct cam_isp_hw_dump_args *)cmd_args, arg_size);
 		break;
 	case CAM_ISP_HW_CMD_GET_RDI_IRQ_MASK:
 		rc = cam_vfe_top_mux_get_rdi_irq_mask(top_priv, cmd_args,
@@ -906,12 +900,12 @@ int cam_vfe_top_process_cmd(void *device_priv, uint32_t cmd_type,
 int cam_vfe_top_ver2_init(
 	struct cam_hw_soc_info                 *soc_info,
 	struct cam_hw_intf                     *hw_intf,
-	void                                   *top_hw_info,
+	const void                             *top_hw_info,
 	struct cam_vfe_top                    **vfe_top_ptr)
 {
 	int i, j, rc = 0;
 	struct cam_vfe_top_ver2_priv           *top_priv = NULL;
-	struct cam_vfe_top_ver2_hw_info        *ver2_hw_info = top_hw_info;
+	const struct cam_vfe_top_ver2_hw_info  *ver2_hw_info = top_hw_info;
 	struct cam_vfe_top                     *vfe_top;
 	struct cam_vfe_soc_private             *soc_private = NULL;
 

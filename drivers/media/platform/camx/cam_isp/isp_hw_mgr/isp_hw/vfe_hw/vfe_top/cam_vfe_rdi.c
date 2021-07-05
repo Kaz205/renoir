@@ -37,7 +37,7 @@ static int cam_vfe_rdi_get_reg_update(
 	uint32_t                          size = 0;
 	uint32_t                          reg_val_pair[2];
 	struct cam_isp_hw_get_cmd_update *cdm_args = cmd_args;
-	struct cam_cdm_utils_ops         *cdm_util_ops = NULL;
+	const struct cam_cdm_utils_ops   *cdm_util_ops;
 	struct cam_vfe_mux_rdi_data      *rsrc_data = NULL;
 
 	if (arg_size != sizeof(struct cam_isp_hw_get_cmd_update)) {
@@ -50,7 +50,7 @@ static int cam_vfe_rdi_get_reg_update(
 		return -EINVAL;
 	}
 
-	cdm_util_ops = (struct cam_cdm_utils_ops *)cdm_args->res->cdm_ops;
+	cdm_util_ops = cdm_args->res->cdm_ops;
 	if (!cdm_util_ops) {
 		CAM_ERR(CAM_ISP, "Error - Invalid CDM ops");
 		return -EINVAL;
@@ -155,7 +155,6 @@ static int cam_vfe_rdi_resource_start(
 static int cam_vfe_rdi_resource_stop(
 	struct cam_isp_resource_node        *rdi_res)
 {
-	struct cam_vfe_mux_rdi_data           *rdi_priv;
 	int rc = 0;
 
 	if (!rdi_res) {
@@ -167,7 +166,6 @@ static int cam_vfe_rdi_resource_stop(
 		rdi_res->res_state == CAM_ISP_RESOURCE_STATE_AVAILABLE)
 		return 0;
 
-	rdi_priv = (struct cam_vfe_mux_rdi_data *)rdi_res->res_priv;
 
 	if (rdi_res->res_state == CAM_ISP_RESOURCE_STATE_STREAMING)
 		rdi_res->res_state = CAM_ISP_RESOURCE_STATE_RESERVED;
@@ -256,11 +254,11 @@ static int cam_vfe_rdi_handle_irq_bottom_half(void *handler_priv,
 int cam_vfe_rdi_ver2_init(
 	struct cam_hw_intf            *hw_intf,
 	struct cam_hw_soc_info        *soc_info,
-	void                          *rdi_hw_info,
+	const void                    *rdi_hw_info,
 	struct cam_isp_resource_node  *rdi_node)
 {
 	struct cam_vfe_mux_rdi_data     *rdi_priv = NULL;
-	struct cam_vfe_rdi_ver2_hw_info *rdi_info = rdi_hw_info;
+	const struct cam_vfe_rdi_ver2_hw_info *rdi_info = rdi_hw_info;
 
 	rdi_priv = kzalloc(sizeof(struct cam_vfe_mux_rdi_data),
 			GFP_KERNEL);

@@ -467,8 +467,8 @@ int cam_isp_add_io_buffers(
 	struct cam_hw_fence_map_entry      *in_map_entries;
 	uint32_t                            kmd_buf_remain_size;
 	uint32_t                            i, j, num_out_buf, num_in_buf;
-	uint32_t                            res_id_out, res_id_in, plane_id;
 	uint32_t                            io_cfg_used_bytes, num_ent;
+	u32                                 res_id_out, plane_id;
 	size_t                              size;
 	int32_t                             hdl;
 	int                                 mmu_hdl;
@@ -538,7 +538,6 @@ int cam_isp_add_io_buffers(
 				return -EINVAL;
 			}
 		} else if (io_cfg[i].direction == CAM_BUF_INPUT) {
-			res_id_in = io_cfg[i].resource_type & 0xFF;
 			CAM_DBG(CAM_ISP,
 				"configure input io with fill fence %d",
 				fill_fence);
@@ -664,7 +663,7 @@ int cam_isp_add_io_buffers(
 					io_cfg[i].mem_handle[plane_id]);
 
 				CAM_DBG(CAM_ISP,
-					"mmu_hdl=0x%x, size=%d, end=0x%x",
+					"mmu_hdl=0x%x, size=%d, end=0x%llx",
 					mmu_hdl, (int)size,
 					io_addr[plane_id]+size);
 
@@ -774,7 +773,7 @@ int cam_isp_add_io_buffers(
 					io_cfg[i].mem_handle[plane_id]);
 
 				CAM_DBG(CAM_ISP,
-					"mmu_hdl=0x%x, size=%d, end=0x%x",
+					"mmu_hdl=0x%x, size=%d, end=0x%llx",
 					mmu_hdl, (int)size,
 					io_addr[plane_id]+size);
 
@@ -874,12 +873,10 @@ int cam_isp_add_reg_update(
 	int rc = -EINVAL;
 	struct cam_isp_resource_node         *res;
 	struct cam_ife_hw_mgr_res            *hw_mgr_res;
-	struct cam_hw_update_entry           *hw_entry;
 	struct cam_isp_hw_get_cmd_update      get_regup;
 	struct cam_isp_hw_rup_data            rup_data;
 	uint32_t kmd_buf_remain_size, num_ent, i, reg_update_size;
 
-	hw_entry = prepare->hw_update_entries;
 	/* Max one hw entries required for each base */
 	if (prepare->num_hw_update_entries + 1 >=
 				prepare->max_hw_update_entries) {

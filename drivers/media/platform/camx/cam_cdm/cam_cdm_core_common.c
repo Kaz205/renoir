@@ -79,14 +79,16 @@ bool cam_cdm_cpas_cb(uint32_t client_handle, void *userdata,
 	return false;
 }
 
-struct cam_cdm_utils_ops *cam_cdm_get_ops(
-	uint32_t ver, struct cam_hw_version *cam_version, bool by_cam_version)
+const
+struct cam_cdm_utils_ops *cam_cdm_get_ops(u32 ver,
+					  struct cam_hw_version *cam_version,
+					  bool by_cam_version)
 {
 	if (by_cam_version == false) {
 		switch (ver) {
 		case CAM_CDM170_VERSION:
 		case CAM_CDM175_VERSION:
-			return &CDM170_ops;
+			return cam_cdm_util_get_cmd170_ops();
 		default:
 			CAM_ERR(CAM_CDM, "CDM Version=%x not supported in util",
 				ver);
@@ -103,7 +105,7 @@ struct cam_cdm_utils_ops *cam_cdm_get_ops(
 				"cam_hw_version=%x:%x:%x supported",
 				cam_version->major, cam_version->minor,
 				cam_version->incr);
-			return &CDM170_ops;
+			return cam_cdm_util_get_cmd170_ops();
 		}
 
 		CAM_ERR(CAM_CDM, "cam_hw_version=%x:%x:%x not supported",
@@ -145,7 +147,7 @@ int cam_cdm_get_caps(void *hw_priv,
 	return -EINVAL;
 }
 
-int cam_cdm_find_free_client_slot(struct cam_cdm *hw)
+static int cam_cdm_find_free_client_slot(struct cam_cdm *hw)
 {
 	int i;
 
@@ -403,7 +405,6 @@ int cam_cdm_process_cmd(void *hw_priv,
 	uint32_t cmd, void *cmd_args, uint32_t arg_size)
 {
 	struct cam_hw_info *cdm_hw = hw_priv;
-	struct cam_hw_soc_info *soc_data = NULL;
 	struct cam_cdm *core = NULL;
 	int rc = -EINVAL;
 
@@ -411,7 +412,6 @@ int cam_cdm_process_cmd(void *hw_priv,
 		(cmd >= CAM_CDM_HW_INTF_CMD_INVALID))
 		return rc;
 
-	soc_data = &cdm_hw->soc_info;
 	core = (struct cam_cdm *)cdm_hw->core_info;
 	switch (cmd) {
 	case CAM_CDM_HW_INTF_CMD_SUBMIT_BL: {

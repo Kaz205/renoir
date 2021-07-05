@@ -9,6 +9,8 @@
 
 #include "arm-smmu.h"
 
+extern const struct iommu_flush_ops arm_smmu_s1_tlb_impl_ops;
+
 struct qcom_smmu {
 	struct arm_smmu_device smmu;
 	bool bypass_quirk;
@@ -135,6 +137,8 @@ static int qcom_adreno_smmu_init_context(struct arm_smmu_domain *smmu_domain,
 {
 	struct adreno_smmu_priv *priv;
 
+	pgtbl_cfg->tlb = &arm_smmu_s1_tlb_impl_ops;
+
 	/* Only enable split pagetables for the GPU device (SID 0) */
 	if (!qcom_adreno_smmu_is_gpu_device(dev))
 		return 0;
@@ -170,6 +174,40 @@ static const struct of_device_id qcom_smmu_client_of_match[] __maybe_unused = {
 	{ .compatible = "qcom,sdm845-mss-pil" },
 	{ }
 };
+
+static const struct of_device_id qcom_smmu_nonstrict_of_match[] __maybe_unused = {
+	{ .compatible = "qcom,sdhci-msm-v4" },
+	{ .compatible = "qcom,sdhci-msm-v5" },
+	{ .compatible = "snps,dwc3" },
+	{ }
+};
+
+static int qcom_smmu_init_context(struct arm_smmu_domain *smmu_domain,
+		struct io_pgtable_cfg *pgtbl_cfg, struct device *dev)
+{
+	const struct of_device_id *match =
+		of_match_device(qcom_smmu_nonstrict_of_match, dev);
+
+	pgtbl_cfg->tlb = &arm_smmu_s1_tlb_impl_ops;
+
+	/*
+	 * BACKPORT ALERT: the below is different upstream. If we ever take
+	 * commit a250c23f15c2 ("iommu: remove DOMAIN_ATTR_DMA_USE_FLUSH_QUEUE")
+	 * then we need to go back to the upstream way of doing things.
+	 *
+	 * NOTE: this purposely messes with the `pgtbl_cfg` in the smmu_domain
+	 * instead of just setting the one passed in because that's needed
+	 * to make other code return the right thing for
+	 * DOMAIN_ATTR_DMA_USE_FLUSH_QUEUE. It also has the good side effect
+	 * of not compiling if you try to run it w/ more upstream code so you'll
+	 * notice this backport alert. When this function returns the quirks
+	 * in the domain are ORed into the pgtbl_cfg passed anyway.
+	 */
+	if (match)
+		smmu_domain->pgtbl_cfg.quirks |= IO_PGTABLE_QUIRK_NON_STRICT;
+
+	return 0;
+}
 
 static int qcom_smmu_cfg_probe(struct arm_smmu_device *smmu)
 {
@@ -292,6 +330,7 @@ static int qcom_smmu500_reset(struct arm_smmu_device *smmu)
 }
 
 static const struct arm_smmu_impl qcom_smmu_impl = {
+	.init_context = qcom_smmu_init_context,
 	.cfg_probe = qcom_smmu_cfg_probe,
 	.def_domain_type = qcom_smmu_def_domain_type,
 	.reset = qcom_smmu500_reset,

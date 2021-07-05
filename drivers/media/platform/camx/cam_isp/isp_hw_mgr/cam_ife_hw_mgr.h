@@ -166,7 +166,7 @@ struct cam_ife_hw_mgr_ctx {
 	struct ctx_base_info            base[CAM_IFE_HW_NUM_MAX];
 	uint32_t                        num_base;
 	uint32_t                        cdm_handle;
-	struct cam_cdm_utils_ops       *cdm_ops;
+	const struct cam_cdm_utils_ops  *cdm_ops;
 	struct cam_cdm_bl_request      *cdm_cmd;
 
 	uint32_t                        sof_cnt[CAM_IFE_HW_NUM_MAX];

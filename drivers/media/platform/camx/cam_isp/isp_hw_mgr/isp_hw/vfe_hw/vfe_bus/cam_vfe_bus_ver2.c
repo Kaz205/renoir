@@ -106,7 +106,7 @@ struct cam_vfe_bus_ver2_common_data {
 	struct cam_hw_intf                         *hw_intf;
 	void                                       *bus_irq_controller;
 	void                                       *vfe_irq_controller;
-	struct cam_vfe_bus_ver2_reg_offset_common  *common_reg;
+	const struct cam_vfe_bus_ver2_reg_offset_common *common_reg;
 	struct cam_vfe_bus_ver2_reg_data           *reg_data;
 	uint32_t                                    io_buf_update[
 		MAX_REG_VAL_PAIR_SIZE];
@@ -120,7 +120,7 @@ struct cam_vfe_bus_ver2_common_data {
 	uint32_t                                    num_sec_out;
 	uint32_t                                    addr_no_sync;
 	uint32_t                                    camera_hw_version;
-	struct cam_vfe_bus_ver2_stats_cfg_info     *stats_data;
+	const struct cam_vfe_bus_ver2_stats_cfg_info *stats_data;
 	uint32_t                                    enable_dmi_dump;
 };
 
@@ -197,7 +197,7 @@ struct cam_vfe_bus_ver2_vfe_out_data {
 	uint32_t                         format;
 	uint32_t                         max_width;
 	uint32_t                         max_height;
-	struct cam_cdm_utils_ops        *cdm_util_ops;
+	const struct cam_cdm_utils_ops   *cdm_util_ops;
 	uint32_t                         secure_mode;
 };
 
@@ -836,6 +836,7 @@ static enum cam_vfe_bus_packer_format
 	case CAM_FORMAT_NV21:
 		if ((wm_index == 4) || (wm_index == 6) || (wm_index == 21))
 			return PACKER_FMT_PLAIN_8_LSB_MSB_10_ODD_EVEN;
+		fallthrough;
 	case CAM_FORMAT_NV12:
 	case CAM_FORMAT_UBWC_NV12:
 	case CAM_FORMAT_UBWC_NV12_4R:
@@ -889,9 +890,9 @@ static int cam_vfe_bus_acquire_wm(
 	uint32_t                              *client_done_mask,
 	uint32_t                               is_dual)
 {
-	uint32_t wm_idx = 0;
 	struct cam_isp_resource_node              *wm_res_local = NULL;
 	struct cam_vfe_bus_ver2_wm_resource_data  *rsrc_data = NULL;
+	int wm_idx;
 
 	*wm_res = NULL;
 	*client_done_mask = 0;
@@ -996,6 +997,7 @@ static int cam_vfe_bus_acquire_wm(
 		case CAM_FORMAT_UBWC_NV12:
 			rsrc_data->en_ubwc = 1;
 			/* Fall through for NV12 */
+			fallthrough;
 		case CAM_FORMAT_NV21:
 		case CAM_FORMAT_NV12:
 		case CAM_FORMAT_Y_ONLY:
@@ -1384,7 +1386,7 @@ static int cam_vfe_bus_err_bottom_half(void *ctx_priv,
 {
 	struct cam_vfe_bus_irq_evt_payload *evt_payload;
 	struct cam_vfe_bus_ver2_common_data *common_data;
-	struct cam_vfe_bus_ver2_stats_cfg_offset *stats_cfg;
+	const struct cam_vfe_bus_ver2_stats_cfg_offset *stats_cfg;
 	struct cam_vfe_bus_ver2_dmi_offset_common dmi_cfg;
 	uint32_t val = 0;
 	uint32_t enable_dmi_dump;
@@ -2491,8 +2493,7 @@ static int cam_vfe_bus_start_vfe_out(
 	struct cam_isp_resource_node          *vfe_out)
 {
 	int rc = 0, i;
-	struct cam_vfe_bus_ver2_vfe_out_data  *rsrc_data = NULL;
-	struct cam_vfe_bus_ver2_common_data   *common_data = NULL;
+	struct cam_vfe_bus_ver2_vfe_out_data  *rsrc_data;
 
 	if (!vfe_out) {
 		CAM_ERR(CAM_ISP, "Invalid input");
@@ -2500,7 +2501,6 @@ static int cam_vfe_bus_start_vfe_out(
 	}
 
 	rsrc_data = vfe_out->res_priv;
-	common_data = rsrc_data->common_data;
 
 	CAM_DBG(CAM_ISP, "Start resource index %d", rsrc_data->out_type);
 
@@ -2649,7 +2649,7 @@ static int cam_vfe_bus_deinit_vfe_out_resource(
 		 * This is not error. It can happen if the resource is
 		 * never supported in the HW.
 		 */
-		CAM_DBG(CAM_ISP, "HW%d Res %d already deinitialized");
+		CAM_DBG(CAM_ISP, "HW already deinitialized");
 		return 0;
 	}
 
@@ -2731,11 +2731,9 @@ static void cam_vfe_bus_update_ubwc_meta_addr(
 {
 	struct cam_vfe_bus_ver2_reg_offset_ubwc_client *ubwc_regs;
 	struct cam_vfe_bus_ver2_reg_offset_ubwc_3_client *ubwc_3_regs;
-	int rc = 0;
 
 	if (!regs || !reg_val_pair || !j) {
 		CAM_ERR(CAM_ISP, "Invalid args");
-		rc = -EINVAL;
 		goto end;
 	}
 
@@ -3038,18 +3036,15 @@ end:
 static int cam_vfe_bus_update_wm(void *priv, void *cmd_args,
 	uint32_t arg_size)
 {
-	struct cam_vfe_bus_ver2_priv             *bus_priv;
 	struct cam_isp_hw_get_cmd_update         *update_buf;
 	struct cam_buf_io_cfg                    *io_cfg;
 	struct cam_vfe_bus_ver2_vfe_out_data     *vfe_out_data = NULL;
 	struct cam_vfe_bus_ver2_wm_resource_data *wm_data = NULL;
-	struct cam_vfe_bus_ver2_reg_offset_ubwc_client *ubwc_client = NULL;
 	uint32_t *reg_val_pair;
 	uint32_t  i, j, k, size = 0;
 	uint32_t  frame_inc = 0, val;
 	uint32_t loop_size = 0;
 
-	bus_priv = (struct cam_vfe_bus_ver2_priv  *) priv;
 	update_buf =  (struct cam_isp_hw_get_cmd_update *) cmd_args;
 
 	vfe_out_data = (struct cam_vfe_bus_ver2_vfe_out_data *)
@@ -3079,7 +3074,6 @@ static int cam_vfe_bus_update_wm(void *priv, void *cmd_args,
 		}
 
 		wm_data = vfe_out_data->wm_res[i]->res_priv;
-		ubwc_client = wm_data->hw_regs->ubwc_regs;
 		/* update width register */
 		CAM_VFE_ADD_REG_VAL_PAIR(reg_val_pair, j,
 			wm_data->hw_regs->buffer_width_cfg,
@@ -3200,7 +3194,6 @@ static int cam_vfe_bus_update_wm(void *priv, void *cmd_args,
 static int cam_vfe_bus_update_hfr(void *priv, void *cmd_args,
 	uint32_t arg_size)
 {
-	struct cam_vfe_bus_ver2_priv             *bus_priv;
 	struct cam_isp_hw_get_cmd_update         *update_hfr;
 	struct cam_vfe_bus_ver2_vfe_out_data     *vfe_out_data = NULL;
 	struct cam_vfe_bus_ver2_wm_resource_data *wm_data = NULL;
@@ -3208,7 +3201,6 @@ static int cam_vfe_bus_update_hfr(void *priv, void *cmd_args,
 	uint32_t *reg_val_pair;
 	uint32_t  i, j, size = 0;
 
-	bus_priv = (struct cam_vfe_bus_ver2_priv  *) priv;
 	update_hfr =  (struct cam_isp_hw_get_cmd_update *) cmd_args;
 
 	vfe_out_data = (struct cam_vfe_bus_ver2_vfe_out_data *)
@@ -3355,14 +3347,12 @@ end:
 static int cam_vfe_bus_update_stripe_cfg(void *priv, void *cmd_args,
 	uint32_t arg_size)
 {
-	struct cam_vfe_bus_ver2_priv                *bus_priv;
 	struct cam_isp_hw_dual_isp_update_args      *stripe_args;
 	struct cam_vfe_bus_ver2_vfe_out_data        *vfe_out_data = NULL;
 	struct cam_vfe_bus_ver2_wm_resource_data    *wm_data = NULL;
 	struct cam_isp_dual_stripe_config           *stripe_config;
 	uint32_t outport_id, ports_plane_idx, i;
 
-	bus_priv = (struct cam_vfe_bus_ver2_priv  *) priv;
 	stripe_args = (struct cam_isp_hw_dual_isp_update_args *)cmd_args;
 
 	vfe_out_data = (struct cam_vfe_bus_ver2_vfe_out_data *)

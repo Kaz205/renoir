@@ -245,7 +245,7 @@ struct cam_vfe_bus_ver2_hw_info {
 	struct cam_vfe_bus_ver2_vfe_out_hw_info
 		vfe_out_hw_info[CAM_VFE_BUS_VER2_VFE_OUT_MAX];
 	struct cam_vfe_bus_ver2_reg_data  reg_data;
-	struct cam_vfe_bus_ver2_stats_cfg_info *stats_data;
+	const struct cam_vfe_bus_ver2_stats_cfg_info *stats_data;
 };
 
 /*

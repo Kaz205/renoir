@@ -1688,18 +1688,11 @@ static struct edid *anx7625_get_edid(struct anx7625_data *ctx)
 static enum drm_connector_status anx7625_sink_detect(struct anx7625_data *ctx)
 {
 	struct device *dev = &ctx->client->dev;
-	int status;
 
 	DRM_DEV_DEBUG_DRIVER(dev, "sink detect\n");
 
-	if (ctx->pdata.panel_bridge) {
-		pm_runtime_get_sync(dev);
-		status = anx7625_read_hpd_status_p0(ctx);
-		pm_runtime_put_sync(dev);
-
-		return (status & HPD_STATUS) ? connector_status_connected :
-						     connector_status_disconnected;
-	}
+	if (ctx->pdata.panel_bridge)
+		return connector_status_connected;
 
 	return ctx->hpd_status ? connector_status_connected :
 				     connector_status_disconnected;
@@ -2377,7 +2370,6 @@ static int __maybe_unused anx7625_suspend(struct device *dev)
 	if (!pm_runtime_enabled(dev) || !pm_runtime_suspended(dev)) {
 		anx7625_runtime_pm_suspend(dev);
 		disable_irq(ctx->pdata.intp_irq);
-		flush_workqueue(ctx->workqueue);
 	}
 
 	return 0;
@@ -2437,7 +2429,8 @@ static int anx7625_i2c_probe(struct i2c_client *client,
 	platform->pdata.intp_irq = client->irq;
 	if (platform->pdata.intp_irq) {
 		INIT_WORK(&platform->work, anx7625_work_func);
-		platform->workqueue = create_workqueue("anx7625_work");
+		platform->workqueue = alloc_workqueue(
+			"anx7625_work", WQ_FREEZABLE | WQ_MEM_RECLAIM, 1);
 		if (!platform->workqueue) {
 			DRM_DEV_ERROR(dev, "fail to create work queue\n");
 			ret = -ENOMEM;
@@ -2479,9 +2472,10 @@ static int anx7625_i2c_probe(struct i2c_client *client,
 
 	platform->bridge.funcs = &anx7625_bridge_funcs;
 	platform->bridge.of_node = client->dev.of_node;
-	platform->bridge.ops = DRM_BRIDGE_OP_EDID | DRM_BRIDGE_OP_DETECT;
+	platform->bridge.ops = DRM_BRIDGE_OP_EDID;
 	if (!platform->pdata.panel_bridge)
-		platform->bridge.ops |= DRM_BRIDGE_OP_HPD;
+		platform->bridge.ops |= DRM_BRIDGE_OP_HPD |
+					DRM_BRIDGE_OP_DETECT;
 	platform->bridge.type = platform->pdata.panel_bridge ?
 				    DRM_MODE_CONNECTOR_eDP :
 				    DRM_MODE_CONNECTOR_DisplayPort;

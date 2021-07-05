@@ -47,6 +47,9 @@ int sched_proc_update_handler(struct ctl_table *table, int write,
 		loff_t *ppos);
 #endif
 
+extern unsigned int sysctl_iowait_reset_ticks;
+extern unsigned int sysctl_iowait_apply_ticks;
+
 /*
  *  control realtime throttling:
  *
