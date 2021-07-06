@@ -140,7 +140,6 @@ enum mt76_testmode_rx_attr {
  * enum mt76_testmode_state - phy test state
  *
  * @MT76_TM_STATE_OFF: test mode disabled (normal operation)
- * @MT76_TM_STATE_ON: test mode enabled used in offload firmware
  * @MT76_TM_STATE_IDLE: test mode enabled, but idle
  * @MT76_TM_STATE_TX_FRAMES: send a fixed number of test frames
  * @MT76_TM_STATE_RX_FRAMES: receive packets and keep statistics
@@ -148,7 +147,6 @@ enum mt76_testmode_rx_attr {
  */
 enum mt76_testmode_state {
 	MT76_TM_STATE_OFF,
-	MT76_TM_STATE_ON,
 	MT76_TM_STATE_IDLE,
 	MT76_TM_STATE_TX_FRAMES,
 	MT76_TM_STATE_RX_FRAMES,
