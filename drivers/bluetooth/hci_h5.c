@@ -798,6 +798,7 @@ static int h5_serdev_probe(struct serdev_device *serdev)
 {
 	const struct acpi_device_id *match;
 	struct device *dev = &serdev->dev;
+	struct hci_dev *hdev;
 	struct h5 *h5;
 	const struct h5_device_data *data;
 	int err;
@@ -845,6 +846,8 @@ static int h5_serdev_probe(struct serdev_device *serdev)
 	err = hci_uart_register_device(&h5->serdev_hu, &h5p);
 	if (err)
 		return err;
+
+	hdev = h5->serdev_hu.hdev;
 
 	/* Set H5 specific quirks */
 	if (data->capabilities & H5_CAP_WAKEUP_ENABLE)
