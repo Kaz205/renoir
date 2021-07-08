@@ -66,6 +66,9 @@
 #define UIC_CMD_TIMEOUT	500
 #endif
 
+/*UIC PWR CTRL command timeout, unit: ms*/
+#define UIC_PWR_CTRL_TIMEOUT 3000
+
 /* NOP OUT retries waiting for NOP IN response */
 #define NOP_OUT_RETRIES    10
 /* Timeout after 30 msecs if NOP OUT hangs without response */
@@ -107,7 +110,7 @@
 #define UFSHCD_REF_CLK_GATING_WAIT_US 0xFF /* microsecs */
 
 /* Polling time to wait for fDeviceInit  */
-#define FDEVICEINIT_COMPL_TIMEOUT 5000 /* millisecs */
+#define FDEVICEINIT_COMPL_TIMEOUT 8000 /* millisecs */
 
 #define ufshcd_toggle_vreg(_dev, _vreg, _on)				\
 	({                                                              \
@@ -4034,7 +4037,7 @@ static int ufshcd_uic_pwr_ctrl(struct ufs_hba *hba, struct uic_command *cmd)
 	}
 
 	if (!wait_for_completion_timeout(hba->uic_async_done,
-					 msecs_to_jiffies(UIC_CMD_TIMEOUT))) {
+					 msecs_to_jiffies(UIC_PWR_CTRL_TIMEOUT))) {
 		dev_err(hba->dev,
 			"pwr ctrl cmd 0x%x with mode 0x%x completion timeout\n",
 			cmd->command, cmd->argument3);
@@ -5945,6 +5948,9 @@ static void ufshcd_err_handler(struct work_struct *work)
 
 	hba = container_of(work, struct ufs_hba, eh_work);
 
+	pm_runtime_get_sync(hba->dev);
+	ufshcd_hold(hba, false);
+
 	spin_lock_irqsave(hba->host->host_lock, flags);
 	if (ufshcd_err_handling_should_stop(hba)) {
 		if (hba->ufshcd_state != UFSHCD_STATE_ERROR)
@@ -7787,16 +7793,9 @@ out:
 static int ufshcd_probe_hba(struct ufs_hba *hba, bool async)
 {
 	int ret;
-	unsigned long flags;
-#if defined(CONFIG_SCSI_UFSHCD_QTI)
-	bool reinit_needed = true;
-#endif
 	ktime_t start = ktime_get();
 
 	dev_err(hba->dev, "*** This is %s ***\n", __FILE__);
-#if defined(CONFIG_SCSI_UFSHCD_QTI)
-reinit:
-#endif
 	ret = ufshcd_link_startup(hba);
 	if (ret)
 		goto out;
@@ -7831,34 +7830,6 @@ reinit:
 			goto out;
 	}
 
-#if defined(CONFIG_SCSI_UFSHCD_QTI)
-	/*
-	 * After reading the device descriptor, it is found as UFS 2.x
-	 * device and limit_phy_submode is set as 1 in DT file i.e
-	 * host phy is calibrated with gear4 setting, we need to
-	 * reinitialize UFS phy host with HS-Gear3, Rate B.
-	 */
-	if (hba->dev_info.wspecversion < 0x300 &&
-		hba->limit_phy_submode && reinit_needed) {
-		unsigned long flags;
-		int err;
-
-		ufshcd_vops_device_reset(hba);
-
-		/* Reset the host controller */
-		spin_lock_irqsave(hba->host->host_lock, flags);
-		ufshcd_hba_stop(hba, false);
-		spin_unlock_irqrestore(hba->host->host_lock, flags);
-
-		hba->limit_phy_submode = 0;
-		err = ufshcd_hba_enable(hba);
-		if (err)
-			goto out;
-		reinit_needed = false;
-
-		goto reinit;
-	}
-#endif
 	ufshcd_tune_unipro_params(hba);
 
 	/* UFS device is also active now */
@@ -7891,18 +7862,16 @@ reinit:
 	 */
 	ufshcd_set_active_icc_lvl(hba);
 
+/* set the state as operational after switching to desired gear */
+	hba->ufshcd_state = UFSHCD_STATE_OPERATIONAL;
+
+#if defined(CONFIG_SCSI_UFSHCD_QTI)
 	ufshcd_wb_config(hba);
+#endif
 	/* Enable Auto-Hibernate if configured */
 	ufshcd_auto_hibern8_enable(hba);
 
 out:
-	spin_lock_irqsave(hba->host->host_lock, flags);
-	if (ret)
-		hba->ufshcd_state = UFSHCD_STATE_ERROR;
-	else if (hba->ufshcd_state == UFSHCD_STATE_RESET)
-		hba->ufshcd_state = UFSHCD_STATE_OPERATIONAL;
-	spin_unlock_irqrestore(hba->host->host_lock, flags);
-
 	trace_ufshcd_init(dev_name(hba->dev), ret,
 		ktime_to_us(ktime_sub(ktime_get(), start)),
 		hba->curr_dev_pwr_mode, hba->uic_link_state);
