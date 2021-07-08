@@ -1611,6 +1611,15 @@ int msm_pinctrl_probe(struct platform_device *pdev,
 
 	dev_dbg(&pdev->dev, "Probed Qualcomm pinctrl driver\n");
 
+#ifdef CONFIG_PINCTRL_RENOIR
+	msm_gpio_mpm_wake_set(151, false);
+	msm_gpio_mpm_wake_set(202, false);
+#else
+	msm_gpio_mpm_wake_set(151, false);
+	msm_gpio_mpm_wake_set(200, false);
+	msm_gpio_mpm_wake_set(202, false);
+#endif
+
 	return 0;
 }
 EXPORT_SYMBOL(msm_pinctrl_probe);
