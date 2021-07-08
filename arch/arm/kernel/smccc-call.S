@@ -7,7 +7,6 @@
 #include <asm/opcodes-sec.h>
 #include <asm/opcodes-virt.h>
 #include <asm/unwind.h>
-#include <linux/arm-smccc.h>
 
 	/*
 	 * Wrap c macros in asm macros to delay expansion until after the
@@ -28,17 +27,9 @@ UNWIND(	.fnstart)
 UNWIND(	.save	{r4-r7})
 	ldm	r12, {r4-r7}
 	\instr
-	ldr	r12, [sp, #(4 * 8)]
-	stm	r12, {r0-r3}
-	ldr	r12, [sp, #(4 * 9)]
-	cmp	r12, #0
-	beq	1f
-	ldr	r8, [r12]
-	cmp 	r8, #ARM_SMCCC_QUIRK_QCOM_A6
-	bne	1f
-	str	r6, [r12, #4]
-1:
 	pop	{r4-r7}
+	ldr	r12, [sp, #(4 * 4)]
+	stm	r12, {r0-r3}
 	bx	lr
 UNWIND(	.fnend)
 	.endm
