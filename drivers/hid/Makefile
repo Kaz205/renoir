@@ -2,6 +2,8 @@
 #
 # Makefile for the HID driver
 #
+ccflags-y += -I$(src)			# needed for trace events
+
 hid-y			:= hid-core.o hid-input.o hid-quirks.o
 hid-$(CONFIG_DEBUG_FS)		+= hid-debug.o
 
