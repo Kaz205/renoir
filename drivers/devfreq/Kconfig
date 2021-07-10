@@ -186,6 +186,7 @@ config ARM_RK3399_DMC_DEVFREQ
 
 config DEVFREQ_SIMPLE_DEV
 	tristate "Device driver for simple clock device with no status info"
+	depends on CPU_FREQ
 	select DEVFREQ_GOV_PERFORMANCE
 	select DEVFREQ_GOV_POWERSAVE
 	select DEVFREQ_GOV_USERSPACE
