@@ -530,11 +530,6 @@ config MI_HARDWARE_ID
 	help
 	  This adds support for mi hwid.
 
-config PERF_HELPER
-	default y
-	help
-	  this module support record perf lock history and other perf messages.
-
 config GPIO_TESTING_MODE
 	tristate "A simple GPIO testing mode driver for sar controler"
 	default n
