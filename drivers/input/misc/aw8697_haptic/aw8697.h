@@ -6,9 +6,10 @@
  * kernel version
  *
  ********************************************************/
-#define INPUT_DEV
-//#define TEST_RTP
-#define TEST_CONT_TO_RAM
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(4, 4, 1)
+#define TIMED_OUTPUT
+#endif
+
 /*********************************************************
  *
  * aw8697.h
@@ -20,9 +21,11 @@
 #include <linux/hrtimer.h>
 #include <linux/mutex.h>
 #include <linux/cdev.h>
+#ifdef TIMED_OUTPUT
+#include <../../../drivers/staging/android/timed_output.h>
+#else
 #include <linux/leds.h>
-#include <linux/atomic.h>
-
+#endif
 
 /*********************************************************
  *
@@ -43,28 +46,18 @@
 #define AW8697_VBAT_REFER                   4200
 #define AW8697_VBAT_MIN                     3000
 #define AW8697_VBAT_MAX                     4500
-#define ENABLE_PIN_CONTROL
 
-#ifdef INPUT_DEV
-/* common definitions */
-#define HAP_BRAKE_PATTERN_MAX       4
-#define HAP_WAVEFORM_BUFFER_MAX     8	/*used */
-#define HAP_VMAX_MV_DEFAULT     1800
-#define HAP_VMAX_MV_MAX         3596
-#define HAP_PLAY_RATE_US_DEFAULT    5715	/*used */
-#define HAP_PLAY_RATE_US_MAX        20475
-#define HAP_PLAY_RATE_US_LSB        5
-#define VMAX_MIN_PLAY_TIME_US       20000
-#define HAP_SC_DET_MAX_COUNT        5
-#define HAP_SC_DET_TIME_US      1000000
-#define FF_EFFECT_COUNT_MAX     32
-#define HAP_DISABLE_DELAY_USEC      1000
-#endif
+/* trig config */
+#define AW8697_TRIG_NUM                     3
+#define AW8697_TRG1_ENABLE                  1
+#define AW8697_TRG2_ENABLE                  1
+#define AW8697_TRG3_ENABLE                  1
+
 /*
  * trig default high level
- * ___________         _________________
- *           |         |
- *           |         |
+ * ___________           _________________
+ *           |           |
+ *           |           |
  *           |___________|
  *        first edge
  *                   second edge
@@ -72,26 +65,80 @@
  *
  * trig default low level
  *            ___________
- *        |           |
- *        |           |
- * __________|        |_________________
+ *           |           |
+ *           |           |
+ * __________|           |_________________
  *        first edge
  *                   second edge
  */
-/* trig config */
-/*dts config
-* default_level -> 1: high level; 0: low level
-* dual_edge     -> 1: dual edge; 0: first edge
-*vib_trig_config = <
-*       1   1              1          1           2
-*  enable   default_level  dual_edge  first_seq   second_seq
-*       1   1              2          1           2
-*  enable   default_level  dual_edge  first_seq   second_seq
-*       1   1              3          1           2
-*  enable   default_level  dual_edge  first_seq   second_seq
-*/
-#define AW8697_TRIG_NUM                     3
+#define AW8697_TRG1_DEFAULT_LEVEL     1	/* 1: high level; 0: low level */
+#define AW8697_TRG2_DEFAULT_LEVEL     1	/* 1: high level; 0: low level */
+#define AW8697_TRG3_DEFAULT_LEVEL     1	/* 1: high level; 0: low level */
 
+#define AW8697_TRG1_DUAL_EDGE         1	/* 1: dual edge; 0: first edge */
+#define AW8697_TRG2_DUAL_EDGE         1	/* 1: dual edge; 0: first edge */
+#define AW8697_TRG3_DUAL_EDGE         1	/* 1: dual edge; 0: first edge */
+
+#define AW8697_TRG1_FIRST_EDGE_SEQ    1	/* trig1: first edge waveform seq */
+#define AW8697_TRG1_SECOND_EDGE_SEQ   2	/* trig1: second edge waveform seq */
+#define AW8697_TRG2_FIRST_EDGE_SEQ    1	/* trig2: first edge waveform seq */
+#define AW8697_TRG2_SECOND_EDGE_SEQ   2	/* trig2: second edge waveform seq */
+#define AW8697_TRG3_FIRST_EDGE_SEQ    1	/* trig3: first edge waveform seq */
+#define AW8697_TRG3_SECOND_EDGE_SEQ   2	/* trig3: second edge waveform seq */
+
+#if AW8697_TRG1_ENABLE
+#define AW8697_TRG1_DEFAULT_ENABLE    AW8697_BIT_TRGCFG2_TRG1_ENABLE
+#else
+#define AW8697_TRG1_DEFAULT_ENABLE    AW8697_BIT_TRGCFG2_TRG1_DISABLE
+#endif
+
+#if AW8697_TRG2_ENABLE
+#define AW8697_TRG2_DEFAULT_ENABLE    AW8697_BIT_TRGCFG2_TRG2_ENABLE
+#else
+#define AW8697_TRG2_DEFAULT_ENABLE    AW8697_BIT_TRGCFG2_TRG2_DISABLE
+#endif
+
+#if AW8697_TRG3_ENABLE
+#define AW8697_TRG3_DEFAULT_ENABLE    AW8697_BIT_TRGCFG2_TRG3_ENABLE
+#else
+#define AW8697_TRG3_DEFAULT_ENABLE    AW8697_BIT_TRGCFG2_TRG3_DISABLE
+#endif
+
+#if AW8697_TRG1_DEFAULT_LEVEL
+#define AW8697_TRG1_DEFAULT_POLAR     AW8697_BIT_TRGCFG1_TRG1_POLAR_POS
+#else
+#define AW8697_TRG1_DEFAULT_POLAR     AW8697_BIT_TRGCFG1_TRG1_POLAR_NEG
+#endif
+
+#if AW8697_TRG2_DEFAULT_LEVEL
+#define AW8697_TRG2_DEFAULT_POLAR     AW8697_BIT_TRGCFG1_TRG2_POLAR_POS
+#else
+#define AW8697_TRG2_DEFAULT_POLAR     AW8697_BIT_TRGCFG1_TRG2_POLAR_NEG
+#endif
+
+#if AW8697_TRG3_DEFAULT_LEVEL
+#define AW8697_TRG3_DEFAULT_POLAR     AW8697_BIT_TRGCFG1_TRG3_POLAR_POS
+#else
+#define AW8697_TRG3_DEFAULT_POLAR     AW8697_BIT_TRGCFG1_TRG3_POLAR_NEG
+#endif
+
+#if AW8697_TRG1_DUAL_EDGE
+#define AW8697_TRG1_DEFAULT_EDGE      AW8697_BIT_TRGCFG1_TRG1_EDGE_POS_NEG
+#else
+#define AW8697_TRG1_DEFAULT_EDGE      AW8697_BIT_TRGCFG1_TRG1_EDGE_POS
+#endif
+
+#if AW8697_TRG2_DUAL_EDGE
+#define AW8697_TRG2_DEFAULT_EDGE       AW8697_BIT_TRGCFG1_TRG2_EDGE_POS_NEG
+#else
+#define AW8697_TRG2_DEFAULT_EDGE       AW8697_BIT_TRGCFG1_TRG2_EDGE_POS
+#endif
+
+#if AW8697_TRG3_DUAL_EDGE
+#define AW8697_TRG3_DEFAULT_EDGE       AW8697_BIT_TRGCFG1_TRG3_EDGE_POS_NEG
+#else
+#define AW8697_TRG3_DEFAULT_EDGE       AW8697_BIT_TRGCFG1_TRG3_EDGE_POS
+#endif
 
 enum aw8697_flags {
 	AW8697_FLAG_NONR = 0,
@@ -120,8 +167,6 @@ enum aw8697_haptic_bst_mode {
 enum aw8697_haptic_activate_mode {
 	AW8697_HAPTIC_ACTIVATE_RAM_MODE = 0,
 	AW8697_HAPTIC_ACTIVATE_CONT_MODE = 1,
-	AW8697_HAPTIC_ACTIVATE_RTP_MODE = 2,
-	AW8697_HAPTIC_ACTIVATE_RAM_LOOP_MODE = 3,
 };
 
 enum aw8697_haptic_cont_vbat_comp_mode {
@@ -155,20 +200,12 @@ enum aw8697_haptic_play {
 enum aw8697_haptic_cmd {
 	AW8697_HAPTIC_CMD_NULL = 0,
 	AW8697_HAPTIC_CMD_ENABLE = 1,
+	AW8697_HAPTIC_CMD_HAPTIC = 0x0f,
+	AW8697_HAPTIC_CMD_TP = 0x10,
+	AW8697_HAPTIC_CMD_SYS = 0xf0,
 	AW8697_HAPTIC_CMD_STOP = 255,
 };
 
-enum haptics_custom_effect_param {
-	CUSTOM_DATA_EFFECT_IDX,
-	CUSTOM_DATA_TIMEOUT_SEC_IDX,
-	CUSTOM_DATA_TIMEOUT_MSEC_IDX,
-	CUSTOM_DATA_LEN,
-};
-enum aw8697_haptic_strength {
-	AW8697_LIGHT_MAGNITUDE = 0x3fff,
-	AW8697_MEDIUM_MAGNITUDE = 0x5fff,
-	AW8697_STRONG_MAGNITUDE = 0x7fff,
-};
 /*********************************************************
  *
  * struct
@@ -191,11 +228,13 @@ struct ram {
 };
 
 struct haptic_ctr {
+	unsigned char cnt;
 	unsigned char cmd;
 	unsigned char play;
 	unsigned char wavseq;
 	unsigned char loop;
 	unsigned char gain;
+	struct list_head list;
 };
 
 struct haptic_audio {
@@ -204,10 +243,19 @@ struct haptic_audio {
 	struct work_struct work;
 	int delay_val;
 	int timer_val;
-	unsigned char cnt;
-	struct haptic_ctr data[256];
 	struct haptic_ctr ctr;
-	unsigned char ori_gain;
+	struct list_head ctr_list;
+	/* struct tp tp; */
+	struct list_head list;
+	/*  struct haptic_audio_tp_size tp_size; */
+	/*   struct trust_zone_info output_tz_info[10]; */
+	int tz_num;
+	int tz_high_num;
+	int tz_cnt_thr;
+	int tz_cnt_max;
+	unsigned int uevent_report_flag;
+	unsigned int hap_cnt_outside_tz;
+	unsigned int hap_cnt_max_outside_tz;
 };
 
 struct trig {
@@ -235,103 +283,36 @@ struct aw8697_dts_info {
 	unsigned int r_spare;
 	unsigned int bstdbg[6];
 	unsigned int parameter1;
-	unsigned int effect_id_boundary;
-	unsigned int effect_max;
-	unsigned int rtp_time[175];
-	unsigned int trig_config[3][5];
-	unsigned int bst_vol_default;
-	unsigned int bst_vol_ram;
-	unsigned int bst_vol_rtp;
 };
 
-#ifdef INPUT_DEV
-enum actutor_type {
-	ACT_LRA,
-	ACT_ERM,
-};
-
-enum lra_res_sig_shape {
-	RES_SIG_SINE,
-	RES_SIG_SQUARE,
-};
-
-enum lra_auto_res_mode {
-	AUTO_RES_MODE_ZXD,
-	AUTO_RES_MODE_QWD,
-};
-
-enum wf_src {
-	INT_WF_VMAX,
-	INT_WF_BUFFER,
-	EXT_WF_AUDIO,
-	EXT_WF_PWM,
-};
-
-struct qti_hap_effect {
-	int id;
-	u8 *pattern;
-	int pattern_length;
-	u16 play_rate_us;
-	u16 vmax_mv;
-	u8 wf_repeat_n;
-	u8 wf_s_repeat_n;
-	u8 brake[HAP_BRAKE_PATTERN_MAX];
-	int brake_pattern_length;
-	bool brake_en;
-	bool lra_auto_res_disable;
-};
-
-struct qti_hap_play_info {
-	struct qti_hap_effect *effect;
-	u16 vmax_mv;
-	int length_us;
-	int playing_pos;
-	bool playing_pattern;
-};
-
-struct qti_hap_config {
-	enum actutor_type act_type;
-	enum lra_res_sig_shape lra_shape;
-	enum lra_auto_res_mode lra_auto_res_mode;
-	enum wf_src ext_src;
-	u16 vmax_mv;
-	u16 play_rate_us;
-	bool lra_allow_variable_play_rate;
-	bool use_ext_wf_src;
-};
-#endif
-
-#ifdef ENABLE_PIN_CONTROL
-const char * const pctl_names[] = {
-	"aw8697_reset_reset",
-	"aw8697_reset_active",
-	"aw8697_interrupt_active",
-};
-#endif
 struct aw8697 {
+	struct regmap *regmap;
 	struct i2c_client *i2c;
+	struct device *dev;
+	struct input_dev *input;
+
 	struct mutex lock;
-#ifdef ENABLE_PIN_CONTROL
-	struct pinctrl *aw8697_pinctrl;
-	struct pinctrl_state *pinctrl_state[ARRAY_SIZE(pctl_names)];
-#endif
-	int enable_pin_control;
+	struct mutex rtp_lock;
+	struct hrtimer timer;
 	struct work_struct vibrator_work;
 	struct work_struct rtp_work;
-	struct work_struct set_gain_work;
 	struct delayed_work ram_work;
-
+#ifdef TIMED_OUTPUT
+	struct timed_output_dev to_dev;
+#else
+	struct led_classdev cdev;
+#endif
 	struct fileops fileops;
 	struct ram ram;
-
-	struct timespec64 start, end;
+	bool haptic_ready;
+	bool audio_ready;
+	int pre_haptic_number;
+	struct timeval start, end;
 	unsigned int timeval_flags;
 	unsigned int osc_cali_flag;
 	unsigned long int microsecond;
 	unsigned int sys_frequency;
 	unsigned int rtp_len;
-	unsigned int lra_calib_data;
-	unsigned int f0_calib_data;
 
 	int reset_gpio;
 	int irq_gpio;
@@ -345,7 +326,6 @@ struct aw8697 {
 	unsigned char activate_mode;
 
 	unsigned char auto_boost;
-	unsigned char wk_lock_flag;
 
 	int state;
 	int duration;
@@ -353,8 +333,6 @@ struct aw8697 {
 	int index;
 	int vmax;
 	int gain;
-	u16 new_gain;
-	unsigned char level;
 
 	unsigned char seq[AW8697_SEQUENCER_SIZE];
 	unsigned char loop[AW8697_SEQUENCER_SIZE];
@@ -364,14 +342,14 @@ struct aw8697 {
 
 	unsigned char rtp_init;
 	unsigned char ram_init;
+	unsigned char rtp_routine_on;
 
 	unsigned int f0;
 	unsigned int cont_f0;
 	unsigned char max_pos_beme;
 	unsigned char max_neg_beme;
 	unsigned char f0_cali_flag;
-	bool f0_cali_status;
-	unsigned int osc_cali_run;
+	unsigned int theory_time;
 
 	unsigned char ram_vbat_comp;
 	unsigned int vbat;
@@ -381,44 +359,11 @@ struct aw8697 {
 
 	struct haptic_audio haptic_audio;
 	struct aw8697_dts_info info;
-	atomic_t is_in_rtp_loop;
-	atomic_t exit_in_rtp_loop;
-	atomic_t is_in_write_loop;
-	wait_queue_head_t wait_q;//wait queue for exit irq mode
-	wait_queue_head_t stop_wait_q;  //wait queue for stop rtp mode
-	struct workqueue_struct *work_queue;
-
-#ifdef INPUT_DEV
-	struct platform_device *pdev;
-	struct device *dev;
-	struct regmap *regmap;
-	struct input_dev *input_dev;
-	struct pwm_device *pwm_dev;
-	struct qti_hap_config config;
-	struct qti_hap_play_info play;
-	struct qti_hap_effect *predefined;
-	struct qti_hap_effect constant;
-	struct regulator *vdd_supply;
-	struct hrtimer stop_timer;
-	struct hrtimer hap_disable_timer;
-	struct hrtimer timer;	/*test used  ,del */
-	struct dentry *hap_debugfs;
-	struct mutex rtp_lock;
-	spinlock_t bus_lock;
-	ktime_t last_sc_time;
-	int play_irq;
-	int sc_irq;
-	int effects_count;
-	int sc_det_count;
-	u16 reg_base;
-	bool perm_disable;
-	bool play_irq_en;
-	bool vdd_enabled;
-	int effect_type;
-	int effect_id;
-	int test_val;
-	int is_custom_wave;
-#endif
+	unsigned int ramupdate_flag;
+	unsigned int rtpupdate_flag;
+    unsigned int osc_cali_run;
+    unsigned int lra_calib_data;
+	unsigned int f0_calib_data;
 };
 
 struct aw8697_container {
@@ -441,26 +386,12 @@ struct aw8697_que_seq {
 
 #define AW8697_HAPTIC_IOCTL_MAGIC         'h'
 
-#define AW8697_HAPTIC_SET_QUE_SEQ         _IOWR(AW8697_HAPTIC_IOCTL_MAGIC,\
-						1,\
-						struct aw8697_que_seq*)
-#define AW8697_HAPTIC_SET_SEQ_LOOP        _IOWR(AW8697_HAPTIC_IOCTL_MAGIC,\
-						2,\
-						struct aw8697_seq_loop*)
-#define AW8697_HAPTIC_PLAY_QUE_SEQ        _IOWR(AW8697_HAPTIC_IOCTL_MAGIC,\
-						3,\
-						unsigned int)
-#define AW8697_HAPTIC_SET_BST_VOL         _IOWR(AW8697_HAPTIC_IOCTL_MAGIC,\
-						4,\
-						unsigned int)
-#define AW8697_HAPTIC_SET_BST_PEAK_CUR    _IOWR(AW8697_HAPTIC_IOCTL_MAGIC,\
-						5,\
-						unsigned int)
-#define AW8697_HAPTIC_SET_GAIN            _IOWR(AW8697_HAPTIC_IOCTL_MAGIC,\
-						6,\
-						unsigned int)
-#define AW8697_HAPTIC_PLAY_REPEAT_SEQ     _IOWR(AW8697_HAPTIC_IOCTL_MAGIC,\
-						7,\
-						unsigned int)
+#define AW8697_HAPTIC_SET_QUE_SEQ         _IOWR(AW8697_HAPTIC_IOCTL_MAGIC, 1, struct aw8697_que_seq*)
+#define AW8697_HAPTIC_SET_SEQ_LOOP        _IOWR(AW8697_HAPTIC_IOCTL_MAGIC, 2, struct aw8697_seq_loop*)
+#define AW8697_HAPTIC_PLAY_QUE_SEQ        _IOWR(AW8697_HAPTIC_IOCTL_MAGIC, 3, unsigned int)
+#define AW8697_HAPTIC_SET_BST_VOL         _IOWR(AW8697_HAPTIC_IOCTL_MAGIC, 4, unsigned int)
+#define AW8697_HAPTIC_SET_BST_PEAK_CUR    _IOWR(AW8697_HAPTIC_IOCTL_MAGIC, 5, unsigned int)
+#define AW8697_HAPTIC_SET_GAIN            _IOWR(AW8697_HAPTIC_IOCTL_MAGIC, 6, unsigned int)
+#define AW8697_HAPTIC_PLAY_REPEAT_SEQ     _IOWR(AW8697_HAPTIC_IOCTL_MAGIC, 7, unsigned int)
 
 #endif

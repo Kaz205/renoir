@@ -114,9 +114,9 @@
 /********************************************
  * Register Access
  *******************************************/
-#define REG_NONE_ACCESS 0
-#define REG_RD_ACCESS  (1 << 0)
-#define REG_WR_ACCESS  (1 << 1)
+#define REG_NONE_ACCESS		0
+#define REG_RD_ACCESS		(1 << 0)
+#define REG_WR_ACCESS		(1 << 1)
 #define AW8697_REG_MAX 0xff
 
 const unsigned char aw8697_reg_access[AW8697_REG_MAX] = {
@@ -426,6 +426,7 @@ const unsigned char aw8697_reg_access[AW8697_REG_MAX] = {
 
 /* DBGST: reg0x30 */
 #define AW8697_BIT_DBGSTAT_FF_EMPTY                 (1<<0)
+
 /* BSTCFG: reg0x34 */
 #define AW8697_BIT_BSTCFG_PEAKCUR_MASK              (~(7<<0))
 #define AW8697_BIT_BSTCFG_PEAKCUR_4A                (7<<0)
