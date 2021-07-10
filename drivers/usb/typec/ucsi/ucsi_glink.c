@@ -6,6 +6,7 @@
 #define pr_fmt(fmt)	"UCSI: %s: " fmt, __func__
 
 #include <linux/device.h>
+#include <linux/delay.h>
 #include <linux/ipc_logging.h>
 #include <linux/module.h>
 #include <linux/notifier.h>
@@ -89,6 +90,7 @@ struct ucsi_dev {
 	struct ucsi_glink_constat_info	constat_info;
 	struct work_struct		notify_work;
 	struct work_struct		setup_work;
+	struct work_struct		swap_role_work;
 	atomic_t			state;
 };
 
