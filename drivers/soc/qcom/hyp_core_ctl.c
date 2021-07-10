@@ -6,7 +6,10 @@
 #define pr_fmt(fmt)	"hyp_core_ctl: " fmt
 
 #include <linux/init.h>
+#include <linux/cpu.h>
 #include <linux/cpumask.h>
+#include <linux/interrupt.h>
+#include <linux/irqreturn.h>
 #include <linux/kthread.h>
 #include <linux/sched.h>
 #include <linux/sched/rt.h>
