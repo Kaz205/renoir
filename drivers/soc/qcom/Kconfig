@@ -295,6 +295,7 @@ config MSM_PIL
 
 config MSM_SUBSYSTEM_RESTART
 	tristate "MSM Subsystem Restart"
+	depends on ARCH_QCOM
 	select MSM_PIL
 	select QCOM_QMI_HELPERS
 	help
@@ -379,6 +380,7 @@ config MSM_PIL_MSS_QDSP6V5
 
 config MSM_SERVICE_LOCATOR
 	tristate "Service Locator"
+	depends on ARCH_QCOM
 	select QCOM_QMI_HELPERS
 	help
 	  The Service Locator provides a library to retrieve location
