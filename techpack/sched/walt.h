@@ -3,9 +3,9 @@
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
  */
 
-#include "../../../kernel/sched/sched.h"
-#include "../../../kernel/sched/walt.h"
-#include "../../../fs/proc/internal.h"
+#include "../../kernel/sched/sched.h"
+#include "../../kernel/sched/walt/walt.h"
+#include "../../fs/proc/internal.h"
 #include "trace.h"
 
 #ifdef CONFIG_SCHED_WALT
