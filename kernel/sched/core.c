@@ -8175,8 +8175,11 @@ int task_set_core_sched(int set, struct task_struct *tsk,
 	 * added to tagged CGroup, then the prctl() returns -EBUSY.
 	 */
 	if (!!tsk->core_cookie == set) {
-		if ((tsk->core_cookie == (unsigned long)tsk) ||
-		    (tsk->core_cookie == (unsigned long)tsk->sched_task_group)) {
+		if ((tsk->core_cookie == (unsigned long)tsk)
+#ifdef CONFIG_CGROUP_SCHED
+		    || tsk->core_cookie == (unsigned long)tsk->sched_task_group
+#endif
+		    ) {
 			return -EBUSY;
 		}
 	}
