@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/slab.h>
@@ -1483,7 +1484,6 @@ static int cam_convert_hw_idx_to_ife_hw_num(int hw_idx)
 			break;
 		case CAM_CPAS_TITAN_580_V100:
 		case CAM_CPAS_TITAN_570_V200:
-		case CAM_CPAS_TITAN_165_V100:
 			if (hw_idx == 0)
 				return CAM_ISP_IFE0_HW;
 			else if (hw_idx == 1)
@@ -1868,6 +1868,7 @@ static int cam_ife_mgr_acquire_cid_res(
 	if (rc || !csid_acquire.node_res) {
 		CAM_ERR(CAM_ISP, "No %d paths available rc %d rsrc %p",
 			path_res_id, rc, csid_acquire.node_res);
+
 		goto put_res;
 	}
 
@@ -4019,7 +4020,7 @@ static int cam_ife_mgr_config_hw(void *hw_mgr_priv,
 			(ctx->custom_config & CAM_IFE_CUSTOM_CFG_SW_SYNC_ON)) {
 			rem_jiffies = wait_for_completion_timeout(
 				&ctx->config_done_complete,
-				msecs_to_jiffies(60));
+				msecs_to_jiffies(120)); // xiaomi modified to enlarge cfg timeout
 			if (rem_jiffies == 0) {
 				CAM_ERR(CAM_ISP,
 					"config done completion timeout for req_id=%llu ctx_index %d",
@@ -6484,7 +6485,6 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 			return rc;
 
 		frame_header_enable = true;
-		prepare_hw_data->frame_header_res_id = 0x0;
 	}
 
 	if (ctx->internal_cdm)
@@ -6588,14 +6588,6 @@ static int cam_ife_mgr_prepare_hw_update(void *hw_mgr_priv,
 				prepare_hw_data->frame_header_res_id,
 				prepare_hw_data->frame_header_cpu_addr);
 		}
-	}
-
-	/* Check if frame header was enabled for any WM */
-	if ((ctx->custom_config & CAM_IFE_CUSTOM_CFG_FRAME_HEADER_TS) &&
-		(prepare->num_out_map_entries) &&
-		(!prepare_hw_data->frame_header_res_id)) {
-		CAM_ERR(CAM_ISP, "Failed to configure frame header");
-		goto end;
 	}
 
 	/*
@@ -7566,8 +7558,7 @@ static int  cam_ife_hw_mgr_find_affected_ctx(
 		 */
 		if (notify_err_cb)
 			notify_err_cb(ife_hwr_mgr_ctx->common.cb_priv,
-				CAM_ISP_HW_EVENT_ERROR,
-				(void *)error_event_data);
+				CAM_ISP_HW_EVENT_ERROR, error_event_data);
 		else {
 			CAM_WARN(CAM_ISP, "Error call back is not set");
 			goto end;

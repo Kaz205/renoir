@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #ifndef _LAHAINA_PORT_CONFIG
@@ -57,22 +58,22 @@ static struct port_params rx_frame_params_44p1KHz[SWR_MSTR_PORT_LEN] = {
 /* TX UC1: TX1: 1ch, TX2: 2chs, TX3: 1ch(MBHC) */
 static struct port_params tx_frame_params_default[SWR_MSTR_PORT_LEN] = {
 	{7,  1,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0x00, 0x00}, /* TX1 */
-	{3,  0,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 1, 0x00, 0x00}, /* TX2 */
+	{7,  0,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 1, 0x00, 0x00}, /* TX2 */
 	{7,  5,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0x00, 0x00}, /* TX3 */
 };
 
 /* TX UC1: TX1: 1ch, TX2: 2chs, TX3: 1ch(MBHC) */
 static struct port_params tx_frame_params_shima[SWR_MSTR_PORT_LEN] = {
-	{3,  0,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 1, 0x00, 0x00}, /* TX1 */
-	{3,  2,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0x00, 0x00}, /* TX2 */
+	{7,  0,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 1, 0x00, 0x00}, /* TX1 */
+	{7,  2,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0x00, 0x00}, /* TX2 */
 	{7,  2,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0x00, 0x00}, /* TX3 */
 };
 
 /* 4.8 MHz clock */
 static struct port_params tx_frame_params_4p8MHz[SWR_MSTR_PORT_LEN] = {
 	{15,  1,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0x00, 0x00}, /* TX1 */
-	{3,  0,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 1, 0x00, 0x00}, /* TX2 */
-	{3,  2,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0x00, 0x00}, /* TX3 */
+	{7,  0,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 1, 0x00, 0x00}, /* TX2 */
+	{7,  2,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0x00, 0x00}, /* TX3 */
 };
 
 /* 0.6 MHz clock */
@@ -84,8 +85,8 @@ static struct port_params tx_frame_params_0p6MHz[SWR_MSTR_PORT_LEN] = {
 
 /* 4.8 MHz clock */
 static struct port_params tx_frame_params_shima_4p8MHz[SWR_MSTR_PORT_LEN] = {
-	{3,  0,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 1, 0x00, 0x00}, /* TX1 */
-	{3,  2,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0x00, 0x00}, /* TX2 */
+	{7,  0,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 1, 0x00, 0x00}, /* TX1 */
+	{7,  2,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0x00, 0x00}, /* TX2 */
 	{7,  2,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0x00, 0x00}, /* TX3 */
 };
 
@@ -94,12 +95,6 @@ static struct port_params tx_frame_params_shima_0p6MHz[SWR_MSTR_PORT_LEN] = {
 	{1,  1,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0x00, 0x00}, /* TX1 */
 	{1,  1,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0x00, 0x00}, /* TX2 */
 	{1,  1,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0x00, 0x00}, /* TX3 */
-};
-
-static struct port_params tx_frame_params_wcd937x[SWR_MSTR_PORT_LEN] = {
-	{3, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 1, 0x00, 0x00}, /* TX1 */
-	{3, 1, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0x00, 0x00}, /* TX2 */
-	{3,  2,  0,  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0x00, 0x00}, /* TX3 */
 };
 
 static struct swr_mstr_port_map sm_port_map[] = {
@@ -116,16 +111,6 @@ static struct swr_mstr_port_map sm_port_map_shima[] = {
 	{TX_MACRO, SWR_UC0, tx_frame_params_shima},
 	{TX_MACRO, SWR_UC1, tx_frame_params_shima_4p8MHz},
 	{TX_MACRO, SWR_UC2, tx_frame_params_shima_0p6MHz},
-	{RX_MACRO, SWR_UC0, rx_frame_params_default},
-	{RX_MACRO, SWR_UC1, rx_frame_params_dsd},
-	{RX_MACRO, SWR_UC2, rx_frame_params_44p1KHz},
-	{WSA_MACRO, SWR_UC0, wsa_frame_params_default},
-};
-
-static struct swr_mstr_port_map sm_port_map_wcd937x[] = {
-	{TX_MACRO, SWR_UC0, tx_frame_params_wcd937x},
-	{TX_MACRO, SWR_UC1, tx_frame_params_wcd937x},
-	{TX_MACRO, SWR_UC2, tx_frame_params_wcd937x},
 	{RX_MACRO, SWR_UC0, rx_frame_params_default},
 	{RX_MACRO, SWR_UC1, rx_frame_params_dsd},
 	{RX_MACRO, SWR_UC2, rx_frame_params_44p1KHz},

@@ -595,11 +595,6 @@ static void gsi_process_evt_re(struct gsi_evt_ctx *ctx,
 	struct gsi_xfer_compl_evt *evt;
 	struct gsi_chan_ctx *ch_ctx;
 
-	/* RMB before reading event ring shared b/w IPA h/w & driver
-	 * ordering between IPA h/w store and CPU load
-	 */
-	if (callback)
-		dma_rmb();
 	evt = (struct gsi_xfer_compl_evt *)(ctx->ring.base_va +
 			ctx->ring.rp_local - ctx->ring.base);
 	gsi_process_chan(evt, notify, callback);
@@ -781,10 +776,13 @@ static void gsi_handle_general(int ee)
 			GSI_EE_n_CNTXT_GSI_IRQ_CLR_OFFS(ee));
 }
 
+#define GSI_ISR_MAX_ITER 50
+
 static void gsi_handle_irq(void)
 {
 	uint32_t type;
 	int ee = gsi_ctx->per.ee;
+	unsigned long cnt = 0;
 	int index;
 
 	while (1) {
@@ -831,6 +829,15 @@ static void gsi_handle_irq(void)
 
 		if (type & GSI_EE_n_CNTXT_TYPE_IRQ_GENERAL_BMSK)
 			gsi_handle_general(ee);
+
+		if (++cnt > GSI_ISR_MAX_ITER) {
+			/*
+			 * Max number of spurious interrupts from hardware.
+			 * Unexpected hardware state.
+			 */
+			GSIERR("Too many spurious interrupt from GSI HW\n");
+			GSI_ASSERT();
+		}
 
 	}
 }

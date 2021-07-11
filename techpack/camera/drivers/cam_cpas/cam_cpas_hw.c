@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/device.h>
@@ -1942,6 +1943,11 @@ static int cam_cpas_log_vote(struct cam_hw_info *cpas_hw)
 	else
 		CAM_DBG(CAM_CPAS, "No ops for print_poweron_settings");
 
+	if (cpas_core->internal_ops.print_poweron_settings)
+		cpas_core->internal_ops.print_poweron_settings(cpas_hw);
+	else
+		CAM_DBG(CAM_CPAS, "No ops for print_poweron_settings");
+
 	return 0;
 }
 
@@ -2001,6 +2007,9 @@ static void cam_cpas_update_monitor_array(struct cam_hw_info *cpas_hw,
 		uint32_t be_mnoc_offset =
 			soc_private->rpmh_info[CAM_RPMH_BCM_BE_OFFSET] +
 			(0x4 * soc_private->rpmh_info[CAM_RPMH_BCM_MNOC_INDEX]);
+		uint32_t be_shub_offset =
+			soc_private->rpmh_info[CAM_RPMH_BCM_BE_OFFSET] +
+			(0x4 * 1); /* i=1 for SHUB, hardcode for now */
 
 		/*
 		 * 0x4, 0x800 - DDR
@@ -2010,6 +2019,7 @@ static void cam_cpas_update_monitor_array(struct cam_hw_info *cpas_hw,
 		entry->fe_mnoc = cam_io_r_mb(rpmh_base + fe_mnoc_offset);
 		entry->be_ddr = cam_io_r_mb(rpmh_base + be_ddr_offset);
 		entry->be_mnoc = cam_io_r_mb(rpmh_base + be_mnoc_offset);
+		entry->be_shub = cam_io_r_mb(rpmh_base + be_shub_offset);
 	}
 
 	entry->camnoc_fill_level[0] = cam_io_r_mb(
@@ -2094,10 +2104,23 @@ static void cam_cpas_dump_monitor_array(
 
 		if (cpas_core->regbase_index[CAM_CPAS_REG_RPMH] != -1) {
 			CAM_INFO(CAM_CPAS,
-				"fe_ddr=0x%x, fe_mnoc=0x%x, be_ddr=0x%x, be_mnoc=0x%x",
+				"fe_ddr=0x%x, fe_mnoc=0x%x, be_ddr=0x%x, be_mnoc=0x%x, be_shub=0x%x",
 				entry->fe_ddr, entry->fe_mnoc,
-				entry->be_ddr, entry->be_mnoc);
+				entry->be_ddr, entry->be_mnoc, entry->be_shub);
 		}
+
+		CAM_INFO(CAM_CPAS,
+			"CAMNOC REG[Queued Pending] linear[%d %d] rdi0_wr[%d %d] ubwc_stats0[%d %d] ubwc_stats1[%d %d] rdi1_wr[%d %d]",
+			(entry->camnoc_fill_level[0] & 0x7FF),
+			(entry->camnoc_fill_level[0] & 0x7F0000) >> 16,
+			(entry->camnoc_fill_level[1] & 0x7FF),
+			(entry->camnoc_fill_level[1] & 0x7F0000) >> 16,
+			(entry->camnoc_fill_level[2] & 0x7FF),
+			(entry->camnoc_fill_level[2] & 0x7F0000) >> 16,
+			(entry->camnoc_fill_level[3] & 0x7FF),
+			(entry->camnoc_fill_level[3] & 0x7F0000) >> 16,
+			(entry->camnoc_fill_level[4] & 0x7FF),
+			(entry->camnoc_fill_level[4] & 0x7F0000) >> 16);
 
 		CAM_INFO(CAM_CPAS,
 			"CAMNOC REG[Queued Pending] linear[%d %d] rdi0_wr[%d %d] ubwc_stats0[%d %d] ubwc_stats1[%d %d] rdi1_wr[%d %d]",
@@ -2426,7 +2449,7 @@ int cam_cpas_hw_probe(struct platform_device *pdev,
 	cpas_hw->soc_info.dev_name = pdev->name;
 	cpas_hw->open_count = 0;
 	cpas_core->ahb_bus_scaling_disable = false;
-	cpas_core->full_state_dump = false;
+	cpas_core->full_state_dump = true;
 
 	atomic64_set(&cpas_core->monitor_head, -1);
 

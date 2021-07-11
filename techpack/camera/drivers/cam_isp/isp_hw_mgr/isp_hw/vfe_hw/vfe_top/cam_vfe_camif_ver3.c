@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/slab.h>
@@ -1452,6 +1453,8 @@ static int cam_vfe_camif_ver3_handle_irq_bottom_half(void *handler_priv,
 			payload->ts.mono_time.tv_sec;
 		camif_priv->epoch_ts.tv_usec =
 			payload->ts.mono_time.tv_usec;
+
+		cam_cpas_notify_event("IFE EPOCH", evt_info.hw_idx);
 
 		if (camif_priv->event_cb)
 			camif_priv->event_cb(camif_priv->priv,

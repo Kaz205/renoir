@@ -94,8 +94,7 @@ struct cam_vfe_mux_rdi_data *rdi_priv)
 	uint32_t  val;
 
 	if (soc_private->cpas_version == CAM_CPAS_TITAN_175_V120 ||
-		soc_private->cpas_version == CAM_CPAS_TITAN_175_V130 ||
-		soc_private->cpas_version == CAM_CPAS_TITAN_165_V100) {
+		soc_private->cpas_version == CAM_CPAS_TITAN_175_V130) {
 		rc = cam_cpas_reg_read(soc_private->cpas_handle,
 				CAM_CPAS_REG_CAMNOC, 0x3A20, true, &val);
 		if (rc) {
