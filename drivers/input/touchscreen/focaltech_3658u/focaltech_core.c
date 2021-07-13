@@ -470,12 +470,6 @@ static int fts_input_report_b(struct fts_ts_data *data)
 		if (EVENT_DOWN(events[i].flag)) {
 			input_mt_report_slot_state(data->input_dev, MT_TOOL_FINGER, true);
 
-#if FTS_REPORT_PRESSURE_EN
-			if (events[i].p <= 0) {
-				events[i].p = 0x3f;
-			}
-			input_report_abs(data->input_dev, ABS_MT_PRESSURE, events[i].p);
-#endif
 			if (events[i].area <= 0) {
 				events[i].area = 0x09;
 			}
@@ -549,12 +543,6 @@ static int fts_input_report_a(struct fts_ts_data *data)
 		va_reported = true;
 		if (EVENT_DOWN(events[i].flag)) {
 			input_report_abs(data->input_dev, ABS_MT_TRACKING_ID, events[i].id);
-#if FTS_REPORT_PRESSURE_EN
-			if (events[i].p <= 0) {
-				events[i].p = 0x3f;
-			}
-			input_report_abs(data->input_dev, ABS_MT_PRESSURE, events[i].p);
-#endif
 			if (events[i].area <= 0) {
 				events[i].area = 0x09;
 			}
@@ -706,14 +694,6 @@ static void fts_irq_read_report(void)
 	int ret = 0;
 	struct fts_ts_data *ts_data = fts_data;
 
-#if FTS_ESDCHECK_EN
-	fts_esdcheck_set_intr(1);
-#endif
-
-#if FTS_POINT_REPORT_CHECK_EN
-	fts_prc_queue_work(ts_data);
-#endif
-
 	ret = fts_read_parse_touchdata(ts_data);
 	if (ret == 0) {
 		mutex_lock(&ts_data->report_mutex);
@@ -731,9 +711,6 @@ static void fts_irq_read_report(void)
 	} else if (!ts_data->touchs) {
 		ts_data->clicktouch_count = ts_data->clicktouch_num;
 	}
-#if FTS_ESDCHECK_EN
-	fts_esdcheck_set_intr(0);
-#endif
 }
 
 static int fts_read_raw(struct fts_ts_data *ts_data, u8 *data, u32 datalen)
@@ -898,9 +875,6 @@ static int fts_input_init(struct fts_ts_data *ts_data)
 	input_set_abs_params(input_dev, ABS_MT_POSITION_X, pdata->x_min, pdata->x_max - 1, 0, 0);
 	input_set_abs_params(input_dev, ABS_MT_POSITION_Y, pdata->y_min, pdata->y_max - 1, 0, 0);
 	input_set_abs_params(input_dev, ABS_MT_TOUCH_MAJOR, 0, 0xFF, 0, 0);
-#if FTS_REPORT_PRESSURE_EN
-	input_set_abs_params(input_dev, ABS_MT_PRESSURE, 0, 0xFF, 0, 0);
-#endif
 
 	ret = input_register_device(input_dev);
 	if (ret) {
@@ -2065,14 +2039,6 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
 		FTS_ERROR("create sysfs node fail");
 	}
 
-
-#if FTS_POINT_REPORT_CHECK_EN
-	ret = fts_point_report_check_init(ts_data);
-	if (ret) {
-		FTS_ERROR("init point report check fail");
-	}
-#endif
-
 	ret = fts_ex_mode_init(ts_data);
 	if (ret) {
 		FTS_ERROR("init glove/cover/charger fail");
@@ -2082,20 +2048,6 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
 	if (ret) {
 		FTS_ERROR("init gesture fail");
 	}
-
-#if FTS_TEST_EN
-	ret = fts_test_init(ts_data);
-	if (ret) {
-		FTS_ERROR("init production test fail");
-	}
-#endif
-
-#if FTS_ESDCHECK_EN
-	ret = fts_esdcheck_init(ts_data);
-	if (ret) {
-		FTS_ERROR("init esd check fail");
-	}
-#endif
 
 	ret = fts_irq_registration(ts_data);
 	if (ret) {
@@ -2179,23 +2131,11 @@ static int fts_ts_remove_entry(struct fts_ts_data *ts_data)
 {
 	FTS_FUNC_ENTER();
 
-#if FTS_POINT_REPORT_CHECK_EN
-	fts_point_report_check_exit(ts_data);
-#endif
-
 	fts_remove_proc(ts_data);
 	fts_remove_sysfs(ts_data);
 	fts_ex_mode_exit(ts_data);
 
 	fts_fwupg_exit(ts_data);
-
-#if FTS_TEST_EN
-	fts_test_exit(ts_data);
-#endif
-
-#if FTS_ESDCHECK_EN
-	fts_esdcheck_exit(ts_data);
-#endif
 
 	fts_gesture_exit(ts_data);
 	fts_bus_exit(ts_data);
@@ -2267,10 +2207,6 @@ static int fts_ts_suspend(struct device *dev)
 	}
 #endif
 
-#if FTS_ESDCHECK_EN
-	fts_esdcheck_suspend();
-#endif
-
 #ifdef CONFIG_FACTORY_BUILD
 	ts_data->poweroff_on_sleep = true;
 #endif
@@ -2325,10 +2261,6 @@ static int fts_ts_resume(struct device *dev)
 
 	fts_wait_tp_to_valid();
 	fts_ex_mode_recovery(ts_data);
-
-#if FTS_ESDCHECK_EN
-	fts_esdcheck_resume();
-#endif
 
 #ifdef FTS_XIAOMI_TOUCHFEATURE
 	if (ts_data->palm_sensor_switch) {

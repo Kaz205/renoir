@@ -119,15 +119,6 @@
 	kfree(pbuf);
 
 /*****************************************************************************
-*  Alternative mode (When something goes wrong, the modules may be able to solve the problem.)
-*****************************************************************************/
-/*
- * point report check
- * default: disable
- */
-#define FTS_POINT_REPORT_CHECK_EN               0
-
-/*****************************************************************************
 * Global variable or extern global variabls/functions
 *****************************************************************************/
 struct ft_chip_t {

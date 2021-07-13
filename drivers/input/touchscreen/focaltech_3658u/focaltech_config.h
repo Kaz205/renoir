@@ -180,28 +180,10 @@
 #define FTS_MT_PROTOCOL_B_EN                    1
 
 /*
- * Report Pressure in multitouch
- * 1:enable(default),0:disable
-*/
-#define FTS_REPORT_PRESSURE_EN                  0
-
-/*
  * Gesture function enable
  * default: disable
  */
 #define FTS_GESTURE_EN                          0
-
-/*
- * ESD check & protection
- * default: disable
- */
-#define FTS_ESDCHECK_EN                         0
-
-/*
- * Production test enable
- * 1: enable, 0:disable(default)
- */
-#define FTS_TEST_EN                             1
 
 /*
  * Pinctrl enable
