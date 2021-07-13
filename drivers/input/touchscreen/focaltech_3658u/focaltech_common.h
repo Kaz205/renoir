@@ -174,7 +174,7 @@ struct ts_ic_info {
 #endif
 
 #define FTS_INFO(fmt, args...) do { \
-	pr_info(KERN_INFO "[FTS_TS/I]%s:"fmt"\n", __func__, ##args); \
+	pr_debug(KERN_INFO "[FTS_TS/I]%s:"fmt"\n", __func__, ##args); \
 } while (0)
 
 #define FTS_ERROR(fmt, args...) do { \
