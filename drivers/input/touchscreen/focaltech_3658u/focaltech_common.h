@@ -115,12 +115,8 @@
 #define FTS_SYSFS_ECHO_ON(buf)      (buf[0] == '1')
 #define FTS_SYSFS_ECHO_OFF(buf)     (buf[0] == '0')
 
-#define kfree_safe(pbuf) do {\
-	if (pbuf) {\
-		kfree(pbuf);\
-		pbuf = NULL;\
-	} \
-} while (0)
+#define kfree_safe(pbuf)
+	kfree(pbuf);
 
 /*****************************************************************************
 *  Alternative mode (When something goes wrong, the modules may be able to solve the problem.)
