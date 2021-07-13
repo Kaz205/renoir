@@ -370,13 +370,7 @@ static void fts_show_touch_buffer(u8 *data, int datalen)
 {
 	int i = 0;
 	int count = 0;
-	char *tmpbuf = NULL;
-
-	tmpbuf = kzalloc(1024, GFP_KERNEL);
-	if (!tmpbuf) {
-		FTS_ERROR("tmpbuf zalloc fail");
-		return;
-	}
+	char tmpbuf[1024];
 
 	for (i = 0; i < datalen; i++) {
 		count += snprintf(tmpbuf + count, 1024 - count, "%02X,", data[i]);
@@ -384,11 +378,6 @@ static void fts_show_touch_buffer(u8 *data, int datalen)
 			break;
 	}
 	FTS_DEBUG("point buffer:%s", tmpbuf);
-
-	if (tmpbuf) {
-		kfree(tmpbuf);
-		tmpbuf = NULL;
-	}
 }
 
 void fts_release_all_finger(void)
