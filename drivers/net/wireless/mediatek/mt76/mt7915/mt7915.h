@@ -35,8 +35,6 @@
 
 #define MT7915_CFEND_RATE_DEFAULT	0x49	/* OFDM 24M */
 #define MT7915_CFEND_RATE_11B		0x03	/* 11B LP, 11M */
-#define MT7915_5G_RATE_DEFAULT		0x4b	/* OFDM 6M */
-#define MT7915_2G_RATE_DEFAULT		0x0	/* CCK 1M */
 
 struct mt7915_vif;
 struct mt7915_sta;
