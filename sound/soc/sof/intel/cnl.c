@@ -195,18 +195,6 @@ int cnl_ipc_send_msg(struct snd_sof_dev *sdev, struct snd_sof_ipc_msg *msg)
 
 	hdr = msg->msg_data;
 
-	/*
-	 * Use mod_delayed_work() to schedule the delayed work
-	 * to avoid scheduling multiple workqueue items when
-	 * IPCs are sent at a high-rate. mod_delayed_work()
-	 * modifies the timer if the work is pending.
-	 * Also, a new delayed work should not be queued after the
-	 * CTX_SAVE IPC, which is sent before the DSP enters D3.
-	 */
-	if (hdr->cmd != (SOF_IPC_GLB_PM_MSG | SOF_IPC_PM_CTX_SAVE))
-		mod_delayed_work(system_wq, &hdev->d0i3_work,
-				 msecs_to_jiffies(SOF_HDA_D0I3_WORK_DELAY_MS));
-
 	return 0;
 }
 
