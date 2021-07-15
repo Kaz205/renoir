@@ -11,7 +11,8 @@
 
 / {
 	model = "Google Homestar (rev0 - 1)";
-	compatible = "google,homestar-rev0", "google,homestar-rev1", "qcom,sc7180";
+	compatible = "google,homestar-rev0", "google,homestar-rev1",
+		 "google,homestar-rev19", "qcom,sc7180";
 };
 
 &ap_ts {
