@@ -11,6 +11,7 @@
 #include <linux/iova.h>
 #include <linux/module.h>
 #include <linux/scatterlist.h>
+#include <linux/version.h>
 #include <linux/vmalloc.h>
 
 #include "ipu-dma.h"

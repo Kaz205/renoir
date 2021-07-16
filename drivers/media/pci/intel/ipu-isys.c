@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-// Copyright (C) 2013 - 2020 Intel Corporation
+// Copyright (C) 2013 - 2021 Intel Corporation
 
 #include <linux/debugfs.h>
 #include <linux/delay.h>
@@ -658,6 +658,7 @@ static int isys_register_devices(struct ipu_isys *isys)
 	rval = isys_notifier_init(isys);
 	if (rval)
 		goto out_isys_unregister_subdevices;
+
 	rval = v4l2_device_register_subdev_nodes(&isys->v4l2_dev);
 	if (rval)
 		goto out_isys_notifier_cleanup;
@@ -812,6 +813,7 @@ static void isys_remove(struct ipu_bus_device *adev)
 	ipu_trace_uninit(&adev->dev);
 	isys_notifier_cleanup(isys);
 	isys_unregister_devices(isys);
+
 	pm_qos_remove_request(&isys->pm_qos);
 
 	if (!isp->secure_mode) {
