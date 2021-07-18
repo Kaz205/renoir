@@ -267,6 +267,14 @@ qdf_export_symbol(nl_srv_is_initialized);
 #include <net/genetlink.h>
 #include <net/cnss_nl.h>
 
+static void *nl80211hdr_put(struct sk_buff *skb, uint32_t portid,
+		     uint32_t seq, int flags, uint8_t cmd)
+{
+	struct genl_family *cld80211_fam = cld80211_get_genl_family();
+
+	return genlmsg_put(skb, portid, seq, cld80211_fam, flags, cmd);
+}
+
 void cld80211_oem_send_reply(struct sk_buff *msg, void *hdr,
 				    struct nlattr *nest, int flags)
 {
@@ -339,14 +347,6 @@ int nl_srv_register(tWlanNlModTypes msg_type, nl_srv_msg_callback msg_handler)
 int nl_srv_unregister(tWlanNlModTypes msg_type, nl_srv_msg_callback msg_handler)
 {
 	return 0;
-}
-
-void *nl80211hdr_put(struct sk_buff *skb, uint32_t portid,
-		     uint32_t seq, int flags, uint8_t cmd)
-{
-	struct genl_family *cld80211_fam = cld80211_get_genl_family();
-
-	return genlmsg_put(skb, portid, seq, cld80211_fam, flags, cmd);
 }
 
 /**
