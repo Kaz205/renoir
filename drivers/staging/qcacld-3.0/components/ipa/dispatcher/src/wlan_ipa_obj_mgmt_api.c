@@ -25,18 +25,6 @@
 #include "target_if_ipa.h"
 #include "wlan_ipa_ucfg_api.h"
 
-static bool g_ipa_is_ready;
-bool ipa_is_ready(void)
-{
-	return g_ipa_is_ready;
-}
-
-void ipa_disable_register_cb(void)
-{
-	ipa_debug("Don't register ready cb with IPA driver");
-	g_ipa_is_ready = false;
-}
-
 /**
  * ipa_pdev_obj_destroy_notification() - IPA pdev object destroy notification
  * @pdev: pdev handle
@@ -144,7 +132,6 @@ static void ipa_register_ready_cb(void *user_data)
 		return;
 	}
 
-	g_ipa_is_ready = true;
 	ipa_info("IPA ready callback invoked: ipa_register_ready_cb");
 	ipa_obj = ipa_pdev_get_priv_obj(pdev);
 	status = ipa_obj_setup(ipa_obj);
