@@ -47,6 +47,7 @@ lahaina-mtp-v2-overlay.dtbo-base := lahaina.dtb lahaina-v2.dtb \
 lahaina-mtp-v2.1-overlay.dtbo-base := lahaina.dtb lahaina-v2.dtb \
 					lahaina-v2.1.dtb
 else
+ifdef 0
 dtb-$(CONFIG_ARCH_LAHAINA) += lahaina-rumi.dtb \
 	lahaina-mtp-hsp.dtb \
 	lahaina-mtp.dtb \
@@ -83,6 +84,7 @@ dtb-$(CONFIG_ARCH_LAHAINA) += lahaina-rumi.dtb \
 	lahainap-v2.1-qrd.dtb \
 	lahaina-mtp-v2.dtb \
 	lahaina-mtp-v2.1.dtb
+endif
 endif
 
 ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
@@ -197,7 +199,8 @@ dtb-$(CONFIG_ARCH_SA8195)	+= sa8195p-adp-star.dtb \
 endif
 endif
 
-ifeq ($(CONFIG_ARCH_LAHAINA), y)
+#ifeq ($(CONFIG_ARCH_LAHAINA), y)
+ifdef 0
 ifeq ($(CONFIG_ARCH_QTI_VM), y)
 dtb-$(CONFIG_ARCH_QTI_VM) += lahaina-vm-mtp.dtb \
 	lahaina-vm-cdp.dtb \
