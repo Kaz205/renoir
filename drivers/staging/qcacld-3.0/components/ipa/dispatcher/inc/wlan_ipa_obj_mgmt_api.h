@@ -55,7 +55,9 @@ QDF_STATUS ipa_register_is_ipa_ready(struct wlan_objmgr_pdev *pdev);
  * Return: Set the ipa_is_ready flag to false when module is
  * unloaded to indicate that ipa ready cb is not registered
  */
-void ipa_disable_register_cb(void);
+static inline void ipa_disable_register_cb(void)
+{
+}
 
 #else
 
