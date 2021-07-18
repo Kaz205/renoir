@@ -94,6 +94,7 @@
 
 &dsi_k9_42_02_0b_mp_dsc_cmd {
 	qcom,panel-supply-entries = <&dsi_panel_pwr_supply_k9>;
+	qcom,ulps-enabled;
 	qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_dcs";
 	qcom,mdss-dsi-bl-min-level = <1>;
 	qcom,mdss-dsi-bl-max-level = <2047>;
