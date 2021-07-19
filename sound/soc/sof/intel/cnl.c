@@ -166,7 +166,6 @@ static bool cnl_compact_ipc_compress(struct snd_sof_ipc_msg *msg,
 int cnl_ipc_send_msg(struct snd_sof_dev *sdev, struct snd_sof_ipc_msg *msg)
 {
 	struct sof_intel_hda_dev *hdev = sdev->pdata->hw_pdata;
-	struct sof_ipc_cmd_hdr *hdr;
 	u32 dr = 0;
 	u32 dd = 0;
 
@@ -192,8 +191,6 @@ int cnl_ipc_send_msg(struct snd_sof_dev *sdev, struct snd_sof_ipc_msg *msg)
 			  msg->msg_size);
 	snd_sof_dsp_write(sdev, HDA_DSP_BAR, CNL_DSP_REG_HIPCIDR,
 			  CNL_DSP_REG_HIPCIDR_BUSY);
-
-	hdr = msg->msg_data;
 
 	return 0;
 }
