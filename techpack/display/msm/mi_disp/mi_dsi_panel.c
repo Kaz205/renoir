@@ -1359,7 +1359,7 @@ int mi_dsi_panel_set_brightness_clone(struct dsi_panel *panel,
 
 	mi_cfg = &panel->mi_cfg;
 	mi_cfg->brightness_clone = brightness_clone;
-	DISP_UTC_INFO("%s panel set brightness clone to %d\n",
+	DISP_UTC_DEBUG("%s panel set brightness clone to %d\n",
 			panel->type, brightness_clone);
 
 	mutex_unlock(&panel->panel_lock);
