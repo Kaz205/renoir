@@ -33,7 +33,7 @@ obj-$(CONFIG_RMI4_CORE)		+= rmi4/
 obj-y += fingerprint/
 obj-$(CONFIG_STMVL53L5)		+= stmvl53l5/
 
-ifeq ($(TARGET_PRODUCT), renoir)
+ifdef CONFIG_ARCH_SHIMA
     KBUILD_CPPFLAGS += -DQCOM_HAPTIC_BOB
     KBUILD_CPPFLAGS += -DQCOM_HAPTIC_F0_PROTECT
 endif
