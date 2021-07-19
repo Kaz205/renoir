@@ -3,6 +3,7 @@
  * Copyright (c) 2008-2020, The Linux Foundation. All rights reserved.
  */
 
+#include <linux/pm_qos.h>
 #include "kgsl_device.h"
 #include "kgsl_sync.h"
 
