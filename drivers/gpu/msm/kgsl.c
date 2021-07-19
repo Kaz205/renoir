@@ -4233,7 +4233,7 @@ int kgsl_request_irq(struct platform_device *pdev, const  char *name,
 		return num;
 
 	ret = devm_request_irq(&pdev->dev, num, handler, IRQF_TRIGGER_HIGH |
-		IRQF_PERF_AFFINE name, data);
+		IRQF_PERF_AFFINE, name, data);
 
 	if (ret)
 		dev_err(&pdev->dev, "Unable to get interrupt %s: %d\n",
