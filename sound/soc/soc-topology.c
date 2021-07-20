@@ -359,9 +359,6 @@ static void remove_mixer(struct snd_soc_component *comp,
 	struct snd_soc_dobj *dobj, int pass)
 {
 	struct snd_card *card = comp->card->snd_card;
-	struct soc_mixer_control *sm =
-		container_of(dobj, struct soc_mixer_control, dobj);
-	const unsigned int *p = NULL;
 
 	if (pass != SOC_TPLG_PASS_MIXER)
 		return;
@@ -369,12 +366,8 @@ static void remove_mixer(struct snd_soc_component *comp,
 	if (dobj->ops && dobj->ops->control_unload)
 		dobj->ops->control_unload(comp, dobj);
 
-	if (dobj->control.kcontrol->tlv.p)
-		p = dobj->control.kcontrol->tlv.p;
 	snd_ctl_remove(card, dobj->control.kcontrol);
 	list_del(&dobj->list);
-	kfree(sm);
-	kfree(p);
 }
 
 /* remove an enum kcontrol */
@@ -395,7 +388,6 @@ static void remove_enum(struct snd_soc_component *comp,
 
 	soc_tplg_denum_remove_values(se);
 	soc_tplg_denum_remove_texts(se);
-	kfree(se);
 }
 
 /* remove a byte kcontrol */
@@ -403,8 +395,6 @@ static void remove_bytes(struct snd_soc_component *comp,
 	struct snd_soc_dobj *dobj, int pass)
 {
 	struct snd_card *card = comp->card->snd_card;
-	struct soc_bytes_ext *sb =
-		container_of(dobj, struct soc_bytes_ext, dobj);
 
 	if (pass != SOC_TPLG_PASS_MIXER)
 		return;
@@ -414,16 +404,12 @@ static void remove_bytes(struct snd_soc_component *comp,
 
 	snd_ctl_remove(card, dobj->control.kcontrol);
 	list_del(&dobj->list);
-	kfree(sb);
 }
 
 /* remove a route */
 static void remove_route(struct snd_soc_component *comp,
 			 struct snd_soc_dobj *dobj, int pass)
 {
-	struct snd_soc_dapm_route *route =
-		container_of(dobj, struct snd_soc_dapm_route, dobj);
-
 	if (pass != SOC_TPLG_PASS_GRAPH)
 		return;
 
@@ -431,7 +417,6 @@ static void remove_route(struct snd_soc_component *comp,
 		dobj->ops->dapm_route_unload(comp, dobj);
 
 	list_del(&dobj->list);
-	kfree(route);
 }
 
 /* remove a widget and it's kcontrols - routes must be removed first */
@@ -469,30 +454,17 @@ static void remove_widget(struct snd_soc_component *comp,
 			soc_tplg_denum_remove_values(se);
 			soc_tplg_denum_remove_texts(se);
 
-			kfree(se);
-			kfree(w->kcontrol_news[i].name);
 		}
 	} else {
 		/* volume mixer or bytes controls */
 		for (i = 0; w->kcontrols != NULL && i < w->num_kcontrols; i++) {
 			struct snd_kcontrol *kcontrol = w->kcontrols[i];
 
-			if (dobj->widget.kcontrol_type
-			    == SND_SOC_TPLG_TYPE_MIXER)
-				kfree(kcontrol->tlv.p);
-
-			/* Private value is used as struct soc_mixer_control
-			 * for volume mixers or soc_bytes_ext for bytes
-			 * controls.
-			 */
-			kfree((void *)kcontrol->private_value);
 			snd_ctl_remove(card, kcontrol);
-			kfree(w->kcontrol_news[i].name);
 		}
 	}
 
 free_news:
-	kfree(w->kcontrol_news);
 
 	list_del(&dobj->list);
 
@@ -517,11 +489,7 @@ static void remove_dai(struct snd_soc_component *comp,
 		if (dai->driver == dai_drv)
 			dai->driver = NULL;
 
-	kfree(dai_drv->playback.stream_name);
-	kfree(dai_drv->capture.stream_name);
-	kfree(dai_drv->name);
 	list_del(&dobj->list);
-	kfree(dai_drv);
 }
 
 /* remove link configurations */
@@ -541,11 +509,6 @@ static void remove_link(struct snd_soc_component *comp,
 
 	snd_soc_remove_pcm_runtime(comp->card,
 			snd_soc_get_pcm_runtime(comp->card, link));
-
-	kfree(link->name);
-	kfree(link->stream_name);
-	kfree(link->cpus->dai_name);
-	kfree(link);
 }
 
 /* unload dai link */
@@ -700,7 +663,7 @@ static int soc_tplg_create_tlv_db_scale(struct soc_tplg *tplg,
 	unsigned int item_len = 2 * sizeof(unsigned int);
 	unsigned int *p;
 
-	p = kzalloc(item_len + 2 * sizeof(unsigned int), GFP_KERNEL);
+	p = devm_kzalloc(tplg->dev, item_len + 2 * sizeof(unsigned int), GFP_KERNEL);
 	if (!p)
 		return -ENOMEM;
 
@@ -744,7 +707,6 @@ static int soc_tplg_create_tlv(struct soc_tplg *tplg,
 static inline void soc_tplg_free_tlv(struct soc_tplg *tplg,
 	struct snd_kcontrol_new *kc)
 {
-	kfree(kc->tlv.p);
 }
 
 static int soc_tplg_dbytes_create(struct soc_tplg *tplg, unsigned int count,
@@ -772,7 +734,7 @@ static int soc_tplg_dbytes_create(struct soc_tplg *tplg, unsigned int count,
 			SNDRV_CTL_ELEM_ID_NAME_MAXLEN)
 			return -EINVAL;
 
-		sbe = kzalloc(sizeof(*sbe), GFP_KERNEL);
+		sbe = devm_kzalloc(tplg->dev, sizeof(*sbe), GFP_KERNEL);
 		if (sbe == NULL)
 			return -ENOMEM;
 
@@ -798,7 +760,6 @@ static int soc_tplg_dbytes_create(struct soc_tplg *tplg, unsigned int count,
 		err = soc_tplg_kcontrol_bind_io(&be->hdr, &kc, tplg);
 		if (err) {
 			soc_control_err(tplg, &be->hdr, be->hdr.name);
-			kfree(sbe);
 			break;
 		}
 
@@ -808,7 +769,6 @@ static int soc_tplg_dbytes_create(struct soc_tplg *tplg, unsigned int count,
 		if (err < 0) {
 			dev_err(tplg->dev, "ASoC: failed to init %s\n",
 				be->hdr.name);
-			kfree(sbe);
 			break;
 		}
 
@@ -818,7 +778,6 @@ static int soc_tplg_dbytes_create(struct soc_tplg *tplg, unsigned int count,
 		if (err < 0) {
 			dev_err(tplg->dev, "ASoC: failed to add %s\n",
 				be->hdr.name);
-			kfree(sbe);
 			break;
 		}
 
@@ -854,7 +813,7 @@ static int soc_tplg_dmixer_create(struct soc_tplg *tplg, unsigned int count,
 			SNDRV_CTL_ELEM_ID_NAME_MAXLEN)
 			return -EINVAL;
 
-		sm = kzalloc(sizeof(*sm), GFP_KERNEL);
+		sm = devm_kzalloc(tplg->dev, sizeof(*sm), GFP_KERNEL);
 		if (sm == NULL)
 			return -ENOMEM;
 		tplg->pos += (sizeof(struct snd_soc_tplg_mixer_control) +
@@ -893,7 +852,6 @@ static int soc_tplg_dmixer_create(struct soc_tplg *tplg, unsigned int count,
 		err = soc_tplg_kcontrol_bind_io(&mc->hdr, &kc, tplg);
 		if (err) {
 			soc_control_err(tplg, &mc->hdr, mc->hdr.name);
-			kfree(sm);
 			break;
 		}
 
@@ -902,7 +860,6 @@ static int soc_tplg_dmixer_create(struct soc_tplg *tplg, unsigned int count,
 		if (err < 0) {
 			dev_err(tplg->dev, "ASoC: failed to create TLV %s\n",
 				mc->hdr.name);
-			kfree(sm);
 			break;
 		}
 
@@ -913,7 +870,6 @@ static int soc_tplg_dmixer_create(struct soc_tplg *tplg, unsigned int count,
 			dev_err(tplg->dev, "ASoC: failed to init %s\n",
 				mc->hdr.name);
 			soc_tplg_free_tlv(tplg, &kc);
-			kfree(sm);
 			break;
 		}
 
@@ -924,7 +880,6 @@ static int soc_tplg_dmixer_create(struct soc_tplg *tplg, unsigned int count,
 			dev_err(tplg->dev, "ASoC: failed to add %s\n",
 				mc->hdr.name);
 			soc_tplg_free_tlv(tplg, &kc);
-			kfree(sm);
 			break;
 		}
 
@@ -934,13 +889,13 @@ static int soc_tplg_dmixer_create(struct soc_tplg *tplg, unsigned int count,
 	return err;
 }
 
-static int soc_tplg_denum_create_texts(struct soc_enum *se,
-	struct snd_soc_tplg_enum_control *ec)
+static int soc_tplg_denum_create_texts(struct soc_tplg *tplg, struct soc_enum *se,
+				       struct snd_soc_tplg_enum_control *ec)
 {
 	int i, ret;
 
 	se->dobj.control.dtexts =
-		kcalloc(le32_to_cpu(ec->items), sizeof(char *), GFP_KERNEL);
+		devm_kcalloc(tplg->dev, le32_to_cpu(ec->items), sizeof(char *), GFP_KERNEL);
 	if (se->dobj.control.dtexts == NULL)
 		return -ENOMEM;
 
@@ -952,7 +907,7 @@ static int soc_tplg_denum_create_texts(struct soc_enum *se,
 			goto err;
 		}
 
-		se->dobj.control.dtexts[i] = kstrdup(ec->texts[i], GFP_KERNEL);
+		se->dobj.control.dtexts[i] = devm_kstrdup(tplg->dev, ec->texts[i], GFP_KERNEL);
 		if (!se->dobj.control.dtexts[i]) {
 			ret = -ENOMEM;
 			goto err;
@@ -971,22 +926,17 @@ err:
 
 static inline void soc_tplg_denum_remove_texts(struct soc_enum *se)
 {
-	int i = se->items;
-
-	for (--i; i >= 0; i--)
-		kfree(se->dobj.control.dtexts[i]);
-	kfree(se->dobj.control.dtexts);
 }
 
-static int soc_tplg_denum_create_values(struct soc_enum *se,
-	struct snd_soc_tplg_enum_control *ec)
+static int soc_tplg_denum_create_values(struct soc_tplg *tplg, struct soc_enum *se,
+					struct snd_soc_tplg_enum_control *ec)
 {
 	int i;
 
 	if (le32_to_cpu(ec->items) > sizeof(*ec->values))
 		return -EINVAL;
 
-	se->dobj.control.dvalues = kzalloc(le32_to_cpu(ec->items) *
+	se->dobj.control.dvalues = devm_kzalloc(tplg->dev, le32_to_cpu(ec->items) *
 					   sizeof(*se->dobj.control.dvalues),
 					   GFP_KERNEL);
 	if (!se->dobj.control.dvalues)
@@ -1002,7 +952,6 @@ static int soc_tplg_denum_create_values(struct soc_enum *se,
 
 static inline void soc_tplg_denum_remove_values(struct soc_enum *se)
 {
-	kfree(se->dobj.control.dvalues);
 }
 
 static int soc_tplg_denum_create(struct soc_tplg *tplg, unsigned int count,
@@ -1031,7 +980,7 @@ static int soc_tplg_denum_create(struct soc_tplg *tplg, unsigned int count,
 			SNDRV_CTL_ELEM_ID_NAME_MAXLEN)
 			return -EINVAL;
 
-		se = kzalloc((sizeof(*se)), GFP_KERNEL);
+		se = devm_kzalloc(tplg->dev, (sizeof(*se)), GFP_KERNEL);
 		if (se == NULL)
 			return -ENOMEM;
 
@@ -1062,7 +1011,7 @@ static int soc_tplg_denum_create(struct soc_tplg *tplg, unsigned int count,
 		switch (le32_to_cpu(ec->hdr.ops.info)) {
 		case SND_SOC_TPLG_DAPM_CTL_ENUM_VALUE:
 		case SND_SOC_TPLG_CTL_ENUM_VALUE:
-			err = soc_tplg_denum_create_values(se, ec);
+			err = soc_tplg_denum_create_values(tplg, se, ec);
 			if (err < 0) {
 				dev_err(tplg->dev,
 					"ASoC: could not create values for %s\n",
@@ -1073,7 +1022,7 @@ static int soc_tplg_denum_create(struct soc_tplg *tplg, unsigned int count,
 		case SND_SOC_TPLG_CTL_ENUM:
 		case SND_SOC_TPLG_DAPM_CTL_ENUM_DOUBLE:
 		case SND_SOC_TPLG_DAPM_CTL_ENUM_VIRT:
-			err = soc_tplg_denum_create_texts(se, ec);
+			err = soc_tplg_denum_create_texts(tplg, se, ec);
 			if (err < 0) {
 				dev_err(tplg->dev,
 					"ASoC: could not create texts for %s\n",
@@ -1119,7 +1068,6 @@ static int soc_tplg_denum_create(struct soc_tplg *tplg, unsigned int count,
 	return 0;
 
 err_denum:
-	kfree(se);
 	return err;
 }
 
@@ -1196,7 +1144,7 @@ static int soc_tplg_dapm_graph_elems_load(struct soc_tplg *tplg,
 	struct snd_soc_dapm_context *dapm = &tplg->comp->dapm;
 	struct snd_soc_tplg_dapm_graph_elem *elem;
 	struct snd_soc_dapm_route **routes;
-	int count, i, j;
+	int count, i;
 	int ret = 0;
 
 	count = le32_to_cpu(hdr->count);
@@ -1225,15 +1173,9 @@ static int soc_tplg_dapm_graph_elems_load(struct soc_tplg *tplg,
 	 * each route can be freed when it is removed in remove_route().
 	 */
 	for (i = 0; i < count; i++) {
-		routes[i] = kzalloc(sizeof(*routes[i]), GFP_KERNEL);
-		if (!routes[i]) {
-			/* free previously allocated memory */
-			for (j = 0; j < i; j++)
-				kfree(routes[j]);
-
-			kfree(routes);
+		routes[i] = devm_kzalloc(tplg->dev, sizeof(*routes[i]), GFP_KERNEL);
+		if (!routes[i])
 			return -ENOMEM;
-		}
 	}
 
 	for (i = 0; i < count; i++) {
@@ -1291,15 +1233,6 @@ static int soc_tplg_dapm_graph_elems_load(struct soc_tplg *tplg,
 	}
 
 	/*
-	 * free memory allocated for all dapm routes not added to the
-	 * list in case of error
-	 */
-	if (ret < 0) {
-		while (i < count)
-			kfree(routes[i++]);
-	}
-
-	/*
 	 * free pointer to array of dapm routes as this is no longer needed.
 	 * The memory allocated for each dapm route will be freed
 	 * when it is removed in remove_route().
@@ -1317,7 +1250,7 @@ static struct snd_kcontrol_new *soc_tplg_dapm_widget_dmixer_create(
 	struct snd_soc_tplg_mixer_control *mc;
 	int i, err;
 
-	kc = kcalloc(num_kcontrols, sizeof(*kc), GFP_KERNEL);
+	kc = devm_kcalloc(tplg->dev, num_kcontrols, sizeof(*kc), GFP_KERNEL);
 	if (kc == NULL)
 		return NULL;
 
@@ -1329,7 +1262,7 @@ static struct snd_kcontrol_new *soc_tplg_dapm_widget_dmixer_create(
 			SNDRV_CTL_ELEM_ID_NAME_MAXLEN)
 			goto err_sm;
 
-		sm = kzalloc(sizeof(*sm), GFP_KERNEL);
+		sm = devm_kzalloc(tplg->dev, sizeof(*sm), GFP_KERNEL);
 		if (sm == NULL)
 			goto err_sm;
 
@@ -1340,7 +1273,7 @@ static struct snd_kcontrol_new *soc_tplg_dapm_widget_dmixer_create(
 			mc->hdr.name, i);
 
 		kc[i].private_value = (long)sm;
-		kc[i].name = kstrdup(mc->hdr.name, GFP_KERNEL);
+		kc[i].name = devm_kstrdup(tplg->dev, mc->hdr.name, GFP_KERNEL);
 		if (kc[i].name == NULL)
 			goto err_sm;
 		kc[i].iface = SNDRV_CTL_ELEM_IFACE_MIXER;
@@ -1392,11 +1325,7 @@ static struct snd_kcontrol_new *soc_tplg_dapm_widget_dmixer_create(
 err_sm:
 	for (; i >= 0; i--) {
 		soc_tplg_free_tlv(tplg, &kc[i]);
-		sm = (struct soc_mixer_control *)kc[i].private_value;
-		kfree(sm);
-		kfree(kc[i].name);
 	}
-	kfree(kc);
 
 	return NULL;
 }
@@ -1409,7 +1338,7 @@ static struct snd_kcontrol_new *soc_tplg_dapm_widget_denum_create(
 	struct soc_enum *se;
 	int i, err;
 
-	kc = kcalloc(num_kcontrols, sizeof(*kc), GFP_KERNEL);
+	kc = devm_kcalloc(tplg->dev, num_kcontrols, sizeof(*kc), GFP_KERNEL);
 	if (kc == NULL)
 		return NULL;
 
@@ -1420,7 +1349,7 @@ static struct snd_kcontrol_new *soc_tplg_dapm_widget_denum_create(
 			    SNDRV_CTL_ELEM_ID_NAME_MAXLEN)
 			goto err_se;
 
-		se = kzalloc(sizeof(*se), GFP_KERNEL);
+		se = devm_kzalloc(tplg->dev, sizeof(*se), GFP_KERNEL);
 		if (se == NULL)
 			goto err_se;
 
@@ -1431,7 +1360,7 @@ static struct snd_kcontrol_new *soc_tplg_dapm_widget_denum_create(
 			ec->hdr.name);
 
 		kc[i].private_value = (long)se;
-		kc[i].name = kstrdup(ec->hdr.name, GFP_KERNEL);
+		kc[i].name = devm_kstrdup(tplg->dev, ec->hdr.name, GFP_KERNEL);
 		if (kc[i].name == NULL)
 			goto err_se;
 		kc[i].iface = SNDRV_CTL_ELEM_IFACE_MIXER;
@@ -1451,7 +1380,7 @@ static struct snd_kcontrol_new *soc_tplg_dapm_widget_denum_create(
 		switch (le32_to_cpu(ec->hdr.ops.info)) {
 		case SND_SOC_TPLG_CTL_ENUM_VALUE:
 		case SND_SOC_TPLG_DAPM_CTL_ENUM_VALUE:
-			err = soc_tplg_denum_create_values(se, ec);
+			err = soc_tplg_denum_create_values(tplg, se, ec);
 			if (err < 0) {
 				dev_err(tplg->dev, "ASoC: could not create values for %s\n",
 					ec->hdr.name);
@@ -1461,7 +1390,7 @@ static struct snd_kcontrol_new *soc_tplg_dapm_widget_denum_create(
 		case SND_SOC_TPLG_CTL_ENUM:
 		case SND_SOC_TPLG_DAPM_CTL_ENUM_DOUBLE:
 		case SND_SOC_TPLG_DAPM_CTL_ENUM_VIRT:
-			err = soc_tplg_denum_create_texts(se, ec);
+			err = soc_tplg_denum_create_texts(tplg, se, ec);
 			if (err < 0) {
 				dev_err(tplg->dev, "ASoC: could not create texts for %s\n",
 					ec->hdr.name);
@@ -1503,10 +1432,7 @@ err_se:
 			soc_tplg_denum_remove_texts(se);
 		}
 
-		kfree(se);
-		kfree(kc[i].name);
 	}
-	kfree(kc);
 
 	return NULL;
 }
@@ -1519,7 +1445,7 @@ static struct snd_kcontrol_new *soc_tplg_dapm_widget_dbytes_create(
 	struct snd_kcontrol_new *kc;
 	int i, err;
 
-	kc = kcalloc(num_kcontrols, sizeof(*kc), GFP_KERNEL);
+	kc = devm_kcalloc(tplg->dev, num_kcontrols, sizeof(*kc), GFP_KERNEL);
 	if (!kc)
 		return NULL;
 
@@ -1531,7 +1457,7 @@ static struct snd_kcontrol_new *soc_tplg_dapm_widget_dbytes_create(
 			SNDRV_CTL_ELEM_ID_NAME_MAXLEN)
 			goto err_sbe;
 
-		sbe = kzalloc(sizeof(*sbe), GFP_KERNEL);
+		sbe = devm_kzalloc(tplg->dev, sizeof(*sbe), GFP_KERNEL);
 		if (sbe == NULL)
 			goto err_sbe;
 
@@ -1543,7 +1469,7 @@ static struct snd_kcontrol_new *soc_tplg_dapm_widget_dbytes_create(
 			be->hdr.name, be->hdr.access);
 
 		kc[i].private_value = (long)sbe;
-		kc[i].name = kstrdup(be->hdr.name, GFP_KERNEL);
+		kc[i].name = devm_kstrdup(tplg->dev, be->hdr.name, GFP_KERNEL);
 		if (kc[i].name == NULL)
 			goto err_sbe;
 		kc[i].iface = SNDRV_CTL_ELEM_IFACE_MIXER;
@@ -1572,12 +1498,6 @@ static struct snd_kcontrol_new *soc_tplg_dapm_widget_dbytes_create(
 	return kc;
 
 err_sbe:
-	for (; i >= 0; i--) {
-		sbe = (struct soc_bytes_ext *)kc[i].private_value;
-		kfree(sbe);
-		kfree(kc[i].name);
-	}
-	kfree(kc);
 
 	return NULL;
 }
@@ -1784,10 +1704,10 @@ static int soc_tplg_dapm_complete(struct soc_tplg *tplg)
 	return 0;
 }
 
-static int set_stream_info(struct snd_soc_pcm_stream *stream,
-	struct snd_soc_tplg_stream_caps *caps)
+static int set_stream_info(struct soc_tplg *tplg, struct snd_soc_pcm_stream *stream,
+			   struct snd_soc_tplg_stream_caps *caps)
 {
-	stream->stream_name = kstrdup(caps->name, GFP_KERNEL);
+	stream->stream_name = devm_kstrdup(tplg->dev, caps->name, GFP_KERNEL);
 	if (!stream->stream_name)
 		return -ENOMEM;
 
@@ -1831,12 +1751,12 @@ static int soc_tplg_dai_create(struct soc_tplg *tplg,
 		snd_soc_component_get_dapm(tplg->comp);
 	int ret;
 
-	dai_drv = kzalloc(sizeof(struct snd_soc_dai_driver), GFP_KERNEL);
+	dai_drv = devm_kzalloc(tplg->dev, sizeof(struct snd_soc_dai_driver), GFP_KERNEL);
 	if (dai_drv == NULL)
 		return -ENOMEM;
 
 	if (strlen(pcm->dai_name)) {
-		dai_drv->name = kstrdup(pcm->dai_name, GFP_KERNEL);
+		dai_drv->name = devm_kstrdup(tplg->dev, pcm->dai_name, GFP_KERNEL);
 		if (!dai_drv->name) {
 			ret = -ENOMEM;
 			goto err;
@@ -1847,7 +1767,7 @@ static int soc_tplg_dai_create(struct soc_tplg *tplg,
 	if (pcm->playback) {
 		stream = &dai_drv->playback;
 		caps = &pcm->caps[SND_SOC_TPLG_STREAM_PLAYBACK];
-		ret = set_stream_info(stream, caps);
+		ret = set_stream_info(tplg, stream, caps);
 		if (ret < 0)
 			goto err;
 	}
@@ -1855,7 +1775,7 @@ static int soc_tplg_dai_create(struct soc_tplg *tplg,
 	if (pcm->capture) {
 		stream = &dai_drv->capture;
 		caps = &pcm->caps[SND_SOC_TPLG_STREAM_CAPTURE];
-		ret = set_stream_info(stream, caps);
+		ret = set_stream_info(tplg, stream, caps);
 		if (ret < 0)
 			goto err;
 	}
@@ -1890,11 +1810,6 @@ static int soc_tplg_dai_create(struct soc_tplg *tplg,
 	return 0;
 
 err:
-	kfree(dai_drv->playback.stream_name);
-	kfree(dai_drv->capture.stream_name);
-	kfree(dai_drv->name);
-	kfree(dai_drv);
-
 	return ret;
 }
 
@@ -1930,7 +1845,7 @@ static int soc_tplg_fe_link_create(struct soc_tplg *tplg,
 	int ret;
 
 	/* link + cpu + codec + platform */
-	link = kzalloc(sizeof(*link) + (3 * sizeof(*dlc)), GFP_KERNEL);
+	link = devm_kzalloc(tplg->dev, sizeof(*link) + (3 * sizeof(*dlc)), GFP_KERNEL);
 	if (link == NULL)
 		return -ENOMEM;
 
@@ -1949,8 +1864,8 @@ static int soc_tplg_fe_link_create(struct soc_tplg *tplg,
 	link->dobj.type = SND_SOC_DOBJ_DAI_LINK;
 
 	if (strlen(pcm->pcm_name)) {
-		link->name = kstrdup(pcm->pcm_name, GFP_KERNEL);
-		link->stream_name = kstrdup(pcm->pcm_name, GFP_KERNEL);
+		link->name = devm_kstrdup(tplg->dev, pcm->pcm_name, GFP_KERNEL);
+		link->stream_name = devm_kstrdup(tplg->dev, pcm->pcm_name, GFP_KERNEL);
 		if (!link->name || !link->stream_name) {
 			ret = -ENOMEM;
 			goto err;
@@ -1959,7 +1874,7 @@ static int soc_tplg_fe_link_create(struct soc_tplg *tplg,
 	link->id = le32_to_cpu(pcm->pcm_id);
 
 	if (strlen(pcm->dai_name)) {
-		link->cpus->dai_name = kstrdup(pcm->dai_name, GFP_KERNEL);
+		link->cpus->dai_name = devm_kstrdup(tplg->dev, pcm->dai_name, GFP_KERNEL);
 		if (!link->cpus->dai_name) {
 			ret = -ENOMEM;
 			goto err;
@@ -1997,10 +1912,6 @@ static int soc_tplg_fe_link_create(struct soc_tplg *tplg,
 
 	return 0;
 err:
-	kfree(link->name);
-	kfree(link->stream_name);
-	kfree(link->cpus->dai_name);
-	kfree(link);
 	return ret;
 }
 
@@ -2473,7 +2384,7 @@ static int soc_tplg_dai_config(struct soc_tplg *tplg,
 	if (d->playback) {
 		stream = &dai_drv->playback;
 		caps = &d->caps[SND_SOC_TPLG_STREAM_PLAYBACK];
-		ret = set_stream_info(stream, caps);
+		ret = set_stream_info(tplg, stream, caps);
 		if (ret < 0)
 			goto err;
 	}
@@ -2481,7 +2392,7 @@ static int soc_tplg_dai_config(struct soc_tplg *tplg,
 	if (d->capture) {
 		stream = &dai_drv->capture;
 		caps = &d->caps[SND_SOC_TPLG_STREAM_CAPTURE];
-		ret = set_stream_info(stream, caps);
+		ret = set_stream_info(tplg, stream, caps);
 		if (ret < 0)
 			goto err;
 	}
@@ -2501,8 +2412,6 @@ static int soc_tplg_dai_config(struct soc_tplg *tplg,
 	return 0;
 
 err:
-	kfree(dai_drv->playback.stream_name);
-	kfree(dai_drv->capture.stream_name);
 	return ret;
 }
 
