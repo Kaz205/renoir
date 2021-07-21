@@ -15,7 +15,7 @@
 #include "ipahal_fltrt.h"
 #include "ipahal_hw_stats.h"
 #include "ipa_rm_i.h"
-#include "../../gsi/gsi.h"
+#include "gsi.h"
 
 /*
  * The following for adding code (ie. for EMULATION) not found on x86.

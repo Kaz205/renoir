@@ -34,7 +34,7 @@
 #include <linux/soc/qcom/smem_state.h>
 #include <linux/of_irq.h>
 #include <linux/ctype.h>
-#include "../../gsi/gsi.h"
+#include "gsi.h"
 #include <linux/sched.h>
 #include <asm/arch_timer.h>
 #include <linux/sched/clock.h>

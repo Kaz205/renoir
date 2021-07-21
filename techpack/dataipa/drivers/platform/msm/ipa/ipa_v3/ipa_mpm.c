@@ -13,7 +13,7 @@
 #include <linux/delay.h>
 #include <linux/log2.h>
 #include <linux/gfp.h>
-#include "../../gsi/gsi.h"
+#include "gsi.h"
 #include "ipa_common_i.h"
 #include "ipa_i.h"
 

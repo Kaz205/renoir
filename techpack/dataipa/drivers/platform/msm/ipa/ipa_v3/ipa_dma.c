@@ -14,7 +14,7 @@
 #include <linux/msm_gsi.h>
 #include <linux/dmapool.h>
 #include "ipa_i.h"
-#include "../../gsi/gsi.h"
+#include "gsi.h"
 
 #define IPA_DMA_POLLING_MIN_SLEEP_RX 1010
 #define IPA_DMA_POLLING_MAX_SLEEP_RX 1050
