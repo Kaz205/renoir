@@ -11,7 +11,7 @@
 #include <linux/ipa.h>
 #include <linux/msm_gsi.h>
 #include <linux/ipa_mhi.h>
-#include "gsi.h"
+#include "../../gsi/gsi.h"
 #include "ipa_common_i.h"
 #include "ipa_i.h"
 #include "ipa_qmi_service.h"
