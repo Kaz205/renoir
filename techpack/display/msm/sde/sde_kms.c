@@ -53,6 +53,8 @@
 #include "sde_connector.h"
 #include "sde_vm.h"
 
+#include <mi_sde_connector.h>
+
 #include <linux/qcom_scm.h>
 #include "soc/qcom/secure_buffer.h"
 #include <linux/qtee_shmbridge.h>

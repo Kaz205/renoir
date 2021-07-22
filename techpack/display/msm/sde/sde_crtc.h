@@ -264,6 +264,7 @@ struct sde_crtc_misr_info {
  * @frame_event_list : available frame event list
  * @spin_lock     : spin lock for transaction status, etc...
  * @fevent_spin_lock     : spin lock for frame event
+ * @fevent_spin_lock     : spin lock for frame event
  * @event_thread  : Pointer to event handler thread
  * @event_worker  : Event worker queue
  * @event_cache   : Local cache of event worker structures

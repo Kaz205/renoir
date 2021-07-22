@@ -40,7 +40,7 @@
 #include "sde_power_handle.h"
 #include "sde_core_perf.h"
 #include "sde_trace.h"
-#include "sde_vm.h"
+#include "mi_sde_crtc.h"
 
 #define SDE_PSTATES_MAX (SDE_STAGE_MAX * 4)
 #define SDE_MULTIRECT_PLANE_MAX (SDE_STAGE_MAX * 2)
@@ -3262,6 +3262,7 @@ static void sde_crtc_atomic_begin(struct drm_crtc *crtc,
 	struct drm_encoder *encoder;
 	struct drm_device *dev;
 	struct sde_kms *sde_kms;
+	struct drm_plane *plane;
 	struct sde_splash_display *splash_display;
 	bool cont_splash_enabled = false, apply_cp_prop = false;
 	size_t i;
@@ -3321,8 +3322,14 @@ static void sde_crtc_atomic_begin(struct drm_crtc *crtc,
 	_sde_crtc_blend_setup(crtc, old_state, true);
 	_sde_crtc_dest_scaler_setup(crtc);
 
-	if (crtc->state->mode_changed)
+	if (old_state->mode_changed) {
 		sde_core_perf_crtc_update_uidle(crtc, true);
+		drm_atomic_crtc_for_each_plane(plane, crtc) {
+			if (plane->state && plane->state->fb)
+				_sde_plane_set_qos_lut(plane, crtc,
+					plane->state->fb);
+		}
+	}
 
 	/*
 	 * Since CP properties use AXI buffer to program the
@@ -3747,6 +3754,8 @@ void sde_crtc_commit_kickoff(struct drm_crtc *crtc,
 	SDE_ATRACE_BEGIN("crtc_commit");
 
 	idle_pc_state = sde_crtc_get_property(cstate, CRTC_PROP_IDLE_PC_STATE);
+
+	mi_sde_crtc_update_layer_state(cstate);
 
 	sde_crtc->kickoff_in_progress = true;
 	list_for_each_entry(encoder, &dev->mode_config.encoder_list, head) {
@@ -5405,6 +5414,9 @@ static void sde_crtc_install_properties(struct drm_crtc *crtc,
 
 	sde_crtc_setup_capabilities_blob(info, catalog);
 
+	/* mi properties */
+	mi_sde_crtc_install_properties(&sde_crtc->property_info);
+
 	msm_property_install_range(&sde_crtc->property_info,
 		"input_fence_timeout", 0x0, 0,
 		SDE_CRTC_MAX_INPUT_FENCE_TIMEOUT, SDE_CRTC_INPUT_FENCE_TIMEOUT,
@@ -6025,7 +6037,6 @@ static ssize_t _sde_crtc_misr_read(struct file *file,
 	struct sde_crtc *sde_crtc;
 	struct sde_kms *sde_kms;
 	struct sde_crtc_mixer *m;
-	struct sde_vm_ops *vm_ops;
 	int i = 0, rc;
 	ssize_t len = 0;
 	char buf[MISR_BUFF_SIZE + 1] = {'\0'};
@@ -6046,17 +6057,8 @@ static ssize_t _sde_crtc_misr_read(struct file *file,
 	if (rc < 0)
 		return rc;
 
-	vm_ops = sde_vm_get_ops(sde_kms);
-	sde_vm_lock(sde_kms);
-	if (vm_ops && vm_ops->vm_owns_hw && !vm_ops->vm_owns_hw(sde_kms)) {
-		SDE_DEBUG("op not supported due to HW unavailability\n");
-		rc = -EOPNOTSUPP;
-		goto end;
-	}
-
 	if (sde_kms_is_secure_session_inprogress(sde_kms)) {
 		SDE_DEBUG("crtc:%d misr read not allowed\n", DRMID(crtc));
-		rc = -EOPNOTSUPP;
 		goto end;
 	}
 
@@ -6106,7 +6108,6 @@ buff_check:
 	*ppos += len;   /* increase offset */
 
 end:
-	sde_vm_unlock(sde_kms);
 	pm_runtime_put_sync(crtc->dev->dev);
 	return len;
 }
