@@ -18,3 +18,7 @@
 &ap_ts {
 	vdd-supply = <&pp3300_ts>;
 };
+
+&sdhc_2 {
+	status = "okay";
+};
