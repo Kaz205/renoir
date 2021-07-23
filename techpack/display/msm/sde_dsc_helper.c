@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include "msm_drv.h"
@@ -39,7 +40,7 @@ static u16 sde_dsc_rc_buf_thresh[DSC_NUM_BUF_RANGES - 1] =
  */
 static char sde_dsc_rc_range_min_qp[DSC_RATIO_TYPE_MAX][DSC_NUM_BUF_RANGES] = {
 	/* DSC v1.1 */
-	{0, 0, 1, 1, 3, 3, 3, 3, 3, 3, 5, 5, 5, 7, 13},
+	{0, 0, 1, 1, 3, 3, 3, 3, 3, 3, 5, 5, 5, 7, 12},
 	{0, 4, 5, 5, 7, 7, 7, 7, 7, 7, 9, 9, 9, 11, 17},
 	{0, 4, 5, 6, 7, 7, 7, 7, 7, 7, 9, 9, 9, 11, 15},
 	/* DSC v1.1 SCR and DSC v1.2 RGB 444 */
@@ -60,6 +61,26 @@ static char sde_dsc_rc_range_min_qp[DSC_RATIO_TYPE_MAX][DSC_NUM_BUF_RANGES] = {
 /*
  * Rate control - Max QP values for each ratio type in sde_dsc_ratio_type
  */
+static char sde_dsc_rc_range_max_qp_nt[DSC_RATIO_TYPE_MAX][DSC_NUM_BUF_RANGES] = {
+	/* DSC v1.1 */
+	{4, 4, 5, 6, 7, 7, 7, 8, 9, 10, 11, 12, 13, 13, 15},
+	{8, 8, 9, 10, 11, 11, 11, 12, 13, 14, 15, 16, 17, 17, 19},
+	{7, 8, 9, 10, 11, 11, 11, 12, 13, 13, 14, 14, 15, 15, 16},
+	/* DSC v1.1 SCR and DSC v1.2 RGB 444 */
+	{4, 4, 5, 6, 7, 7, 7, 8, 9, 10, 10, 11, 11, 12, 13},
+	{8, 8, 9, 10, 11, 11, 11, 12, 13, 14, 14, 15, 15, 16, 17},
+	{7, 8, 9, 10, 11, 11, 11, 12, 13, 13, 14, 14, 15, 15, 16},
+	/* DSC v1.2 YUV422 */
+	{3, 4, 5, 6, 7, 7, 7, 8, 9, 9, 10, 10, 11, 11, 12},
+	{2, 4, 5, 6, 7, 7, 7, 8, 8, 9, 9, 9, 9, 10, 11},
+	{7, 8, 9, 10, 11, 11, 11, 12, 13, 13, 14, 14, 15, 15, 16},
+	{2, 5, 5, 6, 6, 7, 7, 8, 9, 9, 10, 11, 11, 12, 13},
+	/* DSC v1.2 YUV420 */
+	{2, 4, 5, 6, 7, 7, 7, 8, 8, 9, 9, 9, 9, 10, 12},
+	{2, 5, 7, 8, 9, 10, 11, 12, 12, 13, 13, 13, 13, 14, 15},
+	{2, 5, 5, 6, 6, 7, 7, 8, 9, 9, 10, 11, 11, 12, 13},
+	};
+
 static char sde_dsc_rc_range_max_qp[DSC_RATIO_TYPE_MAX][DSC_NUM_BUF_RANGES] = {
 	/* DSC v1.1 */
 	{4, 4, 5, 6, 7, 7, 7, 8, 9, 10, 11, 12, 13, 13, 15},
@@ -79,7 +100,6 @@ static char sde_dsc_rc_range_max_qp[DSC_RATIO_TYPE_MAX][DSC_NUM_BUF_RANGES] = {
 	{2, 5, 7, 8, 9, 10, 11, 12, 12, 13, 13, 13, 13, 14, 15},
 	{2, 5, 5, 6, 6, 7, 7, 8, 9, 9, 10, 11, 11, 12, 13},
 	};
-
 /*
  * Rate control - bpg offset values for each ratio type in sde_dsc_ratio_type
  */
@@ -180,36 +200,6 @@ static int _get_rc_table_index(struct drm_dsc_config *dsc, int scr_ver)
 	return -EINVAL;
 }
 
-u8 _get_dsc_v1_2_bpg_offset(struct drm_dsc_config *dsc)
-{
-	u8 bpg_offset = 0;
-	u8 uncompressed_bpg_rate;
-	u8 bpp = DSC_BPP(*dsc);
-
-	if (dsc->slice_height < 8)
-		bpg_offset = 2 * (dsc->slice_height - 1);
-	else if (dsc->slice_height < 20)
-		bpg_offset = 12;
-	else if (dsc->slice_height <= 30)
-		bpg_offset = 13;
-	else if (dsc->slice_height < 42)
-		bpg_offset = 14;
-	else
-		bpg_offset = 15;
-
-	if (dsc->native_422)
-		uncompressed_bpg_rate = 3 * bpp * 4;
-	else if (dsc->native_420)
-		uncompressed_bpg_rate = 3 * bpp;
-	else
-		uncompressed_bpg_rate = (3 * bpp + 2) * 3;
-
-	if (bpg_offset < (uncompressed_bpg_rate - (3 * bpp)))
-		return bpg_offset;
-	else
-		return (uncompressed_bpg_rate - (3 * bpp));
-}
-
 int sde_dsc_populate_dsc_config(struct drm_dsc_config *dsc, int scr_ver) {
 	int bpp, bpc;
 	int groups_per_line, groups_total;
@@ -223,15 +213,12 @@ int sde_dsc_populate_dsc_config(struct drm_dsc_config *dsc, int scr_ver) {
 
 	dsc->rc_model_size = 8192;
 
-	if ((dsc->dsc_version_major == 0x1) &&
-			(dsc->dsc_version_minor == 0x1)) {
-		if (scr_ver == 0x1)
-			dsc->first_line_bpg_offset = 15;
-		else
-			dsc->first_line_bpg_offset = 12;
-	} else if (dsc->dsc_version_minor == 0x2) {
-		dsc->first_line_bpg_offset = _get_dsc_v1_2_bpg_offset(dsc);
-	}
+	if (dsc->dsc_version_major == 0x1 && ((dsc->dsc_version_minor == 0x1 &&
+			scr_ver == 0x1) ||
+			(dsc->dsc_version_minor == 0x2)))
+		dsc->first_line_bpg_offset = 15;
+	else
+		dsc->first_line_bpg_offset = 12;
 
 	dsc->rc_edge_factor = 6;
 	dsc->rc_tgt_offset_high = 3;
@@ -253,8 +240,13 @@ int sde_dsc_populate_dsc_config(struct drm_dsc_config *dsc, int scr_ver) {
 	for (i = 0; i < DSC_NUM_BUF_RANGES; i++) {
 		dsc->rc_range_params[i].range_min_qp =
 			sde_dsc_rc_range_min_qp[ratio_idx][i];
-		dsc->rc_range_params[i].range_max_qp =
-			sde_dsc_rc_range_max_qp[ratio_idx][i];
+		if ((dsc->dsc_panel_id >> 8) == 0x4B39003602)
+			dsc->rc_range_params[i].range_max_qp =
+				sde_dsc_rc_range_max_qp_nt[ratio_idx][i];
+		else
+			dsc->rc_range_params[i].range_max_qp =
+				sde_dsc_rc_range_max_qp[ratio_idx][i];
+
 		dsc->rc_range_params[i].range_bpg_offset =
 			sde_dsc_rc_range_bpg[ratio_idx][i];
 	}
@@ -532,10 +524,7 @@ int sde_dsc_create_pps_buf_cmd(struct msm_display_dsc_info *dsc_info,
 	}
 
 	if (dsc->dsc_version_minor == 0x2) {
-		if (dsc->native_422)
-			data = BIT(0);
-		else if (dsc->native_420)
-			data = BIT(1);
+		data = dsc->native_422 | dsc->native_420 << 1;
 		*bp++ = data;				/* pps88 */
 		*bp++ = dsc->second_line_bpg_offset;	/* pps89 */
 
