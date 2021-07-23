@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2013-2020, Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 #include <linux/fs.h>
 #include <linux/mutex.h>
@@ -1263,10 +1264,10 @@ int q6lsm_set_afe_data_format(uint64_t fe_id, uint16_t afe_data_format)
 	for (n = LSM_MIN_SESSION_ID; n <= LSM_MAX_SESSION_ID; n++) {
 		/* Save ID of the first available free session */
 		if (LSM_INVALID_SESSION_ID == free_session &&
-		    0 == lsm_client_afe_data[n].fe_id)
+			0 == lsm_client_afe_data[n].fe_id)
 			free_session = n;
 
-		/* Find the matching session with fe_id */
+			/* Find the matching session with fe_id */
 		if (fe_id == lsm_client_afe_data[n].fe_id) {
 			lsm_client_afe_data[n].unprocessed_data =
 							afe_data_format;
@@ -1276,13 +1277,13 @@ int q6lsm_set_afe_data_format(uint64_t fe_id, uint16_t afe_data_format)
 		}
 	}
 	/*
-	 * When no matching session is found, allocate
-	 * a new one if a free session is available.
-	 */
+	* When no matching session is found, allocate
+	* a new one if a free session is available.
+	*/
 	if (free_session != LSM_INVALID_SESSION_ID) {
 		lsm_client_afe_data[free_session].fe_id = fe_id;
 		lsm_client_afe_data[free_session].unprocessed_data =
-							afe_data_format;
+						afe_data_format;
 		pr_debug("%s: session ID is %d, fe_id is %d\n",
 			 __func__, free_session, fe_id);
 		return 0;

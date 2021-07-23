@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
  */
 
 
@@ -265,19 +265,12 @@ static void event_handler(uint32_t opcode,
 				break;
 			}
 			if (prtd->mmap_flag) {
-				int cnt = prtd->pcm_size / prtd->pcm_count;
-
-				pr_debug("%s %d:buffer %d, period %d, %d writes\n",
-					__func__, __LINE__,
-					prtd->pcm_size, prtd->pcm_count, cnt);
-				while (cnt--) {
-					pr_debug("%s %d:writing %d bytes of buffer to dsp\n",
-						__func__, __LINE__,
-						prtd->pcm_count);
-					q6asm_write_nolock(prtd->audio_client,
-						prtd->pcm_count,
-						0, 0, NO_TIMESTAMP);
-				}
+				pr_debug("%s:writing %d bytes of buffer to dsp\n",
+					__func__,
+					prtd->pcm_count);
+				q6asm_write_nolock(prtd->audio_client,
+					prtd->pcm_count,
+					0, 0, NO_TIMESTAMP);
 			} else {
 				while (atomic_read(&prtd->out_needed)) {
 					pr_debug("%s:writing %d bytes of buffer to dsp\n",
@@ -1009,6 +1002,7 @@ static int msm_pcm_capture_copy(struct snd_pcm_substream *substream,
 	pr_debug("Size = %d\n", size);
 	pr_debug("fbytes = %lu\n", fbytes);
 	pr_debug("idx = %d\n", idx);
+	pr_debug("period_size = %d\n", prtd->pcm_count);
 	if (bufptr) {
 		xfer = fbytes;
 		if (xfer > size)
@@ -1017,7 +1011,10 @@ static int msm_pcm_capture_copy(struct snd_pcm_substream *substream,
 		pr_debug("Offset value = %d\n", offset);
 		if (size == 0 || size < prtd->pcm_count) {
 			memset(bufptr + offset + size, 0, prtd->pcm_count - size);
-			size = xfer = prtd->pcm_count;
+			if (fbytes > prtd->pcm_count)
+				size = xfer = prtd->pcm_count;
+			else
+				size = xfer = fbytes;
 		}
 
 		if (copy_to_user(buf, bufptr+offset, xfer)) {
