@@ -235,6 +235,14 @@ CDEFINES +=	-DANI_LITTLE_BYTE_ENDIAN \
 		-Werror\
 		-D__linux__
 
+ifeq ($(TARGET_PRODUCT), renoir)
+	CDEFINES += -DCONFIG_SND_SOC_TFA9874
+	CDEFINES += -DCONFIG_SND_SOC_TFA9874_FOR_DAVI
+	CDEFINES += -DTFA_NON_DSP_SOLUTION
+	CDEFINES += -DCONFIG_TARGET_PRODUCT_RENOIR
+	CDEFINES += -DQCOM_HAPTIC_BOB
+endif
+
 KBUILD_CPPFLAGS += $(CDEFINES)
 
 # Currently, for versions of gcc which support it, the kernel Makefile
@@ -258,6 +266,7 @@ KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/codec
 endif
 ifeq ($(KERNEL_BUILD), 1)
 	obj-y += codecs/
+	obj-y += iio/
 endif
 # Module information used by KBuild framework
 obj-$(CONFIG_SND_SOC_QDSP6V2) += platform_dlkm.o
