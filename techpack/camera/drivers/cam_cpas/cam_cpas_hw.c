@@ -1942,6 +1942,11 @@ static int cam_cpas_log_vote(struct cam_hw_info *cpas_hw)
 	else
 		CAM_DBG(CAM_CPAS, "No ops for print_poweron_settings");
 
+	if (cpas_core->internal_ops.print_poweron_settings)
+		cpas_core->internal_ops.print_poweron_settings(cpas_hw);
+	else
+		CAM_DBG(CAM_CPAS, "No ops for print_poweron_settings");
+
 	return 0;
 }
 
@@ -2001,6 +2006,9 @@ static void cam_cpas_update_monitor_array(struct cam_hw_info *cpas_hw,
 		uint32_t be_mnoc_offset =
 			soc_private->rpmh_info[CAM_RPMH_BCM_BE_OFFSET] +
 			(0x4 * soc_private->rpmh_info[CAM_RPMH_BCM_MNOC_INDEX]);
+		uint32_t be_shub_offset =
+			soc_private->rpmh_info[CAM_RPMH_BCM_BE_OFFSET] +
+			(0x4 * 1); /* i=1 for SHUB, hardcode for now */
 
 		/*
 		 * 0x4, 0x800 - DDR
@@ -2010,6 +2018,7 @@ static void cam_cpas_update_monitor_array(struct cam_hw_info *cpas_hw,
 		entry->fe_mnoc = cam_io_r_mb(rpmh_base + fe_mnoc_offset);
 		entry->be_ddr = cam_io_r_mb(rpmh_base + be_ddr_offset);
 		entry->be_mnoc = cam_io_r_mb(rpmh_base + be_mnoc_offset);
+		entry->be_shub = cam_io_r_mb(rpmh_base + be_shub_offset);
 	}
 
 	entry->camnoc_fill_level[0] = cam_io_r_mb(

@@ -614,6 +614,9 @@ static void __cam_req_mgr_reset_req_slot(struct cam_req_mgr_core_link *link,
 		tbl->slot[idx].ops.skip_next_frame = false;
 		tbl->slot[idx].ops.dev_hdl = -1;
 		tbl->slot[idx].ops.is_applied = false;
+		if (tbl->next)
+			__cam_req_mgr_dec_idx(&idx, tbl->pd_delta,
+				tbl->num_slots);
 		tbl = tbl->next;
 	}
 }
@@ -1548,6 +1551,92 @@ static int __cam_req_mgr_check_sync_req_is_ready(
 	return 0;
 }
 
+/**
+* __cam_req_mgr_check_peer_req_is_applied()
+*
+* @brief	 : Check whether peer req is applied
+* @link	 : pointer to link whose input queue and req tbl are
+*			   traversed through
+* @idx 	 : slot idx
+* @return	 : true means the req is applied, others not applied
+*
+*/
+static bool __cam_req_mgr_check_peer_req_is_applied(
+	struct cam_req_mgr_core_link *link,
+	int32_t idx)
+{
+	bool applied = true;
+	int64_t req_id;
+	int i, sync_slot_idx = 0;
+	struct cam_req_mgr_core_link *sync_link;
+	struct cam_req_mgr_slot *slot, *sync_slot;
+	struct cam_req_mgr_req_queue *in_q;
+
+	if (idx < 0)
+		return true;
+
+	slot = &link->req.in_q->slot[idx];
+	req_id = slot->req_id;
+	in_q = link->req.in_q;
+
+	CAM_DBG(CAM_REQ,
+		"Check Req[%lld] idx %d req_status %d link_hdl %x is applied in peer link",
+		req_id, idx, slot->status, link->link_hdl);
+
+	if (slot->sync_mode == CAM_REQ_MGR_SYNC_MODE_NO_SYNC) {
+		applied = true;
+		goto end;
+	}
+
+	for (i = 0; i < link->num_sync_links; i++) {
+		sync_link = link->sync_link[i];
+
+		if (!sync_link) {
+			applied &= true;
+			continue;
+		}
+
+		sync_slot_idx = __cam_req_mgr_find_slot_for_req(
+			sync_link->req.in_q, req_id);
+
+		in_q = sync_link->req.in_q;
+
+		if (!in_q) {
+			CAM_DBG(CAM_CRM, "Link hdl %x in_q is NULL",
+				sync_link->link_hdl);
+			applied &= true;
+			continue;
+		}
+
+		if ((sync_slot_idx < 0) ||
+			(sync_slot_idx >= MAX_REQ_SLOTS)) {
+			CAM_DBG(CAM_CRM,
+				"Can't find req:%lld from peer link, idx:%d",
+				req_id, sync_slot_idx);
+			applied &= true;
+			continue;
+		}
+
+		sync_slot = &in_q->slot[sync_slot_idx];
+
+		if (sync_slot->status == CRM_SLOT_STATUS_REQ_APPLIED)
+			applied &= true;
+		else
+			applied &= false;
+
+		CAM_DBG(CAM_CRM,
+			"link:%x idx:%d status:%d applied:%d",
+			sync_link->link_hdl, sync_slot_idx, sync_slot->status, applied);
+	}
+
+end:
+	CAM_DBG(CAM_REQ,
+		"Check Req[%lld] idx %d applied:%d",
+		req_id, idx, link->link_hdl, applied);
+
+	return applied;
+}
+
 static int __cam_req_mgr_check_multi_sync_link_ready(
 	struct cam_req_mgr_core_link *link,
 	struct cam_req_mgr_slot *slot)
@@ -1722,9 +1811,16 @@ static int __cam_req_mgr_process_req(struct cam_req_mgr_core_link *link,
 
 			rc = __cam_req_mgr_inject_delay(link->req.l_tbl,
 				slot->idx);
-			if (!rc)
-				rc = __cam_req_mgr_check_link_is_ready(link,
-					slot->idx, false);
+			if (!rc) {
+				rc = __cam_req_mgr_check_peer_req_is_applied(
+					link, in_q->last_applied_idx);
+
+				if (rc)
+					rc = __cam_req_mgr_check_link_is_ready(
+						link, slot->idx, false);
+				else
+					rc = -EINVAL;
+			}
 		}
 
 		if (rc < 0) {
@@ -1820,6 +1916,7 @@ static int __cam_req_mgr_process_req(struct cam_req_mgr_core_link *link,
 			}
 			CAM_DBG(CAM_CRM, "req %d is applied on link %x",
 				slot->req_id,
+				in_q->rd_idx,
 				link->link_hdl);
 			idx = in_q->rd_idx;
 			reset_step = link->max_delay;

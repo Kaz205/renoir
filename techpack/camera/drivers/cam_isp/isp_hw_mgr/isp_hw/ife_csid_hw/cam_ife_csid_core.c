@@ -1311,7 +1311,7 @@ int cam_ife_csid_path_reserve(struct cam_ife_csid_hw *csid_hw,
 	} else {
 		path_data->dt = reserve->in_port->dt[0];
 		path_data->vc = reserve->in_port->vc[0];
-		if (reserve->in_port->num_valid_vc_dt) {
+		if (reserve->in_port->num_valid_vc_dt > 1) {
 			path_data->dt1 = reserve->in_port->dt[1];
 			path_data->vc1 = reserve->in_port->vc[1];
 			path_data->is_valid_vc1_dt1 = 1;
@@ -2580,6 +2580,11 @@ static int cam_ife_csid_init_config_rdi_path(
 			csid_reg->rdi_reg[id]->csid_rdi_multi_vcdt_cfg0_addr);
 		val |= ((path_data->vc1 << 2) |
 			(path_data->dt1 << 7) | 1);
+
+		cam_io_w_mb(val, soc_info->reg_map[0].mem_base +
+			csid_reg->rdi_reg[id]->csid_rdi_multi_vcdt_cfg0_addr);
+		CAM_DBG(CAM_ISP, "multi vcdt enabled: vc1 %d, dt1 %d, val %d",
+		path_data->vc1, path_data->dt1, val);
 	}
 
 	/* select the post irq sub sample strobe for time stamp capture */
@@ -5209,9 +5214,6 @@ handle_fatal_error:
 			CSID_PATH_ERROR_LINE_COUNT)) {
 			val = cam_io_r_mb(soc_info->reg_map[0].mem_base +
 			csid_reg->ipp_reg->csid_pxl_format_measure0_addr);
-			val2 = cam_io_r_mb(soc_info->reg_map[0].mem_base +
-			csid_reg->ipp_reg->csid_pxl_format_measure_cfg1_addr
-			);
 
 			CAM_ERR(CAM_ISP,
 				"CSID:%d irq_status_ipp:0x%x",
@@ -5219,11 +5221,8 @@ handle_fatal_error:
 				irq_status[CAM_IFE_CSID_IRQ_REG_IPP]);
 			CAM_ERR(CAM_ISP,
 			"Expected:: h: 0x%x w: 0x%x actual:: h: 0x%x w: 0x%x [format_measure0: 0x%x]",
-			((val2 >>
-			csid_reg->cmn_reg->format_measure_height_shift_val) &
-			csid_reg->cmn_reg->format_measure_height_mask_val),
-			val2 &
-			csid_reg->cmn_reg->format_measure_width_mask_val,
+			csid_hw->ipp_path_config.height,
+			csid_hw->ipp_path_config.width,
 			((val >>
 			csid_reg->cmn_reg->format_measure_height_shift_val) &
 			csid_reg->cmn_reg->format_measure_height_mask_val),
@@ -5292,9 +5291,6 @@ handle_fatal_error:
 			CSID_PATH_ERROR_LINE_COUNT)) {
 			val = cam_io_r_mb(soc_info->reg_map[0].mem_base +
 			csid_reg->ppp_reg->csid_pxl_format_measure0_addr);
-			val2 = cam_io_r_mb(soc_info->reg_map[0].mem_base +
-			csid_reg->ppp_reg->csid_pxl_format_measure_cfg1_addr
-			);
 
 			CAM_ERR(CAM_ISP,
 				"CSID:%d irq_status_ppp:0x%x",
@@ -5302,11 +5298,8 @@ handle_fatal_error:
 				irq_status[CAM_IFE_CSID_IRQ_REG_PPP]);
 			CAM_ERR(CAM_ISP,
 			"Expected:: h:  0x%x w: 0x%x actual:: h: 0x%x w: 0x%x [format_measure0: 0x%x]",
-			((val2 >>
-			csid_reg->cmn_reg->format_measure_height_shift_val) &
-			csid_reg->cmn_reg->format_measure_height_mask_val),
-			val2 &
-			csid_reg->cmn_reg->format_measure_width_mask_val,
+			csid_hw->ppp_path_config.height,
+			csid_hw->ppp_path_config.width,
 			((val >>
 			csid_reg->cmn_reg->format_measure_height_shift_val) &
 			csid_reg->cmn_reg->format_measure_height_mask_val),
