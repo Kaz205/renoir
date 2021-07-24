@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #ifndef CAM_ICP_HW_MGR_H
@@ -265,6 +266,7 @@ struct cam_icp_hw_ctx_data {
 	uint32_t watch_dog_reset_counter;
 	struct cam_icp_acquire_dev_info icp_dev_io_info;
 	uint64_t last_flush_req;
+	char ctx_id_string[128];
 };
 
 /**
@@ -283,6 +285,7 @@ struct icp_cmd_generic_blob {
  * struct cam_icp_clk_info
  * @base_clk: Base clock to process request
  * @curr_clk: Current clock of hadrware
+ * @prev_clk: Previous clock of hadrware
  * @threshold: Threshold for overclk count
  * @over_clked: Over clock count
  * @uncompressed_bw: Current bandwidth voting
@@ -296,6 +299,7 @@ struct icp_cmd_generic_blob {
 struct cam_icp_clk_info {
 	uint32_t base_clk;
 	uint32_t curr_clk;
+	uint32_t prev_clk;
 	uint32_t threshold;
 	uint32_t over_clked;
 	uint64_t uncompressed_bw;

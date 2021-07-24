@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/module.h>
+#if IS_ENABLED(CONFIG_ISPV2_AL6021)
+#include <linux/ispv2_ioparam.h>
+#endif
 #include <cam_sensor_cmn_header.h>
 #include "cam_sensor_core.h"
 #include "cam_sensor_util.h"
@@ -281,6 +285,15 @@ static int32_t cam_sensor_i2c_pkt_parse(struct cam_sensor_ctrl_t *s_ctrl,
 			csl_packet->header.request_id);
 		break;
 	}
+#if IS_ENABLED(CONFIG_ISPV2_AL6021)
+	case CAM_SENSOR_PACKET_OPCODE_SENSOR_ISPV2_POWERUP: {
+		i2c_reg_settings = &i2c_data->init_settings;
+		i2c_reg_settings->request_id = 0;
+		i2c_reg_settings->is_settings_valid = 0;
+		rc = cam_sensor_power_up_extra(s_ctrl);
+		return rc;
+	}
+#endif
 	case CAM_SENSOR_PACKET_OPCODE_SENSOR_NOP: {
 		if ((s_ctrl->sensor_state == CAM_SENSOR_INIT) ||
 			(s_ctrl->sensor_state == CAM_SENSOR_ACQUIRE)) {
@@ -858,6 +871,20 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			goto release_mutex;
 		}
 
+#if IS_ENABLED(CONFIG_ISPV2_AL6021)
+		if (sensor_acq_dev.reserved == CAM_RESERVED_POWERUP_EX) {
+
+			CAM_INFO(CAM_SENSOR,
+					"CAM_ACQUIRE_DEV Success, reserved %x", sensor_acq_dev.reserved);
+
+			rc = cam_sensor_power_up_extra(s_ctrl);
+			if (rc < 0) {
+				CAM_ERR(CAM_SENSOR, "Sensor Power up Extra failed");
+				goto release_mutex;
+			}
+		}
+#endif
+
 		s_ctrl->sensor_state = CAM_SENSOR_ACQUIRE;
 		s_ctrl->last_flush_req = 0;
 		CAM_INFO(CAM_SENSOR,
@@ -953,7 +980,6 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			}
 		}
 		s_ctrl->sensor_state = CAM_SENSOR_START;
-
 		if (s_ctrl->bridge_intf.crm_cb &&
 			s_ctrl->bridge_intf.crm_cb->notify_timer) {
 			timer.link_hdl = s_ctrl->bridge_intf.link_hdl;
@@ -1227,6 +1253,38 @@ cci_failure:
 
 }
 
+#if IS_ENABLED(CONFIG_ISPV2_AL6021)
+int cam_sensor_power_up_extra(struct cam_sensor_ctrl_t *s_ctrl)
+{
+	int rc;
+	struct cam_sensor_power_ctrl_t *power_info;
+	struct cam_camera_slave_info *slave_info;
+	struct cam_hw_soc_info *soc_info =
+		&s_ctrl->soc_info;
+
+	if (!s_ctrl) {
+		CAM_ERR(CAM_SENSOR, "failed: %pK", s_ctrl);
+		return -EINVAL;
+	}
+
+	power_info = &s_ctrl->sensordata->power_info;
+	slave_info = &(s_ctrl->sensordata->slave_info);
+
+	if (!power_info || !slave_info) {
+		CAM_ERR(CAM_SENSOR, "failed: %pK %pK", power_info, slave_info);
+		return -EINVAL;
+	}
+
+	rc = cam_sensor_core_power_up_extra(power_info, soc_info);
+	if (rc < 0) {
+		CAM_ERR(CAM_SENSOR, "power up extra the core is failed:%d", rc);
+		return rc;
+	}
+
+	return rc;
+}
+#endif
+
 int cam_sensor_power_down(struct cam_sensor_ctrl_t *s_ctrl)
 {
 	struct cam_sensor_power_ctrl_t *power_info;
@@ -1331,7 +1389,20 @@ int cam_sensor_apply_settings(struct cam_sensor_ctrl_t *s_ctrl,
 					CAM_ERR(CAM_SENSOR,
 						"Failed to apply settings: %d",
 						rc);
-					return rc;
+					//return rc;
+					/* xiaomi add to ignore the apply setting fail - begin */
+					usleep_range(1000, 1010);
+					rc = cam_sensor_i2c_modes_util(
+						&(s_ctrl->io_master_info),
+						i2c_list);
+					if (rc < 0) {
+						CAM_ERR(CAM_SENSOR,
+							"Failed to reapply settings: %d, skip",
+							rc);
+						rc = 0;
+						break;
+					}
+					/* xiaomi add to ignore the apply setting fail - end */
 				}
 			}
 			CAM_DBG(CAM_SENSOR, "applied req_id: %llu", req_id);

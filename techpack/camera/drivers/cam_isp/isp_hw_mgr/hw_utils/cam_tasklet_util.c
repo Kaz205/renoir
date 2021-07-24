@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/slab.h>
@@ -275,7 +276,7 @@ int cam_tasklet_start(void  *tasklet_info)
 	struct cam_tasklet_info       *tasklet = tasklet_info;
 	int i = 0;
 
-	if (atomic_read(&tasklet->tasklet_active)) {
+	if (atomic_cmpxchg(&tasklet->tasklet_active, 0, 1)) {
 		CAM_ERR(CAM_ISP, "Tasklet already active idx:%d",
 			tasklet->index);
 		return -EBUSY;
@@ -288,8 +289,6 @@ int cam_tasklet_start(void  *tasklet_info)
 			&tasklet->free_cmd_list);
 	}
 
-	atomic_set(&tasklet->tasklet_active, 1);
-
 	tasklet_enable(&tasklet->tasklet);
 
 	return 0;
@@ -299,10 +298,9 @@ void cam_tasklet_stop(void  *tasklet_info)
 {
 	struct cam_tasklet_info  *tasklet = tasklet_info;
 
-	if (!atomic_read(&tasklet->tasklet_active))
+	if (!atomic_cmpxchg(&tasklet->tasklet_active, 1, 0))
 		return;
 
-	atomic_set(&tasklet->tasklet_active, 0);
 	tasklet_kill(&tasklet->tasklet);
 	tasklet_disable(&tasklet->tasklet);
 	cam_tasklet_flush(tasklet);

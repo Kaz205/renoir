@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/slab.h>
@@ -199,22 +200,10 @@ static int32_t cam_a5_download_fw(void *device_priv)
 	pdev = soc_info->pdev;
 	cam_a5_soc_info = soc_info->soc_private;
 
-	if (cam_a5_soc_info->fw_name) {
-		CAM_INFO(CAM_ICP, "Downloading firmware %s",
-			cam_a5_soc_info->fw_name);
-		rc = request_firmware(&core_info->fw_elf,
-				cam_a5_soc_info->fw_name, &pdev->dev);
-		if (rc) {
-			CAM_ERR(CAM_ICP, "Failed to locate fw: %d", rc);
-			return rc;
-		}
-	} else {
-		rc = request_firmware(&core_info->fw_elf,
-				"CAMERA_ICP.elf", &pdev->dev);
-		if (rc) {
-			CAM_ERR(CAM_ICP, "Failed to locate fw: %d", rc);
-			return rc;
-		}
+	rc = request_firmware(&core_info->fw_elf, "CAMERA_ICP.elf", &pdev->dev);
+	if (rc) {
+		CAM_ERR(CAM_ICP, "Failed to locate fw: %d", rc);
+		return rc;
 	}
 
 	if (!core_info->fw_elf) {

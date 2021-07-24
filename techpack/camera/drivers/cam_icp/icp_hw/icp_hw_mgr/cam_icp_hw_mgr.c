@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/uaccess.h>
@@ -101,10 +102,16 @@ static const char *cam_icp_dev_type_to_name(
 	switch (dev_type) {
 	case CAM_ICP_RES_TYPE_BPS:
 		return "BPS";
-	case CAM_ICP_RES_TYPE_IPE_RT:
-		return "IPE_RT";
+	case CAM_ICP_RES_TYPE_BPS_RT:
+		return "BPS_RT";
+	case CAM_ICP_RES_TYPE_BPS_SEMI_RT:
+		return "BPS_SEMI_RT";
 	case CAM_ICP_RES_TYPE_IPE:
 		return "IPE";
+	case CAM_ICP_RES_TYPE_IPE_RT:
+		return "IPE_RT";
+	case CAM_ICP_RES_TYPE_IPE_SEMI_RT:
+		return "IPE_SEMI_RT";
 	default:
 		return "Invalid dev type";
 	}
@@ -1448,6 +1455,7 @@ static int cam_icp_update_clk_rate(struct cam_icp_hw_mgr *hw_mgr,
 	struct cam_hw_intf *icp_dev_intf = NULL;
 	struct cam_hw_intf *dev_intf = NULL;
 	struct cam_icp_clk_update_cmd clk_upd_cmd;
+	uint32_t camera_hw_version;
 
 	ipe0_dev_intf = hw_mgr->ipe0_dev_intf;
 	ipe1_dev_intf = hw_mgr->ipe1_dev_intf;
@@ -1464,14 +1472,31 @@ static int cam_icp_update_clk_rate(struct cam_icp_hw_mgr *hw_mgr,
 		dev_intf = bps_dev_intf;
 		curr_clk_rate = hw_mgr->clk_info[ICP_CLK_HW_BPS].curr_clk;
 		id = CAM_ICP_BPS_CMD_UPDATE_CLK;
+		cam_cpas_notify_event("Before BPS Clk Update",
+			hw_mgr->clk_info[ICP_CLK_HW_BPS].prev_clk);
+		hw_mgr->clk_info[ICP_CLK_HW_BPS].prev_clk = curr_clk_rate;
+		cam_cpas_notify_event("After BPS Clk Update", curr_clk_rate);
 	} else {
 		dev_intf = ipe0_dev_intf;
 		curr_clk_rate = hw_mgr->clk_info[ICP_CLK_HW_IPE].curr_clk;
 		id = CAM_ICP_IPE_CMD_UPDATE_CLK;
+		cam_cpas_notify_event("Before IPE Clk Update",
+			hw_mgr->clk_info[ICP_CLK_HW_IPE].prev_clk);
+		hw_mgr->clk_info[ICP_CLK_HW_IPE].prev_clk = curr_clk_rate;
+		cam_cpas_notify_event("After IPE Clk Update", curr_clk_rate);
 	}
 
-	CAM_DBG(CAM_PERF, "clk_rate %u for dev_type %d", curr_clk_rate,
-		ctx_data->icp_dev_acquire_info->dev_type);
+	cam_cpas_get_cpas_hw_version(&camera_hw_version);
+	if ((camera_hw_version == 0x570200)&&
+		(curr_clk_rate > ctx_data->clk_info.clk_rate[CAM_MAX_VOTE-1]) &&
+		(ctx_data->icp_dev_acquire_info->dev_type != CAM_ICP_RES_TYPE_BPS)) {
+
+		curr_clk_rate = ctx_data->clk_info.clk_rate[CAM_MAX_VOTE-1];
+	}
+
+	CAM_DBG(CAM_PERF, "clk_rate %u for dev_type %d, ver %x", curr_clk_rate,
+		ctx_data->icp_dev_acquire_info->dev_type, camera_hw_version);
+
 	clk_upd_cmd.curr_clk_rate = curr_clk_rate;
 	clk_upd_cmd.ipe_bps_pc_enable = icp_hw_mgr.ipe_bps_pc_flag;
 	clk_upd_cmd.clk_level = -1;
@@ -4082,6 +4107,8 @@ static int cam_icp_mgr_config_hw(void *hw_mgr_priv, void *config_hw_args)
 			"Anomaly submitting flushed req %llu [last_flush %llu] in ctx %u",
 			req_id, ctx_data->last_flush_req, ctx_data->ctx_id);
 
+	cam_cpas_notify_event(ctx_data->ctx_id_string, req_id);
+
 	rc = cam_icp_mgr_enqueue_config(hw_mgr, config_args);
 	if (rc)
 		goto config_err;
@@ -5727,6 +5754,14 @@ static int cam_icp_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 
 	ctx_data->context_priv = args->context_data;
 	args->ctxt_to_hw_map = ctx_data;
+	args->hw_mgr_ctx_id = ctx_data->ctx_id;
+
+	snprintf(ctx_data->ctx_id_string, sizeof(ctx_data->ctx_id_string),
+		"%s_ctx[%d]_hwmgrctx[%d]_Submit",
+		cam_icp_dev_type_to_name(
+		ctx_data->icp_dev_acquire_info->dev_type),
+		args->ctx_id,
+		ctx_data->ctx_id);
 
 	bitmap_size = BITS_TO_LONGS(CAM_FRAME_CMD_MAX) * sizeof(long);
 	ctx_data->hfi_frame_process.bitmap =
