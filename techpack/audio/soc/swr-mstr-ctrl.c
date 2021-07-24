@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/irq.h>
@@ -1299,12 +1300,15 @@ static void swrm_disable_ports(struct swr_master *master,
 		}
 		value = ((mport->req_ch)
 					<< SWRM_DP_PORT_CTRL_EN_CHAN_SHFT);
+		dev_dbg(swrm->dev, "%s: value :%d\n", __func__, value);
 		value |= ((mport->offset2)
 					<< SWRM_DP_PORT_CTRL_OFFSET2_SHFT);
+		dev_dbg(swrm->dev, "%s: value :%d\n", __func__, value);
 		value |= ((mport->offset1)
 				<< SWRM_DP_PORT_CTRL_OFFSET1_SHFT);
-		value |= mport->sinterval;
-
+		dev_dbg(swrm->dev, "%s: value :%d\n", __func__, value);
+		value |= (mport->sinterval & 0xFF);
+		dev_dbg(swrm->dev, "%s: value :%d\n", __func__, value);
 		swr_master_write(swrm,
 				SWRM_DP_PORT_CTRL_BANK((i + 1), bank),
 				value);
