@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #define pr_fmt(fmt)	"[drm:%s:%d] " fmt, __func__, __LINE__
@@ -9,6 +10,7 @@
 #include "sde_core_irq.h"
 #include "sde_formats.h"
 #include "sde_trace.h"
+#include "mi_sde_encoder.h"
 
 #define SDE_DEBUG_CMDENC(e, fmt, ...) SDE_DEBUG("enc%d intf%d " fmt, \
 		(e) && (e)->base.parent ? \
@@ -244,6 +246,8 @@ static void sde_encoder_phys_cmd_te_rd_ptr_irq(void *arg, int irq_idx)
 
 	if (!phys_enc || !phys_enc->hw_pp || !phys_enc->hw_intf)
 		return;
+
+	mi_sde_encoder_save_vsync_info(phys_enc);
 
 	SDE_ATRACE_BEGIN("rd_ptr_irq");
 	cmd_enc = to_sde_encoder_phys_cmd(phys_enc);
@@ -1345,8 +1349,6 @@ static void sde_encoder_phys_cmd_disable(struct sde_encoder_phys *phys_enc)
 		else if (phys_enc->hw_pp->ops.enable_tearcheck)
 			phys_enc->hw_pp->ops.enable_tearcheck(phys_enc->hw_pp,
 					false);
-		if (sde_encoder_phys_cmd_is_master(phys_enc))
-			sde_encoder_helper_phys_disable(phys_enc, NULL);
 	}
 
 	phys_enc->enable_state = SDE_ENC_DISABLED;

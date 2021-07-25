@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #define pr_fmt(fmt)	"[drm:%s:%d] " fmt, __func__, __LINE__
@@ -10,6 +11,7 @@
 #include "sde_formats.h"
 #include "dsi_display.h"
 #include "sde_trace.h"
+#include "mi_sde_encoder.h"
 
 #define SDE_DEBUG_VIDENC(e, fmt, ...) SDE_DEBUG("enc%d intf%d " fmt, \
 		(e) && (e)->base.parent ? \
@@ -205,7 +207,6 @@ static u32 programmable_fetch_get_num_lines(
 		const struct intf_timing_params *timing)
 {
 	struct sde_encoder_phys *phys_enc = &vid_enc->base;
-	struct sde_mdss_cfg *m;
 
 	u32 needed_prefill_lines, needed_vfp_lines, actual_vfp_lines;
 	const u32 fixed_prefill_fps = DEFAULT_FPS;
@@ -214,23 +215,18 @@ static u32 programmable_fetch_get_num_lines(
 	u32 start_of_frame_lines =
 	    timing->v_back_porch + timing->vsync_pulse_width;
 	u32 v_front_porch = timing->v_front_porch;
-	u32 vrefresh, max_fps;
-
-	m = phys_enc->sde_kms->catalog;
-	max_fps = sde_encoder_get_dfps_maxfps(phys_enc->parent);
-	vrefresh = (max_fps > timing->vrefresh) ? max_fps : timing->vrefresh;
 
 	/* minimum prefill lines are defined based on 60fps */
-	needed_prefill_lines = (vrefresh > fixed_prefill_fps) ?
-		((default_prefill_lines * vrefresh) /
+	needed_prefill_lines = (timing->vrefresh > fixed_prefill_fps) ?
+		((default_prefill_lines * timing->vrefresh) /
 			fixed_prefill_fps) : default_prefill_lines;
 	needed_vfp_lines = needed_prefill_lines - start_of_frame_lines;
 
 	/* Fetch must be outside active lines, otherwise undefined. */
 	if (start_of_frame_lines >= needed_prefill_lines) {
 		SDE_DEBUG_VIDENC(vid_enc,
-				"prog fetch always enabled case\n");
-		actual_vfp_lines = (m->delay_prg_fetch_start) ? 2 : 1;
+				"prog fetch is not needed, large vbp+vsw\n");
+		actual_vfp_lines = 0;
 	} else if (v_front_porch < needed_vfp_lines) {
 		/* Warn fetch needed, but not enough porch in panel config */
 		pr_warn_once
@@ -245,7 +241,7 @@ static u32 programmable_fetch_get_num_lines(
 
 	SDE_DEBUG_VIDENC(vid_enc,
 		"vrefresh:%u v_front_porch:%u v_back_porch:%u vsync_pulse_width:%u\n",
-		vrefresh, v_front_porch, timing->v_back_porch,
+		timing->vrefresh, v_front_porch, timing->v_back_porch,
 		timing->vsync_pulse_width);
 	SDE_DEBUG_VIDENC(vid_enc,
 		"prefill_lines:%u needed_vfp_lines:%u actual_vfp_lines:%u\n",
@@ -500,6 +496,8 @@ static void sde_encoder_phys_vid_vblank_irq(void *arg, int irq_idx)
 	hw_ctl = phys_enc->hw_ctl;
 	if (!hw_ctl)
 		return;
+
+	mi_sde_encoder_save_vsync_info(phys_enc);
 
 	SDE_ATRACE_BEGIN("vblank_irq");
 
