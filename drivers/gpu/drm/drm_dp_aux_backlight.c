@@ -112,31 +112,8 @@ static int drm_dp_aux_brightness_set(struct backlight_device *bd)
 	return 0;
 }
 
-static int drm_dp_aux_brightness_get(struct backlight_device *bd)
-{
-	struct drm_dp_aux_backlight *pdata = bl_get_data(bd);
-	u8 val[2] = { 0x0 };
-	int ret = 0;
-
-	if (!pdata->enabled)
-		return 0;
-
-	if (bd->props.power != FB_BLANK_UNBLANK ||
-	    bd->props.fb_blank != FB_BLANK_UNBLANK ||
-	    bd->props.state & (BL_CORE_SUSPENDED | BL_CORE_FBBLANK))
-		return 0;
-
-	ret = drm_dp_dpcd_read(pdata->aux, DP_EDP_BACKLIGHT_BRIGHTNESS_MSB,
-			       &val, sizeof(val));
-	if (ret < 0)
-		return ret;
-
-	return (val[0] << 8 | val[1]);
-}
-
 static const struct backlight_ops aux_bl_ops = {
 	.update_status = drm_dp_aux_brightness_set,
-	.get_brightness = drm_dp_aux_brightness_get,
 };
 
 /**
