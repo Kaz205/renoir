@@ -19,6 +19,9 @@
 #include <drm/drm_edid.h>
 #include <drm/drm_panel.h>
 
+/* CHROMIUM: Downstream aux backlight driver */
+#include <drm/drm_dp_aux_backlight.h>
+
 struct atana33xc20_panel {
 	struct drm_panel base;
 	bool prepared;
@@ -294,7 +297,21 @@ static int atana33xc20_probe(struct dp_aux_ep_device *aux_ep)
 	drm_panel_init(&panel->base, dev, &atana33xc20_funcs, DRM_MODE_CONNECTOR_eDP);
 
 	pm_runtime_get_sync(dev);
-	ret = drm_panel_dp_aux_backlight(&panel->base, aux_ep->aux);
+	/* CHROMIUM: Adapt to downstream aux backlight driver. */
+	{
+		struct drm_dp_aux_backlight *aux_bl;
+
+		aux_bl = devm_kzalloc(dev, sizeof(*aux_bl), GFP_KERNEL);
+		if (!aux_bl) {
+			pm_runtime_put_autosuspend(dev);
+			return -ENOMEM;
+		}
+
+		aux_bl->dev = dev;
+		aux_bl->aux = aux_ep->aux;
+		ret = drm_dp_aux_backlight_register("atana33xc20-aux-backlight", aux_bl);
+		panel->base.backlight = aux_bl->bd;
+	}
 	pm_runtime_mark_last_busy(dev);
 	pm_runtime_put_autosuspend(dev);
 	if (ret)
