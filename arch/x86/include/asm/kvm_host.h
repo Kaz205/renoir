@@ -758,6 +758,16 @@ struct kvm_vcpu_arch {
 
 	u64 msr_kvm_poll_control;
 
+#ifdef CONFIG_KVM_HETEROGENEOUS_RT
+	struct {
+		bool enabled;
+		bool may_boost;
+		int msr_val;
+		int boost;
+		struct gfn_to_hva_cache data;
+	} preempt_count;
+#endif
+
 	/*
 	 * Indicate whether the access faults on its page table in guest
 	 * which is set when fix page fault and used to detect unhandeable
