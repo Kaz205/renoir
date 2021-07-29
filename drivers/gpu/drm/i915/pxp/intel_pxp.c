@@ -69,6 +69,13 @@ static int intel_pxp_global_terminate_complete_callback(struct intel_pxp *pxp)
 	if (pxp->ctx.global_state_attacked) {
 		pxp->ctx.global_state_attacked = false;
 
+		/*
+		 * WA: Insert delay to allow GuC/CSE to resume allowing session
+		 * inits after an explicit terminate before attempting to
+		 * reinitialize the arb session
+		 */
+		msleep(50);
+
 		/* Re-create the arb session after teardown handle complete */
 		ret = intel_pxp_arb_create_session(pxp);
 		if (ret) {

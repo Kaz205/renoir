@@ -6233,53 +6233,34 @@ static int cam_ife_hw_mgr_debug_register(void)
 		return -ENOMEM;
 	}
 
-	if (!debugfs_create_file("ife_csid_debug",
+	debugfs_create_file("ife_csid_debug",
 		0644,
 		g_ife_hw_mgr.debug_cfg.dentry, NULL,
-		&cam_ife_csid_debug)) {
-		CAM_ERR(CAM_ISP, "failed to create cam_ife_csid_debug");
-		goto err;
-	}
+		&cam_ife_csid_debug);
 
-	if (!debugfs_create_u32("enable_recovery",
+	debugfs_create_u32("enable_recovery",
 		0644,
 		g_ife_hw_mgr.debug_cfg.dentry,
-		&g_ife_hw_mgr.debug_cfg.enable_recovery)) {
-		CAM_ERR(CAM_ISP, "failed to create enable_recovery");
-		goto err;
-	}
+		&g_ife_hw_mgr.debug_cfg.enable_recovery);
 
-	if (!debugfs_create_u32("enable_reg_dump",
+	debugfs_create_u32("enable_reg_dump",
 		0644,
 		g_ife_hw_mgr.debug_cfg.dentry,
-		&g_ife_hw_mgr.debug_cfg.enable_reg_dump)) {
-		CAM_ERR(CAM_ISP, "failed to create enable_reg_dump");
-		goto err;
-	}
+		&g_ife_hw_mgr.debug_cfg.enable_reg_dump);
 
-	if (!debugfs_create_file("ife_camif_debug",
+	debugfs_create_file("ife_camif_debug",
 		0644,
 		g_ife_hw_mgr.debug_cfg.dentry, NULL,
-		&cam_ife_camif_debug)) {
-		CAM_ERR(CAM_ISP, "failed to create cam_ife_camif_debug");
-		goto err;
-	}
+		&cam_ife_camif_debug);
 
-	if (!debugfs_create_file("ife_dmi_dump",
+	debugfs_create_file("ife_dmi_dump",
 		0644,
 		g_ife_hw_mgr.debug_cfg.dentry, NULL,
-		&cam_ife_bus_dmi_debug)) {
-		CAM_ERR(CAM_ISP, "failed to create cam_ife_dmi_dump");
-		goto err;
-	}
+		&cam_ife_bus_dmi_debug);
 
 	g_ife_hw_mgr.debug_cfg.enable_recovery = 0;
 
 	return 0;
-
-err:
-	debugfs_remove_recursive(g_ife_hw_mgr.debug_cfg.dentry);
-	return -ENOMEM;
 }
 
 int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)

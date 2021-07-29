@@ -90,10 +90,6 @@ ap_ts_pen_1v8: &i2c4 {
 	gpio = <&tlmm 67 GPIO_ACTIVE_HIGH>;
 };
 
-&sdhc_2 {
-	status = "okay";
-};
-
 &secondary_mi2s {
 	qcom,playback-sd-lines = <0 1>;
 };
@@ -104,6 +100,10 @@ ap_ts_pen_1v8: &i2c4 {
 
 &sound_multimedia1_codec {
 	sound-dai = <&max98360a>, <&max98360a_1>, <&max98360a_2>, <&max98360a_3> ;
+};
+
+&wifi {
+	qcom,ath10k-calibration-variant = "GO_HOMESTAR";
 };
 
 /* PINCTRL - modifications to sc7180-trogdor.dtsi */

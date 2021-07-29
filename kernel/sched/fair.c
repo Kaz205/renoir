@@ -464,48 +464,81 @@ static inline u64 cfs_rq_min_vruntime(struct cfs_rq *cfs_rq)
 	return cfs_rq->min_vruntime;
 }
 
-#ifdef CONFIG_FAIR_GROUP_SCHED
-bool cfs_prio_less(struct task_struct *a, struct task_struct *b)
+#ifdef CONFIG_SCHED_CORE
+/*
+ * se_fi_update - Update the cfs_rq->min_vruntime_fi in a CFS hierarchy if needed.
+ */
+static void se_fi_update(struct sched_entity *se, unsigned int fi_seq, bool forceidle)
 {
-	bool samecpu = task_cpu(a) == task_cpu(b);
+	for_each_sched_entity(se) {
+		struct cfs_rq *cfs_rq = cfs_rq_of(se);
+
+		if (forceidle) {
+			if (cfs_rq->forceidle_seq == fi_seq)
+				break;
+			cfs_rq->forceidle_seq = fi_seq;
+		}
+
+		cfs_rq->min_vruntime_fi = cfs_rq->min_vruntime;
+	}
+}
+
+void task_vruntime_update(struct rq *rq, struct task_struct *p, bool in_fi)
+{
+	struct sched_entity *se = &p->se;
+
+	if (p->sched_class != &fair_sched_class)
+		return;
+
+	se_fi_update(se, rq->core->core_forceidle_seq, in_fi);
+}
+bool cfs_prio_less(struct task_struct *a, struct task_struct *b, bool in_fi)
+{
+	struct rq *rq = task_rq(a);
 	struct sched_entity *sea = &a->se;
 	struct sched_entity *seb = &b->se;
 	struct cfs_rq *cfs_rqa;
 	struct cfs_rq *cfs_rqb;
 	s64 delta;
 
-	if (samecpu) {
-		/* vruntime is per cfs_rq */
-		while (!is_same_group(sea, seb)) {
-			int sea_depth = sea->depth;
-			int seb_depth = seb->depth;
+	SCHED_WARN_ON(task_rq(b)->core != rq->core);
 
-			if (sea_depth >= seb_depth)
-				sea = parent_entity(sea);
-			if (sea_depth <= seb_depth)
-				seb = parent_entity(seb);
-		}
+#ifdef CONFIG_FAIR_GROUP_SCHED
+	/*
+	 * Find an se in the hierarchy for tasks a and b, such that the se's
+	 * are immediate siblings.
+	 */
+	while (sea->cfs_rq->tg != seb->cfs_rq->tg) {
+		int sea_depth = sea->depth;
+		int seb_depth = seb->depth;
 
-		delta = (s64)(sea->vruntime - seb->vruntime);
-		goto out;
+		if (sea_depth >= seb_depth)
+			sea = parent_entity(sea);
+		if (sea_depth <= seb_depth)
+			seb = parent_entity(seb);
 	}
 
-	/* crosscpu: compare root level se's vruntime to decide priority */
-	while (sea->parent)
-		sea = sea->parent;
-	while (seb->parent)
-		seb = seb->parent;
+	se_fi_update(sea, rq->core->core_forceidle_seq, in_fi);
+	se_fi_update(seb, rq->core->core_forceidle_seq, in_fi);
 
 	cfs_rqa = sea->cfs_rq;
 	cfs_rqb = seb->cfs_rq;
+#else
+	cfs_rqa = &task_rq(a)->cfs;
+	cfs_rqb = &task_rq(b)->cfs;
+#endif
 
-	/* normalize vruntime WRT their rq's base */
+	/*
+	 * Find delta after normalizing se's vruntime with its cfs_rq's
+	 * min_vruntime_fi, which would have been updated in prior calls
+	 * to se_fi_update().
+	 */
 	delta = (s64)(sea->vruntime - seb->vruntime) +
 		(s64)(cfs_rqb->min_vruntime_fi - cfs_rqa->min_vruntime_fi);
-out:
+
 	return delta > 0;
 }
-#endif /* CONFIG_FAIR_GROUP_SCHED */
+#endif
 
 static __always_inline
 void account_cfs_rq_runtime(struct cfs_rq *cfs_rq, u64 delta_exec);
@@ -2948,7 +2981,7 @@ void reweight_task(struct task_struct *p, int prio)
  *
  *                     tg->weight * grq->load.weight
  *   ge->load.weight = -----------------------------               (1)
- *			  \Sum grq->load.weight
+ *                       \Sum grq->load.weight
  *
  * Now, because computing that sum is prohibitively expensive to compute (been
  * there, done that) we approximate it with this average stuff. The average
@@ -2962,7 +2995,7 @@ void reweight_task(struct task_struct *p, int prio)
  *
  *                     tg->weight * grq->avg.load_avg
  *   ge->load.weight = ------------------------------              (3)
- *				tg->load_avg
+ *                             tg->load_avg
  *
  * Where: tg->load_avg ~= \Sum grq->avg.load_avg
  *
@@ -2978,7 +3011,7 @@ void reweight_task(struct task_struct *p, int prio)
  *
  *                     tg->weight * grq->load.weight
  *   ge->load.weight = ----------------------------- = tg->weight   (4)
- *			    grp->load.weight
+ *                         grp->load.weight
  *
  * That is, the sum collapses because all other CPUs are idle; the UP scenario.
  *
@@ -2997,7 +3030,7 @@ void reweight_task(struct task_struct *p, int prio)
  *
  *                     tg->weight * grq->load.weight
  *   ge->load.weight = -----------------------------		   (6)
- *				tg_load_avg'
+ *                             tg_load_avg'
  *
  * Where:
  *
@@ -4156,15 +4189,6 @@ dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 		update_min_vruntime(cfs_rq);
 }
 
-static inline bool
-__entity_slice_used(struct sched_entity *se, int min_nr_tasks)
-{
-	u64 slice = sched_slice(cfs_rq_of(se), se);
-	u64 rtime = se->sum_exec_runtime - se->prev_sum_exec_runtime;
-
-	return (rtime * min_nr_tasks > slice);
-}
-
 /*
  * Preempt the current task with a newly woken task if needed:
  */
@@ -4830,7 +4854,7 @@ static const u64 cfs_bandwidth_slack_period = 5 * NSEC_PER_MSEC;
 static int runtime_refresh_within(struct cfs_bandwidth *cfs_b, u64 min_expire)
 {
 	struct hrtimer *refresh_timer = &cfs_b->period_timer;
-	u64 remaining;
+	s64 remaining;
 
 	/* if the call-back is running a quota refresh is already occurring */
 	if (hrtimer_callback_running(refresh_timer))
@@ -4838,7 +4862,7 @@ static int runtime_refresh_within(struct cfs_bandwidth *cfs_b, u64 min_expire)
 
 	/* is a quota refresh about to occur? */
 	remaining = ktime_to_ns(hrtimer_expires_remaining(refresh_timer));
-	if (remaining < min_expire)
+	if (remaining < (s64)min_expire)
 		return 1;
 
 	return 0;
@@ -10274,49 +10298,42 @@ static void core_sched_deactivate_fair(struct rq *rq)
 #endif /* CONFIG_SMP */
 
 #ifdef CONFIG_SCHED_CORE
-#define MIN_NR_TASKS_DURING_FORCEIDLE	2
-/*
- * If runqueue has only one task which used up its slice and
- * if the sibling is forced idle, then trigger schedule
- * to give forced idle task a chance.
- */
-static void resched_forceidle_sibling(struct rq *rq, struct sched_entity *se)
+static inline bool
+__entity_slice_used(struct sched_entity *se, int min_nr_tasks)
 {
-	int cpu = cpu_of(rq), sibling_cpu;
+	u64 slice = sched_slice(cfs_rq_of(se), se);
+	u64 rtime = se->sum_exec_runtime - se->prev_sum_exec_runtime;
 
-	/*
-	 * If runqueue has only one task which used up its slice and if the
-	 * sibling is forced idle, then trigger schedule to give forced idle
-	 * task a chance.
-	 *
-	 * sched_slice() considers only this active rq and it gets the whole
-	 * slice. But during force idle, we have siblings acting like a single
-	 * runqueue and hence we need to consider runnable tasks on this cpu
-	 * and the forced idle cpu. Ideally, we should go through the forced
-	 * idle rq, but that would be a perf hit.  We can assume that the
-	 * forced idle cpu has atleast MIN_NR_TASKS_DURING_FORCEIDLE - 1 tasks
-	 * and use that to check if we need to give up the cpu.
-	 */
-	if (rq->cfs.nr_running > 1 ||
-	    !__entity_slice_used(se, MIN_NR_TASKS_DURING_FORCEIDLE))
+	return (rtime * min_nr_tasks > slice);
+}
+
+#define MIN_NR_TASKS_DURING_FORCEIDLE	2
+static inline void task_tick_core(struct rq *rq, struct task_struct *curr)
+{
+	if (!sched_core_enabled(rq))
 		return;
 
-	for_each_cpu(sibling_cpu, cpu_smt_mask(cpu)) {
-		struct rq *sibling_rq;
-		if (sibling_cpu == cpu)
-			continue;
-		if (cpu_is_offline(sibling_cpu))
-			continue;
-
-		sibling_rq = cpu_rq(sibling_cpu);
-		if (sibling_rq->core_forceidle) {
-			resched_curr(rq);
-			break;
-		}
-	}
+	/*
+	 * If runqueue has only one task which used up its slice and
+	 * if the sibling is forced idle, then trigger schedule to
+	 * give forced idle task a chance.
+	 *
+	 * sched_slice() considers only this active rq and it gets the
+	 * whole slice. But during force idle, we have siblings acting
+	 * like a single runqueue and hence we need to consider runnable
+	 * tasks on this CPU and the forced idle CPU. Ideally, we should
+	 * go through the forced idle rq, but that would be a perf hit.
+	 * We can assume that the forced idle CPU has at least
+	 * MIN_NR_TASKS_DURING_FORCEIDLE - 1 tasks and use that to check
+	 * if we need to give up the CPU.
+	 */
+	if (rq->core->core_forceidle && rq->cfs.nr_running == 1 &&
+	    __entity_slice_used(&curr->se, MIN_NR_TASKS_DURING_FORCEIDLE))
+		resched_curr(rq);
 }
+#else
+static inline void task_tick_core(struct rq *rq, struct task_struct *curr) {}
 #endif
-
 
 /*
  * scheduler tick hitting a task of our scheduling class.
@@ -10342,10 +10359,7 @@ static void task_tick_fair(struct rq *rq, struct task_struct *curr, int queued)
 	update_misfit_status(curr, rq);
 	update_overutilized_status(task_rq(curr));
 
-#ifdef CONFIG_SCHED_CORE
-	if (sched_core_enabled(rq))
-		resched_forceidle_sibling(rq, &curr->se);
-#endif
+	task_tick_core(rq, curr);
 }
 
 /*
