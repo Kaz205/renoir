@@ -165,7 +165,6 @@ static bool cnl_compact_ipc_compress(struct snd_sof_ipc_msg *msg,
 
 int cnl_ipc_send_msg(struct snd_sof_dev *sdev, struct snd_sof_ipc_msg *msg)
 {
-	struct sof_intel_hda_dev *hdev = sdev->pdata->hw_pdata;
 	u32 dr = 0;
 	u32 dd = 0;
 
