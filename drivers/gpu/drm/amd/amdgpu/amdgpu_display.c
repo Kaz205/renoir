@@ -966,9 +966,8 @@ int amdgpu_display_framebuffer_init(struct drm_device *dev,
 	}
 
 	for (i = 1; i < rfb->base.format->num_planes; ++i) {
-		drm_gem_object_get(rfb->base.obj[0]);
-		drm_gem_object_put(rfb->base.obj[i]);
 		rfb->base.obj[i] = rfb->base.obj[0];
+		drm_gem_object_get(rfb->base.obj[i]);
 	}
 
 	return 0;
@@ -1010,7 +1009,6 @@ amdgpu_display_user_framebuffer_create(struct drm_device *dev,
 		return ERR_PTR(ret);
 	}
 
-	drm_gem_object_put(obj);
 	return &amdgpu_fb->base;
 }
 
