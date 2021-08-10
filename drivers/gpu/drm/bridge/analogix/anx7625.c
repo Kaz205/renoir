@@ -2149,6 +2149,10 @@ static int anx7625_audio_hw_params(struct device *dev, void *data,
 				~I2S_SLAVE_MODE,
 				TDM_SLAVE_MODE);
 
+	/* No shift for the first bit */
+	ret |= anx7625_write_or(ctx, ctx->i2c.tx_p2_client,
+				AUDIO_CONTROL_REGISTER, 0x08);
+
 	/* Word length */
 	switch (params->sample_width) {
 	case 16:
