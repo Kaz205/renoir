@@ -1819,7 +1819,15 @@ static int qsmmuv500_cfg_probe(struct arm_smmu_device *smmu)
 	return 0;
 }
 
+static int qsmmuv500_init_context(struct arm_smmu_domain *smmu_domain)
+{
+	smmu_domain->smmu->flush_walk_prefer_tlbiasid = true;
+
+	return 0;
+}
+
 static const struct arm_smmu_impl qsmmuv500_impl = {
+	.init_context = qsmmuv500_init_context,
 	.cfg_probe = qsmmuv500_cfg_probe,
 	.init_context_bank = qsmmuv500_init_cb,
 	.iova_to_phys_hard = qsmmuv500_iova_to_phys_hard,

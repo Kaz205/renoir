@@ -879,7 +879,8 @@ static void arm_smmu_tlb_inv_context_s1(void *cookie)
 	struct arm_smmu_cfg *cfg = &smmu_domain->cfg;
 	struct arm_smmu_device *smmu = smmu_domain->smmu;
 	int idx = smmu_domain->cfg.cbndx;
-	bool use_tlbiall = smmu->options & ARM_SMMU_OPT_NO_ASID_RETENTION;
+	bool use_tlbiall = smmu->options & ARM_SMMU_OPT_NO_ASID_RETENTION
+			   && !smmu->flush_walk_prefer_tlbiasid;
 	ktime_t cur = ktime_get();
 
 	trace_tlbi_start(dev, 0);
@@ -969,14 +970,19 @@ static void arm_smmu_tlb_inv_walk(unsigned long iova, size_t size,
 {
 	struct arm_smmu_domain *smmu_domain = cookie;
 	const struct arm_smmu_flush_ops *ops = smmu_domain->flush_ops;
+	struct arm_smmu_device *smmu = smmu_domain->smmu;
 
 	if (!IS_ENABLED(CONFIG_QCOM_IOMMU_TLBI_QUIRKS)) {
 		smmu_domain->defer_flush = true;
 		return;
 	}
 
-	ops->tlb_inv_range(iova, size, granule, false, cookie);
-	ops->tlb_sync(cookie);
+	if (smmu->flush_walk_prefer_tlbiasid) {
+		ops->tlb.tlb_flush_all(cookie);
+	} else {
+		ops->tlb_inv_range(iova, size, granule, false, cookie);
+		ops->tlb_sync(cookie);
+	}
 }
 
 static void arm_smmu_tlb_inv_leaf(unsigned long iova, size_t size,
