@@ -12,7 +12,7 @@
 #include "intel_pxp_tee.h"
 #include "intel_pxp_arb.h"
 
-static bool mei_pxp_last_read_interrupted = false;
+static bool mei_pxp_last_message_interrupted = false;
 
 static int intel_pxp_tee_io_message(struct intel_pxp *pxp,
 				    void *msg_in, u32 msg_in_size,
@@ -33,15 +33,18 @@ static int intel_pxp_tee_io_message(struct intel_pxp *pxp,
 		print_hex_dump(KERN_DEBUG, "TEE input message binaries:",
 			       DUMP_PREFIX_OFFSET, 4, 4, msg_in, msg_in_size, true);
 
-	if (mei_pxp_last_read_interrupted) {
+	if (mei_pxp_last_message_interrupted) {
 		/* read and drop data from the previous iteration */
 		/* ignore result */ pxp_tee_master->ops->receive(pxp_tee_master->tee_dev, msg_out, msg_out_buf_size, 1);
-		mei_pxp_last_read_interrupted = false;
+		mei_pxp_last_message_interrupted = false;
 	}
 
 	ret = pxp_tee_master->ops->send(pxp_tee_master->tee_dev, msg_in, msg_in_size, 1);
 	if (ret) {
 		drm_err(&i915->drm, "Failed to send TEE message\n");
+		if (ret == -EINTR)
+			mei_pxp_last_message_interrupted = true;
+
 		return -EFAULT;
 	}
 
@@ -49,7 +52,7 @@ static int intel_pxp_tee_io_message(struct intel_pxp *pxp,
 	if (ret < 0) {
 		drm_err(&i915->drm, "Failed to receive TEE message\n");
 		if (ret == -EINTR)
-			mei_pxp_last_read_interrupted = true;
+			mei_pxp_last_message_interrupted = true;
 
 		return -EFAULT;
 	}
