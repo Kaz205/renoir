@@ -10,5 +10,5 @@
 
 / {
 	model = "Google Pazquel with LTE";
-	compatible = "google,pazquel-sku0", "qcom,sc7180";
+	compatible = "google,pazquel-sku0", "google,pazquel-sku2", "qcom,sc7180";
 };
