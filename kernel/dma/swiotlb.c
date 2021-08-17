@@ -869,8 +869,17 @@ static int rmem_swiotlb_device_init(struct reserved_mem *rmem,
 	struct swiotlb *swiotlb = rmem->priv;
 	int ret;
 
-	if (dev->dev_swiotlb)
-		return -EBUSY;
+	/*
+	 * Restricted DMA regions, like other reserved memory regions, are
+	 * pre-allocated. Also, the relation between device and restricted
+	 * DMA region is fixed in the device tree. So if the device already
+	 * has a region tied to it, it must be the same one that would be
+	 * assigned to it here.
+	 */
+	if (dev->dev_swiotlb) {
+		WARN_ON(dev->dev_swiotlb != swiotlb);
+		return 0;
+	}
 
 	/* Since multiple devices can share the same pool, the private data,
 	 * swiotlb struct, will be initialized by the first device attached
