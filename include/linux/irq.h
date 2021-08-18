@@ -553,30 +553,32 @@ struct irq_chip {
 /*
  * irq_chip specific flags
  *
- * IRQCHIP_SET_TYPE_MASKED:           Mask before calling chip.irq_set_type()
- * IRQCHIP_EOI_IF_HANDLED:            Only issue irq_eoi() when irq was handled
- * IRQCHIP_MASK_ON_SUSPEND:           Mask non wake irqs in the suspend path
- * IRQCHIP_ONOFFLINE_ENABLED:         Only call irq_on/off_line callbacks
- *                                    when irq enabled
- * IRQCHIP_SKIP_SET_WAKE:             Skip chip.irq_set_wake(), for this irq chip
- * IRQCHIP_ONESHOT_SAFE:              One shot does not require mask/unmask
- * IRQCHIP_EOI_THREADED:              Chip requires eoi() on unmask in threaded mode
- * IRQCHIP_SUPPORTS_LEVEL_MSI:        Chip can provide two doorbells for Level MSIs
- * IRQCHIP_SUPPORTS_NMI:              Chip can deliver NMIs, only for root irqchips
+ * IRQCHIP_SET_TYPE_MASKED:	Mask before calling chip.irq_set_type()
+ * IRQCHIP_EOI_IF_HANDLED:	Only issue irq_eoi() when irq was handled
+ * IRQCHIP_MASK_ON_SUSPEND:	Mask non wake irqs in the suspend path
+ * IRQCHIP_ONOFFLINE_ENABLED:	Only call irq_on/off_line callbacks
+ *				when irq enabled
+ * IRQCHIP_SKIP_SET_WAKE:	Skip chip.irq_set_wake(), for this irq chip
+ * IRQCHIP_ONESHOT_SAFE:	One shot does not require mask/unmask
+ * IRQCHIP_EOI_THREADED:	Chip requires eoi() on unmask in threaded mode
+ * IRQCHIP_SUPPORTS_LEVEL_MSI	Chip can provide two doorbells for Level MSIs
+ * IRQCHIP_SUPPORTS_NMI:	Chip can deliver NMIs, only for root irqchips
  * IRQCHIP_ENABLE_WAKEUP_ON_SUSPEND:  Invokes __enable_irq()/__disable_irq() for wake irqs
  *                                    in the suspend path if they are in disabled state
+ * IRQCHIP_AFFINITY_PRE_STARTUP:      Default affinity update before startup
  */
 enum {
-	IRQCHIP_SET_TYPE_MASKED			= (1 <<  0),
-	IRQCHIP_EOI_IF_HANDLED			= (1 <<  1),
-	IRQCHIP_MASK_ON_SUSPEND			= (1 <<  2),
-	IRQCHIP_ONOFFLINE_ENABLED		= (1 <<  3),
-	IRQCHIP_SKIP_SET_WAKE			= (1 <<  4),
-	IRQCHIP_ONESHOT_SAFE			= (1 <<  5),
-	IRQCHIP_EOI_THREADED			= (1 <<  6),
-	IRQCHIP_SUPPORTS_LEVEL_MSI		= (1 <<  7),
-	IRQCHIP_SUPPORTS_NMI			= (1 <<  8),
+	IRQCHIP_SET_TYPE_MASKED		= (1 <<  0),
+	IRQCHIP_EOI_IF_HANDLED		= (1 <<  1),
+	IRQCHIP_MASK_ON_SUSPEND		= (1 <<  2),
+	IRQCHIP_ONOFFLINE_ENABLED	= (1 <<  3),
+	IRQCHIP_SKIP_SET_WAKE		= (1 <<  4),
+	IRQCHIP_ONESHOT_SAFE		= (1 <<  5),
+	IRQCHIP_EOI_THREADED		= (1 <<  6),
+	IRQCHIP_SUPPORTS_LEVEL_MSI	= (1 <<  7),
+	IRQCHIP_SUPPORTS_NMI		= (1 <<  8),
 	IRQCHIP_ENABLE_WAKEUP_ON_SUSPEND	= (1 <<  9),
+	IRQCHIP_AFFINITY_PRE_STARTUP	= (1 << 10),
 };
 
 #include <linux/irqdesc.h>
