@@ -823,7 +823,7 @@ static struct i915_vma *eb_lookup_vma(struct i915_execbuffer *eb, u32 handle)
 		 * the protected objects become invalid.
 		 */
 		if (i915_gem_object_is_protected(obj)) {
-			err = intel_pxp_key_check(&eb->context->vm->gt->pxp, obj);
+			err = intel_pxp_key_check(&eb->context->vm->gt->pxp, obj, true);
 			if (err) {
 				i915_gem_object_put(obj);
 				return ERR_PTR(err);

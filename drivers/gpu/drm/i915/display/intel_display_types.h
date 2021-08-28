@@ -568,6 +568,9 @@ struct intel_plane_state {
 		int x, y;
 	} color_plane[4];
 
+	/* Plane pxp decryption state */
+	bool decrypt;
+
 	/* plane control register */
 	u32 ctl;
 
