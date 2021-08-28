@@ -176,3 +176,27 @@ void intel_pxp_fini_hw(struct intel_pxp *pxp)
 
 	intel_pxp_irq_disable(pxp);
 }
+
+int intel_pxp_key_check(struct intel_pxp *pxp, struct drm_i915_gem_object *obj)
+{
+	if (!intel_pxp_is_active(pxp))
+		return -ENODEV;
+
+	if (!i915_gem_object_is_protected(obj))
+		return -EINVAL;
+
+	GEM_BUG_ON(!pxp->key_instance);
+
+	/*
+	 * If this is the first time we're using this object, it's not
+	 * encrypted yet; it will be encrypted with the current key, so mark it
+	 * as such. If the object is already encrypted, check instead if the
+	 * used key is still valid.
+	 */
+	if (!obj->pxp_key_instance)
+		obj->pxp_key_instance = pxp->key_instance;
+	else if (obj->pxp_key_instance != pxp->key_instance)
+		return -ENOEXEC;
+
+	return 0;
+}

@@ -50,6 +50,8 @@
 #include "gt/intel_gt_pm.h"
 #include "gt/intel_workarounds.h"
 
+#include "pxp/intel_pxp.h"
+
 #include "i915_drv.h"
 #include "i915_trace.h"
 #include "i915_vgpu.h"
@@ -203,7 +205,8 @@ static int
 i915_gem_create(struct drm_file *file,
 		struct intel_memory_region *mr,
 		u64 *size_p,
-		u32 *handle_p)
+		u32 *handle_p,
+		unsigned int ext_flags)
 {
 	struct drm_i915_gem_object *obj;
 	u32 handle;
@@ -222,6 +225,9 @@ i915_gem_create(struct drm_file *file,
 	obj = i915_gem_object_create_region(mr, size, 0);
 	if (IS_ERR(obj))
 		return PTR_ERR(obj);
+
+	/* Add any flag set by create_ext options */
+	obj->flags |= ext_flags;
 
 	ret = drm_gem_handle_create(file, &obj->base, &handle);
 	/* drop reference from allocate - handle holds it now */
@@ -277,7 +283,7 @@ i915_gem_dumb_create(struct drm_file *file,
 	return i915_gem_create(file,
 			       intel_memory_region_by_type(to_i915(dev),
 							   mem_type),
-			       &args->size, &args->handle);
+			       &args->size, &args->handle, 0);
 }
 
 /**
@@ -298,14 +304,35 @@ i915_gem_create_ioctl(struct drm_device *dev, void *data,
 	return i915_gem_create(file,
 			       intel_memory_region_by_type(i915,
 							   INTEL_MEMORY_SYSTEM),
-			       &args->size, &args->handle);
+			       &args->size, &args->handle, 0);
 }
 
 struct create_ext {
 	struct drm_i915_private *i915;
+	unsigned long flags;
 };
 
+static int ext_set_protected(struct i915_user_extension __user *base, void *data)
+{
+	struct drm_i915_gem_create_ext_protected_content ext;
+	struct create_ext *ext_data = data;
+
+	if (copy_from_user(&ext, base, sizeof(ext)))
+		return -EFAULT;
+
+	if (ext.flags)
+		return -EINVAL;
+
+	if (!intel_pxp_is_enabled(&ext_data->i915->gt.pxp))
+		return -ENODEV;
+
+	ext_data->flags |= I915_BO_PROTECTED;
+
+        return 0;
+}
+
 static const i915_user_extension_fn create_extensions[] = {
+	[I915_GEM_CREATE_EXT_PROTECTED_CONTENT] = ext_set_protected,
 };
 
 /**
@@ -338,7 +365,7 @@ i915_gem_create_ext_ioctl(struct drm_device *dev, void *data,
 	return i915_gem_create(file,
 			       intel_memory_region_by_type(i915,
 							   INTEL_MEMORY_SYSTEM),
-			       &args->size, &args->handle);
+			       &args->size, &args->handle, ext_data.flags);
 }
 
 static int

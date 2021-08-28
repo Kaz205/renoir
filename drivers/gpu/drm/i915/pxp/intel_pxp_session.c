@@ -72,6 +72,9 @@ static int pxp_create_arb_session(struct intel_pxp *pxp)
 		return ret;
 	}
 
+	if (!++pxp->key_instance)
+		++pxp->key_instance;
+
 	pxp->arb_is_valid = true;
 
 	return 0;

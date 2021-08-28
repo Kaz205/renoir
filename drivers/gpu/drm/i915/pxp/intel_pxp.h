@@ -8,6 +8,8 @@
 
 #include "intel_pxp_types.h"
 
+struct drm_i915_gem_object;
+
 static inline bool intel_pxp_is_enabled(const struct intel_pxp *pxp)
 {
 	return pxp->ce;
@@ -25,6 +27,8 @@ void intel_pxp_fini_hw(struct intel_pxp *pxp);
 
 void intel_pxp_mark_termination_in_progress(struct intel_pxp *pxp);
 int intel_pxp_wait_for_arb_start(struct intel_pxp *pxp);
+
+int intel_pxp_key_check(struct intel_pxp *pxp, struct drm_i915_gem_object *obj);
 #else
 static inline void intel_pxp_init(struct intel_pxp *pxp)
 {
@@ -35,6 +39,12 @@ static inline void intel_pxp_fini(struct intel_pxp *pxp)
 }
 
 static inline int intel_pxp_wait_for_arb_start(struct intel_pxp *pxp)
+{
+	return -ENODEV;
+}
+
+static inline int intel_pxp_key_check(struct intel_pxp *pxp,
+				      struct drm_i915_gem_object *obj)
 {
 	return -ENODEV;
 }
