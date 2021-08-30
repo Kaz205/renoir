@@ -13,7 +13,7 @@
 #include "sc7180-trogdor-mrbland.dtsi"
 
 / {
-	model = "Google Mrbland BOE panel board";
+	model = "Google Mrbland rev1+ BOE panel board";
 	compatible = "google,mrbland-sku16", "qcom,sc7180";
 };
 
