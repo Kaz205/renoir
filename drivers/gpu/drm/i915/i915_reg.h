@@ -12276,12 +12276,6 @@ enum skl_power_gate {
 #define TGL_ROOT_DEVICE_SKU_ULX		0x2
 #define TGL_ROOT_DEVICE_SKU_ULT		0x4
 
-/* Registers for allowlist check */
-#define PXP_REG_01_LOWERBOUND		_MMIO(0x32260)
-#define PXP_REG_01_UPPERBOUND		_MMIO(0x32268)
-#define PXP_REG_02_LOWERBOUND		_MMIO(0x32670)
-#define PXP_REG_02_UPPERBOUND		_MMIO(0x32678)
-
 #define CLKREQ_POLICY			_MMIO(0x101038)
 #define  CLKREQ_POLICY_MEM_UP_OVRD	REG_BIT(1)
 
