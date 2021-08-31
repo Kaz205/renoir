@@ -19,7 +19,6 @@ struct pxp_context {
 
 	int id;
 
-	bool global_state_attacked;
 	bool flag_display_hm_surface_keys;
 };
 
