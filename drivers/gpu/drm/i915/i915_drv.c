@@ -67,8 +67,6 @@
 #include "gt/intel_gt_pm.h"
 #include "gt/intel_rc6.h"
 
-#include "pxp/intel_pxp_pm.h"
-
 #include "i915_debugfs.h"
 #include "i915_drv.h"
 #include "i915_irq.h"
@@ -1995,8 +1993,6 @@ static int i915_drm_resume_early(struct drm_device *dev)
 	intel_display_power_resume_early(dev_priv);
 
 	intel_power_domains_resume(dev_priv);
-
-	intel_pxp_pm_resume_early(&dev_priv->gt.pxp);
 
 	enable_rpm_wakeref_asserts(&dev_priv->runtime_pm);
 
