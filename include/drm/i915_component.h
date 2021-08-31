@@ -29,7 +29,6 @@
 enum i915_component_type {
 	I915_COMPONENT_AUDIO = 1,
 	I915_COMPONENT_HDCP,
-	I915_COMPONENT_PXP
 };
 
 /* MAX_PORT is the number of port
