@@ -10,11 +10,11 @@
 
 /dts-v1/;
 
-#include "sc7180-trogdor-wormdingler.dtsi"
+#include "sc7180-trogdor-wormdingler-rev0.dtsi"
 
 / {
-	model = "Google Wormdingler INX panel board";
-	compatible = "google,wormdingler-sku0", "qcom,sc7180";
+	model = "Google Wormdingler rev0 INX panel board";
+	compatible = "google,wormdingler-rev0-sku0", "qcom,sc7180";
 };
 
 &panel {

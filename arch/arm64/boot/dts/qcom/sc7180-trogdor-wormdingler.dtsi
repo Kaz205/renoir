@@ -22,7 +22,7 @@ ap_h1_spi: &spi0 {};
 		compatible = "regulator-fixed";
 		regulator-name = "avdd_lcd";
 
-		gpio = <&tlmm 80 GPIO_ACTIVE_HIGH>;
+		gpio = <&tlmm 88 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
 		pinctrl-names = "default";
 		pinctrl-0 = <&avdd_lcd_en>;
@@ -46,7 +46,7 @@ ap_h1_spi: &spi0 {};
 		compatible = "regulator-fixed";
 		regulator-name = "v1p8_mipi";
 
-		gpio = <&tlmm 81 GPIO_ACTIVE_HIGH>;
+		gpio = <&tlmm 86 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
 		pinctrl-names = "default";
 		pinctrl-0 = <&mipi_1800_en>;
@@ -71,7 +71,7 @@ ap_h1_spi: &spi0 {};
 
 	panel: panel@0 {
 		reg = <0>;
-		enable-gpios = <&tlmm 76 GPIO_ACTIVE_HIGH>;
+		enable-gpios = <&tlmm 87 GPIO_ACTIVE_HIGH>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&vdd_reset_1800>;
 		avdd-supply = <&avdd_lcd>;
@@ -214,19 +214,19 @@ tp_en: &en_pp3300_dx_edp {
 			  "WLAN_SW_CTRL",
 			  "",
 			  "REPORT_E",
-			  "VDD_RESET_1.8V",
+			  "",
 			  "ID0",
 			  "",
 			  "ID1",
-			  "AVDD_LCD_EN",
-			  "MIPI_1.8V_EN",
+			  "",
+			  "",
 			  "",
 			  "CODEC_PWR_EN",
 			  "HUB_EN",
 			  "TP_EN",
-			  "",
-			  "",
-			  "",
+			  "MIPI_1.8V_EN",
+			  "VDD_RESET_1.8V",
+			  "AVDD_LCD_EN",
 			  "",
 			  "AP_SKU_ID1",
 			  "AP_RST_REQ",
@@ -260,12 +260,12 @@ tp_en: &en_pp3300_dx_edp {
 
 	vdd_reset_1800: vdd-reset-1800 {
 		pinmux {
-			pins = "gpio76";
+			pins = "gpio87";
 			function = "gpio";
 		};
 
 		pinconf {
-			pins = "gpio76";
+			pins = "gpio87";
 			drive-strength = <2>;
 			bias-disable;
 		};
@@ -273,12 +273,12 @@ tp_en: &en_pp3300_dx_edp {
 
 	avdd_lcd_en: avdd-lcd-en {
 		pinmux {
-			pins = "gpio80";
+			pins = "gpio88";
 			function = "gpio";
 		};
 
 		pinconf {
-			pins = "gpio80";
+			pins = "gpio88";
 			drive-strength = <2>;
 			bias-disable;
 		};
@@ -299,12 +299,12 @@ tp_en: &en_pp3300_dx_edp {
 
 	mipi_1800_en: mipi-1800-en {
 		pinmux {
-			pins = "gpio81";
+			pins = "gpio86";
 			function = "gpio";
 		};
 
 		pinconf {
-			pins = "gpio81";
+			pins = "gpio86";
 			drive-strength = <2>;
 			bias-disable;
 		};

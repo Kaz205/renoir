@@ -4,8 +4,8 @@
  *
  * Copyright 2021 Google LLC.
  *
- * SKU: 0x10 => 16
- *  - bits 7..4: Panel ID: 0x1 (BOE)
+ * SKU: 0x0 => 0
+ *  - bits 7..4: Panel ID: 0x0 (INX)
  */
 
 /dts-v1/;
@@ -13,10 +13,10 @@
 #include "sc7180-trogdor-wormdingler.dtsi"
 
 / {
-	model = "Google Wormdingler BOE panel board";
-	compatible = "google,wormdingler-sku16", "qcom,sc7180";
+	model = "Google Wormdingler rev1+ INX panel board";
+	compatible = "google,wormdingler-sku0", "qcom,sc7180";
 };
 
 &panel {
-	compatible = "boe,tv110c9m-ll3";
+	compatible = "inx,hj110iz-01a";
 };
