@@ -4,8 +4,8 @@
  *
  * Copyright 2021 Google LLC.
  *
- * SKU: 0x0 => 0
- *  - bits 7..4: Panel ID: 0x0 (AUO)
+ * SKU: 0x600 => 1536
+ *  - bits 11..8: Panel ID: 0x6 (AUO)
  */
 
 /dts-v1/;
@@ -14,7 +14,7 @@
 
 / {
 	model = "Google Mrbland rev1+ AUO panel board";
-	compatible = "google,mrbland-sku0", "qcom,sc7180";
+	compatible = "google,mrbland-sku1536", "qcom,sc7180";
 };
 
 &panel {

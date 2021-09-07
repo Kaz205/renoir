@@ -4,8 +4,8 @@
  *
  * Copyright 2021 Google LLC.
  *
- * SKU: 0x10 => 16
- *  - bits 7..4: Panel ID: 0x1 (BOE)
+ * SKU: 0x300 => 768
+ *  - bits 11..8: Panel ID: 0x3 (BOE)
  */
 
 /dts-v1/;
@@ -14,7 +14,7 @@
 
 / {
 	model = "Google Mrbland rev1+ BOE panel board";
-	compatible = "google,mrbland-sku16", "qcom,sc7180";
+	compatible = "google,mrbland-sku768", "qcom,sc7180";
 };
 
 &panel {
