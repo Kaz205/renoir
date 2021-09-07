@@ -4,8 +4,8 @@
  *
  * Copyright 2021 Google LLC.
  *
- * SKU: 0x0 => 0
- *  - bits 7..4: Panel ID: 0x0 (INX)
+ * SKU: 0x20 => 32
+ *  - bits 7..4: Panel ID: 0x2 (INX)
  */
 
 /dts-v1/;
@@ -14,7 +14,7 @@
 
 / {
 	model = "Google Wormdingler rev1+ INX panel board";
-	compatible = "google,wormdingler-sku0", "qcom,sc7180";
+	compatible = "google,wormdingler-sku32", "qcom,sc7180";
 };
 
 &panel {
