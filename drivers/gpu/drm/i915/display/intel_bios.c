@@ -481,6 +481,9 @@ parse_lfp_backlight(struct drm_i915_private *dev_priv,
 			level = 255;
 		}
 		dev_priv->vbt.backlight.min_brightness = min_level;
+
+		dev_priv->vbt.backlight.brightness_precision_bits =
+			backlight_data->brightness_precision_bits[panel_type];
 	} else {
 		level = backlight_data->level[panel_type];
 		dev_priv->vbt.backlight.min_brightness = entry->min_brightness;
