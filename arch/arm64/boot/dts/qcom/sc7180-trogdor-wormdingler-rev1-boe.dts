@@ -4,8 +4,8 @@
  *
  * Copyright 2021 Google LLC.
  *
- * SKU: 0x30 => 48
- *  - bits 7..4: Panel ID: 0x3 (BOE)
+ * SKU: 0x10 => 16
+ *  - bits 7..4: Panel ID: 0x1 (BOE)
  */
 
 /dts-v1/;
@@ -14,7 +14,7 @@
 
 / {
 	model = "Google Wormdingler rev1+ BOE panel board";
-	compatible = "google,wormdingler-sku48", "qcom,sc7180";
+	compatible = "google,wormdingler-sku16", "qcom,sc7180";
 };
 
 &panel {
