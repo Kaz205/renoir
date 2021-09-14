@@ -12,6 +12,10 @@ void msm_submitqueue_destroy(struct kref *kref)
 	struct msm_gpu_submitqueue *queue = container_of(kref,
 		struct msm_gpu_submitqueue, ref);
 
+	idr_destroy(&queue->fence_idr);
+
+	drm_sched_entity_destroy(&queue->entity);
+
 	msm_file_private_put(queue->ctx);
 
 	kfree(queue);
@@ -62,9 +66,19 @@ int msm_submitqueue_create(struct drm_device *drm, struct msm_file_private *ctx,
 {
 	struct msm_drm_private *priv = drm->dev_private;
 	struct msm_gpu_submitqueue *queue;
+	struct msm_ringbuffer *ring;
+	struct drm_gpu_scheduler *sched;
+	struct drm_sched_rq *rqs;
+	int ret;
 
 	if (!ctx)
 		return -ENODEV;
+
+	if (!priv->gpu)
+		return -ENODEV;
+
+	if (prio >= priv->gpu->nr_rings)
+		return -EINVAL;
 
 	queue = kzalloc(sizeof(*queue), GFP_KERNEL);
 
@@ -73,14 +87,28 @@ int msm_submitqueue_create(struct drm_device *drm, struct msm_file_private *ctx,
 
 	kref_init(&queue->ref);
 	queue->flags = flags;
+	queue->prio = prio;
 
-	if (priv->gpu) {
-		if (prio >= priv->gpu->nr_rings) {
-			kfree(queue);
-			return -EINVAL;
-		}
+	ring = priv->gpu->rb[prio];
+	sched = &ring->sched;
 
-		queue->prio = prio;
+	rqs = &sched->sched_rq[DRM_SCHED_PRIORITY_NORMAL];
+
+	/*
+	 * TODO we can allow more priorities than we have ringbuffers by
+	 * mapping:
+	 *
+	 *    ring = prio / 3;
+	 *    ent_prio = DRM_SCHED_PRIORITY_MIN + (prio % 3);
+	 *
+	 * Probably avoid using DRM_SCHED_PRIORITY_KERNEL as that is
+	 * treated specially in places.
+	 */
+	ret = drm_sched_entity_init(&queue->entity,
+			&rqs, 1, NULL);
+	if (ret) {
+		kfree(queue);
+		return ret;
 	}
 
 	write_lock(&ctx->queuelock);
@@ -91,6 +119,9 @@ int msm_submitqueue_create(struct drm_device *drm, struct msm_file_private *ctx,
 	if (id)
 		*id = queue->id;
 
+	idr_init(&queue->fence_idr);
+	mutex_init(&queue->lock);
+
 	list_add_tail(&queue->node, &ctx->submitqueues);
 
 	write_unlock(&ctx->queuelock);
@@ -98,20 +129,23 @@ int msm_submitqueue_create(struct drm_device *drm, struct msm_file_private *ctx,
 	return 0;
 }
 
+/*
+ * Create the default submit-queue (id==0), used for backwards compatibility
+ * for userspace that pre-dates the introduction of submitqueues.
+ */
 int msm_submitqueue_init(struct drm_device *drm, struct msm_file_private *ctx)
 {
 	struct msm_drm_private *priv = drm->dev_private;
 	int default_prio;
 
-	if (!ctx)
-		return 0;
+	if (!priv->gpu)
+		return -ENODEV;
 
 	/*
 	 * Select priority 2 as the "default priority" unless nr_rings is less
-	 * than 2 and then pick the lowest pirority
+	 * than 2 and then pick the lowest priority
 	 */
-	default_prio = priv->gpu ?
-		clamp_t(uint32_t, 2, 0, priv->gpu->nr_rings - 1) : 0;
+	default_prio = clamp_t(uint32_t, 2, 0, priv->gpu->nr_rings - 1);
 
 	INIT_LIST_HEAD(&ctx->submitqueues);
 

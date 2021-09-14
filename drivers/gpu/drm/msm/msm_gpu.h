@@ -9,6 +9,7 @@
 
 #include <linux/adreno-smmu-priv.h>
 #include <linux/clk.h>
+#include <linux/input.h>
 #include <linux/interconnect.h>
 #include <linux/pm_opp.h>
 #include <linux/regulator/consumer.h>
@@ -71,6 +72,49 @@ struct msm_gpu_funcs {
 	uint32_t (*get_rptr)(struct msm_gpu *gpu, struct msm_ringbuffer *ring);
 };
 
+/* Additional state for iommu faults: */
+struct msm_gpu_fault_info {
+	u64 ttbr0;
+	unsigned long iova;
+	int flags;
+	const char *type;
+	const char *block;
+};
+
+/**
+ * struct msm_gpu_devfreq - devfreq related state
+ */
+struct msm_gpu_devfreq {
+	/** devfreq: devfreq instance */
+	struct devfreq *devfreq;
+
+	/**
+	 * busy_cycles:
+	 *
+	 * Used by implementation of gpu->gpu_busy() to track the last
+	 * busy counter value, for calculating elapsed busy cycles since
+	 * last sampling period.
+	 */
+	u64 busy_cycles;
+
+	/** time: Time of last sampling period. */
+	ktime_t time;
+
+	/** idle_time: Time of last transition to idle: */
+	ktime_t idle_time;
+
+	/**
+	 * idle_freq:
+	 *
+	 * Shadow frequency used while the GPU is idle.  From the PoV of
+	 * the devfreq governor, we are continuing to sample busyness and
+	 * adjust frequency while the GPU is idle, but we use this shadow
+	 * value as the GPU is actually clamped to minimum frequency while
+	 * it is inactive.
+	 */
+	unsigned long idle_freq;
+};
+
 struct msm_gpu {
 	const char *name;
 	struct drm_device *dev;
@@ -99,6 +143,19 @@ struct msm_gpu {
 	 * msm_drm_private::mm_lock
 	 */
 	struct list_head active_list;
+
+	/**
+	 * active_submits:
+	 *
+	 * The number of submitted but not yet retired submits, used to
+	 * determine transitions between active and idle.
+	 *
+	 * Protected by lock
+	 */
+	int active_submits;
+
+	/** lock: protects active_submits and idle/active transitions */
+	struct mutex active_lock;
 
 	/* does gpu need hw_init? */
 	bool needs_hw_init;
@@ -135,6 +192,16 @@ struct msm_gpu {
 #define DRM_MSM_HANGCHECK_JIFFIES msecs_to_jiffies(DRM_MSM_HANGCHECK_PERIOD)
 	struct timer_list hangcheck_timer;
 
+	/* work for waking GPU on input: */
+	struct kthread_work boost_work;
+	struct input_handler boost_handler;
+
+	/* Fault info for most recent iova fault: */
+	struct msm_gpu_fault_info fault_info;
+
+	/* work for handling GPU ioval faults: */
+	struct kthread_work fault_work;
+
 	/* work for handling GPU recovery: */
 	struct kthread_work recover_work;
 
@@ -146,11 +213,7 @@ struct msm_gpu {
 
 	struct drm_gem_object *memptrs_bo;
 
-	struct {
-		struct devfreq *devfreq;
-		u64 busy_cycles;
-		ktime_t time;
-	} devfreq;
+	struct msm_gpu_devfreq devfreq;
 
 	uint32_t suspend_count;
 
@@ -202,6 +265,25 @@ struct msm_gpu_perfcntr {
 	const char *name;
 };
 
+/**
+ * A submitqueue is associated with a gl context or vk queue (or equiv)
+ * in userspace.
+ *
+ * @id:        userspace id for the submitqueue, unique within the drm_file
+ * @flags:     userspace flags for the submitqueue, specified at creation
+ *             (currently unusued)
+ * @prio:      the submitqueue priority
+ * @faults:    the number of GPU hangs associated with this submitqueue
+ * @ctx:       the per-drm_file context associated with the submitqueue (ie.
+ *             which set of pgtables do submits jobs associated with the
+ *             submitqueue use)
+ * @node:      node in the context's list of submitqueues
+ * @fence_idr: maps fence-id to dma_fence for userspace visible fence
+ *             seqno, protected by submitqueue lock
+ * @lock:      submitqueue lock
+ * @ref:       reference count
+ * @entity: the submit job-queue
+ */
 struct msm_gpu_submitqueue {
 	int id;
 	u32 flags;
@@ -209,7 +291,10 @@ struct msm_gpu_submitqueue {
 	int faults;
 	struct msm_file_private *ctx;
 	struct list_head node;
+	struct idr fence_idr;
+	struct mutex lock;
 	struct kref ref;
+	struct drm_sched_entity entity;
 };
 
 struct msm_gpu_state_bo {
@@ -241,6 +326,8 @@ struct msm_gpu_state {
 
 	char *comm;
 	char *cmd;
+
+	struct msm_gpu_fault_info fault_info;
 
 	int nr_bos;
 	struct msm_gpu_state_bo *bos;
@@ -294,7 +381,13 @@ static inline void gpu_write64(struct msm_gpu *gpu, u32 lo, u32 hi, u64 val)
 
 int msm_gpu_pm_suspend(struct msm_gpu *gpu);
 int msm_gpu_pm_resume(struct msm_gpu *gpu);
-void msm_gpu_resume_devfreq(struct msm_gpu *gpu);
+
+void msm_devfreq_init(struct msm_gpu *gpu);
+void msm_devfreq_cleanup(struct msm_gpu *gpu);
+void msm_devfreq_resume(struct msm_gpu *gpu);
+void msm_devfreq_suspend(struct msm_gpu *gpu);
+void msm_devfreq_active(struct msm_gpu *gpu);
+void msm_devfreq_idle(struct msm_gpu *gpu);
 
 int msm_gpu_hw_init(struct msm_gpu *gpu);
 

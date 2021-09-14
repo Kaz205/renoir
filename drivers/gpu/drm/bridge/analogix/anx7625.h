@@ -430,6 +430,7 @@ struct anx7625_data {
 	struct mipi_dsi_device *dsi;
 	hdmi_codec_plugged_cb plugged_cb;
 	struct device *codec_dev;
+	struct device_link *link;
 
 	struct anx7625_port_data typec_ports[2];
 };

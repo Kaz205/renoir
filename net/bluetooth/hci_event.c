@@ -2361,6 +2361,22 @@ static void cs_le_create_conn(struct hci_dev *hdev, bdaddr_t *peer_addr,
 	if (!conn)
 		return;
 
+	/* When using controller based address resolution, then the new
+	 * address types 0x02 and 0x03 are used. These types need to be
+	 * converted back into either public address or random address type
+	 */
+	if (use_ll_privacy(hdev) &&
+	    hci_dev_test_flag(hdev, HCI_LL_RPA_RESOLUTION)) {
+		switch (own_address_type) {
+		case ADDR_LE_DEV_PUBLIC_RESOLVED:
+			own_address_type = ADDR_LE_DEV_PUBLIC;
+			break;
+		case ADDR_LE_DEV_RANDOM_RESOLVED:
+			own_address_type = ADDR_LE_DEV_RANDOM;
+			break;
+		}
+	}
+
 	/* Store the initiator and responder address information which
 	 * is needed for SMP. These values will not change during the
 	 * lifetime of the connection.
@@ -5317,6 +5333,11 @@ static void hci_le_enh_conn_complete_evt(struct hci_dev *hdev,
 			     le16_to_cpu(ev->interval),
 			     le16_to_cpu(ev->latency),
 			     le16_to_cpu(ev->supervision_timeout));
+
+	if (use_ll_privacy(hdev) &&
+	    hci_dev_test_flag(hdev, HCI_ENABLE_LL_PRIVACY) &&
+	    hci_dev_test_flag(hdev, HCI_LL_RPA_RESOLUTION))
+		hci_req_disable_address_resolution(hdev);
 }
 
 static void hci_le_ext_adv_term_evt(struct hci_dev *hdev, struct sk_buff *skb)
@@ -5326,47 +5347,53 @@ static void hci_le_ext_adv_term_evt(struct hci_dev *hdev, struct sk_buff *skb)
 
 	BT_DBG("%s status 0x%2.2x", hdev->name, ev->status);
 
+	/* Only RTK chips emit HCI_ERROR_CANCELLED_BY_HOST, which they are not
+	 * supposed to do (consult BT spec vol4 Part E sec 7.7.65.18). This
+	 * event is being fired as a result of a hci_cp_le_set_ext_adv_enable
+	 * disable request, which will have its own callback and cleanup via
+	 * the hci_cc_le_set_ext_adv_enable path.
+	 */
+	if (ev->status == HCI_ERROR_CANCELLED_BY_HOST)
+		return;
+
 	if (!ev->handle)
 		hdev->ext_directed_advertising = false;
 
-	if (ev->status)
-		goto cleanup_instance;
+	if (ev->status) {
+		struct adv_info *adv;
 
-	conn = hci_conn_hash_lookup_handle(hdev, __le16_to_cpu(ev->conn_handle));
-	if (conn) {
-		struct adv_info *adv_instance;
+		adv = hci_find_adv_instance(hdev, ev->handle);
+		if (!adv)
+			return;
 
-		if (hdev->adv_addr_type != ADDR_LE_DEV_RANDOM)
-			goto cleanup_instance;
-
-		if (!ev->handle) {
-			bacpy(&conn->resp_addr, &hdev->random_addr);
-			goto cleanup_instance;
-		}
-
-		adv_instance = hci_find_adv_instance(hdev, ev->handle);
-		if (adv_instance)
-			bacpy(&conn->resp_addr, &adv_instance->random_addr);
-	}
-
-cleanup_instance:
-	/* Since the controller tells us this instance is no longer active, we
-	 * remove it.
-	 *
-	 * One caveat is that if the status is HCI_ERROR_CANCELLED_BY_HOST, this
-	 * event is being fired as a result of a hci_cp_le_set_ext_adv_enable
-	 * disable request, which will have its own callback and cleanup via
-	 * the hci_cc_le_set_ext_adv_enable path. If this is the case, we will
-	 * not remove the instance, as it may only be a temporary disable.
-	 */
-	if (ev->status != HCI_ERROR_CANCELLED_BY_HOST) {
+		/* Remove advertising as it has been terminated */
 		hci_remove_adv_instance(hdev, ev->handle);
+		mgmt_advertising_removed(NULL, hdev, ev->handle);
 
 		/* If we are no longer advertising, clear HCI_LE_ADV */
 		if (list_empty(&hdev->adv_instances) &&
 		    !hdev->ext_directed_advertising) {
 			hci_dev_clear_flag(hdev, HCI_LE_ADV);
 		}
+
+		return;
+	}
+
+	conn = hci_conn_hash_lookup_handle(hdev, __le16_to_cpu(ev->conn_handle));
+	if (conn) {
+		struct adv_info *adv_instance;
+
+		if (hdev->adv_addr_type != ADDR_LE_DEV_RANDOM)
+			return;
+
+		if (!ev->handle) {
+			bacpy(&conn->resp_addr, &hdev->random_addr);
+			return;
+		}
+
+		adv_instance = hci_find_adv_instance(hdev, ev->handle);
+		if (adv_instance)
+			bacpy(&conn->resp_addr, &adv_instance->random_addr);
 	}
 }
 
