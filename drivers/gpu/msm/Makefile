@@ -15,9 +15,7 @@ msm_kgsl-y = \
 	kgsl_pwrctrl.o \
 	kgsl_pwrscale.o \
 	kgsl_sharedmem.o \
-	kgsl_snapshot.o \
 	kgsl_timeline.o \
-	kgsl_trace.o \
 	kgsl_util.o
 
 msm_kgsl-$(CONFIG_COMPAT) += kgsl_compat.o
@@ -36,7 +34,6 @@ msm_kgsl-y += \
 	adreno_a5xx_snapshot.o \
 	adreno_a6xx.o \
 	adreno_a6xx_gmu.o \
-	adreno_a6xx_gmu_snapshot.o \
 	adreno_a6xx_hfi.o \
 	adreno_a6xx_hwsched.o \
 	adreno_a6xx_hwsched_hfi.o \
@@ -44,7 +41,6 @@ msm_kgsl-y += \
 	adreno_a6xx_preempt.o \
 	adreno_a6xx_rgmu.o \
 	adreno_a6xx_rpmh.o \
-	adreno_a6xx_snapshot.o \
 	adreno_cp_parser.o \
 	adreno_dispatch.o \
 	adreno_drawctxt.o \
@@ -52,12 +48,9 @@ msm_kgsl-y += \
 	adreno_ioctl.o \
 	adreno_perfcounter.o \
 	adreno_ringbuffer.o \
-	adreno_snapshot.o \
-	adreno_sysfs.o \
-	adreno_trace.o
+	adreno_sysfs.o
 
 msm_kgsl-$(CONFIG_COMPAT) += adreno_compat.o
-msm_kgsl-$(CONFIG_QCOM_KGSL_CORESIGHT) += adreno_coresight.o
 msm_kgsl-$(CONFIG_DEBUG_FS) += adreno_debugfs.o adreno_profile.o
 msm_kgsl-$(CONFIG_ARM_SMMU) += adreno_iommu.o
 
