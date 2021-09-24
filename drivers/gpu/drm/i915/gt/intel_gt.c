@@ -18,6 +18,7 @@
 #include "intel_uncore.h"
 #include "intel_pm.h"
 #include "shmem_utils.h"
+#include "pxp/intel_pxp.h"
 
 void intel_gt_init_early(struct intel_gt *gt, struct drm_i915_private *i915)
 {
@@ -578,6 +579,8 @@ int intel_gt_init(struct intel_gt *gt)
 	if (err)
 		goto err_gt;
 
+	intel_pxp_init(&gt->pxp);
+
 	goto out_fw;
 err_gt:
 	__intel_gt_disable(gt);
@@ -609,6 +612,8 @@ void intel_gt_driver_remove(struct intel_gt *gt)
 void intel_gt_driver_unregister(struct intel_gt *gt)
 {
 	intel_rps_driver_unregister(&gt->rps);
+
+	intel_pxp_fini(&gt->pxp);
 }
 
 void intel_gt_driver_release(struct intel_gt *gt)
