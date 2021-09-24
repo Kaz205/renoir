@@ -24,7 +24,6 @@
 #include "btintel.h"
 #include "btbcm.h"
 #include "btrtl.h"
-#include "btandroid.h"
 
 #define VERSION "0.8"
 
@@ -61,7 +60,6 @@ static struct usb_driver btusb_driver;
 #define BTUSB_WIDEBAND_SPEECH	0x400000
 #define BTUSB_VALID_LE_STATES   0x800000
 #define BTUSB_INTEL_NEWGEN	0x2000000
-#define BTUSB_QUALITY_REPORT	0x4000000
 
 static const struct usb_device_id btusb_table[] = {
 	/* Generic Bluetooth USB device */
@@ -382,7 +380,6 @@ static const struct usb_device_id blacklist_table[] = {
 	/* MediaTek Bluetooth devices */
 	{ USB_VENDOR_AND_INTERFACE_INFO(0x0e8d, 0xe0, 0x01, 0x01),
 	  .driver_info = BTUSB_MEDIATEK |
-			 BTUSB_QUALITY_REPORT |
 			 BTUSB_WIDEBAND_SPEECH |
 			 BTUSB_VALID_LE_STATES },
 
@@ -391,7 +388,6 @@ static const struct usb_device_id blacklist_table[] = {
 
 	/* Additional MediaTek MT7921 Bluetooth devices */
 	{ USB_DEVICE(0x04ca, 0x3802), .driver_info = BTUSB_MEDIATEK |
-						     BTUSB_QUALITY_REPORT |
 						     BTUSB_WIDEBAND_SPEECH |
 						     BTUSB_VALID_LE_STATES },
 
@@ -4739,9 +4735,6 @@ static int btusb_probe(struct usb_interface *intf,
 		hdev->cmd_timeout = btusb_mtk_cmd_timeout;
 		set_bit(HCI_QUIRK_NON_PERSISTENT_SETUP, &hdev->quirks);
 		data->recv_acl = btusb_recv_acl_mtk;
-
-		if (id->driver_info & BTUSB_QUALITY_REPORT)
-			hdev->set_quality_report = btandroid_set_quality_report;
 	}
 #endif
 
