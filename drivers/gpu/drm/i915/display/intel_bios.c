@@ -449,13 +449,23 @@ parse_lfp_backlight(struct drm_i915_private *dev_priv,
 	}
 
 	dev_priv->vbt.backlight.type = INTEL_BACKLIGHT_DISPLAY_DDI;
-	if (bdb->version >= 191 &&
-	    get_blocksize(backlight_data) >= sizeof(*backlight_data)) {
-		const struct lfp_backlight_control_method *method;
+	if (bdb->version >= 191) {
+		size_t exp_size;
 
-		method = &backlight_data->backlight_control[panel_type];
-		dev_priv->vbt.backlight.type = method->type;
-		dev_priv->vbt.backlight.controller = method->controller;
+		if (bdb->version >= 236)
+			exp_size = sizeof(struct bdb_lfp_backlight_data);
+		else if (bdb->version >= 234)
+			exp_size = EXP_BDB_LFP_BL_DATA_SIZE_REV_234;
+		else
+			exp_size = EXP_BDB_LFP_BL_DATA_SIZE_REV_191;
+
+		if (get_blocksize(backlight_data) >= exp_size) {
+			const struct lfp_backlight_control_method *method;
+
+			method = &backlight_data->backlight_control[panel_type];
+			dev_priv->vbt.backlight.type = method->type;
+			dev_priv->vbt.backlight.controller = method->controller;
+		}
 	}
 
 	dev_priv->vbt.backlight.pwm_freq_hz = entry->pwm_freq_hz;
