@@ -205,9 +205,17 @@ int intel_pxp_sm_ioctl_reserve_session(struct intel_pxp *pxp, struct drm_file *d
 	if (idx >= INTEL_PXP_MAX_HWDRM_SESSIONS)
 		return DOWNSTREAM_DRM_I915_PXP_OP_STATUS_SESSION_NOT_AVAILABLE;
 
-	ret = pxp_wait_for_session_state(pxp, idx, false);
-	if (ret)
-		return DOWNSTREAM_DRM_I915_PXP_OP_STATUS_RETRY_REQUIRED;
+        ret = pxp_wait_for_session_state(pxp, idx, false);
+        if (ret) {
+                /* force termination of old reservation */
+                ret = intel_pxp_terminate_session(pxp, idx);
+                if (ret)
+                        return DOWNSTREAM_DRM_I915_PXP_OP_STATUS_RETRY_REQUIRED;
+                /* wait again for HW state */
+                ret = pxp_wait_for_session_state(pxp, idx, false);
+                if (ret)
+                        return DOWNSTREAM_DRM_I915_PXP_OP_STATUS_RETRY_REQUIRED;
+        }
 
 	ret = create_session_entry(pxp, drmfile,
 				   protection_mode, idx);
