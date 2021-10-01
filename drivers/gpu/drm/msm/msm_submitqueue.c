@@ -7,14 +7,30 @@
 
 #include "msm_gpu.h"
 
+void __msm_file_private_destroy(struct kref *kref)
+{
+	struct msm_file_private *ctx = container_of(kref,
+		struct msm_file_private, ref);
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(ctx->entities); i++) {
+		if (!ctx->entities[i])
+			continue;
+
+		drm_sched_entity_destroy(ctx->entities[i]);
+		kfree(ctx->entities[i]);
+	}
+
+	msm_gem_address_space_put(ctx->aspace);
+	kfree(ctx);
+}
+
 void msm_submitqueue_destroy(struct kref *kref)
 {
 	struct msm_gpu_submitqueue *queue = container_of(kref,
 		struct msm_gpu_submitqueue, ref);
 
 	idr_destroy(&queue->fence_idr);
-
-	drm_sched_entity_destroy(&queue->entity);
 
 	msm_file_private_put(queue->ctx);
 
@@ -61,14 +77,48 @@ void msm_submitqueue_close(struct msm_file_private *ctx)
 	}
 }
 
+static struct drm_sched_entity *
+get_sched_entity(struct msm_file_private *ctx, struct msm_ringbuffer *ring,
+		 unsigned ring_nr, enum drm_sched_priority sched_prio)
+{
+	static DEFINE_MUTEX(entity_lock);
+	unsigned idx = (ring_nr * NR_SCHED_PRIORITIES) + sched_prio;
+
+	/* We should have already validated that the requested priority is
+	 * valid by the time we get here.
+	 */
+	if (WARN_ON(idx >= ARRAY_SIZE(ctx->entities)))
+		return ERR_PTR(-EINVAL);
+
+	mutex_lock(&entity_lock);
+
+	if (!ctx->entities[idx]) {
+		struct drm_sched_entity *entity;
+		struct drm_gpu_scheduler *sched = &ring->sched;
+		struct drm_sched_rq *rqs = &sched->sched_rq[DRM_SCHED_PRIORITY_NORMAL];
+		int ret;
+
+		entity = kzalloc(sizeof(*ctx->entities[idx]), GFP_KERNEL);
+
+		ret = drm_sched_entity_init(entity, &rqs, 1, NULL);
+		if (ret) {
+			kfree(entity);
+			return ERR_PTR(ret);
+		}
+
+		ctx->entities[idx] = entity;
+	}
+
+	mutex_unlock(&entity_lock);
+
+	return ctx->entities[idx];
+}
+
 int msm_submitqueue_create(struct drm_device *drm, struct msm_file_private *ctx,
 		u32 prio, u32 flags, u32 *id)
 {
 	struct msm_drm_private *priv = drm->dev_private;
 	struct msm_gpu_submitqueue *queue;
-	struct msm_ringbuffer *ring;
-	struct drm_gpu_scheduler *sched;
-	struct drm_sched_rq *rqs;
 	int ret;
 
 	if (!ctx)
@@ -89,11 +139,6 @@ int msm_submitqueue_create(struct drm_device *drm, struct msm_file_private *ctx,
 	queue->flags = flags;
 	queue->prio = prio;
 
-	ring = priv->gpu->rb[prio];
-	sched = &ring->sched;
-
-	rqs = &sched->sched_rq[DRM_SCHED_PRIORITY_NORMAL];
-
 	/*
 	 * TODO we can allow more priorities than we have ringbuffers by
 	 * mapping:
@@ -104,9 +149,9 @@ int msm_submitqueue_create(struct drm_device *drm, struct msm_file_private *ctx,
 	 * Probably avoid using DRM_SCHED_PRIORITY_KERNEL as that is
 	 * treated specially in places.
 	 */
-	ret = drm_sched_entity_init(&queue->entity,
-			&rqs, 1, NULL);
-	if (ret) {
+	queue->entity = get_sched_entity(ctx, priv->gpu->rb[prio], prio, 0);
+	if (IS_ERR(queue->entity)) {
+		ret = PTR_ERR(queue->entity);
 		kfree(queue);
 		return ret;
 	}
