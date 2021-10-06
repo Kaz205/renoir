@@ -230,7 +230,7 @@ int sof_widget_setup(struct snd_sof_dev *sdev, struct snd_sof_widget *swidget)
 		break;
 	case snd_soc_dapm_scheduler:
 		pipeline = swidget->private;
-		ret = sof_load_pipeline_ipc(sdev->dev, pipeline, &r);
+		ret = sof_load_pipeline_ipc(sdev, pipeline, &r);
 		break;
 	default:
 		hdr = swidget->private;
@@ -455,7 +455,7 @@ int sof_widget_list_setup(struct snd_sof_dev *sdev, struct snd_sof_pcm *spcm, in
 		if (pipe_widget->complete)
 			continue;
 
-		pipe_widget->complete = snd_sof_complete_pipeline(sdev->dev, pipe_widget);
+		pipe_widget->complete = snd_sof_complete_pipeline(sdev, pipe_widget);
 		if (pipe_widget->complete < 0) {
 			ret = pipe_widget->complete;
 			goto widget_free;
@@ -620,9 +620,8 @@ const struct sof_ipc_pipe_new *snd_sof_pipeline_find(struct snd_sof_dev *sdev,
 	return NULL;
 }
 
-int sof_set_up_pipelines(struct device *dev, bool verify)
+int sof_set_up_pipelines(struct snd_sof_dev *sdev, bool verify)
 {
-	struct snd_sof_dev *sdev = dev_get_drvdata(dev);
 	struct snd_sof_widget *swidget;
 	struct snd_sof_route *sroute;
 	int ret;
@@ -681,7 +680,7 @@ int sof_set_up_pipelines(struct device *dev, bool verify)
 				continue;
 
 			swidget->complete =
-				snd_sof_complete_pipeline(dev, swidget);
+				snd_sof_complete_pipeline(sdev, swidget);
 			break;
 		default:
 			break;
@@ -695,9 +694,8 @@ int sof_set_up_pipelines(struct device *dev, bool verify)
  * This function doesn't free widgets during suspend. It only resets the set up status for all
  * routes and use_count for all widgets.
  */
-int sof_tear_down_pipelines(struct device *dev, bool verify)
+int sof_tear_down_pipelines(struct snd_sof_dev *sdev, bool verify)
 {
-	struct snd_sof_dev *sdev = dev_get_drvdata(dev);
 	struct snd_sof_widget *swidget;
 	struct snd_sof_route *sroute;
 	int ret;
