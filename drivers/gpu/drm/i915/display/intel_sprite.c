@@ -2268,6 +2268,18 @@ static int skl_plane_max_scale(struct drm_i915_private *dev_priv,
 		return 0x20000 - 1;
 }
 
+static bool bo_has_valid_encryption(struct drm_i915_gem_object *obj)
+{
+	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+
+	return intel_pxp_key_check(&i915->gt.pxp, obj, false) == 0;
+}
+
+static bool pxp_is_borked(struct drm_i915_gem_object *obj)
+{
+	return i915_gem_object_is_protected(obj) && !bo_has_valid_encryption(obj);
+}
+
 static int skl_plane_check(struct intel_crtc_state *crtc_state,
 			   struct intel_plane_state *plane_state)
 {
@@ -2313,6 +2325,11 @@ static int skl_plane_check(struct intel_crtc_state *crtc_state,
 	ret = skl_plane_check_nv12_rotation(plane_state);
 	if (ret)
 		return ret;
+
+	if (INTEL_GEN(dev_priv) >= 11) {
+		plane_state->decrypt = bo_has_valid_encryption(intel_fb_obj(fb));
+		plane_state->force_black = pxp_is_borked(intel_fb_obj(fb));
+	}
 
 	/* HW only has 8 bits pixel precision, disable plane if invisible */
 	if (!(plane_state->hw.alpha >> 8))
