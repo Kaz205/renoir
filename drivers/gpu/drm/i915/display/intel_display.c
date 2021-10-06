@@ -4824,6 +4824,9 @@ u32 glk_plane_color_ctl(const struct intel_crtc_state *crtc_state,
 			plane_color_ctl |= PLANE_COLOR_YUV_RANGE_CORRECTION_DISABLE;
 	}
 
+	if (plane_state->force_black)
+		plane_color_ctl |= PLANE_COLOR_PLANE_CSC_ENABLE;
+
 	return plane_color_ctl;
 }
 
