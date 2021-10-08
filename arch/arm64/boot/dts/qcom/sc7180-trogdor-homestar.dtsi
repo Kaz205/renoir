@@ -14,6 +14,7 @@ ap_h1_spi: &spi0 {};
 
 #include "sc7180-trogdor.dtsi"
 #include "sc7180-trogdor-mipi-camera.dtsi"
+#include "sc7180-trogdor-ti-sn65dsi86.dtsi"
 
 / {
 	max98360a_1: max98360a_1 {

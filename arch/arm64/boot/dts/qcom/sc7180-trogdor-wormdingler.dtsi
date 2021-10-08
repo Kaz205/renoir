@@ -15,8 +15,6 @@ ap_h1_spi: &spi0 {};
 #include "sc7180-trogdor.dtsi"
 #include "sc7180-trogdor-mipi-camera.dtsi"
 
-/delete-node/ &sn65dsi86_bridge;
-
 / {
 	avdd_lcd: avdd-lcd {
 		compatible = "regulator-fixed";
@@ -101,10 +99,6 @@ ap_h1_spi: &spi0 {};
 			};
 		};
 	};
-};
-
-&edp_brij_i2c {
-	status = "disabled";
 };
 
 /*
