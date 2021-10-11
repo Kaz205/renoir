@@ -426,7 +426,6 @@ parse_lfp_backlight(struct drm_i915_private *dev_priv,
 	const struct lfp_backlight_data_entry *entry;
 	int panel_type = dev_priv->vbt.panel_type;
 	u16 level;
-	size_t exp_size;
 
 	backlight_data = find_section(bdb, BDB_LVDS_BACKLIGHT);
 	if (!backlight_data)
@@ -449,15 +448,9 @@ parse_lfp_backlight(struct drm_i915_private *dev_priv,
 		return;
 	}
 
-	if (bdb->version <= 234)
-		exp_size = EXP_BDB_LFP_BL_DATA_SIZE_REV_234;
-	else if (bdb->version > 234 && bdb->version <= 236)
-		exp_size = EXP_BDB_LFP_BL_DATA_SIZE_REV_236;
-	else
-		exp_size = sizeof(struct bdb_lfp_backlight_data);
-
 	dev_priv->vbt.backlight.type = INTEL_BACKLIGHT_DISPLAY_DDI;
-	if (bdb->version >= 191 && get_blocksize(backlight_data) >= exp_size) {
+	if (bdb->version >= 191 &&
+	    get_blocksize(backlight_data) >= sizeof(*backlight_data)) {
 		const struct lfp_backlight_control_method *method;
 
 		method = &backlight_data->backlight_control[panel_type];
