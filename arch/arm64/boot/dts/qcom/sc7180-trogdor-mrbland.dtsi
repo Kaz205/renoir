@@ -124,6 +124,10 @@ ap_h1_spi: &spi0 {};
 	};
 };
 
+&wifi {
+	qcom,ath10k-calibration-variant = "GO_MRBLAND";
+};
+
 /*
  * No eDP on this board but it's logically the same signal so just give it
  * a new name and assign the proper GPIO.
