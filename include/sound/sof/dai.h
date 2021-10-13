@@ -63,8 +63,7 @@ struct sof_ipc_dai_config {
 
 	/* physical protocol and clocking */
 	uint16_t format;	/**< SOF_DAI_FMT_ */
-	uint8_t group_id;	/**< group ID, 0 means no group (ABI 3.17) */
-	uint8_t reserved8;	/**< alignment */
+	uint16_t reserved16;	/**< alignment */
 
 	/* reserved for future use */
 	uint32_t reserved[8];
