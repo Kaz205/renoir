@@ -246,6 +246,13 @@ static unsigned int panel_edp_get_display_modes(struct panel_edp *panel,
 			continue;
 		}
 
+		/*
+		 * CHROMIUM: Adapt to the fact that we don't have commit
+		 * 0425662fdf05 ("drm: Nuke mode->vrefresh") but we've removed
+		 * vrefresh from this file.
+		 */
+		mode->vrefresh = drm_mode_vrefresh(m);
+
 		mode->type |= DRM_MODE_TYPE_DRIVER;
 
 		if (panel->desc->num_modes == 1)
