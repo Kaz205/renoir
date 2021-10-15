@@ -64,6 +64,7 @@ config DRM_PANEL_EDP
 	tristate "support for simple Embedded DisplayPort panels"
 	depends on OF
 	depends on BACKLIGHT_CLASS_DEVICE
+	depends on DRM_DP_AUX_BACKLIGHT
 	depends on PM
 	select VIDEOMODE_HELPERS
 	select DRM_DP_AUX_BUS

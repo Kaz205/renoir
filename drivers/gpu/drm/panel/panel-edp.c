@@ -40,6 +40,9 @@
 #include <drm/drm_dp_helper.h>
 #include <drm/drm_panel.h>
 
+/* CHROMIUM: Downstream aux backlight driver */
+#include <drm/drm_dp_aux_backlight.h>
+
 /**
  * struct panel_desc - Describes a simple panel.
  */
@@ -679,7 +682,21 @@ static int panel_edp_probe(struct device *dev, const struct panel_desc *desc,
 
 	if (!panel->base.backlight && panel->aux) {
 		pm_runtime_get_sync(dev);
-		err = drm_panel_dp_aux_backlight(&panel->base, panel->aux);
+		/* CHROMIUM: Adapt to downstream aux backlight driver. */
+		{
+			struct drm_dp_aux_backlight *aux_bl;
+
+			aux_bl = devm_kzalloc(dev, sizeof(*aux_bl), GFP_KERNEL);
+			if (!aux_bl) {
+				pm_runtime_put_autosuspend(dev);
+				return -ENOMEM;
+			}
+
+			aux_bl->dev = dev;
+			aux_bl->aux = aux;
+			err = drm_dp_aux_backlight_register("edp-aux-backlight", aux_bl);
+			panel->base.backlight = aux_bl->bd;
+		}
 		pm_runtime_mark_last_busy(dev);
 		pm_runtime_put_autosuspend(dev);
 		if (err)
