@@ -38,8 +38,6 @@
 
 #define MT7921_CFEND_RATE_DEFAULT	0x49	/* OFDM 24M */
 #define MT7921_CFEND_RATE_11B		0x03	/* 11B LP, 11M */
-#define MT7921_5G_RATE_DEFAULT		0x4b	/* OFDM 6M */
-#define MT7921_2G_RATE_DEFAULT		0x0	/* CCK 1M */
 
 #define MT7921_SKU_RATE_NUM		161
 #define MT7921_SKU_MAX_DELTA_IDX	MT7921_SKU_RATE_NUM
@@ -160,7 +158,8 @@ struct mt7921_dev {
 	u16 chainmask;
 
 	struct work_struct reset_work;
-	bool hw_full_reset;
+	bool hw_full_reset:1;
+	bool hw_init_done:1;
 
 	struct list_head sta_poll_list;
 	spinlock_t sta_poll_lock;

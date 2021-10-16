@@ -318,20 +318,6 @@ struct dma_buf_ops {
 
 	void *(*vmap)(struct dma_buf *);
 	void (*vunmap)(struct dma_buf *, void *vaddr);
-
-	/**
-	 * @get_flags:
-	 *
-	 * This is called by dma_buf_get_flags and is used to get the buffer's
-	 * flags.
-	 * This callback is optional.
-	 *
-	 * Returns:
-	 *
-	 * 0 on success or a negative error code on failure. On success flags
-	 * will be populated with the buffer's flags.
-	 */
-	int (*get_flags)(struct dma_buf *dmabuf, unsigned long *flags);
 };
 
 /**
@@ -399,8 +385,6 @@ struct dma_buf {
  * @sgt: cached mapping.
  * @dir: direction of cached mapping.
  * @priv: exporter specific attachment data.
- * @dma_map_attrs: DMA attributes to be used when the exporter maps the buffer
- * through dma_buf_map_attachment.
  *
  * This structure holds the attachment information between the dma_buf buffer
  * and its user device(s). The list contains one attachment struct per device
@@ -418,7 +402,6 @@ struct dma_buf_attachment {
 	struct sg_table *sgt;
 	enum dma_data_direction dir;
 	void *priv;
-	unsigned long dma_map_attrs;
 };
 
 /**
@@ -501,5 +484,4 @@ int dma_buf_mmap(struct dma_buf *, struct vm_area_struct *,
 		 unsigned long);
 void *dma_buf_vmap(struct dma_buf *);
 void dma_buf_vunmap(struct dma_buf *, void *vaddr);
-int dma_buf_get_flags(struct dma_buf *dmabuf, unsigned long *flags);
 #endif /* __DMA_BUF_H__ */

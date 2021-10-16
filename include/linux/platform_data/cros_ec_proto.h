@@ -190,7 +190,6 @@ struct cros_ec_platform {
 /**
  * struct cros_ec_dev - ChromeOS EC device entry point.
  * @class_dev: Device structure used in sysfs.
- * @groups: sysfs attributes groups for this EC.
  * @ec_dev: cros_ec_device structure to talk to the physical device.
  * @dev: Pointer to the platform device.
  * @debug_info: cros_ec_debugfs structure for debugging information.
@@ -200,7 +199,6 @@ struct cros_ec_platform {
  */
 struct cros_ec_dev {
 	struct device class_dev;
-	const struct attribute_group **groups;
 	struct cros_ec_device *ec_dev;
 	struct device *dev;
 	struct cros_ec_debugfs *debug_info;
@@ -231,9 +229,12 @@ int cros_ec_get_next_event(struct cros_ec_device *ec_dev,
 
 u32 cros_ec_get_host_event(struct cros_ec_device *ec_dev);
 
-int cros_ec_check_features(struct cros_ec_dev *ec, int feature);
+bool cros_ec_check_features(struct cros_ec_dev *ec, int feature);
 
 int cros_ec_get_sensor_count(struct cros_ec_dev *ec);
+
+int cros_ec_command(struct cros_ec_device *ec_dev, unsigned int version, int command, void *outdata,
+		    int outsize, void *indata, int insize);
 
 /**
  * cros_ec_get_time_ns() - Return time in ns.

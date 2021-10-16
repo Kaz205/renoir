@@ -310,13 +310,14 @@ static int cros_ec_light_push_data(
 		s64 timestamp)
 {
 	struct cros_ec_sensors_core_state *st = iio_priv(indio_dev);
+	s16 *out = (s16 *)st->samples;
 
 	if (!st || !indio_dev->active_scan_mask)
 		return 0;
 
 	/* Save clear channel, will be used when RGB data arrives. */
 	if (test_bit(0, indio_dev->active_scan_mask))
-		st->samples[0] = data[0];
+		*out = data[0];
 
 	/* Wait for RGB callback to send samples upstream. */
 	return 0;
@@ -427,7 +428,7 @@ static int cros_ec_light_prox_probe(struct platform_device *pdev)
 	if (!indio_dev)
 		return -ENOMEM;
 
-	ret = cros_ec_sensors_core_init(pdev, indio_dev, true, false,
+	ret = cros_ec_sensors_core_init(pdev, indio_dev, true,
 					cros_ec_light_capture,
 					cros_ec_sensors_push_data);
 	if (ret)
@@ -496,13 +497,13 @@ static int cros_ec_light_prox_probe(struct platform_device *pdev)
 		}
 		cros_ec_sensorhub_unregister_push_data(sensor_hub, sensor_num);
 		if (cros_ec_sensorhub_register_push_data(
-				sensor_hub, sensor_num, false,
+				sensor_hub, sensor_num,
 				indio_dev,
 				cros_ec_light_push_data))
 			dev_warn(dev, "cros_ec_light_push_data reg failed: %d - %d\n",
 				 sensor_num, sensor_hub->sensor_num);
 		if (cros_ec_sensorhub_register_push_data(
-				sensor_hub, sensor_num + 1, false,
+				sensor_hub, sensor_num + 1,
 				indio_dev,
 				cros_ec_light_push_data_rgb))
 			dev_warn(dev, "cros_ec_light_push_data_rgb reg failed: %d - %d\n",

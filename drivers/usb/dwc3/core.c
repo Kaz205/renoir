@@ -1525,17 +1525,18 @@ static int dwc3_probe(struct platform_device *pdev)
 	}
 
 	dwc3_check_params(dwc);
+	dwc3_debugfs_init(dwc);
 
 	ret = dwc3_core_init_mode(dwc);
 	if (ret)
 		goto err5;
 
-	dwc3_debugfs_init(dwc);
 	pm_runtime_put(dev);
 
 	return 0;
 
 err5:
+	dwc3_debugfs_exit(dwc);
 	dwc3_event_buffers_cleanup(dwc);
 
 	usb_phy_shutdown(dwc->usb2_phy);
@@ -1591,11 +1592,6 @@ static int dwc3_remove(struct platform_device *pdev)
 	dwc3_free_scratch_buffers(dwc);
 
 	return 0;
-}
-
-static void dwc3_shutdown(struct platform_device *pdev)
-{
-	dwc3_remove(pdev);
 }
 
 #ifdef CONFIG_PM
@@ -1666,12 +1662,6 @@ static int dwc3_suspend_common(struct dwc3 *dwc, pm_message_t msg)
 		break;
 	case DWC3_GCTL_PRTCAP_HOST:
 		dwc3_set_phy_speed_flags(dwc);
-		if (!PMSG_IS_AUTO(msg)) {
-			if (usb_wakeup_enabled_descendants(hcd->self.root_hub))
-				dwc->need_phy_for_wakeup = true;
-			else
-				dwc->need_phy_for_wakeup = false;
-		}
 
 		/* Let controller to suspend HSPHY before PHY driver suspends */
 		if (dwc->dis_u2_susphy_quirk ||
@@ -1687,6 +1677,16 @@ static int dwc3_suspend_common(struct dwc3 *dwc, pm_message_t msg)
 
 		phy_pm_runtime_put_sync(dwc->usb2_generic_phy);
 		phy_pm_runtime_put_sync(dwc->usb3_generic_phy);
+
+		if (!PMSG_IS_AUTO(msg)) {
+			if (device_may_wakeup(&dwc->xhci->dev) &&
+			    usb_wakeup_enabled_descendants(hcd->self.root_hub)) {
+				dwc->need_phy_for_wakeup = true;
+			} else {
+				dwc->need_phy_for_wakeup = false;
+				dwc3_core_exit(dwc);
+			}
+		}
 		break;
 	case DWC3_GCTL_PRTCAP_OTG:
 		/* do nothing during runtime_suspend */
@@ -1735,7 +1735,6 @@ static int dwc3_resume_common(struct dwc3 *dwc, pm_message_t msg)
 				if (ret)
 					return ret;
 				dwc3_set_prtcap(dwc, DWC3_GCTL_PRTCAP_HOST);
-				break;
 			}
 		}
 		/* Restore GUSB2PHYCFG bits that were modified in suspend */
@@ -1944,7 +1943,6 @@ MODULE_DEVICE_TABLE(acpi, dwc3_acpi_match);
 static struct platform_driver dwc3_driver = {
 	.probe		= dwc3_probe,
 	.remove		= dwc3_remove,
-	.shutdown   = dwc3_shutdown,
 	.driver		= {
 		.name	= "dwc3",
 		.of_match_table	= of_match_ptr(of_dwc3_match),
