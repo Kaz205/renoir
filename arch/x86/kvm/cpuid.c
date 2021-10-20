@@ -720,6 +720,10 @@ static inline int __do_cpuid_func(struct kvm_cpuid_entry2 *entry, u32 function,
 #endif
 			     (1 << KVM_FEATURE_PV_SCHED_YIELD);
 
+#ifdef CONFIG_KVM_VIRT_SUSPEND_TIMING
+		entry->eax |= (1 << KVM_FEATURE_HOST_SUSPEND_TIME);
+#endif
+
 		if (sched_info_on())
 			entry->eax |= (1 << KVM_FEATURE_STEAL_TIME);
 
