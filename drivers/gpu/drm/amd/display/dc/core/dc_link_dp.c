@@ -2418,7 +2418,7 @@ bool dc_link_handle_hpd_rx_irq(struct dc_link *link, union hpd_irq_data *out_hpd
 
 	if (handle_hpd_irq_psr_sink(link))
 		/* PSR-related error was detected and handled */
-		return true;
+		return false;
 
 	/* If PSR-related error handled, Main link may be off,
 	 * so do not handle as a normal sink status change interrupt.
