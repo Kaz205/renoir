@@ -6,7 +6,6 @@
 #include <linux/debugfs.h>
 #include <linux/device.h>
 #include <linux/io.h>
-#include <linux/io-64-nonatomic-hi-lo.h>
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
