@@ -1334,13 +1334,12 @@ static void set_quality_report(struct hci_dev *hdev, bool enable)
 		bt_dev_info(hdev, "set quality report (enable %d)", enable);
 }
 
-static int hci_dev_do_open(struct hci_dev *hdev)
+/* TODO: Move this function into hci_sync.c */
+int hci_dev_open_sync(struct hci_dev *hdev)
 {
 	int ret = 0;
 
 	BT_DBG("%s %p", hdev->name, hdev);
-
-	hci_req_sync_lock(hdev);
 
 	if (hci_dev_test_flag(hdev, HCI_UNREGISTER)) {
 		ret = -ENODEV;
@@ -1513,8 +1512,7 @@ setup_failed:
 		    !hci_dev_test_flag(hdev, HCI_USER_CHANNEL) &&
 		    hci_dev_test_flag(hdev, HCI_MGMT) &&
 		    hdev->dev_type == HCI_PRIMARY) {
-			ret = __hci_req_hci_power_on(hdev);
-			mgmt_power_on(hdev, ret);
+			ret = hci_powered_update_sync(hdev);
 		}
 	} else {
 		/* Init failed, cleanup */
@@ -1546,6 +1544,19 @@ setup_failed:
 	}
 
 done:
+	return ret;
+}
+
+static int hci_dev_do_open(struct hci_dev *hdev)
+{
+	int ret = 0;
+
+	BT_DBG("%s %p", hdev->name, hdev);
+
+	hci_req_sync_lock(hdev);
+
+	ret = hci_dev_open_sync(hdev);
+
 	hci_req_sync_unlock(hdev);
 	return ret;
 }
@@ -1624,7 +1635,8 @@ static void hci_pend_le_actions_clear(struct hci_dev *hdev)
 	BT_DBG("All LE pending actions cleared");
 }
 
-int hci_dev_do_close(struct hci_dev *hdev)
+/* TODO: Move this function into hci_sync.c */
+int hci_dev_close_sync(struct hci_dev *hdev)
 {
 	bool auto_off;
 	int err = 0;
@@ -1653,11 +1665,9 @@ int hci_dev_do_close(struct hci_dev *hdev)
 	cancel_delayed_work(&hdev->ncmd_timer);
 
 	hci_request_cancel_all(hdev);
-	hci_req_sync_lock(hdev);
 
 	if (!test_and_clear_bit(HCI_UP, &hdev->flags)) {
 		cancel_delayed_work_sync(&hdev->cmd_timer);
-		hci_req_sync_unlock(hdev);
 		return err;
 	}
 
@@ -1766,9 +1776,22 @@ int hci_dev_do_close(struct hci_dev *hdev)
 	memset(hdev->dev_class, 0, sizeof(hdev->dev_class));
 	bacpy(&hdev->random_addr, BDADDR_ANY);
 
+	hci_dev_put(hdev);
+	return err;
+}
+
+int hci_dev_do_close(struct hci_dev *hdev)
+{
+	int err;
+
+	BT_DBG("%s %p", hdev->name, hdev);
+
+	hci_req_sync_lock(hdev);
+
+	err = hci_dev_close_sync(hdev);
+
 	hci_req_sync_unlock(hdev);
 
-	hci_dev_put(hdev);
 	return err;
 }
 
@@ -2170,9 +2193,7 @@ static void hci_power_on(struct work_struct *work)
 	    hci_dev_test_flag(hdev, HCI_MGMT) &&
 	    hci_dev_test_and_clear_flag(hdev, HCI_AUTO_OFF)) {
 		cancel_delayed_work(&hdev->power_off);
-		hci_req_sync_lock(hdev);
-		err = __hci_req_hci_power_on(hdev);
-		hci_req_sync_unlock(hdev);
+		err = hci_powered_update_sync(hdev);
 		mgmt_power_on(hdev, err);
 		return;
 	}
