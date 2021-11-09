@@ -85,10 +85,6 @@ ap_h1_spi: &spi0 {};
 	};
 };
 
-&wifi {
-	qcom,ath10k-calibration-variant = "GO_PAZQUEL";
-};
-
 /* PINCTRL - board-specific pinctrl */
 
 &tlmm {
