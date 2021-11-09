@@ -769,7 +769,6 @@ static int gm12u320_usb_probe(struct usb_interface *interface,
 
 err_put_device:
         put_device(gm12u320->dmadev);
-err_put:
 	drm_dev_put(dev);
 	return ret;
 }
