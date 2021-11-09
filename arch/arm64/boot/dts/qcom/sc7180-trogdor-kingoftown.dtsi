@@ -1,18 +1,15 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Google Pompom board device tree source
+ * Google Kingoftown board device tree source
  *
  * Copyright 2021 Google LLC.
  */
-
-#include "sc7180.dtsi"
 
 ap_ec_spi: &spi6 {};
 ap_h1_spi: &spi0 {};
 
 #include "sc7180-trogdor.dtsi"
 #include "sc7180-trogdor-lte-sku.dtsi"
-#include "sc7180-trogdor-ti-sn65dsi86.dtsi"
 
 &keyboard_controller {
 	function-row-physmap = <
@@ -43,9 +40,31 @@ ap_h1_spi: &spi0 {};
 	>;
 };
 
-/* TODO: Remove after we introduce the generic edp panel */
+ap_ts_pen_1v8: &i2c4 {
+	status = "okay";
+	clock-frequency = <400000>;
+
+	ap_ts: touchscreen@10 {
+		compatible = "elan,ekth3500";
+		reg = <0x10>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&ts_int_l>, <&ts_reset_l>;
+
+		interrupt-parent = <&tlmm>;
+		interrupts = <9 IRQ_TYPE_LEVEL_LOW>;
+
+		vcc33-supply = <&pp3300_ts>;
+
+		reset-gpios = <&tlmm 8 GPIO_ACTIVE_LOW>;
+	};
+};
+
 &panel {
-	compatible = "auo,b116xa01";
+	compatible = "edp-panel";
+};
+
+&wifi {
+	qcom,ath10k-calibration-variant = "GO_KINGOFTOWN";
 };
 
 /* PINCTRL - board-specific pinctrl */
