@@ -1154,6 +1154,8 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_STATELESS_H264_SLICE_PARAMS:		return "H264 Slice Parameters";
 	case V4L2_CID_STATELESS_H264_DECODE_PARAMS:		return "H264 Decode Parameters";
 	case V4L2_CID_STATELESS_VP8_FRAME:			return "VP8 Frame Parameters";
+	case V4L2_CID_STATELESS_VP9_COMPRESSED_HDR:	return "VP9 Probabilities Updates";
+	case V4L2_CID_STATELESS_VP9_FRAME:			return "VP9 Frame Decode Parameters";
 	default:
 		return NULL;
 	}
@@ -1422,6 +1424,12 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 		break;
 	case V4L2_CID_STATELESS_VP8_FRAME:
 		*type = V4L2_CTRL_TYPE_VP8_FRAME;
+		break;
+	case V4L2_CID_STATELESS_VP9_COMPRESSED_HDR:
+		*type = V4L2_CTRL_TYPE_VP9_COMPRESSED_HDR;
+		break;
+	case V4L2_CID_STATELESS_VP9_FRAME:
+		*type = V4L2_CTRL_TYPE_VP9_FRAME;
 		break;
 	default:
 		*type = V4L2_CTRL_TYPE_INTEGER;
@@ -1705,6 +1713,12 @@ static void std_log(const struct v4l2_ctrl *ctrl)
 	case V4L2_CTRL_TYPE_VP8_FRAME:
 		pr_cont("VP8_FRAME");
 		break;
+	case V4L2_CTRL_TYPE_VP9_COMPRESSED_HDR:
+		pr_cont("VP9_COMPRESSED_HDR");
+		break;
+	case V4L2_CTRL_TYPE_VP9_FRAME:
+		pr_cont("VP9_FRAME");
+		break;
 	default:
 		pr_cont("unknown type %d", ctrl->type);
 		break;
@@ -1738,6 +1752,168 @@ static void std_log(const struct v4l2_ctrl *ctrl)
 	memset(&(s).padding, 0, sizeof((s).padding))
 #define zero_reserved(s) \
 	memset(&(s).reserved, 0, sizeof((s).reserved))
+
+static int
+validate_vp9_lf_params(struct v4l2_vp9_loop_filter *lf)
+{
+	unsigned int i;
+
+	if (lf->flags & ~(V4L2_VP9_LOOP_FILTER_FLAG_DELTA_ENABLED |
+			  V4L2_VP9_LOOP_FILTER_FLAG_DELTA_UPDATE))
+		return -EINVAL;
+
+	/* That all values are in the accepted range. */
+	if (lf->level > GENMASK(5, 0))
+		return -EINVAL;
+
+	if (lf->sharpness > GENMASK(2, 0))
+		return -EINVAL;
+
+	for (i = 0; i < ARRAY_SIZE(lf->ref_deltas); i++)
+		if (lf->ref_deltas[i] < -63 || lf->ref_deltas[i] > 63)
+			return -EINVAL;
+
+	for (i = 0; i < ARRAY_SIZE(lf->mode_deltas); i++)
+		if (lf->mode_deltas[i] < -63 || lf->mode_deltas[i] > 63)
+			return -EINVAL;
+
+	zero_reserved(*lf);
+	return 0;
+}
+
+static int
+validate_vp9_quant_params(struct v4l2_vp9_quantization *quant)
+{
+	if (quant->delta_q_y_dc < -15 || quant->delta_q_y_dc > 15 ||
+	    quant->delta_q_uv_dc < -15 || quant->delta_q_uv_dc > 15 ||
+	    quant->delta_q_uv_ac < -15 || quant->delta_q_uv_ac > 15)
+		return -EINVAL;
+
+	zero_reserved(*quant);
+	return 0;
+}
+
+static int
+validate_vp9_seg_params(struct v4l2_vp9_segmentation *seg)
+{
+	unsigned int i, j;
+
+	if (seg->flags & ~(V4L2_VP9_SEGMENTATION_FLAG_ENABLED |
+			   V4L2_VP9_SEGMENTATION_FLAG_UPDATE_MAP |
+			   V4L2_VP9_SEGMENTATION_FLAG_TEMPORAL_UPDATE |
+			   V4L2_VP9_SEGMENTATION_FLAG_UPDATE_DATA |
+			   V4L2_VP9_SEGMENTATION_FLAG_ABS_OR_DELTA_UPDATE))
+		return -EINVAL;
+
+	for (i = 0; i < ARRAY_SIZE(seg->feature_enabled); i++) {
+		if (seg->feature_enabled[i] &
+		    ~V4L2_VP9_SEGMENT_FEATURE_ENABLED_MASK)
+			return -EINVAL;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(seg->feature_data); i++) {
+		const int range[] = { 255, 63, 3, 0 };
+
+		for (j = 0; j < ARRAY_SIZE(seg->feature_data[j]); j++) {
+			if (seg->feature_data[i][j] < -range[j] ||
+			    seg->feature_data[i][j] > range[j])
+				return -EINVAL;
+		}
+	}
+
+	zero_reserved(*seg);
+	return 0;
+}
+
+static int
+validate_vp9_compressed_hdr(struct v4l2_ctrl_vp9_compressed_hdr *hdr)
+{
+	if (hdr->tx_mode > V4L2_VP9_TX_MODE_SELECT)
+		return -EINVAL;
+
+	return 0;
+}
+
+static int
+validate_vp9_frame(struct v4l2_ctrl_vp9_frame *frame)
+{
+	int ret;
+
+	/* Make sure we're not passed invalid flags. */
+	if (frame->flags & ~(V4L2_VP9_FRAME_FLAG_KEY_FRAME |
+		  V4L2_VP9_FRAME_FLAG_SHOW_FRAME |
+		  V4L2_VP9_FRAME_FLAG_ERROR_RESILIENT |
+		  V4L2_VP9_FRAME_FLAG_INTRA_ONLY |
+		  V4L2_VP9_FRAME_FLAG_ALLOW_HIGH_PREC_MV |
+		  V4L2_VP9_FRAME_FLAG_REFRESH_FRAME_CTX |
+		  V4L2_VP9_FRAME_FLAG_PARALLEL_DEC_MODE |
+		  V4L2_VP9_FRAME_FLAG_X_SUBSAMPLING |
+		  V4L2_VP9_FRAME_FLAG_Y_SUBSAMPLING |
+		  V4L2_VP9_FRAME_FLAG_COLOR_RANGE_FULL_SWING))
+		return -EINVAL;
+
+	if (frame->flags & V4L2_VP9_FRAME_FLAG_ERROR_RESILIENT &&
+	    frame->flags & V4L2_VP9_FRAME_FLAG_REFRESH_FRAME_CTX)
+		return -EINVAL;
+
+	if (frame->profile > V4L2_VP9_PROFILE_MAX)
+		return -EINVAL;
+
+	if (frame->reset_frame_context > V4L2_VP9_RESET_FRAME_CTX_ALL)
+		return -EINVAL;
+
+	if (frame->frame_context_idx >= V4L2_VP9_NUM_FRAME_CTX)
+		return -EINVAL;
+
+	/*
+	 * Profiles 0 and 1 only support 8-bit depth, profiles 2 and 3 only 10
+	 * and 12 bit depths.
+	 */
+	if ((frame->profile < 2 && frame->bit_depth != 8) ||
+	    (frame->profile >= 2 &&
+	     (frame->bit_depth != 10 && frame->bit_depth != 12)))
+		return -EINVAL;
+
+	/* Profile 0 and 2 only accept YUV 4:2:0. */
+	if ((frame->profile == 0 || frame->profile == 2) &&
+	    (!(frame->flags & V4L2_VP9_FRAME_FLAG_X_SUBSAMPLING) ||
+	     !(frame->flags & V4L2_VP9_FRAME_FLAG_Y_SUBSAMPLING)))
+		return -EINVAL;
+
+	/* Profile 1 and 3 only accept YUV 4:2:2, 4:4:0 and 4:4:4. */
+	if ((frame->profile == 1 || frame->profile == 3) &&
+	    ((frame->flags & V4L2_VP9_FRAME_FLAG_X_SUBSAMPLING) &&
+	     (frame->flags & V4L2_VP9_FRAME_FLAG_Y_SUBSAMPLING)))
+		return -EINVAL;
+
+	if (frame->interpolation_filter > V4L2_VP9_INTERP_FILTER_SWITCHABLE)
+		return -EINVAL;
+
+	/*
+	 * According to the spec, tile_cols_log2 shall be less than or equal
+	 * to 6.
+	 */
+	if (frame->tile_cols_log2 > 6)
+		return -EINVAL;
+
+	if (frame->reference_mode > V4L2_VP9_REFERENCE_MODE_SELECT)
+		return -EINVAL;
+
+	ret = validate_vp9_lf_params(&frame->lf);
+	if (ret)
+		return ret;
+
+	ret = validate_vp9_quant_params(&frame->quant);
+	if (ret)
+		return ret;
+
+	ret = validate_vp9_seg_params(&frame->seg);
+	if (ret)
+		return ret;
+
+	zero_reserved(*frame);
+	return 0;
+}
 
 /*
  * Compound controls validation requires setting unused fields/flags to zero
@@ -1978,6 +2154,13 @@ static int std_validate_compound(const struct v4l2_ctrl *ctrl, u32 idx,
 		zero_padding(p_vp8_frame->entropy);
 		zero_padding(p_vp8_frame->coder_state);
 		break;
+
+	case V4L2_CTRL_TYPE_VP9_COMPRESSED_HDR:
+		return validate_vp9_compressed_hdr(p);
+
+	case V4L2_CTRL_TYPE_VP9_FRAME:
+		return validate_vp9_frame(p);
+
 	default:
 		return -EINVAL;
 	}
@@ -2671,6 +2854,12 @@ static struct v4l2_ctrl *v4l2_ctrl_new(struct v4l2_ctrl_handler *hdl,
 		break;
 	case V4L2_CTRL_TYPE_VP8_FRAME:
 		elem_size = sizeof(struct v4l2_ctrl_vp8_frame);
+		break;
+	case V4L2_CTRL_TYPE_VP9_COMPRESSED_HDR:
+		elem_size = sizeof(struct v4l2_ctrl_vp9_compressed_hdr);
+		break;
+	case V4L2_CTRL_TYPE_VP9_FRAME:
+		elem_size = sizeof(struct v4l2_ctrl_vp9_frame);
 		break;
 	default:
 		if (type < V4L2_CTRL_COMPOUND_TYPES)
