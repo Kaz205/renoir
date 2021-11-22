@@ -122,7 +122,7 @@ ap_h1_spi: &spi0 {};
  * a new name and assign the proper GPIO.
  */
 pp3300_disp_on: &pp3300_dx_edp {
-	gpio = <&tlmm 85 GPIO_ACTIVE_HIGH>;
+	gpio = <&tlmm 67 GPIO_ACTIVE_HIGH>;
 };
 
 /* PINCTRL - modifications to sc7180-trogdor.dtsi */
@@ -134,10 +134,10 @@ pp3300_disp_on: &pp3300_dx_edp {
 
 tp_en: &en_pp3300_dx_edp {
 	pinmux {
-		pins = "gpio85";
+		pins = "gpio67";
 		};
 	pinconf {
-		pins = "gpio85";
+		pins = "gpio67";
 	};
 };
 
