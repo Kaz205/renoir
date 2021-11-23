@@ -253,9 +253,6 @@ int ipa_modem_stop(struct ipa *ipa)
 	if (state != IPA_MODEM_STATE_RUNNING)
 		return -EBUSY;
 
-	/* Prevent the modem from triggering a call to ipa_setup() */
-	ipa_smp2p_disable(ipa);
-
 	/* Stop the queue and disable the endpoints if it's open */
 	if (netdev) {
 		(void)ipa_stop(netdev);
@@ -277,6 +274,9 @@ static void ipa_modem_crashed(struct ipa *ipa)
 {
 	struct device *dev = &ipa->pdev->dev;
 	int ret;
+
+	/* Prevent the modem from triggering a call to ipa_setup() */
+	ipa_smp2p_irq_disable_setup(ipa);
 
 	ipa_endpoint_modem_pause_all(ipa, true);
 
