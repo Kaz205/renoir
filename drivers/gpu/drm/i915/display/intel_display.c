@@ -59,6 +59,8 @@
 
 #include "gt/intel_rps.h"
 
+#include "pxp/intel_pxp.h"
+
 #include "i915_drv.h"
 #include "i915_trace.h"
 #include "intel_acpi.h"
@@ -12927,7 +12929,7 @@ static void
 intel_dump_dp_vsc_sdp(struct drm_i915_private *dev_priv,
 		      const struct drm_dp_vsc_sdp *vsc)
 {
-	if (!drm_debug_syslog_enabled(DRM_UT_KMS))
+	if (!drm_debug_enabled(DRM_UT_KMS))
 		return;
 
 	drm_dp_vsc_sdp_log(KERN_DEBUG, dev_priv->drm.dev, vsc);
@@ -13588,7 +13590,7 @@ pipe_config_dp_vsc_sdp_mismatch(struct drm_i915_private *dev_priv,
 				const struct drm_dp_vsc_sdp *b)
 {
 	if (fastset) {
-		if (!drm_debug_syslog_enabled(DRM_UT_KMS))
+		if (!drm_debug_enabled(DRM_UT_KMS))
 			return;
 
 		drm_dbg_kms(&dev_priv->drm,
@@ -14701,6 +14703,18 @@ static bool active_planes_affects_min_cdclk(struct drm_i915_private *dev_priv)
 		IS_IVYBRIDGE(dev_priv);
 }
 
+static bool bo_has_valid_encryption(struct drm_i915_gem_object *obj)
+{
+	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+
+	return intel_pxp_key_check(&i915->gt.pxp, obj, false) == 0;
+}
+
+static bool pxp_is_borked(struct drm_i915_gem_object *obj)
+{
+	return i915_gem_object_is_protected(obj) && !bo_has_valid_encryption(obj);
+}
+
 static int intel_atomic_check_planes(struct intel_atomic_state *state,
 				     bool *need_cdclk_calc)
 {
@@ -14708,7 +14722,10 @@ static int intel_atomic_check_planes(struct intel_atomic_state *state,
 	struct intel_crtc_state *old_crtc_state, *new_crtc_state;
 	struct intel_plane_state *plane_state;
 	struct intel_plane *plane;
+	struct intel_plane_state *new_plane_state;
+	struct intel_plane_state *old_plane_state;
 	struct intel_crtc *crtc;
+	const struct drm_framebuffer *fb;
 	int i, ret;
 
 	ret = icl_add_linked_planes(state);
@@ -14751,6 +14768,19 @@ static int intel_atomic_check_planes(struct intel_atomic_state *state,
 		if (ret)
 			return ret;
 	}
+
+	for_each_new_intel_plane_in_state(state, plane, plane_state, i) {
+		new_plane_state = intel_atomic_get_new_plane_state(state, plane);
+		old_plane_state = intel_atomic_get_old_plane_state(state, plane);
+		fb = new_plane_state->hw.fb;
+		if (fb) {
+			new_plane_state->decrypt = bo_has_valid_encryption(intel_fb_obj(fb));
+			new_plane_state->force_black = pxp_is_borked(intel_fb_obj(fb));
+		} else {
+ 			new_plane_state->decrypt = old_plane_state->decrypt;
+			new_plane_state->force_black = old_plane_state->force_black;
+		}
+        }
 
 	/*
 	 * active_planes bitmask has been updated, and potentially
@@ -14931,6 +14961,10 @@ static int intel_atomic_check_async(struct intel_atomic_state *state)
 			drm_dbg_kms(&i915->drm, "Color range cannot be changed in async flip\n");
 			return -EINVAL;
 		}
+
+		/* plane decryption is allow to change only in synchronous flips */
+		if (old_plane_state->decrypt != new_plane_state->decrypt)
+			return -EINVAL;
 	}
 
 	return 0;

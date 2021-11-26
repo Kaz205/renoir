@@ -80,9 +80,7 @@ virtio_gpu_get_vbuf(struct virtio_gpu_device *vgdev,
 {
 	struct virtio_gpu_vbuffer *vbuf;
 
-	vbuf = kmem_cache_zalloc(vgdev->vbufs, GFP_KERNEL);
-	if (!vbuf)
-		return ERR_PTR(-ENOMEM);
+	vbuf = kmem_cache_zalloc(vgdev->vbufs, GFP_KERNEL | __GFP_NOFAIL);
 
 	BUG_ON(size > MAX_INLINE_CMD_SIZE);
 	vbuf->buf = (void *)vbuf + sizeof(*vbuf);
@@ -142,10 +140,6 @@ static void *virtio_gpu_alloc_cmd_resp(struct virtio_gpu_device *vgdev,
 
 	vbuf = virtio_gpu_get_vbuf(vgdev, cmd_size,
 				   resp_size, resp_buf, cb);
-	if (IS_ERR(vbuf)) {
-		*vbuffer_p = NULL;
-		return ERR_CAST(vbuf);
-	}
 	*vbuffer_p = vbuf;
 	return (struct virtio_gpu_command *)vbuf->buf;
 }
@@ -1004,7 +998,7 @@ virtio_gpu_cmd_resource_create_3d(struct virtio_gpu_device *vgdev,
 	target->obj = bo;
 	vbuf->data_buf = target;
 	bo->create_callback_done = false;
-	drm_gem_object_get(&bo->gem_base);
+	drm_gem_object_get(&bo->tbo.base);
 
 	virtio_gpu_queue_fenced_ctrl_buffer(vgdev, vbuf, &cmd_p->hdr, fence);
 	bo->created = true;
@@ -1236,7 +1230,7 @@ virtio_gpu_cmd_resource_assign_uuid(struct virtio_gpu_device *vgdev,
 	/* Reuse the data_buf pointer for the object pointer. */
 	target->obj = bo;
 	vbuf->data_buf = target;
-	drm_gem_object_get(&bo->gem_base);
+	drm_gem_object_get(&bo->tbo.base);
 	virtio_gpu_queue_ctrl_buffer(vgdev, vbuf);
 	return 0;
 }
@@ -1374,7 +1368,7 @@ virtio_gpu_cmd_resource_create_blob(struct virtio_gpu_device *vgdev,
 	target->obj = bo;
 	vbuf->data_buf = target;
 	bo->create_callback_done = false;
-	drm_gem_object_get(&bo->gem_base);
+	drm_gem_object_get(&bo->tbo.base);
 
 	virtio_gpu_queue_ctrl_buffer(vgdev, vbuf);
 	bo->created = true;

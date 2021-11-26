@@ -1,9 +1,6 @@
 /* SPDX-License-Identifier: MIT */
 /*
  * Copyright © 2020 Intel Corporation
- *
- * Authors:
- * Vitaly Lubart <vitaly.lubart@intel.com>
  */
 
 #ifndef _I915_PXP_TEE_INTERFACE_H_
@@ -25,16 +22,16 @@ struct i915_pxp_component_ops {
 	struct module *owner;
 
 	int (*send)(struct device *dev, const void *message, size_t size, u8 vtag);
-	int (*receive)(struct device *dev, void *buffer, size_t size, u8 vtag);
+	int (*recv)(struct device *dev, void *buffer, size_t size, u8 vtag);
 };
 
 /**
- * struct i915_pxp_component_master - Used for communication between i915
- * and TEE drivers for the PXP services
+ * struct i915_pxp_component - Used for communication between i915 and TEE
+ * drivers for the PXP services
  * @tee_dev: device that provide the PXP service from TEE Bus.
  * @pxp_ops: Ops implemented by TEE driver, used by i915 driver.
  */
-struct i915_pxp_comp_master {
+struct i915_pxp_component {
 	struct device *tee_dev;
 	const struct i915_pxp_component_ops *ops;
 

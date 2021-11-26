@@ -719,6 +719,7 @@ struct intel_vbt_data {
 
 	struct {
 		u16 pwm_freq_hz;
+		u16 brightness_precision_bits;
 		bool present;
 		bool active_low_pwm;
 		u8 min_brightness;	/* min_brightness/255 of max */
@@ -1283,12 +1284,6 @@ struct drm_i915_private {
 	/* Mutex to protect the above hdcp component related values. */
 	struct mutex hdcp_comp_mutex;
 
-	struct i915_pxp_comp_master *pxp_tee_master;
-	bool pxp_tee_comp_added;
-
-	/* Mutex to protect the above pxp_tee component related values. */
-	struct mutex pxp_tee_comp_mutex;
-
 	I915_SELFTEST_DECLARE(struct i915_selftest_stash selftest;)
 
 	/*
@@ -1819,6 +1814,9 @@ tgl_revids_get(struct drm_i915_private *dev_priv)
 
 #define HAS_GLOBAL_MOCS_REGISTERS(dev_priv)	(INTEL_INFO(dev_priv)->has_global_mocs)
 
+#define HAS_PXP(dev_priv)  ((IS_ENABLED(CONFIG_DRM_I915_PXP) && \
+			    INTEL_INFO(dev_priv)->has_pxp) && \
+			    VDBOX_MASK(&dev_priv->gt))
 
 #define HAS_GMCH(dev_priv) (INTEL_INFO(dev_priv)->display.has_gmch)
 

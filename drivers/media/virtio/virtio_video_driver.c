@@ -19,6 +19,7 @@
 
 #include <linux/module.h>
 #include <linux/version.h>
+#include <linux/dma-direct.h>
 #include <linux/dma-mapping.h>
 
 #include "virtio_video.h"
@@ -46,7 +47,7 @@ static void *dma_phys_alloc(struct device *dev, size_t size,
 
 	ret = (void *)__get_free_pages(gfp, get_order(size));
 	if (ret)
-		*dma_handle = virt_to_phys(ret) - PFN_PHYS(dev->dma_pfn_offset);
+		*dma_handle = translate_phys_to_dma(dev, virt_to_phys(ret));
 
 	return ret;
 }
@@ -63,7 +64,7 @@ static dma_addr_t dma_phys_map_page(struct device *dev, struct page *page,
 				    enum dma_data_direction dir,
 				    unsigned long attrs)
 {
-	return page_to_phys(page) + offset - PFN_PHYS(dev->dma_pfn_offset);
+	return translate_phys_to_dma(dev, page_to_phys(page) + offset);
 }
 
 static int dma_phys_map_sg(struct device *dev, struct scatterlist *sgl,
@@ -74,12 +75,11 @@ static int dma_phys_map_sg(struct device *dev, struct scatterlist *sgl,
 	struct scatterlist *sg;
 
 	for_each_sg(sgl, sg, nents, i) {
-		dma_addr_t offset = PFN_PHYS(dev->dma_pfn_offset);
 		void *va;
 
 		BUG_ON(!sg_page(sg));
 		va = sg_virt(sg);
-		sg_dma_address(sg) = (dma_addr_t)virt_to_phys(va) - offset;
+		sg_dma_address(sg) = translate_phys_to_dma(dev, (dma_addr_t)virt_to_phys(va));
 		sg_dma_len(sg) = sg->length;
 	}
 
