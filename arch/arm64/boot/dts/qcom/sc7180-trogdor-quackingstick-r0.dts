@@ -11,8 +11,8 @@
 #include "sc7180-trogdor-quackingstick.dtsi"
 
 / {
-	model = "Google Quackingstick (rev0 - 1)";
-	compatible = "google,quackingstick-rev0-sku1537", "google,quackingstick-rev1-sku1537",  "qcom,sc7180";
+	model = "Google Quackingstick (rev0+)";
+	compatible = "google,quackingstick-sku1537", "qcom,sc7180";
 };
 
 &panel {
