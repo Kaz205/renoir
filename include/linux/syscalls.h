@@ -1421,8 +1421,6 @@ long compat_ksys_semtimedop(int semid, struct sembuf __user *tsems,
 			    unsigned int nsops,
 			    const struct old_timespec32 __user *timeout);
 
-#ifdef CONFIG_ALT_SYSCALL
-
 /* Only used with ALT_SYSCALL enabled */
 
 int ksys_prctl(int option, unsigned long arg2, unsigned long arg3,
@@ -1441,6 +1439,5 @@ int ksys_getcpu(unsigned __user *cpu, unsigned __user *node,
 int ksys_clock_adjtime32(clockid_t which_clock,
 			 struct old_timex32 __user *utp);
 int ksys_adjtimex_time32(struct old_timex32 __user *utp);
-#endif /* CONFIG_ALT_SYSCALL */
 
 #endif
