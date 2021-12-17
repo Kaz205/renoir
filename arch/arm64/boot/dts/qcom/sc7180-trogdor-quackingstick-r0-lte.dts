@@ -15,3 +15,11 @@
 	model = "Google Quackingstick (rev0+) with LTE";
 	compatible = "google,quackingstick-sku1536", "qcom,sc7180";
 };
+
+&ap_sar_sensor {
+	status = "okay";
+};
+
+&ap_sar_sensor_i2c {
+	status = "okay";
+};
