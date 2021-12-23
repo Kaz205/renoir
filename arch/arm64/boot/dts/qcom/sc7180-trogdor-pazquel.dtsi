@@ -58,7 +58,7 @@ ap_h1_spi: &spi0 {};
 };
 
 &panel {
-	compatible = "starry,2081116HHD028001-51D", "kingdisplay,kd116n21-30nv-a010";
+	compatible = "edp-panel";
 };
 
 &pp3300_dx_edp {
