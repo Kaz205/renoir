@@ -117,6 +117,20 @@ config SX9310
 	  To compile this driver as a module, choose M here: the
 	  module will be called srf08.
 
+config SX9324
+	tristate "SX9324 Semtech proximity sensor"
+	select IIO_BUFFER
+	select IIO_TRIGGERED_BUFFER
+	select REGMAP_I2C
+	select SX_COMMON
+	depends on I2C
+	help
+	  Say Y here to build a driver for Semtech's SX9324
+	  proximity/button sensor.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called sx9324.
+
 config SX932X
 	tristate "sx932x Semtech proximity sensor"
 	select IIO_BUFFER
