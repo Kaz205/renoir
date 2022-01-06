@@ -12,6 +12,11 @@ menuconfig INPUT_TOUCHSCREEN
 
 if INPUT_TOUCHSCREEN
 
+config TOUCHSCREEN_QGKI_GOODIX
+	default n
+	bool "QGKI config"
+
+
 config TOUCHSCREEN_PROPERTIES
 	def_tristate INPUT
 	depends on INPUT
@@ -1334,4 +1339,6 @@ source "drivers/input/touchscreen/synaptics_dsx/Kconfig"
 source "drivers/input/touchscreen/nt36xxx/Kconfig"
 
 source "drivers/input/touchscreen/focaltech_3658u/Kconfig"
+source "drivers/input/touchscreen/gt9897t/Kconfig"
+
 endif
