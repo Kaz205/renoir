@@ -19,7 +19,7 @@
 	};
 };
 
-&pmr735b_gpios {
+&pm8350_gpios {
 	pmr735b_smb_skin {
 		pmr735b_smb_skin_default: pmr735b_smb_skin_default {
 			pins = "gpio3";
@@ -78,6 +78,7 @@
 		qcom,pre-scaling = <1 1>;
 	};
 
+
 	pm8350_cam_flash_therm {
 		reg = <PM8350_ADC7_AMUX_THM2_100K_PU>;
 		label = "pm8350_cam_flash_therm";
@@ -86,9 +87,9 @@
 		qcom,pre-scaling = <1 1>;
 	};
 
-	pm8350_wide_rfc_therm {
+	pm8350_wifi_therm {
 		reg = <PM8350_ADC7_AMUX_THM4_100K_PU>;
-		label = "pm8350_wide_rfc_therm";
+		label = "pm8350_wifi_therm";
 		qcom,ratiometric;
 		qcom,hw-settle-time = <200>;
 		qcom,pre-scaling = <1 1>;
@@ -102,17 +103,17 @@
 		qcom,pre-scaling = <1 1>;
 	};
 
-	pm8350b_wl_chg_therm {
-		reg = <PM8350B_ADC7_GPIO2_100K_PU>;
-		label = "pm8350b_wl_chg_therm";
+	pm8350_msm_skin_therm {
+		reg = <PM8350_ADC7_GPIO2_100K_PU>;
+		label = "pm8350_msm_skin_therm";
 		qcom,ratiometric;
 		qcom,hw-settle-time = <200>;
 		qcom,pre-scaling = <1 1>;
 	};
 
-	pmr735b_smb_skin_therm {
-		reg = <PMR735B_ADC7_GPIO3_100K_PU>;
-		label = "pmr735b_smb_skin_therm";
+	pm8350_charger_therm {
+		reg = <PM8350_ADC7_AMUX_THM3_100K_PU>;
+		label = "pm8350_charger_therm";
 		qcom,ratiometric;
 		qcom,hw-settle-time = <200>;
 		qcom,pre-scaling = <1 1>;
@@ -190,9 +191,9 @@
 			<&pmk8350_vadc PM8350_ADC7_AMUX_THM2_100K_PU>,
 			<&pmk8350_vadc PM8350_ADC7_AMUX_THM4_100K_PU>,
 			<&pmk8350_vadc PM8350B_ADC7_AMUX_THM4_100K_PU>,
-			<&pmk8350_vadc PM8350B_ADC7_GPIO2_100K_PU>,
+			<&pmk8350_vadc PM8350_ADC7_GPIO2_100K_PU>,
 			<&pmk8350_vadc PMK8350_ADC7_AMUX_THM1_100K_PU>,
-			<&pmk8350_vadc PMR735B_ADC7_GPIO3_100K_PU>;
+			<&pmk8350_vadc PM8350_ADC7_AMUX_THM3_100K_PU>;
 
 	pm8350_quiet_therm {
 		reg = <PM8350_ADC7_AMUX_THM1_100K_PU>;
@@ -206,7 +207,7 @@
 		qcom,hw-settle-time = <200>;
 	};
 
-	pm8350_wide_rfc_therm {
+	pm8350_wifi_therm {
 		reg = <PM8350_ADC7_AMUX_THM4_100K_PU>;
 		qcom,ratiometric;
 		qcom,hw-settle-time = <200>;
@@ -218,8 +219,8 @@
 		qcom,hw-settle-time = <200>;
 	};
 
-	pm8350b_wl_chg_therm {
-		reg = <PM8350B_ADC7_GPIO2_100K_PU>;
+	pm8350_msm_skin_therm {
+		reg = <PM8350_ADC7_GPIO2_100K_PU>;
 		qcom,ratiometric;
 		qcom,hw-settle-time = <200>;
 	};
@@ -230,15 +231,16 @@
 		qcom,hw-settle-time = <200>;
 	};
 
-	pmr735b_smb_skin_therm {
-		reg = <PMR735B_ADC7_GPIO3_100K_PU>;
+	pm8350_charge_therm {
+		reg = <PM8350_ADC7_AMUX_THM3_100K_PU>;
 		qcom,ratiometric;
 		qcom,hw-settle-time = <200>;
 	};
+
 };
 
 &thermal_zones {
-	quiet-therm-usr {
+	quiet_therm {
 		polling-delay-passive = <0>;
 		polling-delay = <0>;
 		thermal-governor = "user_space";
@@ -259,7 +261,7 @@
 		};
 	};
 
-	camera-therm-usr {
+	camera_therm {
 		polling-delay-passive = <0>;
 		polling-delay = <0>;
 		thermal-governor = "user_space";
@@ -274,7 +276,7 @@
 		};
 	};
 
-	rear-cam-therm-usr {
+	wifi_therm {
 		polling-delay-passive = <0>;
 		polling-delay = <0>;
 		thermal-governor = "user_space";
@@ -289,7 +291,7 @@
 		};
 	};
 
-	conn-therm-usr {
+	conn_therm {
 		polling-delay-passive = <0>;
 		polling-delay = <0>;
 		thermal-governor = "user_space";
@@ -304,11 +306,11 @@
 		};
 	};
 
-	wlc-therm-usr {
+	cpu_therm {
 		polling-delay-passive = <0>;
 		polling-delay = <0>;
 		thermal-governor = "user_space";
-		thermal-sensors = <&pmk8350_adc_tm PM8350B_ADC7_GPIO2_100K_PU>;
+		thermal-sensors = <&pmk8350_adc_tm PM8350_ADC7_GPIO2_100K_PU>;
 		wake-capable-sensor;
 		trips {
 			active-config0 {
@@ -319,7 +321,7 @@
 		};
 	};
 
-	xo-therm-usr {
+	xo_therm {
 		polling-delay-passive = <0>;
 		polling-delay = <0>;
 		thermal-governor = "user_space";
@@ -334,11 +336,11 @@
 		};
 	};
 
-	charger-therm-usr {
+	charger_therm0 {
 		polling-delay-passive = <0>;
 		polling-delay = <0>;
 		thermal-governor = "user_space";
-		thermal-sensors = <&pmk8350_adc_tm PMR735B_ADC7_GPIO3_100K_PU>;
+		thermal-sensors = <&pmk8350_adc_tm PM8350_ADC7_AMUX_THM3_100K_PU>;
 		wake-capable-sensor;
 		trips {
 			active-config0 {
@@ -348,6 +350,7 @@
 			};
 		};
 	};
+
 };
 
 &qupv3_se5_i2c {
@@ -391,7 +394,7 @@
 			#size-cells = <0>;
 
 			pm8008_en-supply = <&PM8008I_EN>;
-			vdd_l1_l2-supply = <&S9B>;
+			vdd_l1_l2-supply = <&S12B>;
 			vdd_l3_l4-supply = <&BOB>;
 			vdd_l5-supply = <&S11B>;
 			vdd_l6-supply = <&BOB>;
@@ -411,7 +414,7 @@
 				regulator-name = "pm8008i_l2";
 				regulator-min-microvolt = <264000>;
 				regulator-max-microvolt = <1150000>;
-				qcom,min-dropout-voltage = <184000>;
+				qcom,min-dropout-voltage = <150000>;
 				qcom,hpm-min-load = <30000>;
 			};
 
@@ -436,7 +439,7 @@
 				regulator-name = "pm8008i_l5";
 				regulator-min-microvolt = <1544000>;
 				regulator-max-microvolt = <1900000>;
-				qcom,min-dropout-voltage = <152000>;
+				qcom,min-dropout-voltage = <80000>;
 			};
 
 			L6I: pm8008i_l6: regulator@4500 {
@@ -583,6 +586,116 @@
 	nvmem-names = "hap_cfg_sdam";
 	nvmem = <&pmk8350_sdam_46>;
 	qcom,pbs-client = <&pm8350b_pbs2>;
+	qcom,hpwr-supply = <&BOB>;
+	qcom,hpwr-voltage-mv = <3600>;
+	qcom,vmax-mv = <2450>;
+	qcom,lra-period-us = <4808>;
+	qcom,lra-f0-min = <195>;
+	qcom,lra-f0-max = <210>;
+	qcom,lra-f0-default = <203>;
+	qcom,lra-f0-cal-count = <592>;
+	effect_0 {
+		/* CLICK */
+		qcom,effect-id = <0>;
+		qcom,wf-vmax-mv = <3600>;
+		qcom,wf-pattern-data =  <0x01f  S_PERIOD_T_LRA  0>,
+					<0x03f  S_PERIOD_T_LRA  0>,
+					<0x05f  S_PERIOD_T_LRA  0>,
+					<0x07f  S_PERIOD_T_LRA  0>,
+					<0x17f  S_PERIOD_T_LRA  0>,
+					<0x15f  S_PERIOD_T_LRA  0>,
+					<0x13f  S_PERIOD_T_LRA  0>,
+					<0x11f  S_PERIOD_T_LRA  0>;
+		qcom,wf-pattern-period-us = <4808>;
+		qcom,wf-brake-pattern = /bits/ 8 <0x0 0x0 0x0>;
+		qcom,wf-pattern-preload;
+		qcom,wf-auto-res-disable;
+	};
+
+	effect_1 {
+		/* DOUBLE_CLICK */
+		qcom,effect-id = <1>;
+		qcom,wf-vmax-mv = <3600>;
+		qcom,wf-pattern-data =  <0x01f  S_PERIOD_T_LRA  0>,
+					<0x03f  S_PERIOD_T_LRA  0>,
+					<0x05f  S_PERIOD_T_LRA  0>,
+					<0x07f  S_PERIOD_T_LRA  0>,
+					<0x17f  S_PERIOD_T_LRA  0>,
+					<0x15f  S_PERIOD_T_LRA  0>,
+					<0x13f  S_PERIOD_T_LRA  0>,
+					<0x11f  S_PERIOD_T_LRA  0>;
+		qcom,wf-pattern-period-us = <4808>;
+		qcom,wf-brake-pattern = /bits/ 8 <0x0 0x0 0x0>;
+		qcom,wf-auto-res-disable;
+	};
+
+	effect_2 {
+		/* TICK */
+		qcom,effect-id = <2>;
+		qcom,wf-vmax-mv = <3600>;
+		qcom,wf-pattern-data =  <0x01f  S_PERIOD_T_LRA  0>,
+					<0x03f  S_PERIOD_T_LRA  0>,
+					<0x05f  S_PERIOD_T_LRA  0>,
+					<0x07f  S_PERIOD_T_LRA  0>,
+					<0x17f  S_PERIOD_T_LRA  0>,
+					<0x15f  S_PERIOD_T_LRA  0>,
+					<0x13f  S_PERIOD_T_LRA  0>,
+					<0x11f  S_PERIOD_T_LRA  0>;
+		qcom,wf-pattern-period-us = <4808>;
+		qcom,wf-brake-pattern = /bits/ 8 <0x0 0x0 0x0>;
+		qcom,wf-auto-res-disable;
+	};
+
+	effect_3 {
+		/* THUD */
+		qcom,effect-id = <3>;
+		qcom,wf-vmax-mv = <3600>;
+		qcom,wf-pattern-data =  <0x01f  S_PERIOD_T_LRA  0>,
+					<0x03f  S_PERIOD_T_LRA  0>,
+					<0x05f  S_PERIOD_T_LRA  0>,
+					<0x07f  S_PERIOD_T_LRA  0>,
+					<0x17f  S_PERIOD_T_LRA  0>,
+					<0x15f  S_PERIOD_T_LRA  0>,
+					<0x13f  S_PERIOD_T_LRA  0>,
+					<0x11f  S_PERIOD_T_LRA  0>;
+		qcom,wf-pattern-period-us = <4808>;
+		qcom,wf-brake-pattern = /bits/ 8 <0x0 0x0 0x0>;
+		qcom,wf-auto-res-disable;
+	};
+
+	effect_4 {
+		/* POP */
+		qcom,effect-id = <4>;
+		qcom,wf-vmax-mv = <3600>;
+		qcom,wf-pattern-data =  <0x01f  S_PERIOD_T_LRA  0>,
+					<0x03f  S_PERIOD_T_LRA  0>,
+					<0x05f  S_PERIOD_T_LRA  0>,
+					<0x07f  S_PERIOD_T_LRA  0>,
+					<0x17f  S_PERIOD_T_LRA  0>,
+					<0x15f  S_PERIOD_T_LRA  0>,
+					<0x13f  S_PERIOD_T_LRA  0>,
+					<0x11f  S_PERIOD_T_LRA  0>;
+		qcom,wf-pattern-period-us = <4808>;
+		qcom,wf-brake-pattern = /bits/ 8 <0x0 0x0 0x0>;
+		qcom,wf-auto-res-disable;
+	};
+
+	effect_5 {
+		/* HEAVY CLICK */
+		qcom,effect-id = <5>;
+		qcom,wf-vmax-mv = <3600>;
+		qcom,wf-pattern-data =  <0x01f  S_PERIOD_T_LRA  0>,
+					<0x03f  S_PERIOD_T_LRA  0>,
+					<0x05f  S_PERIOD_T_LRA  0>,
+					<0x07f  S_PERIOD_T_LRA  0>,
+					<0x17f  S_PERIOD_T_LRA  0>,
+					<0x15f  S_PERIOD_T_LRA  0>,
+					<0x13f  S_PERIOD_T_LRA  0>,
+					<0x11f  S_PERIOD_T_LRA  0>;
+		qcom,wf-pattern-period-us = <4808>;
+		qcom,wf-brake-pattern = /bits/ 8 <0x0 0x0 0x0>;
+		qcom,wf-auto-res-disable;
+	};
 };
 
 &pmr735b_tz {
