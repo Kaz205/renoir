@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (C) 2021 XiaoMi, Inc.
  */
-#ifdef CONFIG_FACTORY_BUILD
-#define DEBUG
-#endif
 
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -4172,7 +4168,6 @@ static int dwc3_msm_usb_set_role(struct device *dev, enum usb_role role)
 	 * previous role value to allow resetting USB controller and
 	 * PHYs.
 	 */
-
 	if (mdwc->drd_state != DRD_STATE_UNDEFINED && cur_role == role) {
 		dbg_log_string("no USB role change");
 		return 0;
@@ -5595,9 +5590,6 @@ static int dwc3_msm_gadget_vbus_draw(struct dwc3_msm *mdwc, unsigned int mA)
 		return 0;
 
 	if (mdwc->apsd_source == IIO && chg_type != POWER_SUPPLY_TYPE_USB)
-		return 0;
-
-	if (mA < 100)
 		return 0;
 
 	/* Set max current limit in uA */

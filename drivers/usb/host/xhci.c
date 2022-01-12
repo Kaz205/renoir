@@ -3,7 +3,6 @@
  * xHCI host controller driver
  *
  * Copyright (C) 2008 Intel Corp.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * Author: Sarah Sharp
  * Some code borrowed from the Linux EHCI driver.
@@ -1125,10 +1124,7 @@ int xhci_resume(struct xhci_hcd *xhci, bool hibernated)
 	int			retval = 0;
 	bool			comp_timer_running = false;
 
-	if (!hcd)
-		return 0;
-
-        if (!hcd->state)
+	if (!hcd->state)
 		return 0;
 
 	/* Wait a bit if either of the roothubs need to settle from the

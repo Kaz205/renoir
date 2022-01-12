@@ -3,7 +3,6 @@
  * composite.c - infrastructure for Composite USB Gadgets
  *
  * Copyright (C) 2006-2008 David Brownell
- * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 /* #define VERBOSE_DEBUG */
@@ -431,7 +430,7 @@ int usb_function_activate(struct usb_function *function)
 		status = -EINVAL;
 	else {
 		cdev->deactivations--;
-		if (cdev->deactivations == 0){
+		if (cdev->deactivations == 0) {
 			spin_unlock_irqrestore(&cdev->lock, flags);
 			status = usb_gadget_activate(cdev->gadget);
 			spin_lock_irqsave(&cdev->lock, flags);
@@ -745,7 +744,8 @@ static int bos_desc(struct usb_composite_dev *cdev)
 	usb_ext->bLength = USB_DT_USB_EXT_CAP_SIZE;
 	usb_ext->bDescriptorType = USB_DT_DEVICE_CAPABILITY;
 	usb_ext->bDevCapabilityType = USB_CAP_TYPE_EXT;
-	usb_ext->bmAttributes = cpu_to_le32(0);
+	usb_ext->bmAttributes = cpu_to_le32(USB_LPM_SUPPORT |
+					    USB_BESL_SUPPORT | besl);
 
 	/*
 	 * The Superspeed USB Capability descriptor shall be implemented by all
