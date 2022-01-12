@@ -11,7 +11,6 @@
 #define DEBUG
 
 //#define MDSYNC_CS
-//#define FAST_SWITCH_DEBUG
 #define FAST_SWITCH_WORKAROUND
 
 #include <linux/module.h>
@@ -1184,6 +1183,38 @@ static int cs35l45_amp_active_status_put(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+static int cs35l45_ldpm_config_get(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component =
+			snd_soc_kcontrol_component(kcontrol);
+	struct cs35l45_private *cs35l45 =
+			snd_soc_component_get_drvdata(component);
+	unsigned int ldpm_config;
+
+	regmap_read(cs35l45->regmap, CS35L45_LDPM_CONFIG, &ldpm_config);
+	dev_dbg(cs35l45->dev, "%s: LDPM_CONFIG = 0x%x\n", __func__, ldpm_config);
+	ucontrol->value.integer.value[0] = ldpm_config;
+
+	return 0;
+}
+
+static int cs35l45_ldpm_config_put(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component =
+			snd_soc_kcontrol_component(kcontrol);
+	struct cs35l45_private *cs35l45 =
+			snd_soc_component_get_drvdata(component);
+	unsigned int ldpm_config;
+
+	ldpm_config = ucontrol->value.integer.value[0];
+	dev_dbg(cs35l45->dev, "%s: LDPM_CONFIG = 0x%x\n", __func__, ldpm_config);
+	regmap_write(cs35l45->regmap, CS35L45_LDPM_CONFIG, ldpm_config);
+
+	return 0;
+}
+
 static int cs35l45_global_err_rls_get(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
@@ -1492,6 +1523,8 @@ static const struct snd_kcontrol_new cs35l45_aud_controls[] = {
 		       cs35l45_dsp_boot_get, cs35l45_dsp_boot_put),
 	SOC_SINGLE_EXT("AMP Active Status", SND_SOC_NOPM, 0, 1, 0,
 			   cs35l45_amp_active_status_get, cs35l45_amp_active_status_put),
+	SOC_SINGLE_EXT("LDPM Config", SND_SOC_NOPM, 0, 0x1ffff, 0,
+			   cs35l45_ldpm_config_get, cs35l45_ldpm_config_put),
 	SOC_SINGLE_EXT("AMP Global Error Release", SND_SOC_NOPM, 0, 0x7fffffff, 0,
 			   cs35l45_global_err_rls_get, cs35l45_global_err_rls_put),
 	SOC_SINGLE_EXT("DSP1 SYNC NUM DEVICES", SND_SOC_NOPM, 1, 8, 0,
@@ -2081,6 +2114,14 @@ static const struct cs35l45_irq_monitor cs35l45_irq_mons[] = {
 		//.callback = cs35l45_pll_unlock_event,
 	},
 #endif
+	{
+		.reg = CS35L45_IRQ1_EINT_18,
+		.mask = CS35L45_IRQ1_MASK_18,
+		.bitmask = CS35L45_GLOBAL_ERROR_MASK,
+		.description = "Global error",
+		.err_msg = "Global error detected!\n",
+		.callback = NULL,
+	},
 };
 
 static irqreturn_t cs35l45_irq(int irq, void *data)
