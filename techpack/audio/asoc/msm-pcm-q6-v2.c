@@ -2101,7 +2101,7 @@ static int msm_pcm_playback_app_type_cfg_ctl_put(struct snd_kcontrol *kcontrol,
 		cfg_data.sample_rate = ucontrol->value.integer.value[2];
 	if (ucontrol->value.integer.value[4] != 0)
 		cfg_data.copp_token = ucontrol->value.integer.value[4];
-	pr_debug("%s: fe_id- %llu session_type- %d be_id- %d app_type- %d acdb_dev_id- %d sample_rate- %d copp_token %d\n",
+	pr_err("%s: fe_id- %llu session_type- %d be_id- %d app_type- %d acdb_dev_id- %d sample_rate- %d copp_token %d\n",
 		__func__, fe_id, session_type, be_id,
 		cfg_data.app_type, cfg_data.acdb_dev_id, cfg_data.sample_rate,
 		cfg_data.copp_token);
@@ -2159,7 +2159,7 @@ static int msm_pcm_capture_app_type_cfg_ctl_put(struct snd_kcontrol *kcontrol,
 		cfg_data.sample_rate = ucontrol->value.integer.value[2];
 	if (ucontrol->value.integer.value[4] != 0)
 		cfg_data.copp_token = ucontrol->value.integer.value[4];
-	pr_debug("%s: fe_id- %llu session_type- %d be_id- %d app_type- %d acdb_dev_id- %d sample_rate- %d copp_token %d\n",
+	pr_err("%s: fe_id- %llu session_type- %d be_id- %d app_type- %d acdb_dev_id- %d sample_rate- %d copp_token %d\n",
 		__func__, fe_id, session_type, be_id,
 		cfg_data.app_type, cfg_data.acdb_dev_id, cfg_data.sample_rate,
 		cfg_data.copp_token);
