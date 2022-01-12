@@ -465,7 +465,6 @@
 			qcom,iommu-dma-addr-pool = <0x10c00000 0xee300000>;
 			dma-coherent-hint-cached;
 			iova-region-discard = <0xdff00000 0x300000>;
-			dma-coherent-hint-cached;
 			cam-smmu-label = "icp";
 			icp_iova_mem_map: iova-mem-map {
 				iova-mem-region-firmware {
