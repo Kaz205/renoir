@@ -1124,6 +1124,9 @@ int xhci_resume(struct xhci_hcd *xhci, bool hibernated)
 	int			retval = 0;
 	bool			comp_timer_running = false;
 
+	if (!hcd)
+		return 0;
+
 	if (!hcd->state)
 		return 0;
 
