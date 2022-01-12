@@ -150,6 +150,8 @@ static int cs35l41_dsp_power_ev(struct snd_soc_dapm_widget *w,
 	struct snd_soc_component *component = snd_soc_dapm_to_component(w->dapm);
 	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(component);
 
+	dev_info(cs35l41->dev, "%s: event = %d\n", __func__, event);
+
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
 		if (cs35l41->halo_booted == false)
@@ -173,6 +175,8 @@ static int cs35l41_dsp_load_ev(struct snd_soc_dapm_widget *w,
 {
 	struct snd_soc_component *component = snd_soc_dapm_to_component(w->dapm);
 	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(component);
+
+	dev_info(cs35l41->dev, "%s: event = %d\n",__func__, event);
 
 	switch (event) {
 	case SND_SOC_DAPM_POST_PMU:
@@ -361,6 +365,17 @@ static int cs35l41_do_fast_switch(struct cs35l41_private *cs35l41)
 				goto exit;
 			}
 		}
+	}
+
+	/* Verify if there is no active CSPL commands */
+	wm_adsp_read_ctl(&cs35l41->dsp, "CSPL_COMMAND", &cmd_ctl, sizeof(s32));
+	if (be32_to_cpu(cmd_ctl) != CSPL_CMD_NONE) {
+		dev_err(cs35l41->dev, "CSPL_COMMAND = %d)\n",
+			be32_to_cpu(cmd_ctl));
+		usleep_range(100, 110);
+		cmd_ctl = cpu_to_be32(CSPL_CMD_NONE);
+		wm_adsp_write_ctl(&cs35l41->dsp, "CSPL_COMMAND",
+				   &cmd_ctl, sizeof(s32));
 	}
 
 	wm_adsp_write_ctl(&cs35l41->dsp, "CSPL_UPDATE_PARAMS_CONFIG",
@@ -696,6 +711,9 @@ static const struct snd_kcontrol_new cs35l41_aud_controls[] = {
 			 0, 7, 0),
 	SOC_SINGLE("Boost Class-H Tracking Enable", CS35L41_BSTCVRT_VCTRL2, 0, 1, 0),
 	SOC_SINGLE("Boost Target Voltage", CS35L41_BSTCVRT_VCTRL1, 0, 0xAA, 0),
+	SOC_SINGLE("Noise Gate", CS35L41_NG_CFG, 0, 0x3FFF, 0),
+	//Convert hex to int, eg. 0x2005309 --> 33575689, tinymix 'VPBR Config' 33575689
+	SOC_SINGLE("VPBR Config", CS35L41_VPBR_CFG, 0, 0x7FFFFFF, 0),
 	SOC_SINGLE("AMP Enable", CS35L41_PWR_CTRL2, 0, 1, 0),
 	SOC_ENUM("PCM Soft Ramp", pcm_sft_ramp),
 	SOC_SINGLE_EXT("DSP Booted", SND_SOC_NOPM, 0, 1, 0,
@@ -996,6 +1014,10 @@ static const struct reg_sequence cs35l41_pdn_patch[] = {
 	{0x00000040, 0x00000033},
 };
 
+static const struct reg_sequence cs35l41_dsp_recovery_patch[] = {
+	{0x02800258, 0x00000000},
+	{0x0280025c, 0x00000000},
+};
 
 static int cs35l41_main_amp_event(struct snd_soc_dapm_widget *w,
 		struct snd_kcontrol *kcontrol, int event)
@@ -1009,6 +1031,7 @@ static int cs35l41_main_amp_event(struct snd_soc_dapm_widget *w,
 	bool pdn;
 	unsigned int val;
 	pr_debug("++++>CSPL: %s, event = %d, DC counter = %d.\n", __func__, event, cs35l41->dc_current_cnt);
+	dev_warn(cs35l41->dev, "%s: event = %d\n", __func__, event);
 	switch (event) {
 	case SND_SOC_DAPM_POST_PMU:
 		regmap_multi_reg_write_bypassed(cs35l41->regmap,
@@ -1040,8 +1063,12 @@ static int cs35l41_main_amp_event(struct snd_soc_dapm_widget *w,
 				break;
 			default:
 				dev_err(cs35l41->dev,
-					"Firmware status is invalid(%u)\n",
+					"Firmware status is invalid(%u), try to recorver\n",
 					fw_status);
+				regmap_multi_reg_write_bypassed(cs35l41->regmap,
+						cs35l41_dsp_recovery_patch,
+						ARRAY_SIZE(cs35l41_dsp_recovery_patch));
+				mboxcmd = CSPL_MBOX_CMD_RESUME;
 				break;
 			}
 			ret = cs35l41_set_csplmboxcmd(cs35l41, mboxcmd);
@@ -1356,10 +1383,10 @@ static int cs35l41_is_speaker_in_handset(struct snd_pcm_substream *substream,
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_dai *rcv_dai = NULL;//rtd->codec_dais[1];
 	struct cs35l41_private *cs35l41 = NULL;
-	const char *fw_name = NULL;
-        const char *SPK_DAI_NAME = NULL;
-        const char *RCV_DAI_NAME = NULL;
-        const char *HANDSET_TUNING = NULL;
+	const char *fw_name = "spk_voice_delta.txt";
+	const char *SPK_DAI_NAME = "cs35l41.1-0041";
+	const char *RCV_DAI_NAME = "cs35l41.1-0040";
+	const char *HANDSET_TUNING = "rcv_voice_delta.txt";
 	int i = 0;
         u32 is_dev_mars = 0;
         struct device_node *np = dai->dev->of_node;
@@ -1373,6 +1400,11 @@ static int cs35l41_is_speaker_in_handset(struct snd_pcm_substream *substream,
 #if defined(CONFIG_TARGET_PRODUCT_HAYDN)
         SPK_DAI_NAME = "cs35l41.0-0041";
         RCV_DAI_NAME = "cs35l41.0-0040";
+        HANDSET_TUNING = "rcv_voice_delta.txt";
+#endif
+#if defined(CONFIG_TARGET_PRODUCT_ODIN)
+        SPK_DAI_NAME = "cs35l41.1-0042";
+        RCV_DAI_NAME = "cs35l41.1-0040";
         HANDSET_TUNING = "rcv_voice_delta.txt";
 #endif
         /* modify dai name and handset tuning for mars */
@@ -1395,8 +1427,8 @@ static int cs35l41_is_speaker_in_handset(struct snd_pcm_substream *substream,
 	cs35l41 = snd_soc_component_get_drvdata(rcv_dai->component);
 	fw_name = cs35l41->fast_switch_names[cs35l41->fast_switch_file_idx];
 
-        dev_info(cs35l41->dev,"cs35l41_is_speaker_in_handset() SPK_DAI_NAME %s RCV_DAI_NAME %s HANDSET_TUNING %s",
-						SPK_DAI_NAME, RCV_DAI_NAME, HANDSET_TUNING);
+        dev_info(cs35l41->dev,"cs35l41_is_speaker_in_handset() SPK_DAI_NAME %s RCV_DAI_NAME %s HANDSET_TUNING %s fw_name %s",
+						SPK_DAI_NAME, RCV_DAI_NAME, HANDSET_TUNING, fw_name);
 
 	if (!strcmp(fw_name, HANDSET_TUNING)) {
 		dev_info(cs35l41->dev, "%s: '%s'[%d] = '%s'\n",
@@ -1731,9 +1763,9 @@ static int cs35l41_dai_set_sysclk(struct snd_soc_dai *dai,
 	return 0;
 }
 
-#if defined(CONFIG_TARGET_PRODUCT_HAYDN) || defined(CONFIG_TARGET_PRODUCT_VENUS)
 static int  cs35l41_digital_mute(struct snd_soc_dai *dai, int mute)
 {
+
 	struct cs35l41_private *cs35l41 =
 				  snd_soc_component_get_drvdata(dai->component);
 
@@ -1750,7 +1782,6 @@ static int  cs35l41_digital_mute(struct snd_soc_dai *dai, int mute)
 
 	return 0;
 }
-#endif
 
 static int cs35l41_boost_config(struct cs35l41_private *cs35l41,
 		int boost_ind, int boost_cap, int boost_ipk)
@@ -2099,12 +2130,21 @@ static int cs35l41_irq_gpio_config(struct cs35l41_private *cs35l41)
 						CS35L41_GPIO2_CTRL_SHIFT);
 	}
 
+#if defined(CONFIG_TARGET_PRODUCT_ODIN)
+	if (irq_gpio_cfg2->irq_src_sel ==
+			(CS35L41_GPIO_CTRL_ACTV_LO | CS35L41_VALID_PDATA))
+		irq_pol = IRQF_TRIGGER_FALLING;
+	else if (irq_gpio_cfg2->irq_src_sel ==
+			(CS35L41_GPIO_CTRL_ACTV_HI | CS35L41_VALID_PDATA))
+		irq_pol = IRQF_TRIGGER_RISING;
+#else
 	if (irq_gpio_cfg2->irq_src_sel ==
 			(CS35L41_GPIO_CTRL_ACTV_LO | CS35L41_VALID_PDATA))
 		irq_pol = IRQF_TRIGGER_LOW;
 	else if (irq_gpio_cfg2->irq_src_sel ==
 			(CS35L41_GPIO_CTRL_ACTV_HI | CS35L41_VALID_PDATA))
 		irq_pol = IRQF_TRIGGER_HIGH;
+#endif
 
 	return irq_pol;
 }
@@ -2121,9 +2161,7 @@ static const struct snd_soc_dai_ops cs35l41_ops = {
 	.set_fmt = cs35l41_set_dai_fmt,
 	.hw_params = cs35l41_pcm_hw_params,
 	.set_sysclk = cs35l41_dai_set_sysclk,
-#if defined(CONFIG_TARGET_PRODUCT_HAYDN) || defined(CONFIG_TARGET_PRODUCT_VENUS)
 	.digital_mute = cs35l41_digital_mute,
-#endif
 };
 
 static struct snd_soc_dai_driver cs35l41_dai[] = {
@@ -2539,6 +2577,27 @@ int cs35l41_probe(struct cs35l41_private *cs35l41,
 		/* satisfy minimum reset pulse width spec */
 		usleep_range(2000, 2100);
 		gpiod_set_value_cansleep(cs35l41->reset_gpio, 1);
+	}
+
+	cs35l41->spk_sw_gpio = devm_gpiod_get_optional(cs35l41->dev, "spksw",
+							GPIOD_OUT_LOW);
+	if (IS_ERR(cs35l41->spk_sw_gpio)) {
+		ret = PTR_ERR(cs35l41->spk_sw_gpio);
+		cs35l41->spk_sw_gpio = NULL;
+		if (ret == -EBUSY) {
+			dev_info(cs35l41->dev,
+				 "spk_rev_sw line busy, assuming shared reset\n");
+		} else {
+			dev_err(cs35l41->dev,
+				"Failed to get spk_rev_sw GPIO: %d\n", ret);
+			goto err;
+		}
+	}
+	if (cs35l41->spk_sw_gpio) {
+		/* satisfy minimum reset pulse width spec */
+		usleep_range(2000, 2100);
+		dev_info(cs35l41->dev, "set the spk_rev_sw GPIO: 0\n");
+		gpiod_set_value_cansleep(cs35l41->spk_sw_gpio, 0);
 	}
 
 	usleep_range(2000, 2100);
