@@ -38,7 +38,10 @@ struct driver_sensor_event {
 	};
 };
 
-
+static int ups_event;
+#ifdef CONFIG_QGKI_SYSTEM
+extern int us_afe_callback(int data);
+#endif
 
 static int afe_set_parameter(int port,
 		int param_id,
@@ -180,10 +183,20 @@ int32_t mi_ultrasound_apr_set_parameter(int32_t port_id, uint32_t param_id,
 	else
 		module_id = MIUS_ULTRASOUND_MODULE_RX;
 
+	if(param_id == MIUS_ULTRASOUND_UPLOAD_NONE) {
+#ifdef CONFIG_QGKI_SYSTEM
+		ret = (int32_t)us_afe_callback((const uint32_t)ups_event);
+		pr_info("[MIUS]: %s force reprot event %d ret %d\n", __func__, ups_event, ret);
+#endif
+		return ret;
+	}
+
 	ret = afe_set_parameter(port_id,
 		param_id, module_id,
 		(struct afe_mi_ultrasound_set_params_t *)user_params,
 		length);
+
+	pr_info("[MIUS]: %s param_id %x status %d\n", __func__, param_id, ret);
 
 	return ret;
 }
@@ -363,12 +376,6 @@ static int32_t process_sensorhub_msg(uint32_t *payload, uint32_t payload_size)
 }
 
 #endif
-
-#ifdef CONFIG_QGKI_SYSTEM
-extern int us_afe_callback(int data);
-#endif
-
-static int ups_event;
 
 int32_t mius_process_apr_payload(uint32_t *payload)
 {
