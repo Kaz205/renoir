@@ -7,7 +7,7 @@
  *
  * Author: Mark Brown <broonie@opensource.wolfsonmicro.com>
  */
-//#define DEBUG
+#define DEBUG
 
 #include <linux/ctype.h>
 #include <linux/module.h>
