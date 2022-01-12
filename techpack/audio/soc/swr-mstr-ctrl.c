@@ -1314,7 +1314,6 @@ static void swrm_disable_ports(struct swr_master *master,
 		dev_dbg(swrm->dev, "%s: value :%d\n", __func__, value);
 		value |= ((mport->offset1)
 				<< SWRM_DP_PORT_CTRL_OFFSET1_SHFT);
-
 		dev_dbg(swrm->dev, "%s: value :%d\n", __func__, value);
 		value |= (mport->sinterval & 0xFF);
 		dev_dbg(swrm->dev, "%s: value :%d\n", __func__, value);

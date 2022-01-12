@@ -985,7 +985,6 @@ SND_SOC_DAILINK_DEFS(display_port1,
 	DAILINK_COMP_ARRAY(COMP_CODEC("msm-ext-disp-audio-codec-rx",
 			"msm_dp_audio_codec_rx1_dai")),
 	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-routing")));
-
 SND_SOC_DAILINK_DEFS(pri_mi2s_rx,
 	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-q6-mi2s.0")),
 	DAILINK_COMP_ARRAY(COMP_CODEC("msm-stub-codec.1", "msm-stub-rx")),
@@ -1006,7 +1005,7 @@ SND_SOC_DAILINK_DEFS(sec_mi2s_tx,
 	DAILINK_COMP_ARRAY(COMP_CODEC("msm-stub-codec.1", "msm-stub-tx")),
 	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-routing")));
 
-#if defined(CONFIG_SND_SOC_TFA9874)
+#if defined(CONFIG_SND_SOC_RENOIR)
 SND_SOC_DAILINK_DEFS(tert_mi2s_rx,
        DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-q6-mi2s.2")),
        DAILINK_COMP_ARRAY(COMP_CODEC("tfa98xx.1-0034", "tfa98xx-aif-1-34"),
@@ -1185,7 +1184,9 @@ SND_SOC_DAILINK_DEFS(tx_dma_tx3,
 
 SND_SOC_DAILINK_DEFS(tx_dma_tx4,
 	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-cdc-dma-dev.45113")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("bolero_codec", "tx_macro_tx2")),
+	DAILINK_COMP_ARRAY(COMP_CODEC("bolero_codec", "tx_macro_tx2"),
+			   COMP_CODEC("wcd938x_codec", "wcd938x_cdc"),
+			   COMP_CODEC("wcd937x_codec", "wcd937x_cdc")),
 	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-routing")));
 
 SND_SOC_DAILINK_DEFS(va_dma_tx0,
@@ -1218,10 +1219,18 @@ SND_SOC_DAILINK_DEFS(proxy_rx,
 	DAILINK_COMP_ARRAY(COMP_CODEC("msm-stub-codec.1", "msm-stub-rx")),
 	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-routing")));
 
+#if defined(CONFIG_SND_SOC_AW88263S_TDM)
+SND_SOC_DAILINK_DEFS(pri_tdm_rx_1,
+	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-q6-tdm.36866")),
+	DAILINK_COMP_ARRAY(COMP_CODEC("aw882xx_smartpa.1-0034", "aw882xx-aif-1-34"),
+				COMP_CODEC("aw882xx_smartpa.1-0035", "aw882xx-aif-1-35")),
+	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-routing")));
+#else
 SND_SOC_DAILINK_DEFS(pri_tdm_rx_1,
 	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-q6-tdm.36866")),
 	DAILINK_COMP_ARRAY(COMP_CODEC("msm-stub-codec.1", "msm-stub-rx")),
 	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-routing")));
+#endif
 
 SND_SOC_DAILINK_DEFS(pri_tdm_rx_2,
 	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-q6-tdm.36868")),

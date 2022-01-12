@@ -499,7 +499,8 @@ static bool is_smic_enabled(struct snd_soc_component *component, int decimator)
 	adc_mux_reg = BOLERO_CDC_TX_INP_MUX_ADC_MUX0_CFG1 +
 			TX_MACRO_ADC_MUX_CFG_OFFSET * decimator;
 	if (snd_soc_component_read32(component, adc_mux_reg) & SWR_MIC) {
-		if (tx_priv->version == BOLERO_VERSION_2_1)
+		if (tx_priv->version == BOLERO_VERSION_2_1 ||
+			tx_priv->version == BOLERO_VERSION_2_0)
 			return true;
 		adc_reg = BOLERO_CDC_TX_INP_MUX_ADC_MUX0_CFG0 +
 			TX_MACRO_ADC_MUX_CFG_OFFSET * decimator;
@@ -755,6 +756,9 @@ static int tx_macro_tx_mixer_put(struct snd_kcontrol *kcontrol,
 
 	if (!tx_macro_get_data(component, &tx_dev, &tx_priv, __func__))
 		return -EINVAL;
+
+	dev_err(tx_dev, "%s: id:%d(%s) enable:%d active_ch_cnt:%d\n", __func__,
+		dai_id, widget->name, enable, tx_priv->active_ch_cnt[dai_id]);
 
 	if (enable) {
 		set_bit(dec_id, &tx_priv->active_ch_mask[dai_id]);
@@ -1158,7 +1162,7 @@ static int tx_macro_enable_dec(struct snd_soc_dapm_widget *w,
 				&tx_priv->tx_hpf_work[decimator].dwork,
 				msecs_to_jiffies(hpf_delay));
 			snd_soc_component_update_bits(component,
-					hpf_gate_reg, 0x02, 0x02);
+					hpf_gate_reg, 0x03, 0x02);
 			if (!is_smic_enabled(component, decimator))
 				snd_soc_component_update_bits(component,
 					hpf_gate_reg, 0x02, 0x00);
@@ -1409,6 +1413,8 @@ static int tx_macro_get_channel_map(struct snd_soc_dai *dai,
 		dev_err(tx_dev, "%s: Invalid AIF\n", __func__);
 		break;
 	}
+	dev_err(tx_dev, "%s: id:%d(%s) ch_mask:0x%x active_ch_cnt:%d active_mask: 0x%lx\n",
+		__func__, dai->id, dai->name, *tx_slot, *tx_num, tx_priv->active_ch_mask[dai->id]);
 	return 0;
 }
 

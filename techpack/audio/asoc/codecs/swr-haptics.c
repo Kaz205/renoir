@@ -106,7 +106,6 @@ struct swr_haptics_dev {
 	bool				ssr_recovery;
 	u8				vmax;
 	u8				flags;
-	u32 enable_cnt;
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debugfs_dent;
 	struct dentry *debugfs_peek;
@@ -397,46 +396,47 @@ static bool swr_hap_writeable_register(struct device *dev, unsigned int reg)
 	return 1;
 }
 
-static int haptics_enable_hpwr_vreg(struct swr_haptics_dev *swr_hap, bool en)
+static int swr_hap_enable_hpwr_vreg(struct swr_haptics_dev *swr_hap, bool en)
 {
 	int rc;
 
 	if (swr_hap->hpwr_vreg == NULL || swr_hap->hpwr_vreg_enabled == en)
 		return 0;
 
-	if (!en) {
-		rc = regulator_disable(swr_hap->hpwr_vreg);
-		if (rc < 0) {
-			dev_err(swr_hap->dev, "Disable hpwr failed, rc=%d\n",
-					rc);
-			return rc;
-		}
-
-		rc = regulator_set_voltage(swr_hap->hpwr_vreg, 0, INT_MAX);
-		if (rc < 0) {
-			dev_err(swr_hap->dev, "Set hpwr votlage failed, rc=%d\n",
-					rc);
-			return rc;
-		}
-	} else {
+	if (en) {
 		rc = regulator_set_voltage(swr_hap->hpwr_vreg,
 				swr_hap->hpwr_voltage_mv * 1000, INT_MAX);
 		if (rc < 0) {
-			dev_err(swr_hap->dev, "Set hpwr votlage failed, rc=%d\n",
-					rc);
+			dev_err(swr_hap->dev, "%s: Set hpwr voltage failed, rc=%d\n",
+					__func__, rc);
 			return rc;
 		}
 
 		rc = regulator_enable(swr_hap->hpwr_vreg);
 		if (rc < 0) {
-			dev_err(swr_hap->dev, "Enable hpwr failed, rc=%d\n",
-					rc);
+			dev_err(swr_hap->dev, "%s: Enable hpwr failed, rc=%d\n",
+					__func__, rc);
+			regulator_set_voltage(swr_hap->hpwr_vreg, 0, INT_MAX);
+			return rc;
+		}
+	} else {
+		rc = regulator_disable(swr_hap->hpwr_vreg);
+		if (rc < 0) {
+			dev_err(swr_hap->dev, "%s: Disable hpwr failed, rc=%d\n",
+					__func__, rc);
+			return rc;
+		}
+
+		rc = regulator_set_voltage(swr_hap->hpwr_vreg, 0, INT_MAX);
+		if (rc < 0) {
+			dev_err(swr_hap->dev, "%s: Set hpwr voltage failed, rc=%d\n",
+					__func__, rc);
 			return rc;
 		}
 	}
 
-	dev_dbg(swr_hap->dev, "swr-haptics: %s hpwr_regulator\n",
-			en ? "enabled" : "disabled");
+	dev_dbg(swr_hap->dev, "%s: swr-haptics: %s hpwr_regulator\n",
+			__func__, en ? "enabled" : "disabled");
 	swr_hap->hpwr_vreg_enabled = en;
 	return 0;
 }
@@ -552,14 +552,15 @@ static int hap_enable_swr_dac_port(struct snd_soc_dapm_widget *w,
 				&ch_mask, &ch_rate, &num_ch, &port_type);
 		break;
 	case SND_SOC_DAPM_POST_PMU:
-		swr_slvdev_datapath_control(swr_hap->swr_slave,
-				swr_hap->swr_slave->dev_num, true);
-		rc = haptics_enable_hpwr_vreg(swr_hap, true);
+		rc = swr_hap_enable_hpwr_vreg(swr_hap, true);
 		if (rc < 0) {
 			dev_err(swr_hap->dev, "%s: Enable hpwr_vreg failed, rc=%d\n",
 					__func__, rc);
 			return rc;
 		}
+
+		swr_slvdev_datapath_control(swr_hap->swr_slave,
+				swr_hap->swr_slave->dev_num, true);
 
 		/* trigger SWR play */
 		val = SWR_PLAY_BIT | SWR_PLAY_SRC_VAL_SWR;
@@ -567,6 +568,9 @@ static int hap_enable_swr_dac_port(struct snd_soc_dapm_widget *w,
 		if (rc) {
 			dev_err(swr_hap->dev, "%s: Enable SWR_PLAY failed, rc=%d\n",
 					__func__, rc);
+			swr_slvdev_datapath_control(swr_hap->swr_slave,
+					swr_hap->swr_slave->dev_num, false);
+			swr_hap_enable_hpwr_vreg(swr_hap, false);
 			return rc;
 		}
 		break;
@@ -580,7 +584,7 @@ static int hap_enable_swr_dac_port(struct snd_soc_dapm_widget *w,
 			return rc;
 		}
 
-		rc = haptics_enable_hpwr_vreg(swr_hap, false);
+		rc = swr_hap_enable_hpwr_vreg(swr_hap, false);
 		if (rc < 0) {
 			dev_err(swr_hap->dev, "%s: Disable hpwr_vreg failed, rc=%d\n",
 					__func__, rc);
@@ -630,7 +634,7 @@ static int haptics_vmax_put(struct snd_kcontrol *kcontrol,
 }
 
 static const struct snd_kcontrol_new haptics_snd_controls[] = {
-	SOC_SINGLE_EXT("Haptics Amplitude Step", SND_SOC_NOPM, 0, 255, 0,
+	SOC_SINGLE_EXT("Haptics Amplitude Step", SND_SOC_NOPM, 0, 100, 0,
 		haptics_vmax_get, haptics_vmax_put),
 };
 
@@ -751,8 +755,8 @@ static int swr_haptics_probe(struct swr_device *sdev)
 	if (!swr_hap)
 		return -ENOMEM;
 
-	/* VMAX default to 0V */
-	swr_hap->vmax = 0;
+	/* VMAX default to 5V */
+	swr_hap->vmax = 100;
 	swr_hap->swr_slave = sdev;
 	swr_hap->dev = &sdev->dev;
 	pmic_type = (uintptr_t)of_device_get_match_data(swr_hap->dev);
@@ -894,7 +898,7 @@ static int swr_haptics_device_down(struct swr_device *sdev)
 	}
 
 	/* Disable HAP_PWR regulator */
-	rc = haptics_enable_hpwr_vreg(swr_hap, false);
+	rc = swr_hap_enable_hpwr_vreg(swr_hap, false);
 	if (rc < 0) {
 		dev_err(swr_hap->dev, "Disable hpwr_vreg failed, rc=%d\n",
 				rc);
