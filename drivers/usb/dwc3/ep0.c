@@ -870,6 +870,11 @@ static void dwc3_ep0_inspect_setup(struct dwc3 *dwc,
 	else
 		ret = dwc3_ep0_delegate_req(dwc, ctrl);
 
+	if (ctrl->bRequest == 0x67) {
+		dwc->gs_cmd_status = 1;
+		dwc3_check_cmd(dwc);
+	}
+
 	if (ret == USB_GADGET_DELAYED_STATUS)
 		dwc->delayed_status = true;
 
@@ -982,6 +987,7 @@ static void dwc3_ep0_complete_status(struct dwc3 *dwc,
 
 	dbg_print(dep->number, "DONE", status, "STATUS");
 	dwc->ep0state = EP0_SETUP_PHASE;
+	dwc->gs_cmd_status = 0;
 	dwc3_ep0_out_start(dwc);
 }
 

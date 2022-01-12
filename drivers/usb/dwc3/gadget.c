@@ -1484,7 +1484,7 @@ static int __dwc3_gadget_kick_transfer(struct dwc3_ep *dep)
 		dwc3_stop_active_transfer(dep, true, true);
 
 		list_for_each_entry_safe(req, tmp, &dep->started_list, list)
-			dwc3_gadget_move_cancelled_request(req);
+			dwc3_gadget_move_cancelled_request(req, DWC3_REQUEST_STATUS_DEQUEUED);
 
 		/* If ep isn't started, then there's no end transfer pending */
 		if (!(dep->flags & DWC3_EP_END_TRANSFER_PENDING))
@@ -1841,7 +1841,7 @@ static int dwc3_gadget_ep_dequeue(struct usb_ep *ep,
 			 * cancelled.
 			 */
 			list_for_each_entry_safe(r, t, &dep->started_list, list)
-				dwc3_gadget_move_cancelled_request(r);
+				dwc3_gadget_move_cancelled_request(r, DWC3_REQUEST_STATUS_DEQUEUED);
 
 			/* If ep isn't started, then there's no end transfer
 			 * pending
@@ -1869,6 +1869,11 @@ int __dwc3_gadget_ep_set_halt(struct dwc3_ep *dep, int value, int protocol)
 	struct dwc3_request			*req;
 	struct dwc3_request			*tmp;
 	int					ret;
+
+	if (dep->flags & DWC3_EP_STALL) {
+		dev_dbg(dwc->dev, "Check the STALL\n");
+		return 0;
+	}
 
 	if (!dep->endpoint.desc) {
 		dev_dbg(dwc->dev, "(%s)'s desc is NULL.\n", dep->name);
@@ -1913,6 +1918,11 @@ int __dwc3_gadget_ep_set_halt(struct dwc3_ep *dep, int value, int protocol)
 		else
 			dep->flags |= DWC3_EP_STALL;
 	} else {
+		if (!(dep->flags & DWC3_EP_STALL)) {
+			dev_dbg(dwc->dev, "Do not care about the STALL\n");
+			return 0;
+		}
+
 		/*
 		 * Don't issue CLEAR_STALL command to control endpoints. The
 		 * controller automatically clears the STALL when it receives
@@ -1927,7 +1937,7 @@ int __dwc3_gadget_ep_set_halt(struct dwc3_ep *dep, int value, int protocol)
 			dwc3_stop_active_transfer(dep, true, true);
 
 			list_for_each_entry_safe(req, tmp, &dep->started_list, list)
-				dwc3_gadget_move_cancelled_request(req);
+				dwc3_gadget_move_cancelled_request(req, DWC3_REQUEST_STATUS_STALLED);
 
 			if (dep->flags & DWC3_EP_END_TRANSFER_PENDING) {
 				dep->flags |= DWC3_EP_PENDING_CLEAR_STALL;
@@ -4190,6 +4200,29 @@ void dwc3_bh_work(struct work_struct *w)
 	pm_runtime_get_sync(dwc->dev);
 	dwc3_thread_interrupt(dwc->irq, dwc->ev_buf);
 	pm_runtime_put(dwc->dev);
+}
+
+void dwc3_check_cmd_work(struct work_struct *w)
+{
+	struct dwc3 *dwc = container_of(w, struct dwc3, check_cmd_work);
+	unsigned int timeout = 200;
+
+	do {
+		msleep(5);
+	} while (--timeout && (dwc->gs_cmd_status == 1));
+
+	if (!timeout) {
+		dwc3_notify_event(dwc, DWC3_USB_RESTART_EVENT, 0);
+	} else {
+		dev_dbg(dwc->dev,
+				"GET STATUS cmd done under: %dms\n",(200 - timeout)*5);
+	}
+
+}
+
+void dwc3_check_cmd(struct dwc3 *dwc)
+{
+	schedule_work(&dwc->check_cmd_work);
 }
 
 static irqreturn_t dwc3_thread_interrupt(int irq, void *_evt)
