@@ -1347,9 +1347,9 @@ static int skl_tplg_multi_config_set_get(struct snd_kcontrol *kcontrol,
 		return -EIO;
 
 	if (is_set)
-		pipe->pipe_config_idx = ucontrol->value.enumerated.item[0];
+		pipe->cur_config_idx = ucontrol->value.enumerated.item[0];
 	else
-		ucontrol->value.enumerated.item[0]  =  pipe->pipe_config_idx;
+		ucontrol->value.enumerated.item[0] = pipe->cur_config_idx;
 
 	return 0;
 }
@@ -1811,11 +1811,11 @@ static int skl_tplg_be_fill_pipe_params(struct snd_soc_dai *dai,
 		goto err;
 
 	dev_dbg(skl->dev, "%s using pipe config: %d\n", __func__,
-		pipe->pipe_config_idx);
+		pipe->cur_config_idx);
 	if (pipe->direction == SNDRV_PCM_STREAM_PLAYBACK)
-		pipe_fmt = &pipe->configs[pipe->pipe_config_idx].out_fmt;
+		pipe_fmt = &pipe->configs[pipe->cur_config_idx].out_fmt;
 	else
-		pipe_fmt = &pipe->configs[pipe->pipe_config_idx].in_fmt;
+		pipe_fmt = &pipe->configs[pipe->cur_config_idx].in_fmt;
 
 	/* update the blob based on virtual bus_id*/
 	cfg = skl_get_ep_blob(skl, mconfig->vbus_id, link_type,
