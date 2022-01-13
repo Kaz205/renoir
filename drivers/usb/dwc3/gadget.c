@@ -273,7 +273,7 @@ static void dwc3_gadget_del_and_unmap_request(struct dwc3_ep *dep,
 {
 	struct dwc3			*dwc = dep->dwc;
 
-	list_del(&req->list);
+	list_del_init(&req->list);
 	req->remaining = 0;
 	req->needs_extra_trb = false;
 
@@ -990,6 +990,7 @@ static struct usb_request *dwc3_gadget_ep_alloc_request(struct usb_ep *ep,
 	req->epnum	= dep->number;
 	req->dep	= dep;
 	req->status	= DWC3_REQUEST_STATUS_UNKNOWN;
+	INIT_LIST_HEAD(&req->list);
 
 	trace_dwc3_alloc_request(req);
 
@@ -1805,10 +1806,20 @@ static int dwc3_gadget_ep_dequeue(struct usb_ep *ep,
 	unsigned long			flags;
 	int				ret = 0;
 
+	if (!ep || !request) {
+		dev_err(dwc->dev, "Unable to dequeue while no source\n");
+		return -EINVAL;
+	}
+
 	trace_dwc3_ep_dequeue(req);
 	dbg_ep_dequeue(dep->number, req);
 
 	spin_lock_irqsave(&dwc->lock, flags);
+
+	if (list_empty(&req->list)) {
+		dev_err(dwc->dev, "No need to dequeue while in NULL req list\n");
+		goto out;
+	}
 
 	list_for_each_entry(r, &dep->cancelled_list, list) {
 		if (r == req) {
@@ -1853,9 +1864,15 @@ static int dwc3_gadget_ep_dequeue(struct usb_ep *ep,
 		}
 	}
 
-	dev_err_ratelimited(dwc->dev, "request %pK was not queued to %s\n",
-			request, ep->name);
-	ret = -EINVAL;
+	if (request->status == -ECONNRESET && request->actual == 0) {
+		dev_err_ratelimited(dwc->dev, "No need to queue request: %pK to %s\n",
+				request, ep->name);
+	} else {
+		dev_err_ratelimited(dwc->dev, "request %pK was not queued to %s\n",
+				request, ep->name);
+		ret = -EINVAL;
+	}
+
 out:
 	spin_unlock_irqrestore(&dwc->lock, flags);
 
