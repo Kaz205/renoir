@@ -273,7 +273,9 @@ ifneq (,$(filter $(TARGET_PRODUCT), cetus))
 	obj-y	+= cs35l45/
 endif
 
-obj-y	+= tfa98xx/
+ifneq (,$(filter $(TARGET_PRODUCT), renoir))
+	obj-y	+= tfa98xx/
+endif
 
 # Module information used by KBuild framework
 obj-$(CONFIG_WCD9XXX_CODEC_CORE) += wcd_core_dlkm.o
