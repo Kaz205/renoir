@@ -3034,7 +3034,7 @@ static int tfa98xx_mute(struct snd_soc_dai *dai, int mute, int stream)
 		if (stream == SNDRV_PCM_STREAM_PLAYBACK) {
 			tfa98xx->pstream = 1;
 #if defined(CONFIG_TARGET_PRODUCT_RENOIR)
-			if(1 == tfa98xx_mixer_profile){
+			if(strcmp (tfa_cont_profile_name (tfa98xx, tfa98xx_mixer_profile), "handset")== 0){
 				if(gpio_is_valid(tfa98xx->spk_sw_gpio)){
 					gpio_direction_output(tfa98xx->spk_sw_gpio,1);
 				}
