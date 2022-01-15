@@ -403,6 +403,8 @@
 	/* IRQF_ONESHOT | IRQF_TRIGGER_FALLING */
 	mi,esd-err-irq-gpio = <&tlmm 80 0x2002>;
 
+	qcom,ulps-enabled;
+	qcom,suspend-ulps-enabled;
 	qcom,esd-check-enabled;
 	qcom,mdss-dsi-panel-status-check-mode = "reg_read";
 	qcom,mdss-dsi-panel-status-offset-command = [
