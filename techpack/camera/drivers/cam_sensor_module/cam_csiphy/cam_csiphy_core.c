@@ -3,6 +3,7 @@
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
  */
 
+#include <linux/hwid.h>
 #include <linux/module.h>
 
 #include <dt-bindings/msm/msm-camera.h>
