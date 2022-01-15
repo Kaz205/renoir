@@ -310,6 +310,8 @@
 	mi,mdss-dsi-panel-bl-nolp-enable;
 	mi,mdss-dsi-panel-bl-nolp-index = <3>;
 
+	qcom,ulps-enabled;
+	qcom,suspend-ulps-enabled;
 	qcom,esd-check-enabled;
 	qcom,esd-aod-check-enabled;
 	qcom,mdss-dsi-panel-status-check-mode = "reg_read";
