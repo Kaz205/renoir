@@ -857,7 +857,7 @@ static int fts_irq_registration(struct fts_ts_data *ts_data)
 	pdata->irq_gpio_flags = IRQF_TRIGGER_FALLING | IRQF_ONESHOT;
 	FTS_INFO("irq:%d, flag:%x", ts_data->irq, pdata->irq_gpio_flags);
 	ret = request_threaded_irq(ts_data->irq, NULL, fts_irq_handler,
-							   pdata->irq_gpio_flags,
+							   pdata->irq_gpio_flags | IRQF_PERF_AFFINE,
 							   FTS_DRIVER_NAME, ts_data);
 
 	return ret;
