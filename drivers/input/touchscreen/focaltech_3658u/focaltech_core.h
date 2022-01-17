@@ -55,6 +55,7 @@
 #include <linux/time.h>
 #include <linux/jiffies.h>
 #include <linux/fs.h>
+#include <linux/pm_qos.h>
 #include <linux/proc_fs.h>
 #include <linux/version.h>
 #include <linux/types.h>
@@ -63,6 +64,8 @@
 #include <linux/dma-mapping.h>
 #include <linux/power_supply.h>
 #include "focaltech_common.h"
+
+#include <linux/spi/spi-msm-geni.h>
 
 /*****************************************************************************
 * Private constant and macro definitions using #define
@@ -293,6 +296,9 @@ struct fts_ts_data {
 	u8 fps_state;
 	u8 freq_val1;
 	u8 freq_val2;
+
+	struct pm_qos_request pm_spi_req;
+	struct pm_qos_request pm_touch_req;
 };
 
 enum GESTURE_MODE_TYPE {
