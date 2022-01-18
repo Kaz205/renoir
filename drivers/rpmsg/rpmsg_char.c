@@ -458,7 +458,7 @@ static void rpmsg_ctrldev_release_device(struct device *dev)
 
 	ida_simple_remove(&rpmsg_ctrl_ida, dev->id);
 	ida_simple_remove(&rpmsg_minor_ida, MINOR(dev->devt));
-	cdev_device_del(&ctrldev->cdev, &ctrldev->dev);
+	cdev_del(&ctrldev->cdev);
 	kfree(ctrldev);
 }
 
@@ -493,12 +493,18 @@ static int rpmsg_chrdev_probe(struct rpmsg_device *rpdev)
 	dev->id = ret;
 	dev_set_name(&ctrldev->dev, "rpmsg_ctrl%d", ret);
 
-	ret = cdev_device_add(&ctrldev->cdev, &ctrldev->dev);
+	ret = cdev_add(&ctrldev->cdev, dev->devt, 1);
 	if (ret)
 		goto free_ctrl_ida;
 
 	/* We can now rely on the release function for cleanup */
 	dev->release = rpmsg_ctrldev_release_device;
+
+	ret = device_add(dev);
+	if (ret) {
+		dev_err(&rpdev->dev, "device_add failed: %d\n", ret);
+		put_device(dev);
+	}
 
 	dev_set_drvdata(&rpdev->dev, ctrldev);
 
