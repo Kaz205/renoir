@@ -10,7 +10,7 @@ ifeq ($(call is-board-platform-in-list, $(RMNET_CORE_DLKM_PLATFORMS_LIST)),true)
 LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 
-LOCAL_CFLAGS := -Wno-macro-redefined -Wno-unused-function -Wall -Werror
+LOCAL_CFLAGS := -Wno-macro-redefined -Wno-unused-function -Wall
 LOCAL_CLANG :=true
 
 LOCAL_MODULE_PATH := $(KERNEL_MODULES_OUT)
@@ -40,7 +40,7 @@ include $(DLKM_DIR)/AndroidKernelModule.mk
 ######## Create RMNET_CTL DLKM ########
 include $(CLEAR_VARS)
 
-LOCAL_CFLAGS := -Wno-macro-redefined -Wno-unused-function -Wall -Werror
+LOCAL_CFLAGS := -Wno-macro-redefined -Wno-unused-function -Wall
 LOCAL_CLANG :=true
 
 LOCAL_MODULE_PATH := $(KERNEL_MODULES_OUT)
