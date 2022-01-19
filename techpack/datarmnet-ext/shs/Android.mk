@@ -11,7 +11,7 @@ ifeq ($(BOARD_COMMON_DIR),)
     BOARD_COMMON_DIR := device/qcom/common
 endif
 
-LOCAL_CFLAGS := -Wno-macro-redefined -Wno-unused-function -Wall -Werror
+LOCAL_CFLAGS := -Wno-macro-redefined -Wno-unused-function -Wall
 LOCAL_CLANG :=true
 
 LOCAL_MODULE_PATH := $(KERNEL_MODULES_OUT)
