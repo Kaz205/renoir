@@ -2168,6 +2168,7 @@ static void context_notify_user(struct smq_invoke_ctx *ctx,
 		ctx->early_wake_time = early_wake_time;
 		if (ctx->asyncjob.isasyncjob)
 			break;
+		fallthrough;
 	case EARLY_RESPONSE:
 		/* rpc framework early response with return value */
 		if (ctx->asyncjob.isasyncjob)
@@ -6075,18 +6076,19 @@ static long fastrpc_device_ioctl(struct file *file, unsigned int ioctl_num,
 	switch (ioctl_num) {
 	case FASTRPC_IOCTL_INVOKE:
 		size = sizeof(struct fastrpc_ioctl_invoke);
-		/* fall through */
+		fallthrough;
 	case FASTRPC_IOCTL_INVOKE_FD:
 		if (!size)
 			size = sizeof(struct fastrpc_ioctl_invoke_fd);
-		/* fall through */
+		fallthrough;
 	case FASTRPC_IOCTL_INVOKE_ATTRS:
 		if (!size)
 			size = sizeof(struct fastrpc_ioctl_invoke_attrs);
-		/* fall through */
+		fallthrough;
 	case FASTRPC_IOCTL_INVOKE_CRC:
 		if (!size)
 			size = sizeof(struct fastrpc_ioctl_invoke_crc);
+		fallthrough;
 	case FASTRPC_IOCTL_INVOKE_PERF:
 		if (!size)
 			size = sizeof(struct fastrpc_ioctl_invoke_perf);
@@ -6136,7 +6138,7 @@ static long fastrpc_device_ioctl(struct file *file, unsigned int ioctl_num,
 		p.init.attrs = 0;
 		p.init.siglen = 0;
 		size = sizeof(struct fastrpc_ioctl_init);
-		/* fall through */
+		fallthrough;
 	case FASTRPC_IOCTL_INIT_ATTRS:
 		if (!size)
 			size = sizeof(struct fastrpc_ioctl_init_attrs);

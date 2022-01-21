@@ -115,6 +115,7 @@ void cnss_bus_deinit(struct cnss_plat_data *plat_priv)
 	switch (plat_priv->bus_type) {
 	case CNSS_BUS_PCI:
 		cnss_pci_deinit(plat_priv);
+		break;
 	default:
 		cnss_pr_err("Unsupported bus type: %d\n",
 			    plat_priv->bus_type);
