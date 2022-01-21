@@ -625,6 +625,9 @@ struct ath10k_hw_params {
 	bool tx_mac_seq_by_fw;
 
 	bool dynamic_sar_support;
+
+	/* limit tx credit */
+	bool tx_credit_limit;
 };
 
 struct htt_rx_desc;
