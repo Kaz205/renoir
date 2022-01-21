@@ -43,18 +43,12 @@ struct qmi_servreg_notif_query_state_req_msg_v01 {
 	char service_name[QMI_SERVREG_NOTIF_NAME_LENGTH_V01 + 1];
 };
 #define QMI_SERVREG_NOTIF_QUERY_STATE_REQ_MSG_V01_MAX_MSG_LEN 67
-static
-struct qmi_elem_info qmi_servreg_notif_query_state_req_msg_v01_ei[];
-
 struct qmi_servreg_notif_query_state_resp_msg_v01 {
 	struct qmi_response_type_v01 resp;
 	uint8_t curr_state_valid;
 	enum qmi_servreg_notif_service_state_enum_type_v01 curr_state;
 };
 #define QMI_SERVREG_NOTIF_QUERY_STATE_RESP_MSG_V01_MAX_MSG_LEN 14
-static
-struct qmi_elem_info qmi_servreg_notif_query_state_resp_msg_v01_ei[];
-
 struct qmi_servreg_notif_state_updated_ind_msg_v01 {
 	enum qmi_servreg_notif_service_state_enum_type_v01 curr_state;
 	char service_name[QMI_SERVREG_NOTIF_NAME_LENGTH_V01 + 1];
@@ -152,66 +146,6 @@ struct qmi_elem_info qmi_servreg_notif_register_listener_resp_msg_v01_ei[] = {
 		.tlv_type       = 0x10,
 		.offset         = offsetof(struct
 			qmi_servreg_notif_register_listener_resp_msg_v01,
-								curr_state),
-	},
-	{
-		.data_type      = QMI_EOTI,
-		.array_type       = NO_ARRAY,
-		.tlv_type       = QMI_COMMON_TLV_TYPE,
-	},
-};
-
-static
-struct qmi_elem_info qmi_servreg_notif_query_state_req_msg_v01_ei[] = {
-	{
-		.data_type      = QMI_STRING,
-		.elem_len       = QMI_SERVREG_NOTIF_NAME_LENGTH_V01 + 1,
-		.elem_size      = sizeof(char),
-		.array_type       = NO_ARRAY,
-		.tlv_type       = 0x01,
-		.offset         = offsetof(struct
-				qmi_servreg_notif_query_state_req_msg_v01,
-								service_name),
-	},
-	{
-		.data_type      = QMI_EOTI,
-		.array_type       = NO_ARRAY,
-		.tlv_type       = QMI_COMMON_TLV_TYPE,
-	},
-};
-
-static
-struct qmi_elem_info qmi_servreg_notif_query_state_resp_msg_v01_ei[] = {
-	{
-		.data_type      = QMI_STRUCT,
-		.elem_len       = 1,
-		.elem_size      = sizeof(struct qmi_response_type_v01),
-		.array_type       = NO_ARRAY,
-		.tlv_type       = 0x02,
-		.offset         = offsetof(struct
-				qmi_servreg_notif_query_state_resp_msg_v01,
-									resp),
-		.ei_array      = qmi_response_type_v01_ei,
-	},
-	{
-		.data_type      = QMI_OPT_FLAG,
-		.elem_len       = 1,
-		.elem_size      = sizeof(uint8_t),
-		.array_type       = NO_ARRAY,
-		.tlv_type       = 0x10,
-		.offset         = offsetof(struct
-				qmi_servreg_notif_query_state_resp_msg_v01,
-							curr_state_valid),
-	},
-	{
-		.data_type      = QMI_SIGNED_4_BYTE_ENUM,
-		.elem_len       = 1,
-		.elem_size      = sizeof(enum
-				qmi_servreg_notif_service_state_enum_type_v01),
-		.array_type       = NO_ARRAY,
-		.tlv_type       = 0x10,
-		.offset         = offsetof(struct
-				qmi_servreg_notif_query_state_resp_msg_v01,
 								curr_state),
 	},
 	{

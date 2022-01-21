@@ -1674,6 +1674,7 @@ static int goodix_esd_notifier_callback(struct notifier_block *nb,
 			goodix_core_data->hw_ops->charger_on(goodix_core_data, true);
 		if (goodix_core_data->palm_status)
 			goodix_core_data->hw_ops->palm_on(goodix_core_data, true);
+		fallthrough;
 	case NOTIFY_ESD_ON:
 		goodix_ts_esd_on(ts_esd->ts_core);
 		break;

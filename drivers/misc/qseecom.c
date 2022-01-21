@@ -3668,7 +3668,7 @@ static int __qseecom_process_reentrancy(struct qseecom_command_scm_resp *resp,
 			data->client.app_id, data->client.app_name, resp->data);
 			return ret;
 		}
-		/* fall through to process incomplete request */
+		fallthrough;
 	case QSEOS_RESULT_INCOMPLETE:
 		qseecom.app_block_ref_cnt++;
 		ptr_app->app_blocked = true;
@@ -3676,10 +3676,12 @@ static int __qseecom_process_reentrancy(struct qseecom_command_scm_resp *resp,
 		ptr_app->app_blocked = false;
 		qseecom.app_block_ref_cnt--;
 		wake_up_interruptible_all(&qseecom.app_block_wq);
-		if (ret)
+		if (ret) {
 			pr_err("process_incomplete_cmd failed err: %d\n",
 					ret);
-		return ret;
+			return ret;
+		}
+		fallthrough;
 	case QSEOS_RESULT_SUCCESS:
 		return ret;
 	default:
@@ -3741,8 +3743,8 @@ static int __qseecom_send_cmd(struct qseecom_dev_handle *data,
 				(uint32_t)(__qseecom_uvirt_to_kphys(
 				data, (uintptr_t)req->resp_buf));
 		} else {
-			send_data_req.req_ptr = (uint32_t)req->cmd_req_buf;
-			send_data_req.rsp_ptr = (uint32_t)req->resp_buf;
+			send_data_req.req_ptr = (uint32_t)(u64)req->cmd_req_buf;
+			send_data_req.rsp_ptr = (uint32_t)(u64)req->resp_buf;
 		}
 
 		send_data_req.req_len = req->cmd_req_len;

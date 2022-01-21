@@ -958,6 +958,7 @@ static bool ipa3_usb_check_chan_params(struct ipa_usb_xdci_chan_params *params)
 			IPA_USB_ERR("DPL supports only DL channel\n");
 			return false;
 		}
+		break;
 	case IPA_USB_RNDIS:
 	case IPA_USB_ECM:
 		if (ipa3_usb_ctx->teth_prot_ctx[params->teth_prot].state ==
