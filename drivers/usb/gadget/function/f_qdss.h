@@ -65,9 +65,9 @@ struct f_qdss {
 	bool qdss_close;
 };
 
-static void *_qdss_ipc_log;
-
 #define NUM_PAGES	10 /* # of pages for ipc logging */
+
+static void *_qdss_ipc_log;
 
 #ifdef CONFIG_DYNAMIC_DEBUG
 #define qdss_log(fmt, ...) do { \

@@ -4119,46 +4119,56 @@ int msm_comm_try_state(struct msm_vidc_inst *inst, int state)
 		rc = msm_comm_init_core(inst);
 		if (rc || state <= get_flipped_state(inst->state, state))
 			break;
+		fallthrough;
 	case MSM_VIDC_CORE_INIT_DONE:
 		rc = msm_comm_init_core_done(inst);
 		if (rc || state <= get_flipped_state(inst->state, state))
 			break;
+		fallthrough;
 	case MSM_VIDC_OPEN:
 		rc = msm_comm_session_init(flipped_state, inst);
 		if (rc || state <= get_flipped_state(inst->state, state))
 			break;
+		fallthrough;
 	case MSM_VIDC_OPEN_DONE:
 		rc = msm_comm_session_init_done(flipped_state, inst);
 		if (rc || state <= get_flipped_state(inst->state, state))
 			break;
+		fallthrough;
 	case MSM_VIDC_LOAD_RESOURCES:
 		rc = msm_vidc_load_resources(flipped_state, inst);
 		if (rc || state <= get_flipped_state(inst->state, state))
 			break;
+		fallthrough;
 	case MSM_VIDC_LOAD_RESOURCES_DONE:
 	case MSM_VIDC_START:
 		rc = msm_vidc_start(flipped_state, inst);
 		if (rc || state <= get_flipped_state(inst->state, state))
 			break;
+		fallthrough;
 	case MSM_VIDC_START_DONE:
 		rc = wait_for_state(inst, flipped_state, MSM_VIDC_START_DONE,
 				HAL_SESSION_START_DONE);
 		if (rc || state <= get_flipped_state(inst->state, state))
 			break;
+		fallthrough;
 	case MSM_VIDC_STOP:
 		rc = msm_vidc_stop(flipped_state, inst);
 		if (rc || state <= get_flipped_state(inst->state, state))
 			break;
+		fallthrough;
 	case MSM_VIDC_STOP_DONE:
 		rc = wait_for_state(inst, flipped_state, MSM_VIDC_STOP_DONE,
 				HAL_SESSION_STOP_DONE);
 		if (rc || state <= get_flipped_state(inst->state, state))
 			break;
 		s_vpr_h(inst->sid, "Moving to Stop Done state\n");
+		fallthrough;
 	case MSM_VIDC_RELEASE_RESOURCES:
 		rc = msm_vidc_release_res(flipped_state, inst);
 		if (rc || state <= get_flipped_state(inst->state, state))
 			break;
+		fallthrough;
 	case MSM_VIDC_RELEASE_RESOURCES_DONE:
 		rc = wait_for_state(inst, flipped_state,
 			MSM_VIDC_RELEASE_RESOURCES_DONE,
@@ -4166,22 +4176,26 @@ int msm_comm_try_state(struct msm_vidc_inst *inst, int state)
 		if (rc || state <= get_flipped_state(inst->state, state))
 			break;
 		s_vpr_h(inst->sid, "Moving to release resources done state\n");
+		fallthrough;
 	case MSM_VIDC_CLOSE:
 		rc = msm_comm_session_close(flipped_state, inst);
 		if (rc || state <= get_flipped_state(inst->state, state))
 			break;
+		fallthrough;
 	case MSM_VIDC_CLOSE_DONE:
 		rc = wait_for_state(inst, flipped_state, MSM_VIDC_CLOSE_DONE,
 				HAL_SESSION_END_DONE);
 		if (rc || state <= get_flipped_state(inst->state, state))
 			break;
 		msm_comm_session_clean(inst);
+		fallthrough;
 	case MSM_VIDC_CORE_UNINIT:
 	case MSM_VIDC_CORE_INVALID:
 		s_vpr_h(inst->sid, "Sending core uninit\n");
 		rc = msm_vidc_deinit_core(inst);
 		if (rc || state == get_flipped_state(inst->state, state))
 			break;
+		fallthrough;
 	default:
 		s_vpr_e(inst->sid, "State not recognized\n");
 		rc = -EINVAL;
