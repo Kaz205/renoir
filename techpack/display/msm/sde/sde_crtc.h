@@ -372,12 +372,12 @@ struct sde_crtc {
 
 	u32 cp_pu_feature_mask;
 
-	u32 ltm_buffer_cnt;
+	atomic_long_t ltm_buffer_cnt;
 	struct sde_ltm_buffer *ltm_buffers[LTM_BUFFER_SIZE];
 	struct list_head ltm_buf_free;
 	struct list_head ltm_buf_busy;
-	bool ltm_hist_en;
-	bool ltm_merge_clear_pending;
+	atomic_t ltm_hist_en;
+	atomic_t ltm_merge_clear_pending;
 	struct drm_msm_ltm_cfg_param ltm_cfg;
 	struct mutex ltm_buffer_lock;
 	spinlock_t ltm_lock;
