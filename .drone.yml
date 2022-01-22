@@ -8,7 +8,8 @@ steps:
     image: archlinux:base-devel
     commands:
       - curl -LO "https://repo.archlinuxcn.org/x86_64/glibc-linux4-2.33-4-x86_64.pkg.tar.zst" && bsdtar -C / -xvf "glibc-linux4-2.33-4-x86_64.pkg.tar.zst"
-      - pacman -Sy && pacman -S git bc inetutils python2 zip aarch64-linux-gnu-gcc arm-none-eabi-gcc --noconfirm
+      - pacman -Sy && pacman -S git bc inetutils python2 zip aarch64-linux-gnu-gcc arm-none-eabi-gcc clang lld llvm --noconfirm
+      - git clone https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 google-clang -j$(nproc --all)
       - git clone https://github.com/Kaz205/AnyKernel3 -b floral --depth=1
       - ./drone.sh
       - curl -i -T AnyKernel3/kernel.zip https://oshi.at
