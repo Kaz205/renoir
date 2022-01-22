@@ -1974,12 +1974,11 @@ static void _sde_clear_ltm_merge_mode(struct sde_crtc *sde_crtc)
 		return;
 	}
 
-	spin_lock_irqsave(&sde_crtc->ltm_lock, irq_flags);
-	if (!sde_crtc->ltm_merge_clear_pending) {
-		spin_unlock_irqrestore(&sde_crtc->ltm_lock, irq_flags);
+	if (!atomic_read(&sde_crtc->ltm_merge_clear_pending)) {
 		return;
 	}
 
+	spin_lock_irqsave(&sde_crtc->ltm_lock, irq_flags);
 	sde_cp_dspp_flush_helper(sde_crtc, SDE_CP_CRTC_DSPP_LTM_HIST_CTL);
 	for (i = 0; i < num_mixers; i++) {
 		hw_dspp = sde_crtc->mixers[i].hw_dspp;
@@ -1991,9 +1990,8 @@ static void _sde_clear_ltm_merge_mode(struct sde_crtc *sde_crtc)
 		if (ctl->ops.update_bitmask_dspp)
 			ctl->ops.update_bitmask_dspp(ctl, hw_dspp->idx, 1);
 	}
-
-	sde_crtc->ltm_merge_clear_pending = false;
 	spin_unlock_irqrestore(&sde_crtc->ltm_lock, irq_flags);
+	atomic_set(&sde_crtc->ltm_merge_clear_pending, 0);
 }
 
 void sde_cp_crtc_apply_properties(struct drm_crtc *crtc)
@@ -2333,7 +2331,7 @@ void sde_cp_crtc_destroy_properties(struct drm_crtc *crtc)
 	if (sde_crtc->hist_blob)
 		drm_property_blob_put(sde_crtc->hist_blob);
 
-	for (i = 0; i < sde_crtc->ltm_buffer_cnt; i++) {
+	for (i = 0; i < atomic_long_read(&sde_crtc->ltm_buffer_cnt); i++) {
 		if (sde_crtc->ltm_buffers[i]) {
 			msm_gem_put_vaddr(sde_crtc->ltm_buffers[i]->gem);
 			drm_framebuffer_put(sde_crtc->ltm_buffers[i]->fb);
@@ -2343,9 +2341,9 @@ void sde_cp_crtc_destroy_properties(struct drm_crtc *crtc)
 			sde_crtc->ltm_buffers[i] = NULL;
 		}
 	}
-	sde_crtc->ltm_buffer_cnt = 0;
-	sde_crtc->ltm_hist_en = false;
-	sde_crtc->ltm_merge_clear_pending = false;
+	atomic_long_set(&sde_crtc->ltm_buffer_cnt, 0);
+	atomic_set(&sde_crtc->ltm_hist_en, 0);
+	atomic_set(&sde_crtc->ltm_merge_clear_pending, 0);
 	sde_crtc->hist_irq_idx = -1;
 
 	mutex_destroy(&sde_crtc->crtc_cp_lock);
@@ -2362,7 +2360,6 @@ void sde_cp_crtc_suspend(struct drm_crtc *crtc)
 	struct sde_crtc *sde_crtc = NULL;
 	struct sde_cp_node *prop_node = NULL, *n = NULL;
 	bool ad_suspend = false;
-	unsigned long irq_flags;
 
 	if (!crtc) {
 		DRM_ERROR("crtc %pK\n", crtc);
@@ -2389,10 +2386,8 @@ void sde_cp_crtc_suspend(struct drm_crtc *crtc)
 	}
 	mutex_unlock(&sde_crtc->crtc_cp_lock);
 
-	spin_lock_irqsave(&sde_crtc->ltm_lock, irq_flags);
-	sde_crtc->ltm_hist_en = false;
-	sde_crtc->ltm_merge_clear_pending = false;
-	spin_unlock_irqrestore(&sde_crtc->ltm_lock, irq_flags);
+	atomic_set(&sde_crtc->ltm_hist_en, 0);
+	atomic_set(&sde_crtc->ltm_merge_clear_pending, 0);
 
 	if (ad_suspend)
 		sde_cp_ad_set_prop(sde_crtc, AD_SUSPEND);
@@ -2430,7 +2425,7 @@ void sde_cp_crtc_clear(struct drm_crtc *crtc)
 	list_del_init(&sde_crtc->user_event_list);
 	spin_unlock_irqrestore(&sde_crtc->spin_lock, flags);
 
-	for (i = 0; i < sde_crtc->ltm_buffer_cnt; i++) {
+	for (i = 0; i < atomic_long_read(&sde_crtc->ltm_buffer_cnt); i++) {
 		if (sde_crtc->ltm_buffers[i]) {
 			msm_gem_put_vaddr(sde_crtc->ltm_buffers[i]->gem);
 			drm_framebuffer_put(sde_crtc->ltm_buffers[i]->fb);
@@ -2440,9 +2435,9 @@ void sde_cp_crtc_clear(struct drm_crtc *crtc)
 			sde_crtc->ltm_buffers[i] = NULL;
 		}
 	}
-	sde_crtc->ltm_buffer_cnt = 0;
-	sde_crtc->ltm_hist_en = false;
-	sde_crtc->ltm_merge_clear_pending = false;
+	atomic_long_set(&sde_crtc->ltm_buffer_cnt, 0);
+	atomic_set(&sde_crtc->ltm_hist_en, 0);
+	atomic_set(&sde_crtc->ltm_merge_clear_pending, 0);
 	sde_crtc->hist_irq_idx = -1;
 	INIT_LIST_HEAD(&sde_crtc->ltm_buf_free);
 	INIT_LIST_HEAD(&sde_crtc->ltm_buf_busy);
@@ -3519,25 +3514,23 @@ static void _sde_cp_crtc_free_ltm_buffer(struct sde_crtc *sde_crtc, void *cfg)
 		return;
 	}
 
-	spin_lock_irqsave(&sde_crtc->ltm_lock, irq_flags);
-	if (sde_crtc->ltm_hist_en) {
-		spin_unlock_irqrestore(&sde_crtc->ltm_lock, irq_flags);
+	if (atomic_read(&sde_crtc->ltm_hist_en)) {
 		DRM_ERROR("cannot free LTM buffers when hist is enabled\n");
 		return;
 	}
-	if (!sde_crtc->ltm_buffer_cnt) {
+	if (!atomic_long_read(&sde_crtc->ltm_buffer_cnt)) {
 		/* ltm_buffers are already freed */
-		spin_unlock_irqrestore(&sde_crtc->ltm_lock, irq_flags);
 		return;
 	}
+	spin_lock_irqsave(&sde_crtc->ltm_lock, irq_flags);
 	if (!list_empty(&sde_crtc->ltm_buf_busy)) {
 		spin_unlock_irqrestore(&sde_crtc->ltm_lock, irq_flags);
 		DRM_ERROR("ltm_buf_busy is not empty\n");
 		return;
 	}
 
-	buffer_count = sde_crtc->ltm_buffer_cnt;
-	sde_crtc->ltm_buffer_cnt = 0;
+	buffer_count = atomic_long_read(&sde_crtc->ltm_buffer_cnt);
+	atomic_long_set(&sde_crtc->ltm_buffer_cnt, 0);
 	INIT_LIST_HEAD(&sde_crtc->ltm_buf_free);
 	INIT_LIST_HEAD(&sde_crtc->ltm_buf_busy);
 	spin_unlock_irqrestore(&sde_crtc->ltm_lock, irq_flags);
@@ -3583,14 +3576,11 @@ static void _sde_cp_crtc_set_ltm_buffer(struct sde_crtc *sde_crtc, void *cfg)
 		return;
 	}
 
-	spin_lock_irqsave(&sde_crtc->ltm_lock, irq_flags);
-	if (sde_crtc->ltm_buffer_cnt) {
-		spin_unlock_irqrestore(&sde_crtc->ltm_lock, irq_flags);
+	if (atomic_long_read(&sde_crtc->ltm_buffer_cnt)) {
 		DRM_DEBUG("%d ltm_buffers already allocated\n",
 			sde_crtc->ltm_buffer_cnt);
 		return;
 	}
-	spin_unlock_irqrestore(&sde_crtc->ltm_lock, irq_flags);
 
 	expected_size = sizeof(struct drm_msm_ltm_stats_data) + LTM_GUARD_BYTES;
 	for (i = 0; i < num; i++) {
@@ -3657,8 +3647,8 @@ static void _sde_cp_crtc_set_ltm_buffer(struct sde_crtc *sde_crtc, void *cfg)
 	for (i = 0; i < num; i++)
 		list_add(&sde_crtc->ltm_buffers[i]->node,
 			&sde_crtc->ltm_buf_free);
-	sde_crtc->ltm_buffer_cnt = num;
 	spin_unlock_irqrestore(&sde_crtc->ltm_lock, irq_flags);
+	atomic_long_set(&sde_crtc->ltm_buffer_cnt, num);
 
 	return;
 exit:
@@ -3704,13 +3694,12 @@ static void _sde_cp_crtc_queue_ltm_buffer(struct sde_crtc *sde_crtc, void *cfg)
 	}
 	num_mixers = sde_crtc->num_mixers;
 
-	spin_lock_irqsave(&sde_crtc->ltm_lock, irq_flags);
-	if (!sde_crtc->ltm_buffer_cnt) {
-		spin_unlock_irqrestore(&sde_crtc->ltm_lock, irq_flags);
+	if (!atomic_long_read(&sde_crtc->ltm_buffer_cnt)) {
 		DRM_ERROR("LTM buffers are not allocated\n");
 		return;
 	}
 
+	spin_lock_irqsave(&sde_crtc->ltm_lock, irq_flags);
 	if (list_empty(&sde_crtc->ltm_buf_free))
 		submit_buf = true;
 	for (i = 0; i < LTM_BUFFER_SIZE; i++) {
@@ -3797,14 +3786,13 @@ static void _sde_cp_crtc_enable_ltm_hist(struct sde_crtc *sde_crtc,
 	unsigned long irq_flags;
 	struct sde_hw_mixer *hw_lm = hw_cfg->mixer_info;
 
-	spin_lock_irqsave(&sde_crtc->ltm_lock, irq_flags);
-	if (!sde_crtc->ltm_buffer_cnt) {
-		spin_unlock_irqrestore(&sde_crtc->ltm_lock, irq_flags);
+	if (!atomic_long_read(&sde_crtc->ltm_buffer_cnt)) {
 		DRM_ERROR("LTM buffers are not allocated\n");
 		return;
 	}
 
-	if (!hw_lm->cfg.right_mixer && sde_crtc->ltm_hist_en) {
+	spin_lock_irqsave(&sde_crtc->ltm_lock, irq_flags);
+	if (!hw_lm->cfg.right_mixer && atomic_read(&sde_crtc->ltm_hist_en)) {
 		/* histogram is already enabled */
 		spin_unlock_irqrestore(&sde_crtc->ltm_lock, irq_flags);
 		return;
@@ -3813,7 +3801,7 @@ static void _sde_cp_crtc_enable_ltm_hist(struct sde_crtc *sde_crtc,
 	ret = _sde_cp_crtc_get_ltm_buffer(sde_crtc, &addr);
 	if (!ret) {
 		if (!hw_lm->cfg.right_mixer)
-			sde_crtc->ltm_hist_en = true;
+			atomic_set(&sde_crtc->ltm_hist_en, 1);
 		hw_dspp->ops.setup_ltm_hist_ctrl(hw_dspp, hw_cfg,
 			true, addr);
 		SDE_EVT32(SDE_EVTLOG_FUNC_ENTRY);
@@ -3830,12 +3818,12 @@ static void _sde_cp_crtc_disable_ltm_hist(struct sde_crtc *sde_crtc,
 	u8 hist_off = 1;
 	struct drm_event event;
 
+	atomic_set(&sde_crtc->ltm_hist_en, 0);
+	atomic_set(&sde_crtc->ltm_merge_clear_pending, 1);
 	spin_lock_irqsave(&sde_crtc->ltm_lock, irq_flags);
-	sde_crtc->ltm_hist_en = false;
-	sde_crtc->ltm_merge_clear_pending = true;
 	INIT_LIST_HEAD(&sde_crtc->ltm_buf_free);
 	INIT_LIST_HEAD(&sde_crtc->ltm_buf_busy);
-	for (i = 0; i < sde_crtc->ltm_buffer_cnt; i++)
+	for (i = 0; i < atomic_long_read(&sde_crtc->ltm_buffer_cnt); i++)
 		list_add(&sde_crtc->ltm_buffers[i]->node,
 			&sde_crtc->ltm_buf_free);
 	hw_dspp->ops.setup_ltm_hist_ctrl(hw_dspp, NULL,
@@ -3888,14 +3876,13 @@ static void sde_cp_ltm_hist_interrupt_cb(void *arg, int irq_idx)
 			ltm_hist_status |= LTM_STATS_MERGE_SAT;
 	}
 
-	spin_lock_irqsave(&sde_crtc->ltm_lock, irq_flags);
-	if (!sde_crtc->ltm_buffer_cnt) {
-		spin_unlock_irqrestore(&sde_crtc->ltm_lock, irq_flags);
+	if (!atomic_long_read(&sde_crtc->ltm_buffer_cnt)) {
 		/* all LTM buffers are freed, no further action is needed */
 		return;
 	}
 
-	if (!sde_crtc->ltm_hist_en) {
+	spin_lock_irqsave(&sde_crtc->ltm_lock, irq_flags);
+	if (!atomic_read(&sde_crtc->ltm_hist_en)) {
 		/* histogram is disabled, no need to notify user space */
 		for (i = 0; i < sde_crtc->num_mixers; i++) {
 			hw_dspp = sde_crtc->mixers[i].hw_dspp;
@@ -3904,8 +3891,8 @@ static void sde_cp_ltm_hist_interrupt_cb(void *arg, int irq_idx)
 			hw_dspp->ops.setup_ltm_hist_ctrl(hw_dspp, NULL, false,
 				0);
 		}
-		sde_crtc->ltm_merge_clear_pending = true;
 		spin_unlock_irqrestore(&sde_crtc->ltm_lock, irq_flags);
+		atomic_set(&sde_crtc->ltm_merge_clear_pending, 1);
 		DRM_DEBUG_DRIVER("LTM histogram is disabled\n");
 		return;
 	}
@@ -3923,7 +3910,7 @@ static void sde_cp_ltm_hist_interrupt_cb(void *arg, int irq_idx)
 			struct sde_ltm_buffer, node);
 
 	/* find the index of buffer in the ltm_buffers */
-	for (i = 0; i < sde_crtc->ltm_buffer_cnt; i++) {
+	for (i = 0; i < atomic_long_read(&sde_crtc->ltm_buffer_cnt); i++) {
 		if (busy_buf->drm_fb_id == sde_crtc->ltm_buffers[i]->drm_fb_id)
 			idx = i;
 	}
@@ -4024,23 +4011,19 @@ static void sde_cp_notify_ltm_hist(struct drm_crtc *crtc, void *arg)
 		return;
 	}
 
-	mutex_lock(&sde_crtc->ltm_buffer_lock);
-	spin_lock_irqsave(&sde_crtc->ltm_lock, irq_flags);
-	if (!sde_crtc->ltm_buffer_cnt) {
-		spin_unlock_irqrestore(&sde_crtc->ltm_lock, irq_flags);
-		mutex_unlock(&sde_crtc->ltm_buffer_lock);
+	if (!atomic_long_read(&sde_crtc->ltm_buffer_cnt)) {
 		/* all LTM buffers are freed, no further action is needed */
 		return;
 	}
 
-	if (!sde_crtc->ltm_hist_en) {
+	if (!atomic_read(&sde_crtc->ltm_hist_en)) {
 		/* histogram is disabled, no need to notify user space */
-		spin_unlock_irqrestore(&sde_crtc->ltm_lock, irq_flags);
-		mutex_unlock(&sde_crtc->ltm_buffer_lock);
 		DRM_DEBUG_DRIVER("ltm histogram is disabled\n");
 		return;
 	}
 
+	mutex_lock(&sde_crtc->ltm_buffer_lock);
+	spin_lock_irqsave(&sde_crtc->ltm_lock, irq_flags);
 	buf = (struct sde_ltm_buffer *)arg;
 	payload.fd = buf->drm_fb_id;
 	payload.offset = buf->offset;
