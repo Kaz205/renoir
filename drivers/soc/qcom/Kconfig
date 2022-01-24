@@ -228,4 +228,13 @@ config QCOM_CDSP_RM
 	  to improve RPC latency. The driver also registers cooling devices for
 	  CDSP subsystem and implements Cx ipeak limit management.
 
+config QCOM_GLINK_PKT
+	tristate "Enable device interface for GLINK packet channels"
+	depends on QCOM_GLINK || RPMSG_QCOM_GLINK_SLATECOM
+	help
+	  G-link packet driver provides the interface for the userspace
+	  clients to communicate over G-Link via device nodes.
+	  This enable the userspace clients to read and write to
+	  some glink packets channel.
+
 endmenu
