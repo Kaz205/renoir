@@ -237,4 +237,13 @@ config QCOM_GLINK_PKT
 	  This enable the userspace clients to read and write to
 	  some glink packets channel.
 
+config QCOM_GLINK
+	tristate "GLINK Probe Helper"
+	depends on RPMSG_QCOM_GLINK_SMEM
+	help
+	  This enables the GLINK Probe module. This is designed to set up
+	  other edges in the system. It will initialize all the transports for
+	  all the edges present in the device.
+	  Say M if you want to enable this module.
+
 endmenu

@@ -29,3 +29,4 @@ obj-$(CONFIG_QTI_ALTMODE_GLINK) += altmode-glink.o
 obj-$(CONFIG_MSM_CDSP_LOADER) += qdsp6v2/
 obj-$(CONFIG_QCOM_CDSP_RM) += cdsprm.o
 obj-$(CONFIG_QCOM_GLINK_PKT) += glink_pkt.o
+obj-$(CONFIG_QCOM_GLINK) += glink_probe.o
