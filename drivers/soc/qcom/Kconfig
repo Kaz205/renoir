@@ -246,6 +246,15 @@ config QCOM_GLINK
 	  all the edges present in the device.
 	  Say M if you want to enable this module.
 
+config QCOM_SHIMA_LLCC
+	tristate "Qualcomm Technologies, Inc. SHIMA LLCC driver"
+	depends on QCOM_LLCC
+	help
+	  Say y or m here to enable the LLCC driver for Shima platform.
+	  This provides data required to configure LLCC so that clients
+	  can start using the LLCC slices.
+	  If unsure, say n.
+
 source "drivers/soc/qcom/icnss2/Kconfig"
 
 endmenu

@@ -30,3 +30,5 @@ obj-$(CONFIG_MSM_CDSP_LOADER) += qdsp6v2/
 obj-$(CONFIG_QCOM_CDSP_RM) += cdsprm.o
 obj-$(CONFIG_QCOM_GLINK_PKT) += glink_pkt.o
 obj-$(CONFIG_QCOM_GLINK) += glink_probe.o
+obj-$(CONFIG_QCOM_SHIMA_LLCC) += llcc-shima.o
+
