@@ -59,3 +59,4 @@ obj-$(CONFIG_KRAITCC) += krait-cc.o
 obj-$(CONFIG_SM_CAMCC_SHIMA) += camcc-shima.o
 obj-$(CONFIG_MSM_CLK_AOP_QMP) += clk-aop-qmp.o
 obj-$(CONFIG_SM_DISPCC_SHIMA) += dispcc-shima.o
+obj-$(CONFIG_SM_GPUCC_SHIMA) += gpucc-shima.o
