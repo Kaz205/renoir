@@ -560,3 +560,12 @@ config RANDOM_TRUST_BOOTLOADER
 	booloader is trustworthy so it will be added to the kernel's entropy
 	pool. Otherwise, say N here so it will be regarded as device input that
 	only mixes the entropy pool.
+
+config MSM_ADSPRPC
+	tristate "QTI FastRPC driver"
+	depends on RPMSG && QCOM_SECURE_BUFFER && MSM_SERVICE_LOCATOR && MSM_SERVICE_NOTIFIER && PM_SLEEP && HAS_DMA && CMA && MMU
+	help
+		Provides a communication mechanism that allows clients to
+		make remote method invocations across processor boundary to
+		applications/compute DSP processor.
+		Say M if you want to enable this module.
