@@ -91,6 +91,7 @@ static const struct mtk_stateless_control mtk_stateless_controls[] = {
 		},
 		.codec_type = V4L2_PIX_FMT_VP8_FRAME,
 	},
+#if 0
 	{
 		.cfg = {
 			.id = V4L2_CID_MPEG_VIDEO_VP9_FRAME_DECODE_PARAMS,
@@ -107,6 +108,7 @@ static const struct mtk_stateless_control mtk_stateless_controls[] = {
 		},
 		.codec_type = V4L2_PIX_FMT_VP9_FRAME,
 	},
+#endif
 };
 #define NUM_CTRLS ARRAY_SIZE(mtk_stateless_controls)
 
@@ -452,7 +454,9 @@ static void mtk_vcodec_add_formats(unsigned int fourcc,
 	switch (fourcc) {
 	case V4L2_PIX_FMT_H264_SLICE:
 	case V4L2_PIX_FMT_VP8_FRAME:
+#if 0
 	case V4L2_PIX_FMT_VP9_FRAME:
+#endif
 		mtk_video_formats[count_formats].fourcc = fourcc;
 		mtk_video_formats[count_formats].type = MTK_FMT_DEC;
 		mtk_video_formats[count_formats].num_planes = 1;
@@ -501,10 +505,12 @@ static void mtk_vcodec_get_supported_formats(struct mtk_vcodec_ctx *ctx)
 		mtk_vcodec_add_formats(V4L2_PIX_FMT_VP8_FRAME, ctx);
 		out_format_count++;
 	}
+#if 0
 	if (ctx->dev->dec_capability & MTK_VDEC_FORMAT_VP9_FRAME) {
 		mtk_vcodec_add_formats(V4L2_PIX_FMT_VP9_FRAME, ctx);
 		out_format_count++;
 	}
+#endif
 
 	if (cap_format_count)
 		default_cap_format = mtk_video_formats[cap_format_count - 1];
