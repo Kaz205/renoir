@@ -346,4 +346,14 @@ config SM_CAMCC_SHIMA
 	  Say Y if you want to support camera devices and functionality such as
 	  capturing pictures.
 
+config MSM_CLK_AOP_QMP
+	tristate "AOP QMP Clock Driver"
+	depends on COMMON_CLK_QCOM && MSM_QMP
+	help
+	  The Always On Processor (AOP) manages a few of the shared clocks on
+	  some Qualcomm Technologies, Inc. SoCs. It accepts requests from other
+	  hardware subsystems via QMP mailboxes.
+	  Say Y to support the clocks managed by AOP on platforms such as
+	  sdm845.
+
 endif
