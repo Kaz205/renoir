@@ -26,3 +26,4 @@ obj-$(CONFIG_QCOM_SDM845_LLCC) += llcc-sdm845.o
 obj-$(CONFIG_QCOM_RPMHPD) += rpmhpd.o
 obj-$(CONFIG_QCOM_RPMPD) += rpmpd.o
 obj-$(CONFIG_QTI_ALTMODE_GLINK) += altmode-glink.o
+obj-$(CONFIG_MSM_CDSP_LOADER) += qdsp6v2/
