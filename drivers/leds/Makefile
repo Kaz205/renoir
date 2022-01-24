@@ -97,3 +97,4 @@ obj-$(CONFIG_LEDS_USER)			+= uleds.o
 obj-$(CONFIG_LEDS_TRIGGERS)		+= trigger/
 
 obj-$(CONFIG_LEDS_QTI_FLASH)		+= leds-qti-flash.o
+obj-$(CONFIG_LEDS_QTI_TRI_LED)		+= leds-qti-tri-led.o
