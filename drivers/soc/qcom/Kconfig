@@ -246,4 +246,6 @@ config QCOM_GLINK
 	  all the edges present in the device.
 	  Say M if you want to enable this module.
 
+source "drivers/soc/qcom/icnss2/Kconfig"
+
 endmenu
