@@ -218,4 +218,14 @@ config MSM_CDSP_LOADER
 	  for platforms that have one.
 	  Say M if you want to enable this module.
 
+config QCOM_CDSP_RM
+	tristate "CDSP request manager"
+	depends on QCOM_GLINK
+	help
+	  This driver serves CDSP requests for CPU L3 clock and CPU QoS thus
+	  improving CDSP performance. Using this driver, CDSP can set appropriate
+	  CPU L3 clock for improving IO-Coherent throughput and opt for QoS mode
+	  to improve RPC latency. The driver also registers cooling devices for
+	  CDSP subsystem and implements Cx ipeak limit management.
+
 endmenu
