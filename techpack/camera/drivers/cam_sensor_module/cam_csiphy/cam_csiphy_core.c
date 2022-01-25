@@ -913,7 +913,6 @@ int32_t cam_csiphy_config_dev(struct csiphy_device *csiphy_dev,
 		//csiphy_3phase only
 		if (get_hw_version_platform() == HARDWARE_PROJECT_J18 ||
 				get_hw_version_platform() == HARDWARE_PROJECT_K2 ||
-				get_hw_version_platform() == HARDWARE_PROJECT_K8 ||
 				get_hw_version_platform() == HARDWARE_PROJECT_K11) {
 			if ((csiphy_dev->csiphy_info[index].data_rate/1000000) > csiphy_hack_rate_mb)
 			{
