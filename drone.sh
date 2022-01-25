@@ -15,7 +15,7 @@ export CROSS_COMPILE_ARM32=$CLANG_DIR/arm-linux-gnueabi-
 cd "$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 make clean -j$(nproc --all) && make mrproper -j$(nproc --all)
 make vendor/renoir-qgki_defconfig -j$(nproc --all)
-make -j$(nproc --all) Image.lz4 dtbs dtbo.img
+make -j$(nproc --all) Image dtbs dtbo.img
 
 if [ $? -ne 0 ]
 then
