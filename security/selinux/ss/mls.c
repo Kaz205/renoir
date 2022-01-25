@@ -165,8 +165,8 @@ int mls_level_isvalid(struct policydb *p, struct mls_level *l)
 
 	if (!l->sens || l->sens > p->p_levels.nprim)
 		return 0;
-	levdatum = symtab_search(&p->p_levels,
-				 sym_name(p, SYM_LEVELS, l->sens - 1));
+	levdatum = hashtab_search(p->p_levels.table,
+				  sym_name(p, SYM_LEVELS, l->sens - 1));
 	if (!levdatum)
 		return 0;
 
@@ -293,7 +293,7 @@ int mls_context_to_sid(struct policydb *pol,
 			*(next_cat++) = '\0';
 
 		/* Parse sensitivity. */
-		levdatum = symtab_search(&pol->p_levels, sensitivity);
+		levdatum = hashtab_search(pol->p_levels.table, sensitivity);
 		if (!levdatum)
 			return -EINVAL;
 		context->range.level[l].sens = levdatum->level->sens;
@@ -312,7 +312,7 @@ int mls_context_to_sid(struct policydb *pol,
 				*rngptr++ = '\0';
 			}
 
-			catdatum = symtab_search(&pol->p_cats, cur_cat);
+			catdatum = hashtab_search(pol->p_cats.table, cur_cat);
 			if (!catdatum)
 				return -EINVAL;
 
@@ -325,7 +325,7 @@ int mls_context_to_sid(struct policydb *pol,
 			if (rngptr == NULL)
 				continue;
 
-			rngdatum = symtab_search(&pol->p_cats, rngptr);
+			rngdatum = hashtab_search(pol->p_cats.table, rngptr);
 			if (!rngdatum)
 				return -EINVAL;
 
@@ -458,10 +458,9 @@ int mls_convert_context(struct policydb *oldp,
 		return 0;
 
 	for (l = 0; l < 2; l++) {
-		char *name = sym_name(oldp, SYM_LEVELS,
-				      oldc->range.level[l].sens - 1);
-
-		levdatum = symtab_search(&newp->p_levels, name);
+		levdatum = hashtab_search(newp->p_levels.table,
+					  sym_name(oldp, SYM_LEVELS,
+						   oldc->range.level[l].sens - 1));
 
 		if (!levdatum)
 			return -EINVAL;
@@ -471,8 +470,8 @@ int mls_convert_context(struct policydb *oldp,
 					      node, i) {
 			int rc;
 
-			catdatum = symtab_search(&newp->p_cats,
-						 sym_name(oldp, SYM_CATS, i));
+			catdatum = hashtab_search(newp->p_cats.table,
+						  sym_name(oldp, SYM_CATS, i));
 			if (!catdatum)
 				return -EINVAL;
 			rc = ebitmap_set_bit(&newc->range.level[l].cat,
@@ -507,7 +506,7 @@ int mls_compute_sid(struct policydb *p,
 		rtr.source_type = scontext->type;
 		rtr.target_type = tcontext->type;
 		rtr.target_class = tclass;
-		r = policydb_rangetr_search(p, &rtr);
+		r = hashtab_search(p->range_tr, &rtr);
 		if (r)
 			return mls_range_set(newcontext, r);
 
@@ -530,14 +529,11 @@ int mls_compute_sid(struct policydb *p,
 			return mls_context_cpy_high(newcontext, tcontext);
 		case DEFAULT_TARGET_LOW_HIGH:
 			return mls_context_cpy(newcontext, tcontext);
-		case DEFAULT_GLBLUB:
-			return mls_context_glblub(newcontext,
-						  scontext, tcontext);
 		}
 
 		/* Fallthrough */
 	case AVTAB_CHANGE:
-		if ((tclass == p->process_class) || sock)
+		if ((tclass == p->process_class) || (sock == true))
 			/* Use the process MLS attributes. */
 			return mls_context_cpy(newcontext, scontext);
 		else

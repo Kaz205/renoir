@@ -35,9 +35,6 @@ struct security_class_mapping {
 
 #include "classmap.h"
 #include "initial_sid_to_string.h"
-#include "policycap_names.h"
-
-#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 int main(int argc, char *argv[])
 {
@@ -70,14 +67,8 @@ int main(int argc, char *argv[])
 
 	initial_sid_to_string_len = sizeof(initial_sid_to_string) / sizeof (char *);
 	/* print out the sids */
-	for (i = 1; i < initial_sid_to_string_len; i++) {
-		const char *name = initial_sid_to_string[i];
-
-		if (name)
-			fprintf(fout, "sid %s\n", name);
-		else
-			fprintf(fout, "sid unused%d\n", i);
-	}
+	for (i = 1; i < initial_sid_to_string_len; i++)
+		fprintf(fout, "sid %s\n", initial_sid_to_string[i]);
 	fprintf(fout, "\n");
 
 	/* print out the class permissions */
@@ -118,10 +109,6 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	/* enable all policy capabilities */
-	for (i = 0; i < ARRAY_SIZE(selinux_policycap_names); i++)
-		fprintf(fout, "policycap %s;\n", selinux_policycap_names[i]);
-
 	/* types, roles, and allows */
 	fprintf(fout, "type base_t;\n");
 	fprintf(fout, "role base_r;\n");
@@ -139,16 +126,9 @@ int main(int argc, char *argv[])
 #define OBJUSERROLETYPE "user_u:object_r:base_t"
 
 	/* default sids */
-	for (i = 1; i < initial_sid_to_string_len; i++) {
-		const char *name = initial_sid_to_string[i];
-
-		if (name)
-			fprintf(fout, "sid %s ", name);
-		else
-			fprintf(fout, "sid unused%d\n", i);
-		fprintf(fout, SUBJUSERROLETYPE "%s\n",
-			mls ? ":" SYSTEMLOW : "");
-	}
+	for (i = 1; i < initial_sid_to_string_len; i++)
+		fprintf(fout, "sid %s " SUBJUSERROLETYPE "%s\n",
+			initial_sid_to_string[i], mls ? ":" SYSTEMLOW : "");
 	fprintf(fout, "\n");
 
 #define FS_USE(behavior, fstype)			    \

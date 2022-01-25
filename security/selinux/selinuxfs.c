@@ -20,7 +20,6 @@
 #include <linux/fs_context.h>
 #include <linux/mount.h>
 #include <linux/mutex.h>
-#include <linux/namei.h>
 #include <linux/init.h>
 #include <linux/string.h>
 #include <linux/security.h>
@@ -41,7 +40,6 @@
 #include "security.h"
 #include "objsec.h"
 #include "conditional.h"
-#include "ima.h"
 
 enum sel_inos {
 	SEL_ROOT_INO = 2,
@@ -76,6 +74,7 @@ struct selinux_fs_info {
 	unsigned long last_class_ino;
 	bool policy_opened;
 	struct dentry *policycap_dir;
+	struct mutex mutex;
 	unsigned long last_ino;
 	struct selinux_state *state;
 	struct super_block *sb;
@@ -89,6 +88,7 @@ static int selinux_fs_info_create(struct super_block *sb)
 	if (!fsi)
 		return -ENOMEM;
 
+	mutex_init(&fsi->mutex);
 	fsi->last_ino = SEL_INO_NEXT - 1;
 	fsi->state = &selinux_state;
 	fsi->sb = sb;
@@ -116,10 +116,6 @@ static void selinux_fs_info_free(struct super_block *sb)
 #define SEL_CLASS_INO_OFFSET		0x04000000
 #define SEL_POLICYCAP_INO_OFFSET	0x08000000
 #define SEL_INO_MASK			0x00ffffff
-
-#define BOOL_DIR_NAME "booleans"
-#define CLASS_DIR_NAME "class"
-#define POLICYCAP_DIR_NAME "policy_capabilities"
 
 #define TMPBUFLEN	12
 static ssize_t sel_read_enforce(struct file *filp, char __user *buf,
@@ -172,10 +168,11 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 			goto out;
 		audit_log(audit_context(), GFP_KERNEL, AUDIT_MAC_STATUS,
 			"enforcing=%d old_enforcing=%d auid=%u ses=%u"
-			" enabled=1 old-enabled=1 lsm=selinux res=1",
+			" enabled=%d old-enabled=%d lsm=selinux res=1",
 			new_value, old_value,
 			from_kuid(&init_user_ns, audit_get_loginuid(current)),
-			audit_get_sessionid(current));
+			audit_get_sessionid(current),
+			selinux_enabled, selinux_enabled);
 		enforcing_set(state, new_value);
 		if (new_value)
 			avc_ss_reset(state->avc, 0);
@@ -183,8 +180,6 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 		selinux_status_update_setenforce(state, new_value);
 		if (!new_value)
 			call_blocking_lsm_notifier(LSM_POLICY_CHANGE, NULL);
-
-		selinux_ima_measure_state(state);
 	}
 	length = count;
 out:
@@ -287,13 +282,6 @@ static ssize_t sel_write_disable(struct file *file, const char __user *buf,
 	int new_value;
 	int enforcing;
 
-	/* NOTE: we are now officially considering runtime disable as
-	 *       deprecated, and using it will become increasingly painful
-	 *       (e.g. sleeping/blocking) as we progress through future
-	 *       kernel releases until eventually it is removed
-	 */
-	pr_err("SELinux:  Runtime disable is deprecated, use selinux=0 on the kernel cmdline.\n");
-
 	if (count >= PAGE_SIZE)
 		return -ENOMEM;
 
@@ -316,10 +304,10 @@ static ssize_t sel_write_disable(struct file *file, const char __user *buf,
 			goto out;
 		audit_log(audit_context(), GFP_KERNEL, AUDIT_MAC_STATUS,
 			"enforcing=%d old_enforcing=%d auid=%u ses=%u"
-			" enabled=0 old-enabled=1 lsm=selinux res=1",
+			" enabled=%d old-enabled=%d lsm=selinux res=1",
 			enforcing, enforcing,
 			from_kuid(&init_user_ns, audit_get_loginuid(current)),
-			audit_get_sessionid(current));
+			audit_get_sessionid(current), 0, 1);
 	}
 
 	length = count;
@@ -352,23 +340,13 @@ static const struct file_operations sel_policyvers_ops = {
 };
 
 /* declaration for sel_write_load */
-static int sel_make_bools(struct selinux_policy *newpolicy, struct dentry *bool_dir,
-			  unsigned int *bool_num, char ***bool_pending_names,
-			  unsigned int **bool_pending_values);
-static int sel_make_classes(struct selinux_policy *newpolicy,
-			    struct dentry *class_dir,
-			    unsigned long *last_class_ino);
+static int sel_make_bools(struct selinux_fs_info *fsi);
+static int sel_make_classes(struct selinux_fs_info *fsi);
+static int sel_make_policycap(struct selinux_fs_info *fsi);
 
 /* declaration for sel_make_class_dirs */
 static struct dentry *sel_make_dir(struct dentry *dir, const char *name,
 			unsigned long *ino);
-
-/* declaration for sel_make_policy_nodes */
-static struct dentry *sel_make_disconnected_dir(struct super_block *sb,
-						unsigned long *ino);
-
-/* declaration for sel_make_policy_nodes */
-static void sel_remove_entries(struct dentry *de);
 
 static ssize_t sel_read_mls(struct file *filp, char __user *buf,
 				size_t count, loff_t *ppos)
@@ -401,7 +379,7 @@ static int sel_open_policy(struct inode *inode, struct file *filp)
 
 	BUG_ON(filp->private_data);
 
-	mutex_lock(&fsi->state->policy_mutex);
+	mutex_lock(&fsi->mutex);
 
 	rc = avc_has_perm(&selinux_state,
 			  current_sid(), SECINITSID_SECURITY,
@@ -418,25 +396,25 @@ static int sel_open_policy(struct inode *inode, struct file *filp)
 	if (!plm)
 		goto err;
 
+	if (i_size_read(inode) != security_policydb_len(state)) {
+		inode_lock(inode);
+		i_size_write(inode, security_policydb_len(state));
+		inode_unlock(inode);
+	}
+
 	rc = security_read_policy(state, &plm->data, &plm->len);
 	if (rc)
 		goto err;
-
-	if ((size_t)i_size_read(inode) != plm->len) {
-		inode_lock(inode);
-		i_size_write(inode, plm->len);
-		inode_unlock(inode);
-	}
 
 	fsi->policy_opened = 1;
 
 	filp->private_data = plm;
 
-	mutex_unlock(&fsi->state->policy_mutex);
+	mutex_unlock(&fsi->mutex);
 
 	return 0;
 err:
-	mutex_unlock(&fsi->state->policy_mutex);
+	mutex_unlock(&fsi->mutex);
 
 	if (plm)
 		vfree(plm->data);
@@ -524,90 +502,29 @@ static const struct file_operations sel_policy_ops = {
 	.llseek		= generic_file_llseek,
 };
 
-static void sel_remove_old_bool_data(unsigned int bool_num, char **bool_names,
-				unsigned int *bool_values)
+static int sel_make_policy_nodes(struct selinux_fs_info *fsi)
 {
-	u32 i;
+	int ret;
 
-	/* bool_dir cleanup */
-	for (i = 0; i < bool_num; i++)
-		kfree(bool_names[i]);
-	kfree(bool_names);
-	kfree(bool_values);
-}
-
-static int sel_make_policy_nodes(struct selinux_fs_info *fsi,
-				struct selinux_policy *newpolicy)
-{
-	int ret = 0;
-	struct dentry *tmp_parent, *tmp_bool_dir, *tmp_class_dir, *old_dentry;
-	unsigned int tmp_bool_num, old_bool_num;
-	char **tmp_bool_names, **old_bool_names;
-	unsigned int *tmp_bool_values, *old_bool_values;
-	unsigned long tmp_ino = fsi->last_ino; /* Don't increment last_ino in this function */
-
-	tmp_parent = sel_make_disconnected_dir(fsi->sb, &tmp_ino);
-	if (IS_ERR(tmp_parent))
-		return PTR_ERR(tmp_parent);
-
-	tmp_ino = fsi->bool_dir->d_inode->i_ino - 1; /* sel_make_dir will increment and set */
-	tmp_bool_dir = sel_make_dir(tmp_parent, BOOL_DIR_NAME, &tmp_ino);
-	if (IS_ERR(tmp_bool_dir)) {
-		ret = PTR_ERR(tmp_bool_dir);
-		goto out;
+	ret = sel_make_bools(fsi);
+	if (ret) {
+		pr_err("SELinux: failed to load policy booleans\n");
+		return ret;
 	}
 
-	tmp_ino = fsi->class_dir->d_inode->i_ino - 1; /* sel_make_dir will increment and set */
-	tmp_class_dir = sel_make_dir(tmp_parent, CLASS_DIR_NAME, &tmp_ino);
-	if (IS_ERR(tmp_class_dir)) {
-		ret = PTR_ERR(tmp_class_dir);
-		goto out;
+	ret = sel_make_classes(fsi);
+	if (ret) {
+		pr_err("SELinux: failed to load policy classes\n");
+		return ret;
 	}
 
-	ret = sel_make_bools(newpolicy, tmp_bool_dir, &tmp_bool_num,
-			     &tmp_bool_names, &tmp_bool_values);
-	if (ret)
-		goto out;
+	ret = sel_make_policycap(fsi);
+	if (ret) {
+		pr_err("SELinux: failed to load policy capabilities\n");
+		return ret;
+	}
 
-	ret = sel_make_classes(newpolicy, tmp_class_dir,
-			       &fsi->last_class_ino);
-	if (ret)
-		goto out;
-
-	/* booleans */
-	old_dentry = fsi->bool_dir;
-	lock_rename(tmp_bool_dir, old_dentry);
-	d_exchange(tmp_bool_dir, fsi->bool_dir);
-
-	old_bool_num = fsi->bool_num;
-	old_bool_names = fsi->bool_pending_names;
-	old_bool_values = fsi->bool_pending_values;
-
-	fsi->bool_num = tmp_bool_num;
-	fsi->bool_pending_names = tmp_bool_names;
-	fsi->bool_pending_values = tmp_bool_values;
-
-	sel_remove_old_bool_data(old_bool_num, old_bool_names, old_bool_values);
-
-	fsi->bool_dir = tmp_bool_dir;
-	unlock_rename(tmp_bool_dir, old_dentry);
-
-	/* classes */
-	old_dentry = fsi->class_dir;
-	lock_rename(tmp_class_dir, old_dentry);
-	d_exchange(tmp_class_dir, fsi->class_dir);
-	fsi->class_dir = tmp_class_dir;
-	unlock_rename(tmp_class_dir, old_dentry);
-
-out:
-	/* Since the other temporary dirs are children of tmp_parent
-	 * this will handle all the cleanup in the case of a failure before
-	 * the swapover
-	 */
-	sel_remove_entries(tmp_parent);
-	dput(tmp_parent); /* d_genocide() only handles the children */
-
-	return ret;
+	return 0;
 }
 
 static ssize_t sel_write_load(struct file *file, const char __user *buf,
@@ -615,11 +532,10 @@ static ssize_t sel_write_load(struct file *file, const char __user *buf,
 
 {
 	struct selinux_fs_info *fsi = file_inode(file)->i_sb->s_fs_info;
-	struct selinux_load_state load_state;
 	ssize_t length;
 	void *data = NULL;
 
-	mutex_lock(&fsi->state->policy_mutex);
+	mutex_lock(&fsi->mutex);
 
 	length = avc_has_perm(&selinux_state,
 			      current_sid(), SECINITSID_SECURITY,
@@ -632,6 +548,10 @@ static ssize_t sel_write_load(struct file *file, const char __user *buf,
 	if (*ppos != 0)
 		goto out;
 
+	length = -EFBIG;
+	if (count > 64 * 1024 * 1024)
+		goto out;
+
 	length = -ENOMEM;
 	data = vmalloc(count);
 	if (!data)
@@ -641,29 +561,25 @@ static ssize_t sel_write_load(struct file *file, const char __user *buf,
 	if (copy_from_user(data, buf, count) != 0)
 		goto out;
 
-	length = security_load_policy(fsi->state, data, count, &load_state);
+	length = security_load_policy(fsi->state, data, count);
 	if (length) {
 		pr_warn_ratelimited("SELinux: failed to load policy\n");
 		goto out;
 	}
 
-	length = sel_make_policy_nodes(fsi, load_state.policy);
-	if (length) {
-		pr_warn_ratelimited("SELinux: failed to initialize selinuxfs\n");
-		selinux_policy_cancel(fsi->state, &load_state);
-		goto out;
-	}
-
-	selinux_policy_commit(fsi->state, &load_state);
+	length = sel_make_policy_nodes(fsi);
+	if (length)
+		goto out1;
 
 	length = count;
 
+out1:
 	audit_log(audit_context(), GFP_KERNEL, AUDIT_MAC_POLICY_LOAD,
 		"auid=%u ses=%u lsm=selinux res=1",
 		from_kuid(&init_user_ns, audit_get_loginuid(current)),
 		audit_get_sessionid(current));
 out:
-	mutex_unlock(&fsi->state->policy_mutex);
+	mutex_unlock(&fsi->mutex);
 	vfree(data);
 	return length;
 }
@@ -677,8 +593,7 @@ static ssize_t sel_write_context(struct file *file, char *buf, size_t size)
 {
 	struct selinux_fs_info *fsi = file_inode(file)->i_sb->s_fs_info;
 	struct selinux_state *state = fsi->state;
-	char *canon;
-	char canon_buf[SELINUX_LABEL_LENGTH];
+	char *canon = NULL;
 	u32 sid, len;
 	ssize_t length;
 
@@ -692,9 +607,7 @@ static ssize_t sel_write_context(struct file *file, char *buf, size_t size)
 	if (length)
 		goto out;
 
-	canon = canon_buf;
-
-	length = security_sid_to_context_stack(state, sid, &canon, &len);
+	length = security_sid_to_context(state, sid, &canon, &len);
 	if (length)
 		goto out;
 
@@ -708,6 +621,7 @@ static ssize_t sel_write_context(struct file *file, char *buf, size_t size)
 	memcpy(buf, canon, len);
 	length = len;
 out:
+	kfree(canon);
 	return length;
 }
 
@@ -718,8 +632,7 @@ static ssize_t sel_read_checkreqprot(struct file *filp, char __user *buf,
 	char tmpbuf[TMPBUFLEN];
 	ssize_t length;
 
-	length = scnprintf(tmpbuf, TMPBUFLEN, "%u",
-			   checkreqprot_get(fsi->state));
+	length = scnprintf(tmpbuf, TMPBUFLEN, "%u", fsi->state->checkreqprot);
 	return simple_read_from_buffer(buf, count, ppos, tmpbuf, length);
 }
 
@@ -753,19 +666,8 @@ static ssize_t sel_write_checkreqprot(struct file *file, const char __user *buf,
 	if (sscanf(page, "%u", &new_value) != 1)
 		goto out;
 
-	if (new_value) {
-		char comm[sizeof(current->comm)];
-
-		memcpy(comm, current->comm, sizeof(comm));
-		pr_warn_once("SELinux: %s (%d) set checkreqprot to 1. This is deprecated and will be rejected in a future kernel release.\n",
-			     comm, current->pid);
-	}
-
-	checkreqprot_set(fsi->state, (new_value ? 1 : 0));
+	fsi->state->checkreqprot = new_value ? 1 : 0;
 	length = count;
-
-	selinux_ima_measure_state(fsi->state);
-
 out:
 	kfree(page);
 	return length;
@@ -967,8 +869,7 @@ static ssize_t sel_write_create(struct file *file, char *buf, size_t size)
 	u32 ssid, tsid, newsid;
 	u16 tclass;
 	ssize_t length;
-	char *newcon;
-	char newcon_buf[SELINUX_LABEL_LENGTH];
+	char *newcon = NULL;
 	u32 len;
 	int nargs;
 
@@ -1042,8 +943,7 @@ static ssize_t sel_write_create(struct file *file, char *buf, size_t size)
 	if (length)
 		goto out;
 
-	newcon = newcon_buf;
-	length = security_sid_to_context_stack(state, newsid, &newcon, &len);
+	length = security_sid_to_context(state, newsid, &newcon, &len);
 	if (length)
 		goto out;
 
@@ -1057,6 +957,7 @@ static ssize_t sel_write_create(struct file *file, char *buf, size_t size)
 	memcpy(buf, newcon, len);
 	length = len;
 out:
+	kfree(newcon);
 	kfree(namebuf);
 	kfree(tcon);
 	kfree(scon);
@@ -1071,8 +972,7 @@ static ssize_t sel_write_relabel(struct file *file, char *buf, size_t size)
 	u32 ssid, tsid, newsid;
 	u16 tclass;
 	ssize_t length;
-	char *newcon;
-	char newcon_buf[SELINUX_LABEL_LENGTH];
+	char *newcon = NULL;
 	u32 len;
 
 	length = avc_has_perm(&selinux_state,
@@ -1108,8 +1008,7 @@ static ssize_t sel_write_relabel(struct file *file, char *buf, size_t size)
 	if (length)
 		goto out;
 
-	newcon = newcon_buf;
-	length = security_sid_to_context_stack(state, newsid, &newcon, &len);
+	length = security_sid_to_context(state, newsid, &newcon, &len);
 	if (length)
 		goto out;
 
@@ -1120,6 +1019,7 @@ static ssize_t sel_write_relabel(struct file *file, char *buf, size_t size)
 	memcpy(buf, newcon, len);
 	length = len;
 out:
+	kfree(newcon);
 	kfree(tcon);
 	kfree(scon);
 	return length;
@@ -1133,7 +1033,6 @@ static ssize_t sel_write_user(struct file *file, char *buf, size_t size)
 	u32 sid, *sids = NULL;
 	ssize_t length;
 	char *newcon;
-	char newcon_buf[SELINUX_LABEL_LENGTH];
 	int i, rc;
 	u32 len, nsids;
 
@@ -1168,18 +1067,19 @@ static ssize_t sel_write_user(struct file *file, char *buf, size_t size)
 
 	length = sprintf(buf, "%u", nsids) + 1;
 	ptr = buf + length;
-	newcon = newcon_buf;
 	for (i = 0; i < nsids; i++) {
-		rc = security_sid_to_context_stack(state, sids[i], &newcon, &len);
+		rc = security_sid_to_context(state, sids[i], &newcon, &len);
 		if (rc) {
 			length = rc;
 			goto out;
 		}
 		if ((length + len) >= SIMPLE_TRANSACTION_LIMIT) {
+			kfree(newcon);
 			length = -ERANGE;
 			goto out;
 		}
 		memcpy(ptr, newcon, len);
+		kfree(newcon);
 		ptr += len;
 		length += len;
 	}
@@ -1198,8 +1098,7 @@ static ssize_t sel_write_member(struct file *file, char *buf, size_t size)
 	u32 ssid, tsid, newsid;
 	u16 tclass;
 	ssize_t length;
-	char *newcon;
-	char newcon_buf[SELINUX_LABEL_LENGTH];
+	char *newcon = NULL;
 	u32 len;
 
 	length = avc_has_perm(&selinux_state,
@@ -1235,9 +1134,7 @@ static ssize_t sel_write_member(struct file *file, char *buf, size_t size)
 	if (length)
 		goto out;
 
-	newcon = newcon_buf;
-
-	length = security_sid_to_context_stack(state, newsid, &newcon, &len);
+	length = security_sid_to_context(state, newsid, &newcon, &len);
 	if (length)
 		goto out;
 
@@ -1251,6 +1148,7 @@ static ssize_t sel_write_member(struct file *file, char *buf, size_t size)
 	memcpy(buf, newcon, len);
 	length = len;
 out:
+	kfree(newcon);
 	kfree(tcon);
 	kfree(scon);
 	return length;
@@ -1278,7 +1176,7 @@ static ssize_t sel_read_bool(struct file *filep, char __user *buf,
 	unsigned index = file_inode(filep)->i_ino & SEL_INO_MASK;
 	const char *name = filep->f_path.dentry->d_name.name;
 
-	mutex_lock(&fsi->state->policy_mutex);
+	mutex_lock(&fsi->mutex);
 
 	ret = -EINVAL;
 	if (index >= fsi->bool_num || strcmp(name,
@@ -1297,14 +1195,14 @@ static ssize_t sel_read_bool(struct file *filep, char __user *buf,
 	}
 	length = scnprintf(page, PAGE_SIZE, "%d %d", cur_enforcing,
 			  fsi->bool_pending_values[index]);
-	mutex_unlock(&fsi->state->policy_mutex);
+	mutex_unlock(&fsi->mutex);
 	ret = simple_read_from_buffer(buf, count, ppos, page, length);
 out_free:
 	free_page((unsigned long)page);
 	return ret;
 
 out_unlock:
-	mutex_unlock(&fsi->state->policy_mutex);
+	mutex_unlock(&fsi->mutex);
 	goto out_free;
 }
 
@@ -1329,7 +1227,7 @@ static ssize_t sel_write_bool(struct file *filep, const char __user *buf,
 	if (IS_ERR(page))
 		return PTR_ERR(page);
 
-	mutex_lock(&fsi->state->policy_mutex);
+	mutex_lock(&fsi->mutex);
 
 	length = avc_has_perm(&selinux_state,
 			      current_sid(), SECINITSID_SECURITY,
@@ -1354,7 +1252,7 @@ static ssize_t sel_write_bool(struct file *filep, const char __user *buf,
 	length = count;
 
 out:
-	mutex_unlock(&fsi->state->policy_mutex);
+	mutex_unlock(&fsi->mutex);
 	kfree(page);
 	return length;
 }
@@ -1385,7 +1283,7 @@ static ssize_t sel_commit_bools_write(struct file *filep,
 	if (IS_ERR(page))
 		return PTR_ERR(page);
 
-	mutex_lock(&fsi->state->policy_mutex);
+	mutex_lock(&fsi->mutex);
 
 	length = avc_has_perm(&selinux_state,
 			      current_sid(), SECINITSID_SECURITY,
@@ -1407,7 +1305,7 @@ static ssize_t sel_commit_bools_write(struct file *filep,
 		length = count;
 
 out:
-	mutex_unlock(&fsi->state->policy_mutex);
+	mutex_unlock(&fsi->mutex);
 	kfree(page);
 	return length;
 }
@@ -1423,37 +1321,49 @@ static void sel_remove_entries(struct dentry *de)
 	shrink_dcache_parent(de);
 }
 
-static int sel_make_bools(struct selinux_policy *newpolicy, struct dentry *bool_dir,
-			  unsigned int *bool_num, char ***bool_pending_names,
-			  unsigned int **bool_pending_values)
+#define BOOL_DIR_NAME "booleans"
+
+static int sel_make_bools(struct selinux_fs_info *fsi)
 {
-	int ret;
+	int i, ret;
 	ssize_t len;
 	struct dentry *dentry = NULL;
+	struct dentry *dir = fsi->bool_dir;
 	struct inode *inode = NULL;
 	struct inode_security_struct *isec;
 	char **names = NULL, *page;
-	u32 i, num;
+	int num;
 	int *values = NULL;
 	u32 sid;
+
+	/* remove any existing files */
+	for (i = 0; i < fsi->bool_num; i++)
+		kfree(fsi->bool_pending_names[i]);
+	kfree(fsi->bool_pending_names);
+	kfree(fsi->bool_pending_values);
+	fsi->bool_num = 0;
+	fsi->bool_pending_names = NULL;
+	fsi->bool_pending_values = NULL;
+
+	sel_remove_entries(dir);
 
 	ret = -ENOMEM;
 	page = (char *)get_zeroed_page(GFP_KERNEL);
 	if (!page)
 		goto out;
 
-	ret = security_get_bools(newpolicy, &num, &names, &values);
+	ret = security_get_bools(fsi->state, &num, &names, &values);
 	if (ret)
 		goto out;
 
 	for (i = 0; i < num; i++) {
 		ret = -ENOMEM;
-		dentry = d_alloc_name(bool_dir, names[i]);
+		dentry = d_alloc_name(dir, names[i]);
 		if (!dentry)
 			goto out;
 
 		ret = -ENOMEM;
-		inode = sel_make_inode(bool_dir->d_sb, S_IFREG | S_IRUGO | S_IWUSR);
+		inode = sel_make_inode(dir->d_sb, S_IFREG | S_IRUGO | S_IWUSR);
 		if (!inode) {
 			dput(dentry);
 			goto out;
@@ -1468,7 +1378,7 @@ static int sel_make_bools(struct selinux_policy *newpolicy, struct dentry *bool_
 		}
 
 		isec = selinux_inode(inode);
-		ret = selinux_policy_genfs_sid(newpolicy, "selinuxfs", page,
+		ret = security_genfs_sid(fsi->state, "selinuxfs", page,
 					 SECCLASS_FILE, &sid);
 		if (ret) {
 			pr_warn_ratelimited("SELinux: no sid found, defaulting to security isid for %s\n",
@@ -1482,9 +1392,9 @@ static int sel_make_bools(struct selinux_policy *newpolicy, struct dentry *bool_
 		inode->i_ino = i|SEL_BOOL_INO_OFFSET;
 		d_add(dentry, inode);
 	}
-	*bool_num = num;
-	*bool_pending_names = names;
-	*bool_pending_values = values;
+	fsi->bool_num = num;
+	fsi->bool_pending_names = names;
+	fsi->bool_pending_values = values;
 
 	free_page((unsigned long)page);
 	return 0;
@@ -1497,7 +1407,7 @@ out:
 		kfree(names);
 	}
 	kfree(values);
-	sel_remove_entries(bool_dir);
+	sel_remove_entries(dir);
 
 	return ret;
 }
@@ -1756,17 +1666,16 @@ static ssize_t sel_read_initcon(struct file *file, char __user *buf,
 {
 	struct selinux_fs_info *fsi = file_inode(file)->i_sb->s_fs_info;
 	char *con;
-	char con_buf[SELINUX_LABEL_LENGTH];
 	u32 sid, len;
 	ssize_t ret;
 
 	sid = file_inode(file)->i_ino&SEL_INO_MASK;
-	con = con_buf;
-	ret = security_sid_to_context_stack(fsi->state, sid, &con, &len);
+	ret = security_sid_to_context(fsi->state, sid, &con, &len);
 	if (ret)
 		return ret;
 
 	ret = simple_read_from_buffer(buf, count, ppos, con, len);
+	kfree(con);
 	return ret;
 }
 
@@ -1782,11 +1691,7 @@ static int sel_make_initcon_files(struct dentry *dir)
 	for (i = 1; i <= SECINITSID_NUM; i++) {
 		struct inode *inode;
 		struct dentry *dentry;
-		const char *s = security_get_initial_sid_context(i);
-
-		if (!s)
-			continue;
-		dentry = d_alloc_name(dir, s);
+		dentry = d_alloc_name(dir, security_get_initial_sid_context(i));
 		if (!dentry)
 			return -ENOMEM;
 
@@ -1829,7 +1734,7 @@ static ssize_t sel_read_class(struct file *file, char __user *buf,
 {
 	unsigned long ino = file_inode(file)->i_ino;
 	char res[TMPBUFLEN];
-	ssize_t len = scnprintf(res, sizeof(res), "%d", sel_ino_to_class(ino));
+	ssize_t len = snprintf(res, sizeof(res), "%d", sel_ino_to_class(ino));
 	return simple_read_from_buffer(buf, count, ppos, res, len);
 }
 
@@ -1843,7 +1748,7 @@ static ssize_t sel_read_perm(struct file *file, char __user *buf,
 {
 	unsigned long ino = file_inode(file)->i_ino;
 	char res[TMPBUFLEN];
-	ssize_t len = scnprintf(res, sizeof(res), "%d", sel_ino_to_perm(ino));
+	ssize_t len = snprintf(res, sizeof(res), "%d", sel_ino_to_perm(ino));
 	return simple_read_from_buffer(buf, count, ppos, res, len);
 }
 
@@ -1872,14 +1777,14 @@ static const struct file_operations sel_policycap_ops = {
 	.llseek		= generic_file_llseek,
 };
 
-static int sel_make_perm_files(struct selinux_policy *newpolicy,
-			char *objclass, int classvalue,
-			struct dentry *dir)
+static int sel_make_perm_files(char *objclass, int classvalue,
+				struct dentry *dir)
 {
+	struct selinux_fs_info *fsi = dir->d_sb->s_fs_info;
 	int i, rc, nperms;
 	char **perms;
 
-	rc = security_get_permissions(newpolicy, objclass, &perms, &nperms);
+	rc = security_get_permissions(fsi->state, objclass, &perms, &nperms);
 	if (rc)
 		return rc;
 
@@ -1912,9 +1817,8 @@ out:
 	return rc;
 }
 
-static int sel_make_class_dir_entries(struct selinux_policy *newpolicy,
-				char *classname, int index,
-				struct dentry *dir)
+static int sel_make_class_dir_entries(char *classname, int index,
+					struct dentry *dir)
 {
 	struct super_block *sb = dir->d_sb;
 	struct selinux_fs_info *fsi = sb->s_fs_info;
@@ -1940,38 +1844,39 @@ static int sel_make_class_dir_entries(struct selinux_policy *newpolicy,
 	if (IS_ERR(dentry))
 		return PTR_ERR(dentry);
 
-	rc = sel_make_perm_files(newpolicy, classname, index, dentry);
+	rc = sel_make_perm_files(classname, index, dentry);
 
 	return rc;
 }
 
-static int sel_make_classes(struct selinux_policy *newpolicy,
-			    struct dentry *class_dir,
-			    unsigned long *last_class_ino)
+static int sel_make_classes(struct selinux_fs_info *fsi)
 {
 
 	int rc, nclasses, i;
 	char **classes;
 
-	rc = security_get_classes(newpolicy, &classes, &nclasses);
+	/* delete any existing entries */
+	sel_remove_entries(fsi->class_dir);
+
+	rc = security_get_classes(fsi->state, &classes, &nclasses);
 	if (rc)
 		return rc;
 
 	/* +2 since classes are 1-indexed */
-	*last_class_ino = sel_class_to_ino(nclasses + 2);
+	fsi->last_class_ino = sel_class_to_ino(nclasses + 2);
 
 	for (i = 0; i < nclasses; i++) {
 		struct dentry *class_name_dir;
 
-		class_name_dir = sel_make_dir(class_dir, classes[i],
-					      last_class_ino);
+		class_name_dir = sel_make_dir(fsi->class_dir, classes[i],
+					      &fsi->last_class_ino);
 		if (IS_ERR(class_name_dir)) {
 			rc = PTR_ERR(class_name_dir);
 			goto out;
 		}
 
 		/* i+1 since class values are 1-indexed */
-		rc = sel_make_class_dir_entries(newpolicy, classes[i], i + 1,
+		rc = sel_make_class_dir_entries(classes[i], i + 1,
 				class_name_dir);
 		if (rc)
 			goto out;
@@ -1989,6 +1894,8 @@ static int sel_make_policycap(struct selinux_fs_info *fsi)
 	unsigned int iter;
 	struct dentry *dentry = NULL;
 	struct inode *inode = NULL;
+
+	sel_remove_entries(fsi->policycap_dir);
 
 	for (iter = 0; iter <= POLICYDB_CAPABILITY_MAX; iter++) {
 		if (iter < ARRAY_SIZE(selinux_policycap_names))
@@ -2039,22 +1946,6 @@ static struct dentry *sel_make_dir(struct dentry *dir, const char *name,
 	inc_nlink(d_inode(dir));
 
 	return dentry;
-}
-
-static struct dentry *sel_make_disconnected_dir(struct super_block *sb,
-						unsigned long *ino)
-{
-	struct inode *inode = sel_make_inode(sb, S_IFDIR | S_IRUGO | S_IXUGO);
-
-	if (!inode)
-		return ERR_PTR(-ENOMEM);
-
-	inode->i_op = &simple_dir_inode_operations;
-	inode->i_fop = &simple_dir_operations;
-	inode->i_ino = ++(*ino);
-	/* directory inodes start off with i_nlink == 2 (for "." entry) */
-	inc_nlink(inode);
-	return d_obtain_alias(inode);
 }
 
 #define NULL_FILE_NAME "null"
@@ -2155,14 +2046,14 @@ static int sel_fill_super(struct super_block *sb, struct fs_context *fc)
 	if (ret)
 		goto err;
 
-	fsi->class_dir = sel_make_dir(sb->s_root, CLASS_DIR_NAME, &fsi->last_ino);
+	fsi->class_dir = sel_make_dir(sb->s_root, "class", &fsi->last_ino);
 	if (IS_ERR(fsi->class_dir)) {
 		ret = PTR_ERR(fsi->class_dir);
 		fsi->class_dir = NULL;
 		goto err;
 	}
 
-	fsi->policycap_dir = sel_make_dir(sb->s_root, POLICYCAP_DIR_NAME,
+	fsi->policycap_dir = sel_make_dir(sb->s_root, "policy_capabilities",
 					  &fsi->last_ino);
 	if (IS_ERR(fsi->policycap_dir)) {
 		ret = PTR_ERR(fsi->policycap_dir);
@@ -2170,12 +2061,9 @@ static int sel_fill_super(struct super_block *sb, struct fs_context *fc)
 		goto err;
 	}
 
-	ret = sel_make_policycap(fsi);
-	if (ret) {
-		pr_err("SELinux: failed to load policy capabilities\n");
+	ret = sel_make_policy_nodes(fsi);
+	if (ret)
 		goto err;
-	}
-
 	return 0;
 err:
 	pr_err("SELinux: %s:  failed while creating inodes\n",
@@ -2213,8 +2101,8 @@ static struct file_system_type sel_fs_type = {
 	.kill_sb	= sel_kill_sb,
 };
 
-static struct vfsmount *selinuxfs_mount __ro_after_init;
-struct path selinux_null __ro_after_init;
+struct vfsmount *selinuxfs_mount;
+struct path selinux_null;
 
 static int __init init_sel_fs(void)
 {
@@ -2222,7 +2110,7 @@ static int __init init_sel_fs(void)
 					  sizeof(NULL_FILE_NAME)-1);
 	int err;
 
-	if (!selinux_enabled_boot)
+	if (!selinux_enabled)
 		return 0;
 
 	err = sysfs_create_mount_point(fs_kobj, "selinux");

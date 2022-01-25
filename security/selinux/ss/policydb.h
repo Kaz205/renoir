@@ -69,7 +69,6 @@ struct class_datum {
 #define DEFAULT_TARGET_LOW     4
 #define DEFAULT_TARGET_HIGH    5
 #define DEFAULT_TARGET_LOW_HIGH        6
-#define DEFAULT_GLBLUB		7
 	char default_range;
 };
 
@@ -81,26 +80,23 @@ struct role_datum {
 	struct ebitmap types;		/* set of authorized types for role */
 };
 
-struct role_trans_key {
+struct role_trans {
 	u32 role;		/* current role */
 	u32 type;		/* program executable type, or new object type */
 	u32 tclass;		/* process class, or new object class */
-};
-
-struct role_trans_datum {
 	u32 new_role;		/* new role */
+	struct role_trans *next;
 };
 
-struct filename_trans_key {
+struct filename_trans {
+	u32 stype;		/* current process */
 	u32 ttype;		/* parent dir context */
 	u16 tclass;		/* class of new object */
 	const char *name;	/* last path component */
 };
 
 struct filename_trans_datum {
-	struct ebitmap stypes;	/* bitmap of source types for this otype */
-	u32 otype;		/* resulting type of new object */
-	struct filename_trans_datum *next;	/* record for next otype*/
+	u32 otype;		/* expected of new object */
 };
 
 struct role_allow {
@@ -239,7 +235,6 @@ struct genfs {
 struct policydb {
 	int mls_enabled;
 	int android_netlink_route;
-	int android_netlink_getneigh;
 
 	/* symbol tables */
 	struct symtab symtab[SYM_NUM];
@@ -265,23 +260,20 @@ struct policydb {
 	struct avtab te_avtab;
 
 	/* role transitions */
-	struct hashtab role_tr;
+	struct role_trans *role_tr;
 
 	/* file transitions with the last path component */
 	/* quickly exclude lookups when parent ttype has no rules */
 	struct ebitmap filename_trans_ttypes;
 	/* actual set of filename_trans rules */
-	struct hashtab filename_trans;
-	/* only used if policyvers < POLICYDB_VERSION_COMP_FTRANS */
-	u32 compat_filename_trans_count;
+	struct hashtab *filename_trans;
 
 	/* bools indexed by (value - 1) */
 	struct cond_bool_datum **bool_val_to_struct;
 	/* type enforcement conditional access vectors and transitions */
 	struct avtab te_cond_avtab;
-	/* array indexing te_cond_avtab by conditional */
+	/* linked list indexing te_cond_avtab by conditional */
 	struct cond_node *cond_list;
-	u32 cond_list_len;
 
 	/* role allows */
 	struct role_allow *role_allow;
@@ -296,7 +288,7 @@ struct policydb {
 	struct genfs *genfs;
 
 	/* range transitions table (range_trans_key -> mls_range) */
-	struct hashtab range_tr;
+	struct hashtab *range_tr;
 
 	/* type -> attribute reverse mapping */
 	struct ebitmap *type_attr_map_array;
@@ -315,7 +307,7 @@ struct policydb {
 
 	u16 process_class;
 	u32 process_trans_perms;
-} __randomize_layout;
+};
 
 extern void policydb_destroy(struct policydb *p);
 extern int policydb_load_isids(struct policydb *p, struct sidtab *s);
@@ -326,18 +318,10 @@ extern int policydb_role_isvalid(struct policydb *p, unsigned int role);
 extern int policydb_read(struct policydb *p, void *fp);
 extern int policydb_write(struct policydb *p, void *fp);
 
-extern struct filename_trans_datum *policydb_filenametr_search(
-	struct policydb *p, struct filename_trans_key *key);
-
-extern struct mls_range *policydb_rangetr_search(
-	struct policydb *p, struct range_trans *key);
-
-extern struct role_trans_datum *policydb_roletr_search(
-	struct policydb *p, struct role_trans_key *key);
+#define PERM_SYMTAB_SIZE 32
 
 #define POLICYDB_CONFIG_MLS    1
 #define POLICYDB_CONFIG_ANDROID_NETLINK_ROUTE    (1 << 31)
-#define POLICYDB_CONFIG_ANDROID_NETLINK_GETNEIGH (1 << 30)
 
 /* the config flags related to unknown classes/perms are bits 2 and 3 */
 #define REJECT_UNKNOWN	0x00000002
