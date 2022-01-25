@@ -3705,6 +3705,7 @@ void sde_crtc_commit_kickoff(struct drm_crtc *crtc,
 	struct sde_kms *sde_kms;
 	struct sde_crtc_state *cstate;
 	bool is_error = false;
+	unsigned long flags;
 	enum sde_crtc_idle_pc_state idle_pc_state;
 	struct sde_encoder_kickoff_params params = { 0 };
 
@@ -3801,9 +3802,9 @@ void sde_crtc_commit_kickoff(struct drm_crtc *crtc,
 	if (sde_crtc->event) {
 		WARN_ON(sde_crtc->event);
 	} else {
-		spin_lock(&dev->event_lock);
+		spin_lock_irqsave(&dev->event_lock, flags);
 		sde_crtc->event = crtc->state->event;
-		spin_unlock(&dev->event_lock);
+		spin_unlock_irqrestore(&dev->event_lock, flags);
 	}
 
 	_sde_crtc_schedule_idle_notify(crtc);
