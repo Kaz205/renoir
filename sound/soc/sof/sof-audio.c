@@ -30,8 +30,8 @@ static int sof_kcontrol_setup(struct snd_sof_dev *sdev, struct snd_sof_control *
 			ipc_cmd = SOF_IPC_COMP_SET_VALUE;
 			ctrl_type = SOF_CTRL_TYPE_VALUE_CHAN_SET;
 		} else {
-			ipc_cmd = SOF_IPC_COMP_GET_DATA;
-			ctrl_type = SOF_CTRL_TYPE_DATA_GET;
+			ipc_cmd = SOF_IPC_COMP_GET_VALUE;
+			ctrl_type = SOF_CTRL_TYPE_VALUE_CHAN_GET;
 		}
 		break;
 	case SOF_CTRL_CMD_BINARY:
