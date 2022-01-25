@@ -22,7 +22,7 @@ then
     exit 1
 fi
 
-cp out/arch/arm64/boot/Image.lz4 $ak/Image.lz4
+cp out/arch/arm64/boot/Image $ak/Image
 find out/arch/arm64/boot/dts -name '*.dtb' -exec cat {} + > $ak/dtb
 cp out/arch/arm64/boot/dtbo.img $ak/dtbo.img
 cd $ak
