@@ -3,7 +3,6 @@
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
  */
 
-#include <linux/hwid.h>
 #include <linux/module.h>
 
 #include <dt-bindings/msm/msm-camera.h>
@@ -18,6 +17,7 @@
 #include "cam_cpas_api.h"
 #include "cam_compat.h"
 #include "cam_subdev.h"
+#include <linux/hwid.h>
 
 #define SCM_SVC_CAMERASS 0x18
 #define SECURE_SYSCALL_ID 0x6
