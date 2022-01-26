@@ -6,12 +6,6 @@ export CROSS_COMPILE_ARM32=/usr/bin/arm-none-eabi-
 
 git submodule init && git submodule update
 
-export CLANG_DIR=google-clang/clang-r437112b/bin
-export LLVM=1
-export CLANG_TRIPLE=aarch64-linux-gnu
-export CROSS_COMPILE=$CLANG_DIR/aarch64-linux-gnu-
-export CROSS_COMPILE_ARM32=$CLANG_DIR/arm-linux-gnueabi-
-
 cd "$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 make clean -j$(nproc --all) && make mrproper -j$(nproc --all)
 make vendor/renoir-qgki_defconfig -j$(nproc --all)
