@@ -69,6 +69,10 @@ ap_ts_pen_1v8: &i2c4 {
 	compatible = "edp-panel";
 };
 
+&pp3300_dx_edp {
+	gpio = <&tlmm 67 GPIO_ACTIVE_HIGH>;
+};
+
 &sound {
 	compatible = "google,sc7180-trogdor";
 	model = "sc7180-rt5682s-max98357a-1mic";
@@ -76,6 +80,18 @@ ap_ts_pen_1v8: &i2c4 {
 
 &wifi {
 	qcom,ath10k-calibration-variant = "GO_KINGOFTOWN";
+};
+
+/* PINCTRL - modifications to sc7180-trogdor.dtsi */
+
+&en_pp3300_dx_edp {
+	pinmux {
+		pins = "gpio67";
+	};
+
+	pinconf {
+		pins = "gpio67";
+	};
 };
 
 /* PINCTRL - board-specific pinctrl */
