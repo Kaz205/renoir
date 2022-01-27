@@ -3602,7 +3602,7 @@ static int msm_geni_serial_sys_suspend(struct device *dev)
 	  driver prob*/
 	if (!is_early_cons_enabled &&
 		(!strcmp(id->compatible, "qcom,msm-geni-console"))) {
-		pr_info("ignore cons suspend\n");
+		pr_debug("ignore cons suspend\n");
 		return 0;
 	}
 #endif

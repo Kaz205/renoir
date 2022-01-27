@@ -1125,7 +1125,7 @@ static int haptics_set_vmax_mv(struct haptics_chip *chip, u32 vmax_mv)
 	if (rc < 0)
 		dev_err(chip->dev, "config VMAX failed, rc=%d\n", rc);
 	else
-		dev_info(chip->dev, "Set Vmax to %u mV\n", vmax_mv);
+		dev_dbg(chip->dev, "Set Vmax to %u mV\n", vmax_mv);
 
 	return rc;
 }
@@ -1353,7 +1353,7 @@ static int haptics_enable_hpwr_vreg(struct haptics_chip *chip, bool en)
 		}
 	}
 
-	dev_info(chip->dev, "%s hpwr vreg\n", en ? "enabled" : "disabled");
+	dev_dbg(chip->dev, "%s hpwr vreg\n", en ? "enabled" : "disabled");
 	chip->hpwr_vreg_enabled = en;
 	return 0;
 }
@@ -1395,7 +1395,7 @@ static int haptics_open_loop_drive_config(struct haptics_chip *chip, bool en)
 			if (rc < 0)
 				return rc;
 
-			dev_info(chip->dev, "Toggle CAL_EN in open-loop-VREG playing\n");
+			dev_dbg(chip->dev, "Toggle CAL_EN in open-loop-VREG playing\n");
 		}
 	} else if (chip->hpwr_vreg == NULL) {
 #if !defined(QCOM_HAPTIC_BOB)
@@ -1981,7 +1981,7 @@ static int haptics_load_predefined_effect(struct haptics_chip *chip,
 
 	if (play->pattern_src == PATTERN1 || play->pattern_src == PATTERN2) {
 		if (play->effect->pattern->preload) {
-			dev_info(chip->dev, "Ignore preloaded effect: %d\n",
+			dev_dbg(chip->dev, "Ignore preloaded effect: %d\n",
 					play->effect->id);
 			return 0;
 		}
@@ -2211,7 +2211,7 @@ static int haptics_load_periodic_effect(struct haptics_chip *chip,
 	}
 
 	mutex_lock(&chip->play.lock);
-	dev_info(chip->dev, "upload effect %d, vmax_mv=%d\n",
+	dev_dbg(chip->dev, "upload effect %d, vmax_mv=%d\n",
 			chip->effects[i].id, play->vmax_mv);
 
 	if (chip->play.in_calibration) {
@@ -2382,7 +2382,7 @@ static int haptics_playback(struct input_dev *dev, int effect_id, int val)
 	struct haptics_play_info *play = &chip->play;
 	int rc;
 
-	dev_info(chip->dev, "playback val = %d\n", val);
+	dev_dbg(chip->dev, "playback val = %d\n", val);
 	if (!!val) {
 		rc = haptics_enable_play(chip, true);
 		if (rc < 0)
