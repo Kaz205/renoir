@@ -1504,17 +1504,17 @@ static int drm_notifier_callback(struct notifier_block *self,
 	}
 
 	blank = *(int *)(evdata->data);
-	FTS_INFO("notifier tp event:%d, code:%d\n", event, blank);
+	FTS_DEBUG("notifier tp event:%d, code:%d\n", event, blank);
 
 	if (event == MI_DISP_DPMS_EVENT && blank == MI_DISP_DPMS_ON) {
-		FTS_INFO("FB_BLANK_UNBLANK!\n");
+		FTS_DEBUG("FB_BLANK_UNBLANK!\n");
 		queue_work(fts_data->ts_workqueue, &fts_data->resume_work);
 
 	} else if (event == MI_DISP_DPMS_EARLY_EVENT &&
 			(blank == MI_DISP_DPMS_POWERDOWN ||
 			 blank == MI_DISP_DPMS_LP1 ||
 			 blank == MI_DISP_DPMS_LP2)) {
-		FTS_INFO("FB_BLANK %s\n",
+		FTS_DEBUG("FB_BLANK %s\n",
 				blank == MI_DISP_DPMS_POWERDOWN ? "POWER DOWN" : "LP");
 
 		cancel_work_sync(&fts_data->resume_work);
