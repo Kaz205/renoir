@@ -24,10 +24,15 @@ extern void *cnss_ipc_log_long_context;
 #define cnss_debug_log_long_print(_x...) \
 		 cnss_debug_ipc_log_print(cnss_ipc_log_long_context, _x)
 #else
+static inline void no_cnss_log_print(void *log_ctx, char *process,
+					    const char *fn, const char *log_level,
+					    char *fmt, ...)
+{
+}
 #define cnss_debug_log_print(_x...) \
-		 cnss_debug_ipc_log_print((void *)NULL, _x)
+		 no_cnss_log_print((void *)NULL, _x)
 #define cnss_debug_log_long_print(_x...) \
-		 cnss_debug_ipc_log_print((void *)NULL, _x)
+		 no_cnss_log_print((void *)NULL, _x)
 #endif
 
 #define proc_name (in_irq() ? "irq" : \

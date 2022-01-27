@@ -2,7 +2,6 @@
 /* Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
-
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/device.h>
