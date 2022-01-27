@@ -334,7 +334,7 @@ static int32_t process_diagnostics_msg(uint32_t *payload, uint32_t payload_size)
 	size_t copy_size = 0;
 	int32_t  ret = -1;
 
-	pr_err("[ELUS]: %s() size:%d\n", __func__, payload_size);
+	pr_debug("[ELUS]: %s() size:%d\n", __func__, payload_size);
 
 	if (payload_size >= ELLIPTIC_DIAGNOSTICS_DATA_SIZE) {
 		pr_debug("[ELUS]: diagnostics_data copied to local AP cache");
