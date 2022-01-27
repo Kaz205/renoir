@@ -1050,7 +1050,7 @@ static int battery_psy_set_charge_current(struct battery_chg_dev *bcdev,
 
 	if(val == bcdev->curr_thermal_level)
 	      return 0;
-	pr_err("set thermal-level: %d num_thermal_levels: %d \n", val, bcdev->num_thermal_levels);
+	pr_debug("set thermal-level: %d num_thermal_levels: %d \n", val, bcdev->num_thermal_levels);
 
 	if (!bcdev->num_thermal_levels)
 		return 0;
@@ -2311,7 +2311,7 @@ static int chg_suspend(struct device *dev)
 {
 	//struct battery_chg_dev *bcdev = dev_get_drvdata(dev);
 
-	pr_err("chg suspend\n");
+	pr_debug("chg suspend\n");
 	return 0;
 }
 
@@ -2319,7 +2319,7 @@ static int chg_resume(struct device *dev)
 {
 	//struct battery_chg_dev *bcdev = dev_get_drvdata(dev);
 
-	pr_err("chg resume\n");
+	pr_debug("chg resume\n");
 	return 0;
 }
 static const struct of_device_id battery_chg_match_table[] = {
