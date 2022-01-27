@@ -11,13 +11,6 @@
  *
  */
 
-#ifdef __KERNEL__
-	#ifdef pr_fmt
-	#undef pr_fmt
-	#endif
-	#define pr_fmt(fmt) "[tfa98xx] %s(): " fmt, __func__
-#endif
-
 #include <linux/module.h>
 #include <linux/i2c.h>
 #include <sound/core.h>
@@ -1530,7 +1523,7 @@ static int tfa98xx_send_mute_cmd(int mute)
         cmd[5] = TFA_KCONTROL_VALUE_ENABLED; //mute left channel
         cmd[8] = TFA_KCONTROL_VALUE_ENABLED; //mute right channel
     }
-	pr_info("send mute command to host DSP.\n");
+	pr_debug("send mute command to host DSP.\n");
 	return send_tfa_cal_in_band(&cmd[0], sizeof(cmd));
 }
 
@@ -2303,7 +2296,7 @@ static void tfa98xx_container_loaded(const struct firmware *cont, void *context)
 
 	tfa98xx->dsp_fw_state = TFA98XX_DSP_FW_FAIL;
 
-	printk(KERN_ERR "%s-1\n",__func__);//
+	pr_debug("%s-1\n",__func__);//
 
 	if (!cont) {
 		pr_err("Failed to read %s\n", fw_name);
@@ -2904,7 +2897,7 @@ enum Tfa98xx_Error tfa98xx_adsp_send_calib_values(void)
 		if (TFA_GET_BF(tfa, MTPEX) == 1) {
 			value = tfa_dev_mtp_get(tfa, TFA_MTP_RE25);
 			dsp_cal_value = (value * 65536) / 1000;
-			pr_info("Device 0x%x impendance:%d, cal value is 0x%x\n", tfa98xx->i2c->addr, value, dsp_cal_value);
+			pr_debug("Device 0x%x impendance:%d, cal value is 0x%x\n", tfa98xx->i2c->addr, value, dsp_cal_value);
 
 			if (2 == tfa98xx_device_count) {
 				/*stereo case*/
@@ -2941,7 +2934,7 @@ enum Tfa98xx_Error tfa98xx_adsp_send_calib_values(void)
 		bytes[2] = 0x81;
 		bytes[3] = 0x05;
 
-		pr_info("calibration value send to host DSP.\n");
+		pr_debug("calibration value send to host DSP.\n");
 		ret = send_tfa_cal_in_band(&bytes[1], sizeof(bytes) - 1);
 		msleep(10);
 
@@ -2967,9 +2960,9 @@ static int tfa98xx_mute(struct snd_soc_dai *dai, int mute, int stream)
 	struct snd_soc_codec *codec = dai->codec;
 	struct tfa98xx *tfa98xx = snd_soc_codec_get_drvdata(codec);
 #endif
-	dev_info(&tfa98xx->i2c->dev, "%s: state: %d\n", __func__, mute);
+	dev_dbg(&tfa98xx->i2c->dev, "%s: state: %d\n", __func__, mute);
 
-	printk(KERN_ERR "%s-1 mute:\n",__func__,mute);//
+	pr_debug("%s-1 mute:\n",__func__,mute);//
 
 	if (no_start) {
 		pr_debug("no_start parameter set no tfa_dev_start or tfa_dev_stop, returning\n");
