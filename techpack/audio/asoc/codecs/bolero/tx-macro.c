@@ -1171,13 +1171,13 @@ static int tx_macro_enable_dec(struct snd_soc_dapm_widget *w,
 		usleep_range(6000, 6010);
 		/* apply gain after decimator is enabled */
 		reg_val = snd_soc_component_read32(component, tx_gain_ctl_reg);
-		dev_info(component->dev, "%s: the reg(%#x) value before enable dec is: %#x \n",
+		dev_dbg(component->dev, "%s: the reg(%#x) value before enable dec is: %#x \n",
 			__func__, tx_gain_ctl_reg, reg_val);
 		snd_soc_component_write(component, tx_gain_ctl_reg,
 			      snd_soc_component_read32(component,
 					tx_gain_ctl_reg));
 		reg_val = snd_soc_component_read32(component, tx_gain_ctl_reg);
-		dev_info(component->dev, "%s: the reg(%#x) value after enable dec is: %#x \n",
+		dev_dbg(component->dev, "%s: the reg(%#x) value after enable dec is: %#x \n",
 			__func__, tx_gain_ctl_reg, reg_val);
 		if (tx_priv->bcs_enable && decimator == 0) {
 			if (tx_priv->version == BOLERO_VERSION_2_1)
