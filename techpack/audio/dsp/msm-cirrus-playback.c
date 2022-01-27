@@ -55,13 +55,6 @@
 
 #undef CONFIG_OF
 
-#undef pr_info
-#undef pr_err
-#undef pr_debug
-#define pr_debug(fmt, args...) printk(KERN_INFO "[CSPL] " pr_fmt(fmt), ##args)
-#define pr_info(fmt, args...) printk(KERN_INFO "[CSPL] " pr_fmt(fmt), ##args)
-#define pr_err(fmt, args...) printk(KERN_ERR "[CSPL] " pr_fmt(fmt), ##args)
-
 #define CRUS_TX_CONFIG "crus_sp_tx%d.bin"
 #define CRUS_RX_CONFIG "crus_sp_rx%d.bin"
 
