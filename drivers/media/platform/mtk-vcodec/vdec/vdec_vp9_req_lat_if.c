@@ -736,7 +736,7 @@ static int vdec_vp9_slice_setup_lat_from_src_buf(
 static void vdec_vp9_slice_setup_hdr(
 	struct vdec_vp9_slice_instance *instance,
 	struct vdec_vp9_slice_uncompressed_header *uh,
-	struct v4l2_ctrl_vp9_frame_decode_params *hdr)
+	struct v4l2_ctrl_vp9_frame *hdr)
 {
 	int i;
 
@@ -774,13 +774,13 @@ static void vdec_vp9_slice_setup_hdr(
 	 * - LAST_FRAME = 1,
 	 * - GOLDEN_FRAME = 2,
 	 * - ALTREF_FRAME = 3,
-	 * ref_frame_sign_biases[INTRA_FRAME] is always 0
+	 * ref_frame_sign_bias[INTRA_FRAME] is always 0
 	 * and VDA only passes another 3 directions
 	 */
 	uh->ref_frame_sign_bias[0] = 0;
 	for (i = 0; i < 3; i++)
 		uh->ref_frame_sign_bias[i + 1] =
-			!!(hdr->ref_frame_sign_biases & (1 << i));
+			!!(hdr->ref_frame_sign_bias & (1 << i));
 	uh->allow_high_precision_mv = HDR_FLAG(ALLOW_HIGH_PREC_MV);
 	uh->interpolation_filter = hdr->interpolation_filter;
 	uh->refresh_frame_context = HDR_FLAG(REFRESH_FRAME_CTX);
@@ -798,7 +798,7 @@ static void vdec_vp9_slice_setup_hdr(
 static void vdec_vp9_slice_setup_frame_ctx(
 	struct vdec_vp9_slice_instance *instance,
 	struct vdec_vp9_slice_uncompressed_header *uh,
-	struct v4l2_ctrl_vp9_frame_decode_params *hdr)
+	struct v4l2_ctrl_vp9_frame *hdr)
 {
 	int error_resilient_mode;
 	int reset_frame_context;
@@ -888,7 +888,7 @@ static void vdec_vp9_slice_setup_segmentation(
 }
 
 static int vdec_vp9_slice_setup_tile(struct vdec_vp9_slice_vsi *vsi,
-	struct v4l2_ctrl_vp9_frame_decode_params *hdr)
+	struct v4l2_ctrl_vp9_frame *hdr)
 {
 	unsigned int rows_log2;
 	unsigned int cols_log2;
@@ -942,27 +942,25 @@ static void vdec_vp9_slice_setup_state(struct vdec_vp9_slice_vsi *vsi)
 
 static void vdec_vp9_slice_setup_ref_idx(
 	struct vdec_vp9_slice_pfc *pfc,
-	struct v4l2_ctrl_vp9_frame_decode_params *hdr)
+	struct v4l2_ctrl_vp9_frame *hdr)
 {
-	int i;
-
-	for (i = 0; i < 3; i++)
-		pfc->ref_idx[i] = hdr->refs[i];
+	pfc->ref_idx[0] = hdr->last_frame_ts;
+	pfc->ref_idx[1] = hdr->golden_frame_ts;
+	pfc->ref_idx[2] = hdr->alt_frame_ts;
 }
 
 static int vdec_vp9_slice_setup_pfc(
 	struct vdec_vp9_slice_instance *instance,
 	struct vdec_vp9_slice_pfc *pfc)
 {
-	struct v4l2_ctrl_vp9_frame_decode_params *hdr;
+	struct v4l2_ctrl_vp9_frame *hdr;
 	struct vdec_vp9_slice_uncompressed_header *uh;
 	struct v4l2_ctrl *hdr_ctrl;
 	struct vdec_vp9_slice_vsi *vsi;
 	int ret;
 
 	/* frame header */
-	hdr_ctrl = v4l2_ctrl_find(&instance->ctx->ctrl_hdl,
-		V4L2_CID_MPEG_VIDEO_VP9_FRAME_DECODE_PARAMS);
+	hdr_ctrl = v4l2_ctrl_find(&instance->ctx->ctrl_hdl, V4L2_CID_STATELESS_VP9_FRAME);
 	if (!hdr_ctrl || !hdr_ctrl->p_cur.p)
 		return -EINVAL;
 	hdr = hdr_ctrl->p_cur.p;

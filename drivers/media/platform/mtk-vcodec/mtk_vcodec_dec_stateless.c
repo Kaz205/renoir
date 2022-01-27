@@ -94,7 +94,7 @@ static const struct mtk_stateless_control mtk_stateless_controls[] = {
 #if 0
 	{
 		.cfg = {
-			.id = V4L2_CID_MPEG_VIDEO_VP9_FRAME_DECODE_PARAMS,
+			.id = V4L2_CID_STATELESS_VP9_FRAME,
 		},
 		.codec_type = V4L2_PIX_FMT_VP9_FRAME,
 		.needed_in_request = true,
