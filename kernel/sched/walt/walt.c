@@ -2549,7 +2549,6 @@ static void walt_get_possible_siblings(int cpuid, struct cpumask *cluster_cpus)
 static void walt_rest_init(struct work_struct *work)
 {
 	core_ctl_init();
-	cpu_boost_init();
 }
 static DECLARE_WORK(walt_work, walt_rest_init);
 
