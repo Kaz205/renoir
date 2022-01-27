@@ -877,7 +877,7 @@ static struct cal_block_data *q6asm_find_cal_by_app_type(int cal_index,
 				return cal_block;
 		}
 	}
-	pr_err("%s: Can't find ASM Cal for cal_index %d app_type %d\n",
+	pr_debug("%s: Can't find ASM Cal for cal_index %d app_type %d\n",
 			__func__, cal_index, app_type);
 	return NULL;
 }
@@ -937,7 +937,7 @@ static struct cal_block_data *q6asm_find_cal_by_buf_number(int cal_index,
 			}
 		}
 	}
-	pr_err("%s: Can't find ASM Cal for cal_index %d app_type %d buffer_number %d\n",
+	pr_debug("%s: Can't find ASM Cal for cal_index %d app_type %d buffer_number %d\n",
 			__func__, cal_index, app_type, buffer_idx_w_path);
 
 	return NULL;
