@@ -12,19 +12,6 @@
 #ifndef _DBGPRINT_H
 #   define _DBGPRINT_H
 
-/* Debugging macro's. */
-#   ifndef DEBUG
-#      define DEBUG
-#   endif
-
-#   ifndef ASSERT
-//#define ASSERT
-#   endif
- //TODO wwwim
-#   ifndef _ASSERT
-		#define _ASSERT(e)
-#   endif
-
 #   ifndef PREFIX
 #     define PREFIX "tfa98xx: "
 #	define DRIVER_NAME "tfa98xx"

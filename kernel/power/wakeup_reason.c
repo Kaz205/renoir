@@ -274,6 +274,7 @@ static void print_wakeup_sources(void)
 	struct wakeup_irq_node *n;
 	unsigned long flags;
 
+	return;
 	spin_lock_irqsave(&wakeup_reason_lock, flags);
 
 	capture_reasons = false;
