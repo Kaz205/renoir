@@ -706,7 +706,7 @@ int elliptic_system_configuration_param_get(
 	struct soc_mixer_control *mc =
 		(struct soc_mixer_control *)kcontrol->private_value;
 
-	pr_err("%s: reg: %d shift: %d\n", __func__, mc->reg, mc->shift);
+	pr_debug("%s: reg: %d shift: %d\n", __func__, mc->reg, mc->shift);
 
 	if (mc->reg != ELLIPTIC_SYSTEM_CONFIGURATION)
 		return -EINVAL;
@@ -810,7 +810,7 @@ int elliptic_system_configuration_param_put(
 		(struct soc_mixer_control *)kcontrol->private_value;
 	struct elliptic_system_configuration_parameter param;
 
-	pr_err("%s: reg: %d shift: %d val: %d\n", __func__, mc->reg, mc->shift, 
+	pr_debug("%s: reg: %d shift: %d val: %d\n", __func__, mc->reg, mc->shift, 
 		ucontrol->value.integer.value[0]);
 
 	if (mc->reg != ELLIPTIC_SYSTEM_CONFIGURATION)
@@ -821,16 +821,16 @@ int elliptic_system_configuration_param_put(
 		const size_t csi =
 			mc->shift -
 			ELLIPTIC_SYSTEM_CONFIGURATION_CUSTOM_SETTING_0;
-		EL_PRINT_E("ELLIPTIC_SYSTEM_CONFIGURATION_CUSTOM_SETTING_XX csi:%zu", csi);
+		EL_PRINT_D("ELLIPTIC_SYSTEM_CONFIGURATION_CUSTOM_SETTING_XX csi:%zu", csi);
 		if (csi >=
 			ARRAY_SIZE(elliptic_system_configuration_cache.custom_settings))
 			return -EINVAL;
-		EL_PRINT_E("ucontrol->value.integer.value[0]:%ld", ucontrol->value.integer.value[0]);
+		EL_PRINT_D("ucontrol->value.integer.value[0]:%ld", ucontrol->value.integer.value[0]);
 		elliptic_system_configuration_cache.custom_settings[csi] =
 			ucontrol->value.integer.value[0];
 		param.type = ESCPT_ENGINE_CUSTOM_SETTING_0 + csi;
 		param.custom_setting = ucontrol->value.integer.value[0];
-		EL_PRINT_E("calling elliptic_data_write(custom_setting) csi:%zu", csi);
+		EL_PRINT_D("calling elliptic_data_write(custom_setting) csi:%zu", csi);
 		return elliptic_data_write(ELLIPTIC_ULTRASOUND_SET_PARAMS,
 				  (const char *)&param, sizeof(param));
 	}
