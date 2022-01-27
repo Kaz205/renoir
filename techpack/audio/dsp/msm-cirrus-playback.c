@@ -55,13 +55,6 @@
 
 #undef CONFIG_OF
 
-#undef pr_info
-#undef pr_err
-#undef pr_debug
-#define pr_debug(fmt, args...) printk(KERN_INFO "[CSPL] " pr_fmt(fmt), ##args)
-#define pr_info(fmt, args...) printk(KERN_INFO "[CSPL] " pr_fmt(fmt), ##args)
-#define pr_err(fmt, args...) printk(KERN_ERR "[CSPL] " pr_fmt(fmt), ##args)
-
 #define CRUS_TX_CONFIG "crus_sp_tx%d.bin"
 #define CRUS_RX_CONFIG "crus_sp_rx%d.bin"
 
@@ -1163,7 +1156,7 @@ void msm_crus_pb_add_controls(struct snd_soc_component *component)
 EXPORT_SYMBOL(msm_crus_pb_add_controls);
 int crus_afe_port_start(u16 port_id)
 {
-	pr_info("%s: 0x%x\n", __func__, port_id);
+	pr_debug("%s: 0x%x\n", __func__, port_id);
 #if 0
 //CSPL do not be involved in AFE
 	struct snd_kcontrol kcontrol;
