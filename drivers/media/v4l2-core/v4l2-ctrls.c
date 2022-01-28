@@ -1591,6 +1591,7 @@ static void std_init_compound(const struct v4l2_ctrl *ctrl, u32 idx,
 {
 	struct v4l2_ctrl_mpeg2_slice_params *p_mpeg2_slice_params;
 	struct v4l2_ctrl_vp8_frame *p_vp8_frame;
+	struct v4l2_ctrl_vp9_frame_decode_params *p_vp9_frame;
 	void *p = ptr.p + idx * ctrl->elem_size;
 
 	memset(p, 0, ctrl->elem_size);
@@ -1613,6 +1614,13 @@ static void std_init_compound(const struct v4l2_ctrl *ctrl, u32 idx,
 	case V4L2_CTRL_TYPE_VP8_FRAME:
 		p_vp8_frame = p;
 		p_vp8_frame->num_dct_parts = 1;
+		break;
+	case V4L2_CTRL_TYPE_VP9_FRAME_DECODE_PARAMS:
+		p_vp9_frame = p;
+		p_vp9_frame->profile = 0;
+		p_vp9_frame->bit_depth = 8;
+		p_vp9_frame->flags |= V4L2_VP9_FRAME_FLAG_X_SUBSAMPLING |
+			V4L2_VP9_FRAME_FLAG_Y_SUBSAMPLING;
 		break;
 	}
 }
