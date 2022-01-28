@@ -347,4 +347,8 @@ config PINCTRL_RENOIR
 	tristate "RENOIR GPIO condfig"
 	default n
 
+config PINCTRL_SM7325
+	tristate "SM7325 GPIO condfig"
+	default n
+
 endif
