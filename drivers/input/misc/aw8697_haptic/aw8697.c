@@ -2553,8 +2553,6 @@ static void aw8697_vibrator_work_routine(struct work_struct *work)
 				      ktime_set(aw8697->duration / 1000,
 						(aw8697->duration % 1000) *
 						1000000), HRTIMER_MODE_REL);
-			pm_stay_awake(aw8697->dev);
-			aw8697->wk_lock_flag = 1;
 		} else if (aw8697->activate_mode ==
 			   AW8697_HAPTIC_ACTIVATE_CONT_MODE) {
 			aw8697_haptic_cont(aw8697);
@@ -2564,11 +2562,6 @@ static void aw8697_vibrator_work_routine(struct work_struct *work)
 						1000000), HRTIMER_MODE_REL);
 		} else {
 			/*other mode */
-		}
-	} else {
-		if (aw8697->wk_lock_flag == 1) {
-			pm_relax(aw8697->dev);
-			aw8697->wk_lock_flag = 0;
 		}
 	}
 	mutex_unlock(&aw8697->lock);
