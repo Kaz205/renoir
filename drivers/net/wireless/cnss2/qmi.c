@@ -31,14 +31,12 @@
 #define ELF_BDF_FILE_NAME_K11_GLOBAL     "bd_k11gl.elf"
 #define ELF_BDF_FILE_NAME_K11_NO_CRYSTAL            "bd_k11_2.elf"
 #define ELF_BDF_FILE_NAME_K11_GLOBAL_NO_CRYSTAL     "bd_k11gl_2.elf"
-#define ELF_BDF_FILE_NAME_K8             "bd_k8.elf"
 
 #define BIN_BDF_FILE_NAME		"bdwlan.bin"
 #define BIN_BDF_FILE_NAME_GF		"bdwlang.bin"
 #define BIN_BDF_FILE_NAME_PREFIX	"bdwlan.b"
 #define BIN_BDF_FILE_NAME_GF_PREFIX	"bdwlang.b"
 #define REGDB_FILE_NAME			"regdb.bin"
-#define REGDB_FILE_NAME_XIAOMI		"regdb_xiaomi.bin"
 #define HDS_FILE_NAME			"hds.bin"
 #define CHIP_ID_GF_MASK			0x10
 
@@ -582,15 +580,9 @@ static int cnss_get_bdf_file_name(struct cnss_plat_data *plat_priv,
 					else
 						snprintf(filename_tmp, filename_len, ELF_BDF_FILE_NAME_K11_NO_CRYSTAL);
 				}
-			} else if (hw_platform_ver == HARDWARE_PROJECT_K8) {
-				snprintf(filename_tmp, filename_len, ELF_BDF_FILE_NAME_K8);
-			} else if (plat_priv->chip_info.chip_id & CHIP_ID_GF_MASK) {
-				snprintf(filename_tmp, filename_len,
-					 ELF_BDF_FILE_NAME_GF);
 			} else {
-				snprintf(filename_tmp, filename_len,
-					 ELF_BDF_FILE_NAME);
-                        }
+				snprintf(filename_tmp, filename_len, ELF_BDF_FILE_NAME);
+			}
 		} else if (plat_priv->board_info.board_id < 0xFF) {
 			if (plat_priv->chip_info.chip_id & CHIP_ID_GF_MASK)
 				snprintf(filename_tmp, filename_len,
@@ -632,7 +624,7 @@ static int cnss_get_bdf_file_name(struct cnss_plat_data *plat_priv,
 		}
 		break;
 	case CNSS_BDF_REGDB:
-		snprintf(filename_tmp, filename_len, REGDB_FILE_NAME_XIAOMI);
+		snprintf(filename_tmp, filename_len, REGDB_FILE_NAME);
 		break;
 	case CNSS_BDF_HDS:
 		snprintf(filename_tmp, filename_len, HDS_FILE_NAME);
