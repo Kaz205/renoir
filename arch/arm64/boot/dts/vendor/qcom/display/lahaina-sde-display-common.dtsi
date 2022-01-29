@@ -32,8 +32,13 @@
 #include "dsi-panel-k2-38-08-0a-dsc-cmd.dtsi"
 #include "dsi-panel-k2-38-08-0a-mp-dsc-cmd.dtsi"
 #include "dsi-panel-k2b-38-08-0a-dsc-cmd.dtsi"
+#include "dsi-panel-j18-42-06-0a-prim-dsc-cmd.dtsi"
+#include "dsi-panel-j18-42-06-0a-sec-dsc-cmd.dtsi"
+#include "dsi-panel-k11-38-08-0a-dsc-cmd.dtsi"
 #include "dsi-panel-prim-sim-video.dtsi"
 #include "dsi-panel-sec-sim-video.dtsi"
+#include "dsi-panel-k1-43-06-00-sec-cmd.dtsi"
+#include "dsi-panel-k1-43-06-00-sec-video.dtsi"
 
 &soc {
 	dsi_panel_pwr_supply: dsi_panel_pwr_supply {
