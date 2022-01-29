@@ -35,6 +35,7 @@
 	};
 };
 
+
 &soc {
 	gpio_keys {
 		compatible = "gpio-keys";
@@ -51,15 +52,6 @@
 			gpio-key,wakeup;
 			debounce-interval = <15>;
 			linux,can-disable;
-		};
-
-		hall_key {
-			label = "hall_key";
-			gpios = <&tlmm 80 GPIO_ACTIVE_LOW>;
-			linux,input-type = <5>;
-			linux,code = <0>;
-			gpio-key,wakeup;
-			debounce-interval = <15>;
 		};
 	};
 
@@ -78,15 +70,6 @@
 		board-sensor = "VIRTUAL-SENSOR";
 	};
 
-	fingerprint_goodix {
-		compatible = "goodix,fingerprint";
-		l11c_vdd-supply = <&L11C>;
-		goodix,gpio-reset = <&tlmm 39 0x0>;
-		goodix,gpio-irq = <&tlmm 38 0x0>;
-		fp-gpio-pwr = <&tlmm 13 0x0>;
-		status = "ok";
-	};
-
 	xiaomi_touch {
 		compatible = "xiaomi-touch";
 		status = "ok";
@@ -101,16 +84,6 @@
 		/*regulator-boot-on*/
 		gpio = <&tlmm 132 0>;
 	};
-};
-
-&qupv3_se1_spi {
-        status = "ok";
-        ir-spi@0 {
-                compatible = "ir-spi";
-                reg = <0>;
-                spi-max-frequency = <19200000>;
-                status = "ok";
-        };
 };
 
 &sdhc_2 {
@@ -150,7 +123,6 @@
 
 	vcc-supply = <&pm8350_l7>;
 	vcc-voltage-level = <2504000 2950000>;
-	vcc-low-voltage-sup;
 	vcc-max-microamp = <800000>;
 
 	/*overlay spm-level*/
@@ -177,6 +149,7 @@
 			&dsi_sw43404_amoled_video
 			&dsi_sw43404_amoled_fhd_plus_cmd
 			&dsi_r66451_amoled_cmd
+			&dsi_r66451_amoled_60hz_cmd
 			&dsi_r66451_amoled_video>;
 };
 
@@ -335,7 +308,7 @@
 			qcom,use-bark = <1>;
 			qcom,support-reset = <1>;
 			linux,code = <KEY_POWER>;
-			qcom,s1-timer = <4480>;
+			qcom,s1-timer = <6720>;
 			qcom,s2-timer = <2000>;
 			qcom,s2-type = <PON_POWER_OFF_TYPE_HARD_RESET>;
 		};
