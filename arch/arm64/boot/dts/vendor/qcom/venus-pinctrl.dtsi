@@ -141,7 +141,8 @@
 				};
 			};
 	};
-        sar_mode_ctrl_irq {
+
+    md_mode_ctrl_irq {
 		ant3_ctrl_irq: ant3_ctrl_irq {
 			mux {
 				pins = "gpio84";
