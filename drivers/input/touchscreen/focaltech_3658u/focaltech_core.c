@@ -836,7 +836,6 @@ static irqreturn_t fts_irq_handler(int irq, void *data)
 		}
 	}
 #endif
-	pm_stay_awake(fts_data->dev);
 
 	pm_qos_update_request(&ts_data->pm_touch_req, 100);
 	pm_qos_update_request(&ts_data->pm_spi_req, 100);
@@ -852,7 +851,6 @@ static irqreturn_t fts_irq_handler(int irq, void *data)
 	pm_qos_update_request(&ts_data->pm_touch_req, PM_QOS_DEFAULT_VALUE);
 	pm_qos_update_request(&ts_data->pm_spi_req, PM_QOS_DEFAULT_VALUE);
 
-	pm_relax(fts_data->dev);
 	return IRQ_HANDLED;
 }
 
