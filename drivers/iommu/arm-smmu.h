@@ -305,7 +305,7 @@ struct arm_smmu_power_resources {
 
 	/* Protects clock_refs_count */
 	spinlock_t			clock_refs_lock;
-	int				clock_refs_count;
+	atomic_t			clock_refs_count;
 	int				regulator_defer;
 };
 
@@ -528,7 +528,7 @@ static inline u32 arm_smmu_readl(struct arm_smmu_device *smmu, int page, int off
 {
 	if (smmu->impl && unlikely(smmu->impl->read_reg))
 		return smmu->impl->read_reg(smmu, page, offset);
-	return readl_relaxed(arm_smmu_page(smmu, page) + offset);
+	return readl(arm_smmu_page(smmu, page) + offset);
 }
 
 static inline void arm_smmu_writel(struct arm_smmu_device *smmu, int page,

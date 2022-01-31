@@ -366,10 +366,6 @@ static void arm_smmu_arch_write_sync(struct arm_smmu_device *smmu)
 
 	/* Read to complete prior write transcations */
 	id = arm_smmu_readl(smmu, ARM_SMMU_IMPL_DEF0, 0);
-
-
-	/* Wait for read to complete before off */
-	rmb();
 }
 
 static struct platform_driver arm_smmu_driver;
@@ -636,18 +632,17 @@ static int arm_smmu_power_on_atomic(struct arm_smmu_power_resources *pwr)
 	int ret = 0;
 	unsigned long flags;
 
-	spin_lock_irqsave(&pwr->clock_refs_lock, flags);
-	if (pwr->clock_refs_count > 0) {
-		pwr->clock_refs_count++;
-		spin_unlock_irqrestore(&pwr->clock_refs_lock, flags);
+	if (atomic_read(&pwr->clock_refs_count) > 0) {
+		atomic_inc(&pwr->clock_refs_count);
 		return 0;
 	}
 
+	spin_lock_irqsave(&pwr->clock_refs_lock, flags);
 	ret = arm_smmu_enable_clocks(pwr);
-	if (!ret)
-		pwr->clock_refs_count = 1;
-
 	spin_unlock_irqrestore(&pwr->clock_refs_lock, flags);
+	if (!ret)
+		atomic_set(&pwr->clock_refs_count, 1);
+
 	return ret;
 }
 
@@ -657,23 +652,21 @@ static void arm_smmu_power_off_atomic(struct arm_smmu_device *smmu,
 {
 	unsigned long flags;
 
-	spin_lock_irqsave(&pwr->clock_refs_lock, flags);
-	if (pwr->clock_refs_count == 0) {
+	if (atomic_read(&pwr->clock_refs_count) == 0) {
 		WARN(1, "%s: bad clock_ref_count\n", dev_name(pwr->dev));
-		spin_unlock_irqrestore(&pwr->clock_refs_lock, flags);
 		return;
 
-	} else if (pwr->clock_refs_count > 1) {
-		pwr->clock_refs_count--;
-		spin_unlock_irqrestore(&pwr->clock_refs_lock, flags);
+	} else if (atomic_set(&pwr->clock_refs_count) > 1) {
+		atomic_dec(&pwr->clock_refs_count);
 		return;
 	}
 
 	arm_smmu_arch_write_sync(smmu);
+	spin_lock_irqsave(&pwr->clock_refs_lock, flags);
 	arm_smmu_disable_clocks(pwr);
-
-	pwr->clock_refs_count = 0;
 	spin_unlock_irqrestore(&pwr->clock_refs_lock, flags);
+
+	atomic_set(&pwr->clock_refs_count, 0);
 }
 
 static int arm_smmu_power_on_slow(struct arm_smmu_power_resources *pwr)
@@ -802,6 +795,7 @@ static int __arm_smmu_tlb_sync(struct arm_smmu_device *smmu, int page,
 	unsigned int inc, delay;
 	u32 reg;
 
+	spin_lock_irqsave(&smmu->global_sync_lock, flags);
 	/*
 	 * Allowing an unbounded number of sync requests to be submitted when a
 	 * TBU is not processing sync requests can cause a TBU's command queue
@@ -833,6 +827,7 @@ static int __arm_smmu_tlb_sync(struct arm_smmu_device *smmu, int page,
 	if (smmu->impl && smmu->impl->tlb_sync_timeout)
 		smmu->impl->tlb_sync_timeout(smmu);
 out:
+	spin_unlock_irqsave(&smmu->global_sync_lock, flags);
 	return -EINVAL;
 }
 
@@ -840,12 +835,10 @@ static void arm_smmu_tlb_sync_global(struct arm_smmu_device *smmu)
 {
 	unsigned long flags;
 
-	spin_lock_irqsave(&smmu->global_sync_lock, flags);
 	if (__arm_smmu_tlb_sync(smmu, ARM_SMMU_GR0, ARM_SMMU_GR0_sTLBGSYNC,
 				ARM_SMMU_GR0_sTLBGSTATUS))
 		dev_err_ratelimited(smmu->dev,
 				    "TLB global sync failed!\n");
-	spin_unlock_irqrestore(&smmu->global_sync_lock, flags);
 }
 
 static void arm_smmu_tlb_sync_context(void *cookie)
@@ -855,14 +848,12 @@ static void arm_smmu_tlb_sync_context(void *cookie)
 	int idx = smmu_domain->cfg.cbndx;
 	unsigned long flags;
 
-	spin_lock_irqsave(&smmu_domain->sync_lock, flags);
 	if (__arm_smmu_tlb_sync(smmu, ARM_SMMU_CB(smmu, idx),
 				ARM_SMMU_CB_TLBSYNC, ARM_SMMU_CB_TLBSTATUS))
 		dev_err_ratelimited(smmu->dev,
 				"TLB sync on cb%d failed for device %s\n",
 				smmu_domain->cfg.cbndx,
 				dev_name(smmu_domain->dev));
-	spin_unlock_irqrestore(&smmu_domain->sync_lock, flags);
 }
 
 static void arm_smmu_tlb_sync_vmid(void *cookie)
