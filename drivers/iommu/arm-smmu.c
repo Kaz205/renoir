@@ -416,7 +416,7 @@ static int arm_smmu_register_legacy_master(struct device *dev,
 	struct device_node *np;
 	struct of_phandle_iterator it;
 	void *data = &it;
-	u32 *sids;
+	uint32_t sids;
 	__be32 pci_sid;
 	int err = 0;
 
@@ -450,14 +450,9 @@ static int arm_smmu_register_legacy_master(struct device *dev,
 	if (err)
 		return err;
 
-	sids = kcalloc(it.cur_count, sizeof(*sids), GFP_KERNEL);
-	if (!sids)
-		return -ENOMEM;
-
 	*smmu = dev_get_drvdata(smmu_dev);
-	of_phandle_iterator_args(&it, sids, it.cur_count);
-	err = iommu_fwspec_add_ids(dev, sids, it.cur_count);
-	kfree(sids);
+	of_phandle_iterator_args(&it, &sids, it.cur_count);
+	err = iommu_fwspec_add_ids(dev, &sids, it.cur_count);
 	return err;
 }
 
