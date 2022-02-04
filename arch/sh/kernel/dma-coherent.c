@@ -37,8 +37,8 @@ void *arch_dma_alloc(struct device *dev, size_t size, dma_addr_t *dma_handle,
 	split_page(pfn_to_page(virt_to_phys(ret) >> PAGE_SHIFT), order);
 
 	*dma_handle = virt_to_phys(ret);
-	if (!WARN_ON(!dev))
-		*dma_handle -= PFN_PHYS(dev->dma_pfn_offset);
+	if (!WARN_ON(!dev) && dev->dma_range_map)
+		*dma_handle = translate_phys_to_dma(dev, *dma_handle);
 
 	return ret_nocache;
 }
