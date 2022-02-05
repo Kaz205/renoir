@@ -440,6 +440,9 @@ void drm_debugfs_connector_add(struct drm_connector *connector)
 	/* edid */
 	debugfs_create_file("edid_override", S_IRUGO | S_IWUSR, root, connector,
 			    &drm_edid_fops);
+
+	if (connector->funcs->debugfs_init)
+		connector->funcs->debugfs_init(connector, root);
 }
 
 void drm_debugfs_connector_remove(struct drm_connector *connector)
