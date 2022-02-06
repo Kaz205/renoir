@@ -4115,101 +4115,29 @@ static int _sde_kms_active_override(struct sde_kms *sde_kms, bool enable)
 	return 0;
 }
 
-static void _sde_kms_update_pm_qos_irq_request(struct sde_kms *sde_kms)
-{
-	struct device *cpu_dev;
-	int cpu = 0;
-	u32 cpu_irq_latency = sde_kms->catalog->perf.cpu_irq_latency;
-
-	if (cpumask_empty(&sde_kms->irq_cpu_mask)) {
-		SDE_DEBUG("%s: irq_cpu_mask is empty\n", __func__);
-		return;
-	}
-
-	for_each_cpu(cpu, &sde_kms->irq_cpu_mask) {
-		cpu_dev = get_cpu_device(cpu);
-		if (!cpu_dev) {
-			SDE_DEBUG("%s: failed to get cpu%d device\n", __func__,
-				cpu);
-			continue;
-		}
-
-		if (dev_pm_qos_request_active(&sde_kms->pm_qos_irq_req[cpu]))
-			dev_pm_qos_update_request(&sde_kms->pm_qos_irq_req[cpu],
-					cpu_irq_latency);
-		else
-			dev_pm_qos_add_request(cpu_dev,
-				&sde_kms->pm_qos_irq_req[cpu],
-				DEV_PM_QOS_RESUME_LATENCY,
-				cpu_irq_latency);
-	}
-}
-
-static void _sde_kms_remove_pm_qos_irq_request(struct sde_kms *sde_kms)
-{
-	struct device *cpu_dev;
-	int cpu = 0;
-
-	if (cpumask_empty(&sde_kms->irq_cpu_mask)) {
-		SDE_DEBUG("%s: irq_cpu_mask is empty\n", __func__);
-		return;
-	}
-
-	for_each_cpu(cpu, &sde_kms->irq_cpu_mask) {
-		cpu_dev = get_cpu_device(cpu);
-		if (!cpu_dev) {
-			SDE_DEBUG("%s: failed to get cpu%d device\n", __func__,
-				cpu);
-			continue;
-		}
-
-		if (dev_pm_qos_request_active(&sde_kms->pm_qos_irq_req[cpu]))
-			dev_pm_qos_remove_request(
-					&sde_kms->pm_qos_irq_req[cpu]);
-	}
-}
-
 void sde_kms_cpu_vote_for_irq(struct sde_kms *sde_kms, bool enable)
 {
-	struct msm_drm_private *priv = sde_kms->dev->dev_private;
-
-	mutex_lock(&priv->phandle.phandle_lock);
-
-	if (enable && atomic_inc_return(&sde_kms->irq_vote_count) == 1)
-		_sde_kms_update_pm_qos_irq_request(sde_kms);
-	else if (!enable && atomic_dec_return(&sde_kms->irq_vote_count) == 0)
-		_sde_kms_remove_pm_qos_irq_request(sde_kms);
-
-	mutex_unlock(&priv->phandle.phandle_lock);
-}
-
-static void sde_kms_irq_affinity_notify(
-		struct irq_affinity_notify *affinity_notify,
-		const cpumask_t *mask)
-{
-	struct msm_drm_private *priv;
-	struct sde_kms *sde_kms = container_of(affinity_notify,
-					struct sde_kms, affinity_notify);
-
-	if (!sde_kms || !sde_kms->dev || !sde_kms->dev->dev_private)
+	if (!sde_kms->irq_num)
 		return;
 
-	priv = sde_kms->dev->dev_private;
+	if (enable) {
+		u32 cpu_irq_latency = sde_kms->catalog->perf.cpu_irq_latency;
 
-	mutex_lock(&priv->phandle.phandle_lock);
-
-	_sde_kms_remove_pm_qos_irq_request(sde_kms);
-	// save irq cpu mask
-	sde_kms->irq_cpu_mask = *mask;
-
-	// request vote with updated irq cpu mask
-	if (atomic_read(&sde_kms->irq_vote_count))
-		_sde_kms_update_pm_qos_irq_request(sde_kms);
-
-	mutex_unlock(&priv->phandle.phandle_lock);
+		if (pm_qos_request_active(&sde_kms->pm_qos_irq_req)) {
+			pm_qos_update_request(&sde_kms->pm_qos_irq_req,
+					cpu_irq_latency);
+		} else {
+			sde_kms->pm_qos_irq_req.type = PM_QOS_REQ_AFFINE_IRQ;
+			sde_kms->pm_qos_irq_req.irq = sde_kms->irq_num;
+			pm_qos_add_request(&sde_kms->pm_qos_irq_req,
+				PM_QOS_CPU_DMA_LATENCY,
+				cpu_irq_latency);
+		}
+	} else if (pm_qos_request_active(&sde_kms->pm_qos_irq_req)) {
+		pm_qos_update_request(&sde_kms->pm_qos_irq_req,
+				PM_QOS_DEFAULT_VALUE);
+	}
 }
-
-static void sde_kms_irq_affinity_release(struct kref *ref) {}
 
 static void sde_kms_handle_power_event(u32 event_type, void *usr)
 {
@@ -4686,7 +4614,7 @@ static int sde_kms_hw_init(struct msm_kms *kms)
 	struct drm_device *dev;
 	struct msm_drm_private *priv;
 	struct platform_device *platformdev;
-	int i, irq_num, rc = -EINVAL;
+	int i, rc = -EINVAL;
 
 	if (!kms) {
 		SDE_ERROR("invalid kms\n");
@@ -4728,7 +4656,6 @@ static int sde_kms_hw_init(struct msm_kms *kms)
 
 	atomic_set(&sde_kms->detach_sec_cb, 0);
 	atomic_set(&sde_kms->detach_all_cb, 0);
-	atomic_set(&sde_kms->irq_vote_count, 0);
 
 	/*
 	 * Support format modifiers for compression etc.
@@ -4754,13 +4681,6 @@ static int sde_kms_hw_init(struct msm_kms *kms)
 
 		pm_runtime_put_sync(sde_kms->dev->dev);
 	}
-
-	sde_kms->affinity_notify.notify = sde_kms_irq_affinity_notify;
-	sde_kms->affinity_notify.release = sde_kms_irq_affinity_release;
-
-	irq_num = platform_get_irq(to_platform_device(sde_kms->dev->dev), 0);
-	SDE_DEBUG("Registering for notification of irq_num: %d\n", irq_num);
-	irq_set_affinity_notifier(irq_num, &sde_kms->affinity_notify);
 
 	if (sde_in_trusted_vm(sde_kms)) {
 		rc = sde_vm_trusted_init(sde_kms);
