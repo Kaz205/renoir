@@ -156,6 +156,7 @@ struct xiaomi_touch_pdata{
 	struct last_touch_event *last_touch_events;
 };
 
+#ifdef CONFIG_TOUCHSCREEN_XIAOMI_TOUCHFEATURE
 struct xiaomi_touch *xiaomi_touch_dev_get(int minor);
 
 extern struct class *get_xiaomi_touch_class(void);
@@ -177,5 +178,49 @@ extern int update_clicktouch_raw(void);
 extern void last_touch_events_collect(int slot, int state);
 
 int xiaomi_touch_set_suspend_state(int state);
-
+#else
+static inline struct xiaomi_touch *xiaomi_touch_dev_get(int minor)
+{
+	return NULL;
+}
+static inline struct class *get_xiaomi_touch_class(void)
+{
+	return NULL;
+}
+static inline struct device *get_xiaomi_touch_dev(void)
+{
+	return NULL;
+}
+static inline int update_palm_sensor_value(int value)
+{
+	return 0;
+}
+static inline int update_prox_sensor_value(int value)
+{
+	return 0;
+}
+static inline int xiaomitouch_register_modedata(int touchId, struct xiaomi_touch_interface *data)
+{
+	return 0;
+}
+static inline int copy_touch_rawdata(char *raw_base,  int len)
+{
+	return 0;
+}
+static inline int update_touch_rawdata(void)
+{
+	return 0;
+}
+static inline int update_clicktouch_raw(void)
+{
+	return 0;
+}
+static inline void last_touch_events_collect(int slot, int state)
+{
+}
+static inline int xiaomi_touch_set_suspend_state(int state)
+{
+	return 0;
+}
+#endif /* CONFIG_TOUCHSCREEN_XIAOMI_TOUCHFEATURE */
 #endif
