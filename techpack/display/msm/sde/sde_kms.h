@@ -291,7 +291,10 @@ struct sde_kms {
 	bool qdss_enabled;
 	bool pm_suspend_clk_dump;
 
-	struct pm_qos_request pm_qos_irq_req;
+	cpumask_t irq_cpu_mask;
+	atomic_t irq_vote_count;
+	struct dev_pm_qos_request pm_qos_irq_req[NR_CPUS];
+	struct irq_affinity_notify affinity_notify;
 
 	struct sde_vm *vm;
 };
