@@ -461,7 +461,7 @@ static int fts_input_report_key(struct fts_ts_data *data, int index)
 }
 
 #if FTS_MT_PROTOCOL_B_EN
-static int fts_input_report_b(struct fts_ts_data *data)
+static inline int fts_input_report_b(struct fts_ts_data *data)
 {
 	int i = 0;
 	int uppoint = 0;
@@ -545,7 +545,7 @@ static int fts_input_report_b(struct fts_ts_data *data)
 }
 
 #else
-static int fts_input_report_a(struct fts_ts_data *data)
+static inline int fts_input_report_a(struct fts_ts_data *data)
 {
 	int i = 0;
 	int touchs = 0;
@@ -645,7 +645,7 @@ static int fts_read_touchdata(struct fts_ts_data *data)
 	return 0;
 }
 
-static int fts_read_parse_touchdata(struct fts_ts_data *data)
+static inline int fts_read_parse_touchdata(struct fts_ts_data *data)
 {
 	int ret = 0;
 	int i = 0;
@@ -712,39 +712,19 @@ static int fts_read_parse_touchdata(struct fts_ts_data *data)
 	return 0;
 }
 
-static void fts_irq_read_report(void)
+static inline void fts_irq_read_report(void)
 {
-	int ret = 0;
+	int ret;
 	struct fts_ts_data *ts_data = fts_data;
-
-#if FTS_ESDCHECK_EN
-	fts_esdcheck_set_intr(1);
-#endif
-
-#if FTS_POINT_REPORT_CHECK_EN
-	fts_prc_queue_work(ts_data);
-#endif
 
 	ret = fts_read_parse_touchdata(ts_data);
 	if (ret == 0) {
-		mutex_lock(&ts_data->report_mutex);
 #if FTS_MT_PROTOCOL_B_EN
 		fts_input_report_b(ts_data);
 #else
 		fts_input_report_a(ts_data);
 #endif
-		mutex_unlock(&ts_data->report_mutex);
 	}
-
-	if (ts_data->clicktouch_count && ts_data->touchs) {
-		FTS_INFO("%s: update touch data: %d\n", __func__, ts_data->clicktouch_count);
-		ts_data->clicktouch_count--;
-	} else if (!ts_data->touchs) {
-		ts_data->clicktouch_count = ts_data->clicktouch_num;
-	}
-#if FTS_ESDCHECK_EN
-	fts_esdcheck_set_intr(0);
-#endif
 }
 
 static int fts_read_raw(struct fts_ts_data *ts_data, u8 *data, u32 datalen)
@@ -821,32 +801,12 @@ static struct timeval get_timeval(const s64 nsec)
 
 static irqreturn_t fts_irq_handler(int irq, void *data)
 {
-	int read_size = sizeof(struct tp_raw);
-#if defined(CONFIG_PM) && FTS_PATCH_COMERR_PM
-	int ret = 0;
 	struct fts_ts_data *ts_data = fts_data;
-
-	if ((ts_data->suspended) && (ts_data->pm_suspend)) {
-		ret = wait_for_completion_timeout(
-				  &ts_data->pm_completion,
-				  msecs_to_jiffies(FTS_TIMEOUT_COMERR_PM));
-		if (!ret) {
-			FTS_ERROR("Bus don't resume from pm(deep),timeout,skip irq");
-			return IRQ_HANDLED;
-		}
-	}
-#endif
 
 	pm_qos_update_request(&ts_data->pm_touch_req, 100);
 	pm_qos_update_request(&ts_data->pm_spi_req, 100);
 
-	if (fts_data->enable_touch_raw) {
-		fts_data->tp_frame.tv = get_timeval(ktime_get());
-		fts_read_raw(fts_data, fts_data->tp_frame.tp_raw, read_size);
-		fts_data->tp_frame.tv0 = get_timeval(ktime_get());
-	} else {
-		fts_irq_read_report();
-	}
+	fts_irq_read_report();
 
 	pm_qos_update_request(&ts_data->pm_touch_req, PM_QOS_DEFAULT_VALUE);
 	pm_qos_update_request(&ts_data->pm_spi_req, PM_QOS_DEFAULT_VALUE);
