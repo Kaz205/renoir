@@ -461,7 +461,7 @@ static int fts_input_report_key(struct fts_ts_data *data, int index)
 }
 
 #if FTS_MT_PROTOCOL_B_EN
-static int fts_input_report_b(struct fts_ts_data *data)
+static inline int fts_input_report_b(struct fts_ts_data *data)
 {
 	int i = 0;
 	int uppoint = 0;
@@ -545,7 +545,7 @@ static int fts_input_report_b(struct fts_ts_data *data)
 }
 
 #else
-static int fts_input_report_a(struct fts_ts_data *data)
+static inline int fts_input_report_a(struct fts_ts_data *data)
 {
 	int i = 0;
 	int touchs = 0;
@@ -645,7 +645,7 @@ static int fts_read_touchdata(struct fts_ts_data *data)
 	return 0;
 }
 
-static int fts_read_parse_touchdata(struct fts_ts_data *data)
+static inline int fts_read_parse_touchdata(struct fts_ts_data *data)
 {
 	int ret = 0;
 	int i = 0;
@@ -712,141 +712,29 @@ static int fts_read_parse_touchdata(struct fts_ts_data *data)
 	return 0;
 }
 
-static void fts_irq_read_report(void)
+static inline void fts_irq_read_report(void)
 {
-	int ret = 0;
+	int ret;
 	struct fts_ts_data *ts_data = fts_data;
-
-#if FTS_ESDCHECK_EN
-	fts_esdcheck_set_intr(1);
-#endif
-
-#if FTS_POINT_REPORT_CHECK_EN
-	fts_prc_queue_work(ts_data);
-#endif
 
 	ret = fts_read_parse_touchdata(ts_data);
 	if (ret == 0) {
-		mutex_lock(&ts_data->report_mutex);
 #if FTS_MT_PROTOCOL_B_EN
 		fts_input_report_b(ts_data);
 #else
 		fts_input_report_a(ts_data);
 #endif
-		mutex_unlock(&ts_data->report_mutex);
 	}
-
-	if (ts_data->clicktouch_count && ts_data->touchs) {
-		FTS_INFO("%s: update touch data: %d\n", __func__, ts_data->clicktouch_count);
-		ts_data->clicktouch_count--;
-	} else if (!ts_data->touchs) {
-		ts_data->clicktouch_count = ts_data->clicktouch_num;
-	}
-#if FTS_ESDCHECK_EN
-	fts_esdcheck_set_intr(0);
-#endif
-}
-
-static int fts_read_raw(struct fts_ts_data *ts_data, u8 *data, u32 datalen)
-{
-	int ret = 0;
-	int i = 0;
-	u8 *txbuf = ts_data->bus_tx_buf;
-	u8 *rxbuf = ts_data->bus_rx_buf;
-	u32 txlen_need = datalen + SPI_HEADER_BYTE;
-	u32 txlen = 0;
-	u8 ctrl = READ_CMD;
-	u32 dp = 0;
-	u8 cmd = HT_CMD_GET_FRAME;
-
-	if (!cmd  || !data || !datalen || (txlen_need > PAGE_SIZE)) {
-		FTS_ERROR("cmd/cmdlen/data/datalen(%d) is invalid", datalen);
-		return -EINVAL;
-	}
-	memset(txbuf, 0x0, txlen_need);
-	memset(rxbuf, 0x0, txlen_need);
-	txbuf[txlen++] = cmd;
-	txbuf[txlen++] = ctrl;
-	txbuf[txlen++] = (datalen >> 8) & 0xFF;
-	txbuf[txlen++] = datalen & 0xFF;
-	dp = txlen + SPI_DUMMY_BYTE;
-	txlen = dp + datalen;
-	if (ctrl & DATA_CRC_EN) {
-		txlen = txlen + SPI_CRC_BYTE;
-	}
-
-	for (i = 0; i < SPI_RETRY_NUMBER; i++) {
-		ret = fts_spi_transfer(txbuf, rxbuf, txlen);
-		if ((0 == ret) && ((rxbuf[3] & 0xA0) == 0)) {
-			memcpy(data, &rxbuf[dp], datalen);
-			/* crc check */
-			if (ctrl & DATA_CRC_EN) {
-			    ret = rdata_check(&rxbuf[dp], txlen - dp);
-			    if (ret < 0) {
-			        FTS_DEBUG("data read(addr:%x) crc abnormal,retry:%d",
-			                  cmd, i);
-			        udelay(CS_HIGH_DELAY);
-			        continue;
-			    }
-		    }
-		    break;
-	    } else {
-			FTS_INFO("data read(addr:%x) status:%x,retry:%d,ret:%d",
-			          cmd, rxbuf[3], i, ret);
-			ret = -EIO;
-			udelay(CS_HIGH_DELAY);
-		}
-	}
-
-	if (ret < 0) {
-		FTS_ERROR("data read(addr:%x) %s,status:%x,ret:%d", cmd,
-		          (i >= SPI_RETRY_NUMBER) ? "crc abnormal" : "fail",
-		          rxbuf[3], ret);
-	}
-
-	udelay(CS_HIGH_DELAY);
-	return ret;
-}
-
-static struct timeval get_timeval(const s64 nsec)
-{
-	struct timespec ts = ns_to_timespec(nsec);
-	struct timeval tv;
-
-	tv.tv_sec = ts.tv_sec;
-	tv.tv_usec = (suseconds_t) ts.tv_nsec / 1000;
-
-	return tv;
 }
 
 static irqreturn_t fts_irq_handler(int irq, void *data)
 {
-	int read_size = sizeof(struct tp_raw);
-#if defined(CONFIG_PM) && FTS_PATCH_COMERR_PM
-	int ret = 0;
 	struct fts_ts_data *ts_data = fts_data;
-
-	if ((ts_data->suspended) && (ts_data->pm_suspend)) {
-		ret = wait_for_completion_timeout(
-				  &ts_data->pm_completion,
-				  msecs_to_jiffies(FTS_TIMEOUT_COMERR_PM));
-		if (!ret) {
-			FTS_ERROR("Bus don't resume from pm(deep),timeout,skip irq");
-			return IRQ_HANDLED;
-		}
-	}
-#endif
 
 	pm_qos_update_request(&ts_data->pm_touch_req, 100);
 	pm_qos_update_request(&ts_data->pm_spi_req, 100);
 
-	if (fts_data->enable_touch_raw) {
-		fts_data->tp_frame.tv = get_timeval(ktime_get());
-		fts_read_raw(fts_data, fts_data->tp_frame.tp_raw, read_size);
-		fts_data->tp_frame.tv0 = get_timeval(ktime_get());
-	} else {
-		fts_irq_read_report();
-	}
+	fts_irq_read_report();
 
 	pm_qos_update_request(&ts_data->pm_touch_req, PM_QOS_DEFAULT_VALUE);
 	pm_qos_update_request(&ts_data->pm_spi_req, PM_QOS_DEFAULT_VALUE);
