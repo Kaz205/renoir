@@ -1,7 +1,7 @@
 export ARCH=arm64
 export SUBARCH=arm64
 export ak=AnyKernel3
-export PATH="/drone/src/google-clang/clang-r437112b/bin:$PATH"
+export PATH="/drone/src/google-clang/clang-r445002/bin:$PATH"
 
 MAKE_PARAMS="CC=clang CLANG_TRIPLE=aarch64-linux-gnu- LLVM=1 \
 	CROSS_COMPILE=/usr/bin/aarch64-linux-gnu- \
