@@ -336,7 +336,7 @@ config HEADERS_INSTALL
 	  as uapi header sanity checks.
 
 config OPTIMIZE_INLINING
-	def_bool y
+	bool "Allow compiler to uninline functions marked 'inline'"
 	help
 	  This option determines if the kernel forces gcc to inline the functions
 	  developers have marked 'inline'. Doing so takes away freedom from gcc to
@@ -346,6 +346,8 @@ config OPTIMIZE_INLINING
 	  this algorithm is so good that allowing gcc 4.x and above to make the
 	  decision will become the default in the future. Until then this option
 	  is there to test gcc for this.
+
+	  If unsure, say N.
 
 config DEBUG_SECTION_MISMATCH
 	bool "Enable full Section mismatch analysis"
