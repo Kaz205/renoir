@@ -957,6 +957,7 @@ static ssize_t hispeed_freq_store(struct gov_attr_set *attr_set,
 	unsigned long hs_util;
 	unsigned long flags;
 
+	return count;
 	if (kstrtouint(buf, 10, &val))
 		return -EINVAL;
 
