@@ -581,7 +581,6 @@ static int cnss_pci_set_link_down(struct cnss_pci_data *pci_priv)
 	int ret;
 
 	if (pci_priv->drv_connected_last) {
-		cnss_pr_vdbg("Use PCIe DRV suspend\n");
 		pm_ops = MSM_PCIE_DRV_SUSPEND;
 	} else {
 		pm_ops = MSM_PCIE_SUSPEND;
@@ -1024,8 +1023,6 @@ static int cnss_set_pci_link_status(struct cnss_pci_data *pci_priv,
 	u16 link_speed, link_width;
 	int ret;
 
-	cnss_pr_vdbg("Set PCI link status to: %u\n", status);
-
 	switch (status) {
 	case PCI_GEN1:
 		link_speed = PCI_EXP_LNKSTA_CLS_2_5GB;
@@ -1058,8 +1055,6 @@ static int cnss_set_pci_link_status(struct cnss_pci_data *pci_priv,
 static int cnss_set_pci_link(struct cnss_pci_data *pci_priv, bool link_up)
 {
 	int ret = 0, retry = 0;
-
-	cnss_pr_vdbg("%s PCI link\n", link_up ? "Resuming" : "Suspending");
 
 	if (link_up) {
 retry:
@@ -1753,9 +1748,6 @@ static int cnss_pci_set_mhi_state(struct cnss_pci_data *pci_priv,
 	if (ret)
 		goto out;
 
-	cnss_pr_vdbg("Setting MHI state: %s(%d)\n",
-		     cnss_mhi_state_to_str(mhi_state), mhi_state);
-
 	switch (mhi_state) {
 	case CNSS_MHI_INIT:
 		ret = mhi_prepare_for_power_up(pci_priv->mhi_ctrl);
@@ -2399,10 +2391,6 @@ static void cnss_pci_misc_reg_dump(struct cnss_pci_data *pci_priv,
 					       misc_reg[i].offset,
 					       misc_reg[i].val))
 				goto force_wake_put;
-			cnss_pr_vdbg("Write 0x%X to 0x%X\n",
-				     misc_reg[i].val,
-				     misc_reg[i].offset);
-
 		} else {
 			if (cnss_pci_reg_read(pci_priv,
 					      misc_reg[i].offset,
@@ -3474,8 +3462,6 @@ static int cnss_pci_runtime_suspend(struct device *dev)
 		}
 	}
 
-	cnss_pr_vdbg("Runtime suspend start\n");
-
 	driver_ops = pci_priv->driver_ops;
 	if (driver_ops && driver_ops->runtime_ops &&
 	    driver_ops->runtime_ops->runtime_suspend)
@@ -3485,8 +3471,6 @@ static int cnss_pci_runtime_suspend(struct device *dev)
 
 	if (ret)
 		pci_priv->drv_connected_last = 0;
-
-	cnss_pr_vdbg("Runtime suspend status: %d\n", ret);
 
 	return ret;
 }
@@ -3509,8 +3493,6 @@ static int cnss_pci_runtime_resume(struct device *dev)
 		return -EAGAIN;
 	}
 
-	cnss_pr_vdbg("Runtime resume start\n");
-
 	driver_ops = pci_priv->driver_ops;
 	if (driver_ops && driver_ops->runtime_ops &&
 	    driver_ops->runtime_ops->runtime_resume)
@@ -3521,15 +3503,11 @@ static int cnss_pci_runtime_resume(struct device *dev)
 	if (!ret)
 		pci_priv->drv_connected_last = 0;
 
-	cnss_pr_vdbg("Runtime resume status: %d\n", ret);
-
 	return ret;
 }
 
 static int cnss_pci_runtime_idle(struct device *dev)
 {
-	cnss_pr_vdbg("Runtime idle\n");
-
 	pm_request_autosuspend(dev);
 
 	return -EBUSY;
@@ -3602,11 +3580,6 @@ int cnss_pci_pm_request_resume(struct cnss_pci_data *pci_priv)
 
 	dev = &pci_priv->pci_dev->dev;
 
-	status = dev->power.runtime_status;
-	if (status == RPM_SUSPENDING || status == RPM_SUSPENDED)
-		cnss_pr_vdbg("Runtime PM resume is requested by %ps\n",
-			     (void *)_RET_IP_);
-
 	return pm_request_resume(dev);
 }
 
@@ -3619,11 +3592,6 @@ int cnss_pci_pm_runtime_resume(struct cnss_pci_data *pci_priv)
 		return -ENODEV;
 
 	dev = &pci_priv->pci_dev->dev;
-
-	status = dev->power.runtime_status;
-	if (status == RPM_SUSPENDING || status == RPM_SUSPENDED)
-		cnss_pr_vdbg("Runtime PM resume is requested by %ps\n",
-			     (void *)_RET_IP_);
 
 	return pm_runtime_resume(dev);
 }
@@ -3638,11 +3606,6 @@ int cnss_pci_pm_runtime_get(struct cnss_pci_data *pci_priv,
 		return -ENODEV;
 
 	dev = &pci_priv->pci_dev->dev;
-
-	status = dev->power.runtime_status;
-	if (status == RPM_SUSPENDING || status == RPM_SUSPENDED)
-		cnss_pr_vdbg("Runtime PM resume is requested by %ps\n",
-			     (void *)_RET_IP_);
 
 	cnss_pci_pm_runtime_get_record(pci_priv, id);
 
@@ -3659,11 +3622,6 @@ int cnss_pci_pm_runtime_get_sync(struct cnss_pci_data *pci_priv,
 		return -ENODEV;
 
 	dev = &pci_priv->pci_dev->dev;
-
-	status = dev->power.runtime_status;
-	if (status == RPM_SUSPENDING || status == RPM_SUSPENDED)
-		cnss_pr_vdbg("Runtime PM resume is requested by %ps\n",
-			     (void *)_RET_IP_);
 
 	cnss_pci_pm_runtime_get_record(pci_priv, id);
 
