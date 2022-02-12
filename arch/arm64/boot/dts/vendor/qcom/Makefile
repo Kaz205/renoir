@@ -1,4 +1,5 @@
 ifneq ($(CONFIG_ARCH_QTI_VM), y)
+ifeq ($(filter y, $(CONFIG_ARCH_SHIMA) $(CONFIG_ARCH_YUPIK)),)
 ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
 dtbo-$(CONFIG_ARCH_LAHAINA) += lahaina-rumi-overlay.dtbo \
 	lahaina-mtp-overlay.dtbo \
@@ -92,6 +93,7 @@ dtb-$(CONFIG_ARCH_LAHAINA) += lahaina-rumi.dtb \
 	lahaina-v2.1-cdp-hsp-pro.dts \
 	lahaina-v2.1-qrd-hsp-pro.dts
 endif
+endif
 
 ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
 dtbo-$(CONFIG_ARCH_HOLI) += holi-rumi-overlay.dtbo \
@@ -173,23 +175,9 @@ endif
 
 ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
 dtbo-$(CONFIG_ARCH_SHIMA) +=    \
-	renoir-sm7350-overlay.dtbo	\
-	shima-rumi-overlay.dtbo \
-	shima-idp-overlay.dtbo  \
-	shima-idp-120fps-overlay.dtbo \
-	shima-atp-overlay.dtbo \
-	shima-qrd-overlay.dtbo \
-	shima-idps-digital-mics-overlay.dtbo \
-	shima-idps-digital-mics-120fps-overlay.dtbo
+	renoir-sm7350-overlay.dtbo
 
 renoir-sm7350-overlay.dtbo-base := shima.dtb
-shima-rumi-overlay.dtbo-base := shima.dtb
-shima-idp-overlay.dtbo-base := shima.dtb
-shima-idp-120fps-overlay.dtbo-base := shima.dtb
-shima-atp-overlay.dtbo-base := shima.dtb
-shima-qrd-overlay.dtbo-base := shima.dtb
-shima-idps-digital-mics-overlay.dtbo-base := shima.dtb
-shima-idps-digital-mics-120fps-overlay.dtbo-base := shima.dtb
 else
 dtb-$(CONFIG_ARCH_SHIMA) += shima-rumi.dtb  \
 			    shima-idp.dtb   \
