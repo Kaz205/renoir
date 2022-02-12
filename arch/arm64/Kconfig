@@ -1330,7 +1330,7 @@ config COMPAT_VDSO
 	bool "Enable vDSO for 32-bit applications"
 	depends on !CPU_BIG_ENDIAN && "$(CROSS_COMPILE_COMPAT)" != ""
 	select GENERIC_COMPAT_VDSO
-	default n
+	default y
 	help
 	  Place in the process address space of 32-bit applications an
 	  ELF shared object providing fast implementations of gettimeofday
