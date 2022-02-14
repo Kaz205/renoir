@@ -481,8 +481,19 @@ static void mtk_drm_crtc_hw_config(struct mtk_drm_crtc *mtk_crtc)
 static void mtk_crtc_ddp_irq(void *data)
 {
 	struct drm_crtc *crtc = data;
-	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
-	struct mtk_drm_private *priv = crtc->dev->dev_private;
+	struct mtk_drm_crtc *mtk_crtc;
+	struct mtk_drm_private *priv;
+
+	if (!crtc)
+		DRM_INFO("%s crtc is null\n", __func__);
+	mtk_crtc = to_mtk_crtc(crtc);
+
+	if (!crtc->dev)
+		DRM_INFO("%s crtc->dev is null\n", __func__);
+
+	if (!crtc->dev->dev_private)
+		DRM_INFO("%s dev_private is null\n", __func__);
+	priv = crtc->dev->dev_private;
 
 #if IS_REACHABLE(CONFIG_MTK_CMDQ)
 	if (!priv->data->shadow_register && !mtk_crtc->cmdq_client)
