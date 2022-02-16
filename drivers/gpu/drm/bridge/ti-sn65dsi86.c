@@ -422,6 +422,36 @@ ti_sn_bridge_connector_mode_valid(struct drm_connector *connector,
 	return MODE_OK;
 }
 
+/*
+ * CHROMIUM:
+ *
+ * This is almost entirely a copy-paste from drm_bridge_connector_debugfs_init()
+ * and panel_bridge_debugfs_init() and is only here because
+ * commit e283820cbf80 ("drm/bridge: ti-sn65dsi86: Use drm_bridge_connector")
+ * and commit 4e5763f03e10 ("drm/bridge: ti-sn65dsi86: Wrap panel with
+ * panel-bridge") were going to be a pain to backport. This can be
+ * dropped if those patches are picked or if trogdor devices all move to 5.15.
+ */
+static void ti_sn65dsi86_connector_debugfs_init(struct drm_connector *connector,
+						struct dentry *root)
+{
+	struct ti_sn65dsi86 *pdata = connector_to_ti_sn65dsi86(connector);
+	struct drm_encoder *encoder = pdata->bridge.encoder;
+	struct drm_panel *panel = pdata->panel;
+	struct drm_bridge *bridge;
+
+	/* Do what drm_bridge_connector_debugfs_init() does */
+	list_for_each_entry(bridge, &encoder->bridge_chain, chain_node) {
+		if (bridge->funcs->debugfs_init)
+			bridge->funcs->debugfs_init(bridge, root);
+	}
+
+	/* Do what panel_bridge_debugfs_init() does */
+	root = debugfs_create_dir("panel", root);
+	if (panel->funcs->debugfs_init)
+		panel->funcs->debugfs_init(panel, root);
+}
+
 static struct drm_connector_helper_funcs ti_sn_bridge_connector_helper_funcs = {
 	.get_modes = ti_sn_bridge_connector_get_modes,
 	.mode_valid = ti_sn_bridge_connector_mode_valid,
@@ -433,6 +463,7 @@ static const struct drm_connector_funcs ti_sn_bridge_connector_funcs = {
 	.reset = drm_atomic_helper_connector_reset,
 	.atomic_duplicate_state = drm_atomic_helper_connector_duplicate_state,
 	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
+	.debugfs_init = ti_sn65dsi86_connector_debugfs_init,
 };
 
 static struct ti_sn65dsi86 *bridge_to_ti_sn65dsi86(struct drm_bridge *bridge)
