@@ -1201,9 +1201,9 @@ unprivileged_bpf_disabled:
 ==========================
 
 Writing 1 to this entry will disable unprivileged calls to ``bpf()``;
-once disabled, calling ``bpf()`` without ``CAP_SYS_ADMIN`` or ``CAP_BPF``
-will return ``-EPERM``. Once set to 1, this can't be cleared from the
-running kernel anymore.
+once disabled, calling ``bpf()`` without ``CAP_SYS_ADMIN`` will return
+``-EPERM``. Once set to 1, this can't be cleared from the running kernel
+anymore.
 
 Writing 2 to this entry will also disable unprivileged calls to ``bpf()``,
 however, an admin can still change this setting later on, if needed, by
@@ -1217,7 +1217,6 @@ entry will default to 2 instead of 0.
 1 Unprivileged calls to ``bpf()`` are disabled without recovery
 2 Unprivileged calls to ``bpf()`` are disabled
 = =============================================================
-
 
 watchdog:
 =========
