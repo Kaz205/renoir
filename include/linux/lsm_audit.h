@@ -48,13 +48,13 @@ struct lsm_ioctlop_audit {
 };
 
 struct lsm_ibpkey_audit {
-	u64	subnet_prefix;
-	u16	pkey;
+	u64 subnet_prefix;
+	u16 pkey;
 };
 
 struct lsm_ibendport_audit {
-	char	dev_name[IB_DEVICE_NAME_MAX];
-	u8	port;
+	const char *dev_name;
+	u8 port;
 };
 
 /* Auxiliary data to use in generating the audit record. */
@@ -117,16 +117,8 @@ int ipv4_skb_to_auditdata(struct sk_buff *skb,
 int ipv6_skb_to_auditdata(struct sk_buff *skb,
 		struct common_audit_data *ad, u8 *proto);
 
-#ifdef CONFIG_AUDIT
 void common_lsm_audit(struct common_audit_data *a,
 	void (*pre_audit)(struct audit_buffer *, void *),
 	void (*post_audit)(struct audit_buffer *, void *));
-#else
-static inline void common_lsm_audit(struct common_audit_data *a,
-	void (*pre_audit)(struct audit_buffer *, void *),
-	void (*post_audit)(struct audit_buffer *, void *))
-{
-}
-#endif
 
 #endif
