@@ -4,8 +4,8 @@ export ak=AnyKernel3
 export PATH="/drone/src/google-clang/clang-r445002/bin:$PATH"
 
 MAKE_PARAMS="CC=clang CLANG_TRIPLE=aarch64-linux-gnu- LLVM=1 \
-	CROSS_COMPILE=/usr/bin/aarch64-linux-gnu- \
-	CROSS_COMPILE_COMPAT=/usr/bin/arm-none-eabi- \
+	CROSS_COMPILE=/drone/src/arm64-gcc/bin/aarch64-elf- \
+	CROSS_COMPILE_COMPAT=/drone/src/arm32-gcc/bin/arm-eabi- \
     LD=ld.lld \
 	AR=llvm-ar \
 	NM=llvm-nm \
