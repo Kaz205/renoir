@@ -24,8 +24,9 @@ then
     exit 1
 fi
 
+NAME=$(git describe --exact-match --tags 2> /dev/null || git rev-parse --short HEAD)
 cp out/arch/arm64/boot/Image $ak/Image
 find out/arch/arm64/boot/dts -name '*.dtb' -exec cat {} + > $ak/dtb
 cp out/arch/arm64/boot/dtbo.img $ak/dtbo.img
 cd $ak
-zip -FSr9 kernel.zip ./*
+zip -FSr9 $NAME.zip ./*
