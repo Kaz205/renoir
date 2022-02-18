@@ -451,7 +451,7 @@ static struct tb_retimer *tb_port_find_retimer(struct tb_port *port, u8 index)
  */
 int tb_retimer_scan(struct tb_port *port, bool add)
 {
-	u32 status[TB_MAX_RETIMER_INDEX] = {};
+	u32 status[TB_MAX_RETIMER_INDEX + 1] = {};
 	int ret, i, last_idx = 0;
 
 	/*
