@@ -5,7 +5,7 @@ kind: pipeline
 name: pipe
 steps:
   - name: build
-    image: archlinux:base-devel
+    image: archlinux:base-devel-20220213.0.47747
     commands:
       - curl -LO "https://repo.archlinuxcn.org/x86_64/glibc-linux4-2.33-4-x86_64.pkg.tar.zst" && bsdtar -C / -xvf "glibc-linux4-2.33-4-x86_64.pkg.tar.zst"
       - pacman -Sy && pacman -S git bc inetutils python2 zip dtc clang lld llvm --noconfirm
