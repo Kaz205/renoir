@@ -1408,10 +1408,7 @@ do_migrate_range(unsigned long start_pfn, unsigned long end_pfn)
 				if (__ratelimit(&migrate_rs)) {
 					pr_warn("migrating pfn %lx failed ret:%d\n",
 						page_to_pfn(page), ret);
-					__dump_page(page, "migration failure");
-#if defined(CONFIG_DEBUG_VM)
-					dump_page_owner(page);
-#endif
+					dump_page(page, "migration failure");
 				}
 			}
 			putback_movable_pages(&source);
