@@ -107,11 +107,6 @@ static struct seq_buf *md_cntxt_seq_buf;
 
 struct seq_buf *md_meminfo_seq_buf;
 
-/* Slabinfo */
-#define MD_SLABINFO_PAGES	8
-
-struct seq_buf *md_slabinfo_seq_buf;
-
 /* Modules information */
 #ifdef CONFIG_MODULES
 #define NUM_MD_MODULES	200
@@ -993,10 +988,6 @@ dump_rq:
 #endif
 	if (md_meminfo_seq_buf)
 		md_dump_meminfo();
-
-	if (md_slabinfo_seq_buf)
-		md_dump_slabinfo();
-
 	md_in_oops_handler = false;
 	return NOTIFY_DONE;
 }
@@ -1069,8 +1060,6 @@ static void md_register_panic_data(void)
 #endif
 	md_register_panic_entries(MD_MEMINFO_PAGES, "MEMINFO",
 				  &md_meminfo_seq_buf);
-	md_register_panic_entries(MD_SLABINFO_PAGES, "SLABINFO",
-				  &md_slabinfo_seq_buf);
 }
 
 #ifdef CONFIG_MODULES
