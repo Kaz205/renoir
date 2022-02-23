@@ -10,8 +10,6 @@
 #include <linux/migrate.h>
 #include <linux/stackdepot.h>
 #include <linux/seq_file.h>
-#include <linux/sched.h>
-#include <linux/sched/clock.h>
 
 #include "internal.h"
 
@@ -27,8 +25,6 @@ struct page_owner {
 	gfp_t gfp_mask;
 	depot_stack_handle_t handle;
 	depot_stack_handle_t free_handle;
-	int pid;
-	u64 ts_nsec;
 };
 
 static bool page_owner_enabled = IS_ENABLED(CONFIG_PAGE_OWNER_ENABLE_DEFAULT);
@@ -179,8 +175,6 @@ static inline void __set_page_owner_handle(struct page *page,
 		page_owner->order = order;
 		page_owner->gfp_mask = gfp_mask;
 		page_owner->last_migrate_reason = -1;
-		page_owner->pid = current->pid;
-		page_owner->ts_nsec = local_clock();
 		__set_bit(PAGE_EXT_OWNER, &page_ext->flags);
 		__set_bit(PAGE_EXT_OWNER_ALLOCATED, &page_ext->flags);
 
@@ -245,8 +239,6 @@ void __copy_page_owner(struct page *oldpage, struct page *newpage)
 	new_page_owner->last_migrate_reason =
 		old_page_owner->last_migrate_reason;
 	new_page_owner->handle = old_page_owner->handle;
-	new_page_owner->pid = old_page_owner->pid;
-	new_page_owner->ts_nsec = old_page_owner->ts_nsec;
 
 	/*
 	 * We don't clear the bit on the oldpage as it's going to be freed
@@ -361,10 +353,9 @@ print_page_owner(char __user *buf, size_t count, unsigned long pfn,
 		return -ENOMEM;
 
 	ret = snprintf(kbuf, count,
-			"Page allocated via order %u, mask %#x(%pGg), pid %d, ts %llu ns\n",
+			"Page allocated via order %u, mask %#x(%pGg)\n",
 			page_owner->order, page_owner->gfp_mask,
-			&page_owner->gfp_mask, page_owner->pid,
-			page_owner->ts_nsec);
+			&page_owner->gfp_mask);
 
 	if (ret >= count)
 		goto err;
@@ -440,7 +431,7 @@ void __dump_page_owner(struct page *page)
 	else
 		pr_alert("page_owner tracks the page as freed\n");
 
-	pr_alert("page last allocated via order %u, migratetype %s, gfp_mask %#x(%pGg), pid %d, ts %llu ns\n",
+	pr_alert("page last allocated via order %u, migratetype %s, gfp_mask %#x(%pGg)\n",
 		 page_owner->order, migratetype_names[mt], gfp_mask, &gfp_mask);
 
 	handle = READ_ONCE(page_owner->handle);
