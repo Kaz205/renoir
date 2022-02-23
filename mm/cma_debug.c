@@ -24,18 +24,12 @@ struct cma_mem {
 static int cma_debugfs_get(void *data, u64 *val)
 {
 	unsigned long *p = data;
-	int ret = -EPERM;
 
-	if (kptr_restrict == 0) {
-		*val = *p;
-		ret = 0;
-	} else {
-		*val = 0;
-	}
+	*val = *p;
 
-	return ret;
+	return 0;
 }
-DEFINE_SIMPLE_ATTRIBUTE(cma_debugfs_fops, cma_debugfs_get, NULL, "0x%lx\n");
+DEFINE_SIMPLE_ATTRIBUTE(cma_debugfs_fops, cma_debugfs_get, NULL, "%llu\n");
 
 static int cma_used_get(void *data, u64 *val)
 {
@@ -180,10 +174,9 @@ static void cma_debugfs_add_one(struct cma *cma, struct dentry *root_dentry)
 	debugfs_create_file("free", 0200, tmp, cma, &cma_free_fops);
 	debugfs_create_file("base_pfn", 0444, tmp,
 			    &cma->base_pfn, &cma_debugfs_fops);
-
-	debugfs_create_ulong("count", 0444, tmp, &cma->count);
-	debugfs_create_u32("order_per_bit", 0444, tmp,
-			     (u32 *)&cma->order_per_bit);
+	debugfs_create_file("count", 0444, tmp, &cma->count, &cma_debugfs_fops);
+	debugfs_create_file("order_per_bit", 0444, tmp,
+			    &cma->order_per_bit, &cma_debugfs_fops);
 	debugfs_create_file("used", 0444, tmp, cma, &cma_used_fops);
 	debugfs_create_file("maxchunk", 0444, tmp, cma, &cma_maxchunk_fops);
 
