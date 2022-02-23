@@ -1348,8 +1348,6 @@ do_migrate_range(unsigned long start_pfn, unsigned long end_pfn)
 	struct page *page;
 	int ret = 0;
 	LIST_HEAD(source);
-	static DEFINE_RATELIMIT_STATE(migrate_rs, DEFAULT_RATELIMIT_INTERVAL,
-				      DEFAULT_RATELIMIT_BURST);
 
 	for (pfn = start_pfn; pfn < end_pfn; pfn++) {
 		if (!pfn_valid(pfn))
@@ -1397,10 +1395,8 @@ do_migrate_range(unsigned long start_pfn, unsigned long end_pfn)
 						    page_is_file_cache(page));
 
 		} else {
-			if (__ratelimit(&migrate_rs)) {
-				pr_warn("failed to isolate pfn %lx\n", pfn);
-				dump_page(page, "isolation failed");
-			}
+			pr_warn("failed to isolate pfn %lx\n", pfn);
+			dump_page(page, "isolation failed");
 		}
 		put_page(page);
 	}
@@ -1410,11 +1406,9 @@ do_migrate_range(unsigned long start_pfn, unsigned long end_pfn)
 					MIGRATE_SYNC, MR_MEMORY_HOTPLUG);
 		if (ret) {
 			list_for_each_entry(page, &source, lru) {
-				if (__ratelimit(&migrate_rs)) {
-					pr_warn("migrating pfn %lx failed ret:%d\n",
-						page_to_pfn(page), ret);
-					dump_page(page, "migration failure");
-				}
+				pr_warn("migrating pfn %lx failed ret:%d ",
+				       page_to_pfn(page), ret);
+				dump_page(page, "migration failure");
 			}
 			putback_movable_pages(&source);
 		}
