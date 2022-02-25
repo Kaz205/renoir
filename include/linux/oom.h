@@ -49,16 +49,12 @@ struct oom_control {
 	unsigned long totalpages;
 	struct task_struct *chosen;
 	long chosen_points;
-#ifdef CONFIG_PRIORITIZE_OOM_TASKS
-	short min_kill_adj;
-#endif
 
 	/* Used to print the constraint info. */
 	enum oom_constraint constraint;
 };
 
 extern struct mutex oom_lock;
-extern struct mutex oom_adj_mutex;
 
 static inline void set_current_oom_origin(void)
 {

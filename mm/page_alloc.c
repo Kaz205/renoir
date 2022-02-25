@@ -64,7 +64,6 @@
 #include <linux/page_owner.h>
 #include <linux/kthread.h>
 #include <linux/memcontrol.h>
-#include <linux/show_mem_notifier.h>
 #include <linux/ftrace.h>
 #include <linux/lockdep.h>
 #include <linux/nmi.h>
@@ -2348,38 +2347,11 @@ static bool can_steal_fallback(unsigned int order, int start_mt)
 	return false;
 }
 
-static bool boost_eligible(struct zone *z)
-{
-	unsigned long high_wmark, threshold;
-	unsigned long reclaim_eligible, free_pages;
-
-	high_wmark = z->_watermark[WMARK_HIGH];
-	reclaim_eligible = zone_page_state_snapshot(z, NR_ZONE_INACTIVE_FILE) +
-			zone_page_state_snapshot(z, NR_ZONE_ACTIVE_FILE);
-	free_pages = zone_page_state(z, NR_FREE_PAGES) -
-			zone_page_state(z, NR_FREE_CMA_PAGES);
-	threshold = high_wmark + (2 * mult_frac(high_wmark,
-					watermark_boost_factor, 10000));
-
-	/*
-	 * Don't boost watermark If we are already low on memory where the
-	 * boosting can simply put the watermarks at higher levels for a
-	 * longer duration of time and thus the other users relied on the
-	 * watermarks are forced to choose unintended decissions. If memory
-	 * is so low, kswapd in normal mode should help.
-	 */
-
-	if (reclaim_eligible < threshold && free_pages < threshold)
-		return false;
-
-	return true;
-}
-
 static inline bool boost_watermark(struct zone *zone)
 {
 	unsigned long max_boost;
 
-	if (!watermark_boost_factor || !boost_eligible(zone))
+	if (!watermark_boost_factor)
 		return false;
 	/*
 	 * Don't bother in zones that are unlikely to produce results.
@@ -3785,20 +3757,6 @@ retry:
 		}
 
 		mark = wmark_pages(zone, alloc_flags & ALLOC_WMARK_MASK);
-		/*
-		 * Allow high, atomic, harder order-0 allocation requests
-		 * to skip the ->watermark_boost for min watermark check.
-		 * In doing so, check for:
-		 *  1) ALLOC_WMARK_MIN - Allow to wake up kswapd in the
-		 *			 slow path.
-		 *  2) ALLOC_HIGH - Allow high priority requests.
-		 *  3) ALLOC_HARDER - Allow (__GFP_ATOMIC && !__GFP_NOMEMALLOC),
-		 *			of the others.
-		 */
-		if (unlikely(!order && !(alloc_flags & ALLOC_WMARK_MASK) &&
-		     (alloc_flags & (ALLOC_HARDER | ALLOC_HIGH)))) {
-			mark = zone->_watermark[WMARK_MIN];
-		}
 		if (!zone_watermark_fast(zone, order, mark,
 				       ac_classzone_idx(ac), alloc_flags,
 				       gfp_mask)) {
@@ -3895,7 +3853,6 @@ static void warn_alloc_show_mem(gfp_t gfp_mask, nodemask_t *nodemask)
 		filter &= ~SHOW_MEM_FILTER_NODES;
 
 	show_mem(filter, nodemask);
-	show_mem_call_notifiers();
 }
 
 void warn_alloc(gfp_t gfp_mask, nodemask_t *nodemask, const char *fmt, ...)
@@ -7073,8 +7030,6 @@ void __init free_area_init_node(int nid, unsigned long *zones_size,
 	pg_data_t *pgdat = NODE_DATA(nid);
 	unsigned long start_pfn = 0;
 	unsigned long end_pfn = 0;
-	u64 i;
-	phys_addr_t start, end;
 
 	/* pg_data_t should be reset to zero when it's allocated */
 	WARN_ON(pgdat->nr_zones || pgdat->kswapd_classzone_idx);
@@ -7088,10 +7043,6 @@ void __init free_area_init_node(int nid, unsigned long *zones_size,
 		(u64)start_pfn << PAGE_SHIFT,
 		end_pfn ? ((u64)end_pfn << PAGE_SHIFT) - 1 : 0);
 #else
-	for_each_mem_range(i, &memblock.memory, NULL, nid, MEMBLOCK_NONE,
-			   &start, &end, NULL)
-		subsection_map_init((unsigned long)start >> PAGE_SHIFT,
-				    (unsigned long)(end - start) >> PAGE_SHIFT);
 	start_pfn = node_start_pfn;
 #endif
 	calculate_node_totalpages(pgdat, start_pfn, end_pfn,
@@ -7713,11 +7664,6 @@ unsigned long free_reserved_area(void *start, void *end, int poison, const char 
 		pr_info("Freeing %s memory: %ldK\n",
 			s, pages << (PAGE_SHIFT - 10));
 
-#ifdef CONFIG_HAVE_MEMBLOCK
-		memblock_dbg("memblock_free: [%#016llx-%#016llx] %pS\n",
-			__pa(start), __pa(end), (void *)_RET_IP_);
-#endif
-
 	return pages;
 }
 EXPORT_SYMBOL_GPL(free_reserved_area);
@@ -7995,11 +7941,11 @@ static void __setup_per_zone_wmarks(void)
 			    mult_frac(zone_managed_pages(zone),
 				      watermark_scale_factor, 10000));
 
-		zone->watermark_boost = 0;
 		zone->_watermark[WMARK_LOW]  = min_wmark_pages(zone) +
 					low + tmp;
 		zone->_watermark[WMARK_HIGH] = min_wmark_pages(zone) +
 					low + tmp * 2;
+		zone->watermark_boost = 0;
 
 		spin_unlock_irqrestore(&zone->lock, flags);
 	}
@@ -8114,22 +8060,6 @@ int watermark_boost_factor_sysctl_handler(struct ctl_table *table, int write,
 	return 0;
 }
 
-#ifdef CONFIG_MULTIPLE_KSWAPD
-int kswapd_threads_sysctl_handler(struct ctl_table *table, int write,
-	void __user *buffer, size_t *length, loff_t *ppos)
-{
-	int rc;
-
-	rc = proc_dointvec_minmax(table, write, buffer, length, ppos);
-	if (rc)
-		return rc;
-
-	if (write)
-		update_kswapd_threads();
-
-	return 0;
-}
-#endif
 int watermark_scale_factor_sysctl_handler(struct ctl_table *table, int write,
 	void __user *buffer, size_t *length, loff_t *ppos)
 {
