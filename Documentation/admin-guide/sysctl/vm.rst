@@ -39,7 +39,6 @@ Currently, these files are in /proc/sys/vm:
 - extfrag_threshold
 - extra_free_kbytes
 - hugetlb_shm_group
-- kswapd_threads
 - laptop_mode
 - legacy_va_layout
 - lowmem_reserve_ratio
@@ -75,7 +74,7 @@ Currently, these files are in /proc/sys/vm:
 - watermark_boost_factor
 - watermark_scale_factor
 - zone_reclaim_mode
-- want_old_faultaround_pte
+
 
 admin_reserve_kbytes
 ====================
@@ -310,25 +309,6 @@ hugetlb_shm_group
 hugetlb_shm_group contains group id that is allowed to create SysV
 shared memory segment using hugetlb page.
 
-kswapd_threads
-==============
-kswapd_threads allows you to control the number of kswapd threads per node
-running on the system. This provides the ability to devote additional CPU
-resources toward proactive page replacement with the goal of reducing
-direct reclaims. When direct reclaims are prevented, the CPU consumed
-by them is prevented as well. Depending on the workload, the result can
-cause aggregate CPU usage on the system to go up, down or stay the same.
-
-More aggressive page replacement can reduce direct reclaims which cause
-latency for tasks and decrease throughput when doing filesystem IO through
-the pagecache. Direct reclaims are recorded using the allocstall counter
-in /proc/vmstat.
-
-The default value is 1 and the range of acceptible values are 1-16.
-Always start with lower values in the 2-6 range. Higher values should
-be justified with testing. If direct reclaims occur in spite of high
-values, the cost of direct reclaims (in latency) that occur can be
-higher due to increased lock contention.
 
 laptop_mode
 ===========
@@ -998,24 +978,3 @@ of other processes running on other nodes will not be affected.
 Allowing regular swap effectively restricts allocations to the local
 node unless explicitly overridden by memory policies or cpuset
 configurations.
-
-
-want_old_faultaround_pte:
-=========================
-
-By default faultaround code produces young pte. When want_old_faultaround_pte is
-set to 1, faultaround produces old ptes.
-
-During sparse file access faultaround gets more pages mapped and when all of
-them are young (default), under memory pressure, this makes vmscan swap out anon
-pages instead, or to drop other page cache pages which otherwise stay resident.
-Setting want_old_faultaround_pte to 1 avoids this.
-
-Making the faultaround ptes old can result in performance regression on some
-architectures. This is due to cycles spent in micro-faults which would take page
-walk to set young bit in the pte. One such known test that shows a regression on
-x86 is unixbench shell8. Set want_old_faultaround_pte to 1 on architectures
-which does not show this regression or if the workload shows overall performance
-benefit with old faultaround ptes.
-
-The default value is 0.
