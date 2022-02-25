@@ -66,7 +66,7 @@ void put_online_mems(void)
 	percpu_up_read(&mem_hotplug_lock);
 }
 
-bool movable_node_enabled = IS_ENABLED(CONFIG_MEMORY_HOTPLUG_MOVABLE_NODE);
+bool movable_node_enabled = false;
 
 #ifndef CONFIG_MEMORY_HOTPLUG_DEFAULT_ONLINE
 bool memhp_auto_online;
@@ -1004,33 +1004,6 @@ int try_online_node(int nid)
 	return ret;
 }
 
-static int online_memory_one_block(struct memory_block *mem, void *arg)
-{
-	bool *onlined_block = (bool *)arg;
-	int ret;
-
-	if (*onlined_block || !is_memblock_offlined(mem))
-		return 0;
-
-	ret = device_online(&mem->dev);
-	if (!ret)
-		*onlined_block = true;
-
-	return 0;
-}
-
-bool try_online_one_block(int nid)
-{
-	bool onlined_block = false;
-
-	if (!trylock_device_hotplug())
-		return false;
-
-	for_each_memory_block(&onlined_block, online_memory_one_block);
-	unlock_device_hotplug();
-	return onlined_block;
-}
-
 static int check_hotplug_memory_range(u64 start, u64 size)
 {
 	/* memory range must be block size aligned */
@@ -1341,8 +1314,6 @@ do_migrate_range(unsigned long start_pfn, unsigned long end_pfn)
 	struct page *page;
 	int ret = 0;
 	LIST_HEAD(source);
-	static DEFINE_RATELIMIT_STATE(migrate_rs, DEFAULT_RATELIMIT_INTERVAL,
-				      DEFAULT_RATELIMIT_BURST);
 
 	for (pfn = start_pfn; pfn < end_pfn; pfn++) {
 		if (!pfn_valid(pfn))
@@ -1369,9 +1340,7 @@ do_migrate_range(unsigned long start_pfn, unsigned long end_pfn)
 			if (WARN_ON(PageLRU(page)))
 				isolate_lru_page(page);
 			if (page_mapped(page))
-				try_to_unmap(page,
-					TTU_IGNORE_MLOCK | TTU_IGNORE_ACCESS,
-					NULL);
+				try_to_unmap(page, TTU_IGNORE_MLOCK | TTU_IGNORE_ACCESS);
 			continue;
 		}
 
@@ -1392,10 +1361,8 @@ do_migrate_range(unsigned long start_pfn, unsigned long end_pfn)
 						    page_is_file_cache(page));
 
 		} else {
-			if (__ratelimit(&migrate_rs)) {
-				pr_warn("failed to isolate pfn %lx\n", pfn);
-				dump_page(page, "isolation failed");
-			}
+			pr_warn("failed to isolate pfn %lx\n", pfn);
+			dump_page(page, "isolation failed");
 		}
 		put_page(page);
 	}
@@ -1405,14 +1372,9 @@ do_migrate_range(unsigned long start_pfn, unsigned long end_pfn)
 					MIGRATE_SYNC, MR_MEMORY_HOTPLUG);
 		if (ret) {
 			list_for_each_entry(page, &source, lru) {
-				if (__ratelimit(&migrate_rs)) {
-					pr_warn("migrating pfn %lx failed ret:%d\n",
-						page_to_pfn(page), ret);
-					__dump_page(page, "migration failure");
-#if defined(CONFIG_DEBUG_VM)
-					dump_page_owner(page);
-#endif
-				}
+				pr_warn("migrating pfn %lx failed ret:%d ",
+				       page_to_pfn(page), ret);
+				dump_page(page, "migration failure");
 			}
 			putback_movable_pages(&source);
 		}
@@ -1604,20 +1566,6 @@ static int __ref __offline_pages(unsigned long start_pfn,
 		/* check again */
 		ret = walk_system_ram_range(start_pfn, end_pfn - start_pfn,
 					    NULL, check_pages_isolated_cb);
-		/*
-		 * per-cpu pages are drained in start_isolate_page_range, but if
-		 * there are still pages that are not free, make sure that we
-		 * drain again, because when we isolated range we might
-		 * have raced with another thread that was adding pages to pcp
-		 * list.
-		 *
-		 * Forward progress should be still guaranteed because
-		 * pages on the pcp list can only belong to MOVABLE_ZONE
-		 * because has_unmovable_pages explicitly checks for
-		 * PageBuddy on freed pages on other zones.
-		 */
-		if (ret)
-			drain_all_pages(zone);
 	} while (ret);
 
 	/* Ok, all of our target is isolated.
