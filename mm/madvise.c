@@ -17,20 +17,17 @@
 #include <linux/falloc.h>
 #include <linux/fadvise.h>
 #include <linux/sched.h>
-#include <linux/sched/mm.h>
 #include <linux/ksm.h>
 #include <linux/fs.h>
 #include <linux/file.h>
 #include <linux/blkdev.h>
 #include <linux/backing-dev.h>
-#include <linux/compat.h>
 #include <linux/pagewalk.h>
 #include <linux/swap.h>
 #include <linux/swapops.h>
 #include <linux/shmem_fs.h>
 #include <linux/mmu_notifier.h>
 #include <linux/sched/mm.h>
-#include <linux/uio.h>
 
 #include <asm/tlb.h>
 
@@ -39,7 +36,6 @@
 struct madvise_walk_private {
 	struct mmu_gather *tlb;
 	bool pageout;
-	struct task_struct *target_task;
 };
 
 /*
@@ -171,9 +167,7 @@ success:
 	/*
 	 * vm_flags is protected by the mmap_sem held in write mode.
 	 */
-	vm_write_begin(vma);
-	WRITE_ONCE(vma->vm_flags, new_flags);
-	vm_write_end(vma);
+	vma->vm_flags = new_flags;
 
 out_convert_errno:
 	/*
@@ -261,7 +255,6 @@ static long madvise_willneed(struct vm_area_struct *vma,
 			     struct vm_area_struct **prev,
 			     unsigned long start, unsigned long end)
 {
-	struct mm_struct *mm = vma->vm_mm;
 	struct file *file = vma->vm_file;
 	loff_t offset;
 
@@ -298,10 +291,10 @@ static long madvise_willneed(struct vm_area_struct *vma,
 	get_file(file);
 	offset = (loff_t)(start - vma->vm_start)
 			+ ((loff_t)vma->vm_pgoff << PAGE_SHIFT);
-	up_read(&mm->mmap_sem);
+	up_read(&current->mm->mmap_sem);
 	vfs_fadvise(file, offset, end - start, POSIX_FADV_WILLNEED);
 	fput(file);
-	down_read(&mm->mmap_sem);
+	down_read(&current->mm->mmap_sem);
 	return 0;
 }
 
@@ -320,10 +313,6 @@ static int madvise_cold_or_pageout_pte_range(pmd_t *pmd,
 	LIST_HEAD(page_list);
 
 	if (fatal_signal_pending(current))
-		return -EINTR;
-
-	if (private->target_task &&
-			fatal_signal_pending(private->target_task))
 		return -EINTR;
 
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
@@ -487,25 +476,20 @@ static const struct mm_walk_ops cold_walk_ops = {
 };
 
 static void madvise_cold_page_range(struct mmu_gather *tlb,
-			     struct task_struct *task,
 			     struct vm_area_struct *vma,
 			     unsigned long addr, unsigned long end)
 {
 	struct madvise_walk_private walk_private = {
 		.pageout = false,
 		.tlb = tlb,
-		.target_task = task,
 	};
 
-	vm_write_begin(vma);
 	tlb_start_vma(tlb, vma);
 	walk_page_range(vma->vm_mm, addr, end, &cold_walk_ops, &walk_private);
 	tlb_end_vma(tlb, vma);
-	vm_write_end(vma);
 }
 
-static long madvise_cold(struct task_struct *task,
-			struct vm_area_struct *vma,
+static long madvise_cold(struct vm_area_struct *vma,
 			struct vm_area_struct **prev,
 			unsigned long start_addr, unsigned long end_addr)
 {
@@ -518,28 +502,24 @@ static long madvise_cold(struct task_struct *task,
 
 	lru_add_drain();
 	tlb_gather_mmu(&tlb, mm, start_addr, end_addr);
-	madvise_cold_page_range(&tlb, task, vma, start_addr, end_addr);
+	madvise_cold_page_range(&tlb, vma, start_addr, end_addr);
 	tlb_finish_mmu(&tlb, start_addr, end_addr);
 
 	return 0;
 }
 
 static void madvise_pageout_page_range(struct mmu_gather *tlb,
-			     struct task_struct *task,
 			     struct vm_area_struct *vma,
 			     unsigned long addr, unsigned long end)
 {
 	struct madvise_walk_private walk_private = {
 		.pageout = true,
 		.tlb = tlb,
-		.target_task = task,
 	};
 
-	vm_write_begin(vma);
 	tlb_start_vma(tlb, vma);
 	walk_page_range(vma->vm_mm, addr, end, &cold_walk_ops, &walk_private);
 	tlb_end_vma(tlb, vma);
-	vm_write_end(vma);
 }
 
 static inline bool can_do_pageout(struct vm_area_struct *vma)
@@ -558,8 +538,7 @@ static inline bool can_do_pageout(struct vm_area_struct *vma)
 		inode_permission(file_inode(vma->vm_file), MAY_WRITE) == 0;
 }
 
-static long madvise_pageout(struct task_struct *task,
-			struct vm_area_struct *vma,
+static long madvise_pageout(struct vm_area_struct *vma,
 			struct vm_area_struct **prev,
 			unsigned long start_addr, unsigned long end_addr)
 {
@@ -575,7 +554,7 @@ static long madvise_pageout(struct task_struct *task,
 
 	lru_add_drain();
 	tlb_gather_mmu(&tlb, mm, start_addr, end_addr);
-	madvise_pageout_page_range(&tlb, task, vma, start_addr, end_addr);
+	madvise_pageout_page_range(&tlb, vma, start_addr, end_addr);
 	tlb_finish_mmu(&tlb, start_addr, end_addr);
 
 	return 0;
@@ -704,6 +683,7 @@ out:
 	if (nr_swap) {
 		if (current->mm == mm)
 			sync_mm_rss(mm);
+
 		add_mm_counter(mm, MM_SWAPENTS, nr_swap);
 	}
 	arch_leave_lazy_mmu_mode();
@@ -742,12 +722,10 @@ static int madvise_free_single_vma(struct vm_area_struct *vma,
 	update_hiwater_rss(mm);
 
 	mmu_notifier_invalidate_range_start(&range);
-	vm_write_begin(vma);
 	tlb_start_vma(&tlb, vma);
 	walk_page_range(vma->vm_mm, range.start, range.end,
 			&madvise_free_walk_ops, &tlb);
 	tlb_end_vma(&tlb, vma);
-	vm_write_end(vma);
 	mmu_notifier_invalidate_range_end(&range);
 	tlb_finish_mmu(&tlb, range.start, range.end);
 
@@ -785,8 +763,6 @@ static long madvise_dontneed_free(struct vm_area_struct *vma,
 				  unsigned long start, unsigned long end,
 				  int behavior)
 {
-	struct mm_struct *mm = vma->vm_mm;
-
 	*prev = vma;
 	if (!can_madv_lru_vma(vma))
 		return -EINVAL;
@@ -794,8 +770,8 @@ static long madvise_dontneed_free(struct vm_area_struct *vma,
 	if (!userfaultfd_remove(vma, start, end)) {
 		*prev = NULL; /* mmap_sem has been dropped, prev is stale */
 
-		down_read(&mm->mmap_sem);
-		vma = find_vma(mm, start);
+		down_read(&current->mm->mmap_sem);
+		vma = find_vma(current->mm, start);
 		if (!vma)
 			return -ENOMEM;
 		if (start < vma->vm_start) {
@@ -849,7 +825,6 @@ static long madvise_remove(struct vm_area_struct *vma,
 	loff_t offset;
 	int error;
 	struct file *f;
-	struct mm_struct *mm = vma->vm_mm;
 
 	*prev = NULL;	/* tell sys_madvise we drop mmap_sem */
 
@@ -877,13 +852,13 @@ static long madvise_remove(struct vm_area_struct *vma,
 	get_file(f);
 	if (userfaultfd_remove(vma, start, end)) {
 		/* mmap_sem was not released by userfaultfd_remove() */
-		up_read(&mm->mmap_sem);
+		up_read(&current->mm->mmap_sem);
 	}
 	error = vfs_fallocate(f,
 				FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE,
 				offset, end - start);
 	fput(f);
-	down_read(&mm->mmap_sem);
+	down_read(&current->mm->mmap_sem);
 	return error;
 }
 
@@ -957,8 +932,7 @@ static int madvise_inject_error(int behavior,
 #endif
 
 static long
-madvise_vma(struct task_struct *task, struct vm_area_struct *vma,
-		struct vm_area_struct **prev,
+madvise_vma(struct vm_area_struct *vma, struct vm_area_struct **prev,
 		unsigned long start, unsigned long end, int behavior)
 {
 	switch (behavior) {
@@ -967,9 +941,9 @@ madvise_vma(struct task_struct *task, struct vm_area_struct *vma,
 	case MADV_WILLNEED:
 		return madvise_willneed(vma, prev, start, end);
 	case MADV_COLD:
-		return madvise_cold(task, vma, prev, start, end);
+		return madvise_cold(vma, prev, start, end);
 	case MADV_PAGEOUT:
-		return madvise_pageout(task, vma, prev, start, end);
+		return madvise_pageout(vma, prev, start, end);
 	case MADV_FREE:
 	case MADV_DONTNEED:
 		return madvise_dontneed_free(vma, prev, start, end, behavior);
@@ -1011,22 +985,6 @@ madvise_behavior_valid(int behavior)
 #endif
 		return true;
 
-	default:
-		return false;
-	}
-}
-
-static bool
-process_madvise_behavior_valid(int behavior)
-{
-	switch (behavior) {
-	case MADV_COLD:
-	case MADV_PAGEOUT:
-#ifdef CONFIG_KSM
-	case MADV_MERGEABLE:
-	case MADV_UNMERGEABLE:
-#endif
-		return true;
 	default:
 		return false;
 	}
@@ -1079,11 +1037,6 @@ process_madvise_behavior_valid(int behavior)
  *  MADV_DONTDUMP - the application wants to prevent pages in the given range
  *		from being included in its core dump.
  *  MADV_DODUMP - cancel MADV_DONTDUMP: no longer exclude from core dump.
- *  MADV_COLD - the application is not expected to use this memory soon,
- *		deactivate pages in this range so that they can be reclaimed
- *		easily if memory pressure hanppens.
- *  MADV_PAGEOUT - the application is not expected to use this memory soon,
- *		page out the pages in this range immediately.
  *
  * return values:
  *  zero    - success
@@ -1098,8 +1051,7 @@ process_madvise_behavior_valid(int behavior)
  *  -EBADF  - map exists, but area maps something that isn't a file.
  *  -EAGAIN - a kernel resource was temporarily unavailable.
  */
-int do_madvise(struct task_struct *target_task, struct mm_struct *mm,
-		unsigned long start, size_t len_in, int behavior)
+SYSCALL_DEFINE3(madvise, unsigned long, start, size_t, len_in, int, behavior)
 {
 	unsigned long end, tmp;
 	struct vm_area_struct *vma, *prev;
@@ -1137,7 +1089,7 @@ int do_madvise(struct task_struct *target_task, struct mm_struct *mm,
 
 	write = madvise_need_mmap_write(behavior);
 	if (write) {
-		if (down_write_killable(&mm->mmap_sem))
+		if (down_write_killable(&current->mm->mmap_sem))
 			return -EINTR;
 
 		/*
@@ -1152,12 +1104,12 @@ int do_madvise(struct task_struct *target_task, struct mm_struct *mm,
 		 * but for now we have the mmget_still_valid()
 		 * model.
 		 */
-		if (!mmget_still_valid(mm)) {
-			up_write(&mm->mmap_sem);
+		if (!mmget_still_valid(current->mm)) {
+			up_write(&current->mm->mmap_sem);
 			return -EINTR;
 		}
 	} else {
-		down_read(&mm->mmap_sem);
+		down_read(&current->mm->mmap_sem);
 	}
 
 	/*
@@ -1165,7 +1117,7 @@ int do_madvise(struct task_struct *target_task, struct mm_struct *mm,
 	 * ranges, just ignore them, but return -ENOMEM at the end.
 	 * - different from the way of handling in mlock etc.
 	 */
-	vma = find_vma_prev(mm, start, &prev);
+	vma = find_vma_prev(current->mm, start, &prev);
 	if (vma && start > vma->vm_start)
 		prev = vma;
 
@@ -1190,8 +1142,7 @@ int do_madvise(struct task_struct *target_task, struct mm_struct *mm,
 			tmp = end;
 
 		/* Here vma->vm_start <= start < tmp <= (end|vma->vm_end). */
-		error = madvise_vma(target_task, vma, &prev,
-					start, tmp, behavior);
+		error = madvise_vma(vma, &prev, start, tmp, behavior);
 		if (error)
 			goto out;
 		start = tmp;
@@ -1203,107 +1154,14 @@ int do_madvise(struct task_struct *target_task, struct mm_struct *mm,
 		if (prev)
 			vma = prev->vm_next;
 		else	/* madvise_remove dropped mmap_sem */
-			vma = find_vma(mm, start);
+			vma = find_vma(current->mm, start);
 	}
 out:
 	blk_finish_plug(&plug);
 	if (write)
-		up_write(&mm->mmap_sem);
+		up_write(&current->mm->mmap_sem);
 	else
-		up_read(&mm->mmap_sem);
+		up_read(&current->mm->mmap_sem);
 
 	return error;
-}
-
-SYSCALL_DEFINE3(madvise, unsigned long, start, size_t, len_in, int, behavior)
-{
-	return do_madvise(current, current->mm, start, len_in, behavior);
-}
-
-static int do_process_madvise(struct task_struct *target_task,
-		struct mm_struct *mm, struct iov_iter *iter, int behavior)
-{
-	struct iovec iovec;
-	int ret = 0;
-
-	while (iov_iter_count(iter)) {
-		iovec = iov_iter_iovec(iter);
-		ret = do_madvise(target_task, mm, (unsigned long)iovec.iov_base,
-					iovec.iov_len, behavior);
-		if (ret < 0)
-			break;
-		iov_iter_advance(iter, iovec.iov_len);
-	}
-
-	return ret;
-}
-
-SYSCALL_DEFINE6(process_madvise, int, which, pid_t, upid,
-		const struct iovec __user *, vec, unsigned long, vlen,
-		int, behavior, unsigned long, flags)
-{
-	ssize_t ret;
-	struct pid *pid;
-	struct task_struct *task;
-	struct mm_struct *mm;
-	struct iovec iovstack[UIO_FASTIOV];
-	struct iovec *iov = iovstack;
-	struct iov_iter iter;
-
-	if (flags != 0)
-		return -EINVAL;
-
-	switch (which) {
-	case P_PID:
-		if (upid <= 0)
-			return -EINVAL;
-
-		pid = find_get_pid(upid);
-		if (!pid)
-			return -ESRCH;
-		break;
-	case P_PIDFD:
-		if (upid < 0)
-			return -EINVAL;
-
-		pid = pidfd_get_pid(upid);
-		if (IS_ERR(pid))
-			return PTR_ERR(pid);
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	task = get_pid_task(pid, PIDTYPE_PID);
-	if (!task) {
-		ret = -ESRCH;
-		goto put_pid;
-	}
-
-	if (!process_madvise_behavior_valid(behavior)) {
-		ret = -EINVAL;
-		goto release_task;
-	}
-
-	mm = mm_access(task, PTRACE_MODE_ATTACH_FSCREDS);
-	if (IS_ERR_OR_NULL(mm)) {
-		ret = IS_ERR(mm) ? PTR_ERR(mm) : -ESRCH;
-		goto release_task;
-	}
-
-	ret = import_iovec(READ, vec, vlen, ARRAY_SIZE(iovstack), &iov, &iter);
-	if (ret >= 0) {
-		size_t total_len = iov_iter_count(&iter);
-
-		ret = do_process_madvise(task, mm, &iter, behavior);
-		if (ret >= 0)
-			ret = total_len - iov_iter_count(&iter);
-		kfree(iov);
-	}
-	mmput(mm);
-release_task:
-	put_task_struct(task);
-put_pid:
-	put_pid(pid);
-	return ret;
 }

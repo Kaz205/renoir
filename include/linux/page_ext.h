@@ -19,9 +19,6 @@ struct page_ext_operations {
 enum page_ext_flags {
 	PAGE_EXT_OWNER,
 	PAGE_EXT_OWNER_ALLOCATED,
-#ifdef CONFIG_PAGE_EXTENSION_PAGE_FREE
-	PAGE_EXT_PG_FREE,
-#endif
 #if defined(CONFIG_IDLE_PAGE_TRACKING) && !defined(CONFIG_64BIT)
 	PAGE_EXT_YOUNG,
 	PAGE_EXT_IDLE,
@@ -47,12 +44,8 @@ static inline void page_ext_init_flatmem(void)
 {
 }
 extern void page_ext_init(void);
-static inline void page_ext_init_flatmem_late(void)
-{
-}
 #else
 extern void page_ext_init_flatmem(void);
-extern void page_ext_init_flatmem_late(void);
 static inline void page_ext_init(void)
 {
 }
@@ -80,10 +73,6 @@ static inline struct page_ext *lookup_page_ext(const struct page *page)
 }
 
 static inline void page_ext_init(void)
-{
-}
-
-static inline void page_ext_init_flatmem_late(void)
 {
 }
 
