@@ -1170,9 +1170,6 @@ const char * const vmstat_text[] = {
 	"nr_dirtied",
 	"nr_written",
 	"nr_kernel_misc_reclaimable",
-#ifdef CONFIG_MM_STAT_UNRECLAIMABLE_PAGES
-	"nr_unreclaimable_pages",
-#endif
 
 	/* enum writeback_stat_item counters */
 	"nr_dirty_threshold",
@@ -1300,11 +1297,7 @@ const char * const vmstat_text[] = {
 	"swap_ra",
 	"swap_ra_hit",
 #endif
-#ifdef CONFIG_SPECULATIVE_PAGE_FAULT
-	"speculative_pgfault_anon",
-	"speculative_pgfault_file",
-#endif
-#endif /* CONFIG_VM_EVENT_COUNTERS */
+#endif /* CONFIG_VM_EVENTS_COUNTERS */
 };
 #endif /* CONFIG_PROC_FS || CONFIG_SYSFS || CONFIG_NUMA */
 
