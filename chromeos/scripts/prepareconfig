@@ -3,7 +3,7 @@
 # See this page for more details:
 # http://dev.chromium.org/chromium-os/how-tos-and-troubleshooting/kernel-configuration
 
-family="${CROS_KERNEL_FAMILY}"
+family="${CHROMEOS_KERNEL_FAMILY}"
 
 flavourconf=$(find chromeos/config/${family} -name $1.flavour.config)
 if [ ! -f "${flavourconf}" ]; then
