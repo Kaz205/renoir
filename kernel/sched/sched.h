@@ -95,6 +95,13 @@ struct walt_cpu_load {
 	u64 ws;
 };
 
+struct walt_root_domain {
+	/* First cpu with maximum and minimum original capacity */
+	int max_cap_orig_cpu, min_cap_orig_cpu;
+	/* First cpu with mid capacity */
+	int mid_cap_orig_cpu;
+};
+
 #ifdef CONFIG_SCHED_WALT
 #define DECLARE_BITMAP_ARRAY(name, nr, bits) \
 	unsigned long name[nr][BITS_TO_LONGS(bits)]
@@ -125,14 +132,6 @@ struct walt_task_group {
 	/* Controls whether further updates are allowed to the colocate flag */
 	bool colocate_update_disabled;
 };
-
-struct walt_root_domain {
-	/* First cpu with maximum and minimum original capacity */
-	int max_cap_orig_cpu, min_cap_orig_cpu;
-	/* First cpu with mid capacity */
-	int mid_cap_orig_cpu;
-};
-
 
 #define NUM_TRACKED_WINDOWS 2
 #define NUM_LOAD_INDICES 1000
@@ -923,9 +922,7 @@ struct root_domain {
 	 */
 	struct perf_domain __rcu *pd;
 
-#ifdef CONFIG_SCHED_WALT
 	struct walt_root_domain	wrd;
-#endif
 };
 
 extern void init_defrootdomain(void);
@@ -3277,7 +3274,7 @@ static inline bool is_max_capacity_cpu(int cpu) { return true; }
 static inline bool is_min_capacity_cpu(int cpu)
 {
 #ifdef CONFIG_SMP
-	int min_cpu = cpu_rq(cpu)->rd->min_cap_orig_cpu;
+	int min_cpu = cpu_rq(cpu)->rd->wrd.min_cap_orig_cpu;
 
 	return unlikely(min_cpu == -1) ||
 		capacity_orig_of(cpu) == capacity_orig_of(min_cpu);
