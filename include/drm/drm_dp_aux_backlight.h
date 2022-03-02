@@ -20,9 +20,6 @@ struct drm_dp_aux_backlight {
 	bool enabled;
 };
 
-int drm_dp_aux_backlight_enable(struct drm_dp_aux_backlight *aux_bl);
-int drm_dp_aux_backlight_disable(struct drm_dp_aux_backlight *aux_bl);
-
 int drm_dp_aux_backlight_register(const char *name,
 				struct drm_dp_aux_backlight *aux_bl);
 

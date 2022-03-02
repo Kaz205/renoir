@@ -137,23 +137,15 @@ config DRM_I915_GVT_KVMGT
 	  Intel GVT-g.
 
 config DRM_I915_PXP
-	bool "Enable Intel PXP support for Intel Gen12+ platform"
+	bool "Enable Intel PXP support"
 	depends on DRM_I915
-	select INTEL_MEI_PXP
+	depends on INTEL_MEI && INTEL_MEI_PXP
 	default n
 	help
-	  This option selects INTEL_MEI_ME if it isn't already selected to
-	  enabled full PXP Services on Intel platforms.
-
-	  PXP (Protected Xe Path) is an i915 componment, available on GEN12+,
-	  that helps to establish the hardware protected session and manage
-	  the status of the alive software session, as well as its life cycle.
-
-	  This patch series is to allow the kernel space to create and
-	  manage a single hardware session (a.k.a default session or
-	  arbitrary session). So Mesa can allocate the protected buffer,
-	  which is encrypted with the leverage of the arbitrary hardware
-	  session.
+	  PXP (Protected Xe Path) is an i915 component, available on graphics
+	  version 12 and newer GPUs, that helps to establish the hardware
+	  protected session and manage the status of the alive software session,
+	  as well as its life cycle.
 
 menu "drm/i915 Debugging"
 depends on DRM_I915

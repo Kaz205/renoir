@@ -248,18 +248,33 @@ static int cros_ec_light_prox_write(struct iio_dev *indio_dev,
 	case IIO_CHAN_INFO_CALIBSCALE:
 		if (indio_dev->num_channels >
 		    CROS_EC_LIGHT_PROX_MIN_CHANNELS) {
+			u16 scale;
+
+			if (val >= 2) {
+				/*
+				 * The user space is sending values already
+				 * multiplied by MOTION_SENSE_DEFAULT_SCALE.
+				 */
+				scale = val;
+			} else {
+				u64 val64 = val2 * MOTION_SENSE_DEFAULT_SCALE;
+
+				do_div(val64, 1000000);
+				scale = (val << 15) | val64;
+			}
+
 			st->core.param.cmd = MOTIONSENSE_CMD_SENSOR_SCALE;
 			st->core.param.sensor_offset.flags =
 				MOTION_SENSE_SET_OFFSET;
 			st->core.param.sensor_offset.temp =
 				EC_MOTION_SENSE_INVALID_CALIB_TEMP;
 			if (idx == 0) {
-				st->core.calib[0].scale = val;
-				st->core.param.sensor_scale.scale[0] = val;
+				st->core.calib[0].scale = scale;
+				st->core.param.sensor_scale.scale[0] = scale;
 				ret = cros_ec_motion_send_host_cmd(
 						&st->core, 0);
 			} else {
-				st->rgb_calib[idx - 1].scale = val;
+				st->rgb_calib[idx - 1].scale = scale;
 				for (i = CROS_EC_SENSOR_X;
 				     i < CROS_EC_SENSOR_MAX_AXIS;
 				     i++)
@@ -310,13 +325,14 @@ static int cros_ec_light_push_data(
 		s64 timestamp)
 {
 	struct cros_ec_sensors_core_state *st = iio_priv(indio_dev);
+	s16 *out = (s16 *)st->samples;
 
 	if (!st || !indio_dev->active_scan_mask)
 		return 0;
 
 	/* Save clear channel, will be used when RGB data arrives. */
 	if (test_bit(0, indio_dev->active_scan_mask))
-		st->samples[0] = data[0];
+		*out = data[0];
 
 	/* Wait for RGB callback to send samples upstream. */
 	return 0;
@@ -427,7 +443,7 @@ static int cros_ec_light_prox_probe(struct platform_device *pdev)
 	if (!indio_dev)
 		return -ENOMEM;
 
-	ret = cros_ec_sensors_core_init(pdev, indio_dev, true, false,
+	ret = cros_ec_sensors_core_init(pdev, indio_dev, true,
 					cros_ec_light_capture,
 					cros_ec_sensors_push_data);
 	if (ret)
@@ -496,13 +512,13 @@ static int cros_ec_light_prox_probe(struct platform_device *pdev)
 		}
 		cros_ec_sensorhub_unregister_push_data(sensor_hub, sensor_num);
 		if (cros_ec_sensorhub_register_push_data(
-				sensor_hub, sensor_num, false,
+				sensor_hub, sensor_num,
 				indio_dev,
 				cros_ec_light_push_data))
 			dev_warn(dev, "cros_ec_light_push_data reg failed: %d - %d\n",
 				 sensor_num, sensor_hub->sensor_num);
 		if (cros_ec_sensorhub_register_push_data(
-				sensor_hub, sensor_num + 1, false,
+				sensor_hub, sensor_num + 1,
 				indio_dev,
 				cros_ec_light_push_data_rgb))
 			dev_warn(dev, "cros_ec_light_push_data_rgb reg failed: %d - %d\n",

@@ -97,12 +97,14 @@ ipu_psys_create_buffer_set(struct ipu_psys_kcmd *kcmd,
 	buf_set_size = ipu_fw_psys_ppg_get_buffer_set_size(kcmd);
 
 	kbuf_set = __get_buf_set(fh, buf_set_size);
-	if (!kbuf_set)
-		goto error;
+	if (!kbuf_set) {
+		dev_err(&psys->adev->dev, "failed to create buffer set\n");
+		return NULL;
+	}
 
 	kbuf_set->buf_set = ipu_fw_psys_ppg_create_buffer_set(kcmd,
 							      kbuf_set->kaddr,
-	0);
+							      0);
 
 	ipu_fw_psys_ppg_buffer_set_vaddress(kbuf_set->buf_set,
 					    kbuf_set->dma_addr);
@@ -111,9 +113,6 @@ ipu_psys_create_buffer_set(struct ipu_psys_kcmd *kcmd,
 							    keb);
 
 	return kbuf_set;
-error:
-	dev_err(&psys->adev->dev, "failed to create buffer set\n");
-	return NULL;
 }
 
 int ipu_psys_ppg_get_bufset(struct ipu_psys_kcmd *kcmd,
@@ -503,8 +502,11 @@ void ipu_psys_enter_power_gating(struct ipu_psys *psys)
 
 		list_for_each_entry_safe(kppg, tmp, &sched->ppgs, list) {
 			mutex_lock(&kppg->mutex);
-			/* kppg has already power down */
-			if (kppg->state == PPG_STATE_STOPPED) {
+			/*
+			 * Only for SUSPENDED kppgs, STOPPED kppgs has already
+			 * power down and new kppgs might come now.
+			 */
+			if (kppg->state != PPG_STATE_SUSPENDED) {
 				mutex_unlock(&kppg->mutex);
 				continue;
 			}
@@ -539,9 +541,8 @@ void ipu_psys_exit_power_gating(struct ipu_psys *psys)
 
 		list_for_each_entry_safe(kppg, tmp, &sched->ppgs, list) {
 			mutex_lock(&kppg->mutex);
-			/* kppg is not started and power up */
-			if (kppg->state == PPG_STATE_START ||
-			    kppg->state == PPG_STATE_STARTING) {
+			/* Only for SUSPENDED kppgs */
+			if (kppg->state != PPG_STATE_SUSPENDED) {
 				mutex_unlock(&kppg->mutex);
 				continue;
 			}

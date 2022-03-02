@@ -2,11 +2,13 @@
 // Copyright (c) 2017 Intel Corporation.
 
 #include <linux/acpi.h>
+#include <linux/delay.h>
 #include <linux/i2c.h>
 #include <linux/module.h>
 #include <linux/pm_runtime.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
+#include <media/v4l2-event.h>
 
 #define OV5670_REG_CHIP_ID		0x300a
 #define OV5670_CHIP_ID			0x005670
@@ -45,6 +47,13 @@
 #define	ANALOG_GAIN_STEP		1
 #define	ANALOG_GAIN_DEFAULT		128
 
+/* OTP control registers */
+#define OV5670_REG_OTP_LOAD_CTRL	0x3d81
+#define OV5670_OTP_LOAD_ENABLE		BIT(0)
+#define OV5670_REG_OTP_MODE_CTRL	0x3d84
+#define OV5670_OTP_PROGRAM_DISABLE	BIT(7)
+#define OV5670_OTP_MANUAL_MODE		BIT(6)
+
 /* Digital gain controls from sensor */
 #define OV5670_REG_R_DGTL_GAIN		0x5032
 #define OV5670_REG_G_DGTL_GAIN		0x5034
@@ -65,6 +74,19 @@
 
 /* Initial number of frames to skip to avoid possible garbage */
 #define OV5670_NUM_OF_SKIP_FRAMES	2
+
+/* ISP control registers */
+#define OV5670_REG_ISP_CTRL02		0x5002
+#define OV5670_OTP_DPC_ENABLE		BIT(3)
+
+/* OTP access for vendor Id */
+#define OV5670_OTP_SRAM			0x7000
+#define OV5670_FLAG_BASIC_OFFSET	0x10
+#define OV5670_NUM_OTP_GROUP		3
+#define OV5670_OTP_GROUP_FLAG_SHIFT(i)	(6 - 2*(i))
+#define OV5670_OTP_GROUP_FLAG_MASK	0x3
+#define OV5670_OTP_GROUP_FLAG_VALID	0x1
+#define OV5670_OTP_MI_ID_OFFSET(i)	(0x11 + 5*(i))
 
 struct ov5670_reg {
 	u16 address;
@@ -1833,6 +1855,10 @@ struct ov5670 {
 	bool streaming;
 	/* True if the device has been identified */
 	bool identified;
+
+	/* Vendor Id from OTP */
+	bool otp_read;
+	u32 vendor_id;
 };
 
 #define to_ov5670(_sd)	container_of(_sd, struct ov5670, sd)
@@ -2422,6 +2448,12 @@ static int __maybe_unused ov5670_resume(struct device *dev)
 	return 0;
 }
 
+static const struct v4l2_subdev_core_ops ov5670_core_ops = {
+	.log_status = v4l2_ctrl_subdev_log_status,
+	.subscribe_event = v4l2_ctrl_subdev_subscribe_event,
+	.unsubscribe_event = v4l2_event_subdev_unsubscribe,
+};
+
 static const struct v4l2_subdev_video_ops ov5670_video_ops = {
 	.s_stream = ov5670_set_stream,
 };
@@ -2438,6 +2470,7 @@ static const struct v4l2_subdev_sensor_ops ov5670_sensor_ops = {
 };
 
 static const struct v4l2_subdev_ops ov5670_subdev_ops = {
+	.core = &ov5670_core_ops,
 	.video = &ov5670_video_ops,
 	.pad = &ov5670_pad_ops,
 	.sensor = &ov5670_sensor_ops,
@@ -2450,6 +2483,130 @@ static const struct media_entity_operations ov5670_subdev_entity_ops = {
 static const struct v4l2_subdev_internal_ops ov5670_internal_ops = {
 	.open = ov5670_open,
 };
+
+static int ov5670_read_otp(struct ov5670 *ov5670)
+{
+	struct i2c_client *client = v4l2_get_subdevdata(&ov5670->sd);
+	u32 otp_mode_ctrl, isp_ctrl02, flag_basic;
+	unsigned int mi_id_offs;
+	int ret = 0;
+	int i;
+
+	mutex_lock(&ov5670->mutex);
+	if (ov5670->otp_read)
+		goto out_unlock;
+
+	ret = pm_runtime_get_sync(&client->dev);
+	if (ret < 0) {
+		pm_runtime_put_noidle(&client->dev);
+		goto out_unlock;
+	}
+
+	if (!ov5670->streaming) {
+		ret = ov5670_start_streaming(ov5670);
+		if (ret)
+			goto out_runtime_put;
+	}
+
+	ret = ov5670_read_reg(ov5670,
+			      OV5670_REG_ISP_CTRL02,
+			      OV5670_REG_VALUE_08BIT, &isp_ctrl02);
+	if (ret)
+		goto out_standby;
+
+	ret = ov5670_write_reg(ov5670,
+			       OV5670_REG_ISP_CTRL02,
+			       OV5670_REG_VALUE_08BIT,
+			       isp_ctrl02 & ~OV5670_OTP_DPC_ENABLE);
+	if (ret)
+		goto out_standby;
+
+	ret = ov5670_read_reg(ov5670,
+			      OV5670_REG_OTP_MODE_CTRL,
+			      OV5670_REG_VALUE_08BIT, &otp_mode_ctrl);
+	if (ret)
+		goto out_dpc_enable;
+
+	otp_mode_ctrl |= OV5670_OTP_PROGRAM_DISABLE;
+	otp_mode_ctrl &= ~OV5670_OTP_MANUAL_MODE;
+
+	ret = ov5670_write_reg(ov5670,
+			       OV5670_REG_OTP_MODE_CTRL,
+			       OV5670_REG_VALUE_08BIT, otp_mode_ctrl);
+	if (ret)
+		goto out_dpc_enable;
+
+	ret = ov5670_write_reg(ov5670,
+			       OV5670_REG_OTP_LOAD_CTRL,
+			       OV5670_REG_VALUE_08BIT,
+			       OV5670_OTP_LOAD_ENABLE);
+	if (ret)
+		goto out_dpc_enable;
+
+	usleep_range(5000, 5500);
+
+	ret = ov5670_read_reg(ov5670,
+			      OV5670_OTP_SRAM + OV5670_FLAG_BASIC_OFFSET,
+			      OV5670_REG_VALUE_08BIT, &flag_basic);
+
+	for (i = 0; i < OV5670_NUM_OTP_GROUP; ++i) {
+		u8 flag;
+
+		flag = (flag_basic >> OV5670_OTP_GROUP_FLAG_SHIFT(i))
+					& OV5670_OTP_GROUP_FLAG_MASK;
+		if (flag == OV5670_OTP_GROUP_FLAG_VALID) {
+			mi_id_offs = OV5670_OTP_MI_ID_OFFSET(i);
+			break;
+		}
+	}
+	if (i == OV5670_NUM_OTP_GROUP) {
+		ret = -EFAULT;
+		goto out_dpc_enable;
+	}
+
+	ret = ov5670_read_reg(ov5670,
+			      OV5670_OTP_SRAM + mi_id_offs,
+			      OV5670_REG_VALUE_08BIT, &ov5670->vendor_id);
+
+out_dpc_enable:
+	ov5670_write_reg(ov5670,
+			 OV5670_REG_ISP_CTRL02,
+			 OV5670_REG_VALUE_08BIT,
+			 isp_ctrl02);
+
+out_standby:
+	if (!ov5670->streaming)
+		ov5670_stop_streaming(ov5670);
+
+out_runtime_put:
+	pm_runtime_put(&client->dev);
+
+out_unlock:
+	if (!ret)
+		ov5670->otp_read = true;
+
+	mutex_unlock(&ov5670->mutex);
+
+	return ret;
+}
+
+static ssize_t ov5670_vendor_id_read(struct device *dev,
+				     struct device_attribute *attr,
+				     char *buf)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct v4l2_subdev *sd = i2c_get_clientdata(client);
+	struct ov5670 *ov5670 = to_ov5670(sd);
+	int ret;
+
+	ret = ov5670_read_otp(ov5670);
+	if (ret)
+		return ret;
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", ov5670->vendor_id);
+}
+
+static DEVICE_ATTR(vendor_id, 0444, ov5670_vendor_id_read, NULL);
 
 static int ov5670_probe(struct i2c_client *client)
 {
@@ -2495,7 +2652,8 @@ static int ov5670_probe(struct i2c_client *client)
 	}
 
 	ov5670->sd.internal_ops = &ov5670_internal_ops;
-	ov5670->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
+	ov5670->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE |
+			    V4L2_SUBDEV_FL_HAS_EVENTS;
 	ov5670->sd.entity.ops = &ov5670_subdev_entity_ops;
 	ov5670->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;
 
@@ -2514,6 +2672,12 @@ static int ov5670_probe(struct i2c_client *client)
 		goto error_entity_cleanup;
 	}
 
+	ret = device_create_file(&client->dev, &dev_attr_vendor_id);
+	if (ret) {
+		dev_err(&client->dev, "sysfs vendor_id creation failed\n");
+		goto error_unregister;
+	}
+
 	ov5670->streaming = false;
 
 	/*
@@ -2525,6 +2689,9 @@ static int ov5670_probe(struct i2c_client *client)
 	pm_runtime_idle(&client->dev);
 
 	return 0;
+
+error_unregister:
+	v4l2_async_unregister_subdev(&ov5670->sd);
 
 error_entity_cleanup:
 	media_entity_cleanup(&ov5670->sd.entity);
@@ -2546,6 +2713,7 @@ static int ov5670_remove(struct i2c_client *client)
 	struct v4l2_subdev *sd = i2c_get_clientdata(client);
 	struct ov5670 *ov5670 = to_ov5670(sd);
 
+	device_remove_file(&client->dev, &dev_attr_vendor_id);
 	v4l2_async_unregister_subdev(sd);
 	media_entity_cleanup(&sd->entity);
 	v4l2_ctrl_handler_free(sd->ctrl_handler);

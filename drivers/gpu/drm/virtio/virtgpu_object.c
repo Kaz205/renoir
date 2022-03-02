@@ -71,7 +71,7 @@ static void virtio_gpu_ttm_bo_destroy(struct ttm_buffer_object *tbo)
 	struct virtio_gpu_device *vgdev;
 
 	bo = container_of(tbo, struct virtio_gpu_object, tbo);
-	vgdev = (struct virtio_gpu_device *)bo->gem_base.dev->dev_private;
+	vgdev = (struct virtio_gpu_device *)bo->tbo.base.dev->dev_private;
 
 	if (bo->created)
 		virtio_gpu_cmd_unref_resource(vgdev, bo->hw_res_handle);
@@ -79,7 +79,7 @@ static void virtio_gpu_ttm_bo_destroy(struct ttm_buffer_object *tbo)
 		virtio_gpu_object_free_sg_table(bo);
 	if (bo->vmap)
 		virtio_gpu_object_kunmap(bo);
-	drm_gem_object_release(&bo->gem_base);
+	drm_gem_object_release(&bo->tbo.base);
 	virtio_gpu_resource_id_put(vgdev, bo->hw_res_handle);
 	kfree(bo);
 }
@@ -143,7 +143,7 @@ int virtio_gpu_object_create(struct virtio_gpu_device *vgdev,
 		return ret;
 	}
 	params->size = roundup(params->size, PAGE_SIZE);
-	ret = drm_gem_object_init(vgdev->ddev, &bo->gem_base, params->size);
+	ret = drm_gem_object_init(vgdev->ddev, &bo->tbo.base, params->size);
 	if (ret != 0) {
 		virtio_gpu_resource_id_put(vgdev, bo->hw_res_handle);
 		kfree(bo);
@@ -180,7 +180,7 @@ int virtio_gpu_object_create(struct virtio_gpu_device *vgdev,
 		memset(&mainbuf, 0, sizeof(struct ttm_validate_buffer));
 
 		/* use a gem reference since unref list undoes them */
-		drm_gem_object_get(&bo->gem_base);
+		drm_gem_object_get(&bo->tbo.base);
 		mainbuf.bo = &bo->tbo;
 		list_add(&mainbuf.head, &validate_list);
 

@@ -42,6 +42,9 @@ properties:
     maxItems: 1
     description: Regulator for 3.3V digital core power.
 
+  aux-bus:
+    $ref: /schemas/display/dp-aux-bus.yaml#
+
   ports:
     type: object
     description:
@@ -104,7 +107,21 @@ examples:
                     reg = <1>;
                     ps8640_out: endpoint {
                         remote-endpoint = <&panel_in>;
-                   };
+                    };
+                };
+            };
+
+            aux-bus {
+                panel {
+                    compatible = "boe,nv133fhm-n62";
+                    power-supply = <&pp3300_dx_edp>;
+                    backlight = <&backlight>;
+
+                    port {
+                        panel_in: endpoint {
+                            remote-endpoint = <&ps8640_out>;
+                        };
+                    };
                 };
             };
         };

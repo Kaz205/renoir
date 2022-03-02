@@ -336,8 +336,11 @@ static int vdec_s_fmt(struct file *file, void *fh, struct v4l2_format *f)
 
 	if (f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE)
 		inst->fmt_out = fmt;
-	else if (f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE)
+	else if (f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
 		inst->fmt_cap = fmt;
+		inst->output2_buf_size =
+			venus_helper_get_framesz(pixfmt_cap, orig_pixmp.width, orig_pixmp.height);
+	}
 
 	return 0;
 }
@@ -814,6 +817,7 @@ static int vdec_queue_setup(struct vb2_queue *q,
 			    unsigned int sizes[], struct device *alloc_devs[])
 {
 	struct venus_inst *inst = vb2_get_drv_priv(q);
+	struct venus_core *core = inst->core;
 	unsigned int in_num, out_num;
 	int ret = 0;
 
@@ -837,6 +841,16 @@ static int vdec_queue_setup(struct vb2_queue *q,
 			return -EINVAL;
 
 		return 0;
+	}
+
+	if (test_bit(0, &core->sys_error)) {
+		if (inst->nonblock)
+			return -EAGAIN;
+
+		ret = wait_event_interruptible(core->sys_err_done,
+					       !test_bit(0, &core->sys_error));
+		if (ret)
+			return ret;
 	}
 
 	ret = vdec_pm_get(inst);
@@ -1161,6 +1175,8 @@ static void vdec_stop_streaming(struct vb2_queue *q)
 
 	venus_helper_buffers_done(inst, q->type, VB2_BUF_STATE_ERROR);
 
+	inst->session_error = 0;
+
 	if (ret)
 		goto unlock;
 
@@ -1194,7 +1210,7 @@ static void vdec_session_release(struct venus_inst *inst)
 	ret = hfi_session_deinit(inst);
 	abort = (ret && ret != -EINVAL) ? 1 : 0;
 
-	if (inst->session_error || core->sys_error)
+	if (inst->session_error || test_bit(0, &core->sys_error))
 		abort = 1;
 
 	if (abort)
@@ -1289,8 +1305,10 @@ static void vdec_buf_done(struct venus_inst *inst, unsigned int buf_type,
 		type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
 
 	vbuf = venus_helper_find_buf(inst, type, tag);
-	if (!vbuf)
+	if (!vbuf) {
+		venus_helper_change_dpb_owner(inst, vbuf, type, buf_type, tag);
 		return;
+	}
 
 	vbuf->flags = flags;
 	vbuf->field = V4L2_FIELD_NONE;
@@ -1432,6 +1450,7 @@ static void vdec_event_notify(struct venus_inst *inst, u32 event,
 	switch (event) {
 	case EVT_SESSION_ERROR:
 		inst->session_error = true;
+		venus_helper_vb2_queue_error(inst);
 		dev_err(dev, "dec: event session error %x\n", inst->error);
 		break;
 	case EVT_SYS_EVENT_CHANGE:
@@ -1556,6 +1575,8 @@ static int vdec_open(struct file *file)
 	inst->bit_depth = VIDC_BITDEPTH_8;
 	inst->pic_struct = HFI_INTERLACE_FRAME_PROGRESSIVE;
 	init_waitqueue_head(&inst->reconf_wait);
+	inst->nonblock = file->f_flags & O_NONBLOCK;
+
 	venus_helper_init_instance(inst);
 
 	ret = vdec_ctrl_init(inst);
@@ -1567,6 +1588,8 @@ static int vdec_open(struct file *file)
 		goto err_ctrl_deinit;
 
 	vdec_inst_init(inst);
+
+	ida_init(&inst->dpb_ids);
 
 	/*
 	 * create m2m device for every instance, the m2m context scheduling
@@ -1613,6 +1636,7 @@ static int vdec_close(struct file *file)
 	v4l2_m2m_ctx_release(inst->m2m_ctx);
 	v4l2_m2m_release(inst->m2m_dev);
 	vdec_ctrl_deinit(inst);
+	ida_destroy(&inst->dpb_ids);
 	hfi_session_destroy(inst);
 	mutex_destroy(&inst->lock);
 	v4l2_fh_del(&inst->fh);
