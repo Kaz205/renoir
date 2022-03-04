@@ -3,6 +3,7 @@
  * Copyright (c) 2011,2013-2014,2019-2020, The Linux Foundation. All rights reserved.
  */
 
+#include <linux/irq_work.h>
 #include <linux/spinlock.h>
 #include <linux/types.h>
 #include <linux/workqueue.h>
@@ -16,6 +17,7 @@ struct rq_data {
 	struct attribute_group *attr_group;
 	struct kobject *kobj;
 	struct work_struct def_timer_work;
+	struct irq_work def_timer_irq_work;
 	int init;
 };
 
