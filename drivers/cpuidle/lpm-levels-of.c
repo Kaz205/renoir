@@ -543,7 +543,7 @@ static int parse_cpu_levels(struct device_node *dn, struct lpm_cluster *c)
 	if (!cpu)
 		return -ENOMEM;
 
-	spin_lock_init(&cpu->cpu_lock);
+	raw_spin_lock_init(&cpu->cpu_lock);
 	if (get_cpumask_for_node(dn, &cpu->related_cpus))
 		return -EINVAL;
 
@@ -636,7 +636,7 @@ static struct lpm_cluster *parse_cluster(struct device_node *node,
 	INIT_LIST_HEAD(&c->child);
 	INIT_LIST_HEAD(&c->cpu);
 	c->parent = parent;
-	spin_lock_init(&c->sync_lock);
+	raw_spin_lock_init(&c->sync_lock);
 	c->min_child_level = NR_LPM_LEVELS;
 
 	for_each_child_of_node(node, n) {
