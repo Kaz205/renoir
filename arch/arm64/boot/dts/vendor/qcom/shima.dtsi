@@ -363,11 +363,6 @@
 		size = <0x0 0xC00000>;
 	};
 
-	pil_wlan_mem: wlan@8ad00000 {
-		no-map;
-		reg = <0x0 0x8ad00000 0x0 0xa00000>;
-	};
-
 	pil_ipa_fw_mem: ipa_fw@8b700000 {
 		no-map;
 		reg = <0x0 0x8b700000 0x0 0x10000>;
