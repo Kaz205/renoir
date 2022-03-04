@@ -1126,6 +1126,8 @@ int msm_gpu_init(struct drm_device *drm, struct platform_device *pdev,
 
 	msm_gpuboost_init(gpu);
 
+	refcount_set(&gpu->sysprof_active, 1);
+
 	return 0;
 
 fail:
