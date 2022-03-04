@@ -64,7 +64,7 @@ struct msm_msi {
 	u32 msi_addr_size;
 	enum msi_type type;
 	bool msi_mask_disable;
-	spinlock_t cfg_lock; /* lock for configuring Synopsys MSI registers */
+	raw_spinlock_t cfg_lock; /* lock for configuring Synopsys MSI registers */
 	bool cfg_access; /* control access to MSI registers */
 	void __iomem *pcie_cfg;
 
@@ -132,9 +132,9 @@ static void msm_msi_snps_mask_irq(struct irq_data *data)
 	struct msm_msi *msi = msi_irq->client->msi;
 	unsigned long flags;
 
-	spin_lock_irqsave(&msi->cfg_lock, flags);
+	raw_spin_lock_irqsave(&msi->cfg_lock, flags);
 	msi_grp->mask |= BIT(msi_irq->grp_index);
-	spin_unlock_irqrestore(&msi->cfg_lock, flags);
+	raw_spin_unlock_irqrestore(&msi->cfg_lock, flags);
 }
 
 static void msm_msi_qgic_mask_irq(struct irq_data *data)
@@ -162,10 +162,10 @@ static void msm_msi_mask_irq(struct irq_data *data)
 	msi_irq = irq_data_get_irq_chip_data(parent_data);
 	msi = msi_irq->client->msi;
 
-	spin_lock_irqsave(&msi->cfg_lock, flags);
+	raw_spin_lock_irqsave(&msi->cfg_lock, flags);
 	if (!msi->msi_mask_disable && msi->cfg_access)
 		pci_msi_mask_irq(data);
-	spin_unlock_irqrestore(&msi->cfg_lock, flags);
+	raw_spin_unlock_irqrestore(&msi->cfg_lock, flags);
 
 	msi->mask_irq(parent_data);
 }
@@ -177,13 +177,13 @@ static void msm_msi_snps_unmask_irq(struct irq_data *data)
 	struct msm_msi *msi = msi_irq->client->msi;
 	unsigned long flags;
 
-	spin_lock_irqsave(&msi->cfg_lock, flags);
+	raw_spin_lock_irqsave(&msi->cfg_lock, flags);
 
 	msi_grp->mask &= ~BIT(msi_irq->grp_index);
 	if (msi->cfg_access)
 		writel_relaxed(msi_grp->mask, msi_grp->int_mask_reg);
 
-	spin_unlock_irqrestore(&msi->cfg_lock, flags);
+	raw_spin_unlock_irqrestore(&msi->cfg_lock, flags);
 }
 
 static void msm_msi_qgic_unmask_irq(struct irq_data *data)
@@ -213,10 +213,10 @@ static void msm_msi_unmask_irq(struct irq_data *data)
 
 	msi->unmask_irq(parent_data);
 
-	spin_lock_irqsave(&msi->cfg_lock, flags);
+	raw_spin_lock_irqsave(&msi->cfg_lock, flags);
 	if (!msi->msi_mask_disable && msi->cfg_access)
 		pci_msi_unmask_irq(data);
-	spin_unlock_irqrestore(&msi->cfg_lock, flags);
+	raw_spin_unlock_irqrestore(&msi->cfg_lock, flags);
 }
 
 static struct irq_chip msm_msi_irq_chip = {
@@ -589,9 +589,9 @@ void msm_msi_config_access(struct irq_domain *domain, bool allow)
 	struct msm_msi *msi = domain->parent->host_data;
 	unsigned long flags;
 
-	spin_lock_irqsave(&msi->cfg_lock, flags);
+	raw_spin_lock_irqsave(&msi->cfg_lock, flags);
 	msi->cfg_access = allow;
-	spin_unlock_irqrestore(&msi->cfg_lock, flags);
+	raw_spin_unlock_irqrestore(&msi->cfg_lock, flags);
 }
 EXPORT_SYMBOL(msm_msi_config_access);
 
@@ -664,7 +664,7 @@ int msm_msi_init(struct device *dev)
 	msi->dev = dev;
 	msi->of_node = of_node;
 	mutex_init(&msi->mutex);
-	spin_lock_init(&msi->cfg_lock);
+	raw_spin_lock_init(&msi->cfg_lock);
 	INIT_LIST_HEAD(&msi->clients);
 	msi->msi_mask_disable = of_property_read_bool(dev->of_node,
 						"qcom,msi_mask_disable");
