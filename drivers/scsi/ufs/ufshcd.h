@@ -58,6 +58,7 @@
 #include <linux/bitfield.h>
 #include <linux/devfreq.h>
 #include <linux/pm_qos.h>
+#include <linux/irq_work.h>
 #include "unipro.h"
 
 #include <asm/irq.h>
@@ -1034,6 +1035,8 @@ struct ufs_hba {
 		struct pm_qos_request req;
 		struct work_struct get_work;
 		struct work_struct put_work;
+		struct irq_work get_irq_work;
+		struct irq_work put_irq_work;
 		struct mutex lock;
 		atomic_t count;
 		bool active;
