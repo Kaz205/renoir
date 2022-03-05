@@ -2879,6 +2879,7 @@ static void adreno_regread(struct kgsl_device *device, unsigned int offsetwords,
 			offsetwords, device->reg_len >> 2))
 		return;
 
+#ifndef CONFIG_PREEMPT_RT_BASE
 	/*
 	 * kgsl panic notifier will be called in atomic context to get
 	 * GPU snapshot. Also panic handler will skip snapshot dumping
@@ -2887,6 +2888,7 @@ static void adreno_regread(struct kgsl_device *device, unsigned int offsetwords,
 	 */
 	if (!device->snapshot_atomic && !in_interrupt())
 		kgsl_pre_hwaccess(device);
+#endif
 
 	*value = readl_relaxed(device->reg_virt + (offsetwords << 2));
 	/* Order this read with respect to the following memory accesses */
@@ -2909,6 +2911,7 @@ static void adreno_regwrite(struct kgsl_device *device,
 			offsetwords, device->reg_len >> 2))
 		return;
 
+#ifndef CONFIG_PREEMPT_RT_BASE
 	/*
 	 * kgsl panic notifier will be called in atomic context to get
 	 * GPU snapshot. Also panic handler will skip snapshot dumping
@@ -2917,6 +2920,7 @@ static void adreno_regwrite(struct kgsl_device *device,
 	 */
 	if (!device->snapshot_atomic && !in_interrupt())
 		kgsl_pre_hwaccess(device);
+#endif
 
 	trace_kgsl_regwrite(device, offsetwords, value);
 
