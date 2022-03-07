@@ -128,9 +128,11 @@ unsigned int sysctl_sched_cfs_bandwidth_slice		= 5000UL;
 
 /* Migration margins */
 unsigned int sched_capacity_margin_up[NR_CPUS] = {
-			[0 ... NR_CPUS-1] = 1078}; /* ~5% margin */
+			1280, 1280, 1280, 1280, 1706, 1706, 1706, 1024
+}; /* 20% margin for LITTLE, 40% for big, none for prime */
 unsigned int sched_capacity_margin_down[NR_CPUS] = {
-			[0 ... NR_CPUS-1] = 1205}; /* ~15% margin */
+			1024, 1024, 1024, 1024, 1484, 1484, 1484, 1313
+}; /* None for LITTLE, 31% for big, 22% for prime */
 
 #ifdef CONFIG_SCHED_WALT
 __read_mostly unsigned int sysctl_sched_prefer_spread;
