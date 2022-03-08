@@ -8,10 +8,10 @@
 Linguaggio di programmazione
 ============================
 
-Il kernel è scritto nel linguaggio di programmazione C [c-language]_.
-Più precisamente, il kernel viene compilato con ``gcc`` [gcc]_ usando
-l'opzione ``-std=gnu89`` [gcc-c-dialect-options]_: il dialetto GNU
-dello standard ISO C90 (con l'aggiunta di alcune funzionalità da C99)
+Il kernel è scritto nel linguaggio di programmazione C [it-c-language]_.
+Più precisamente, il kernel viene compilato con ``gcc`` [it-gcc]_ usando
+l'opzione ``-std=gnu11`` [it-gcc-c-dialect-options]_: il dialetto GNU
+dello standard ISO C11.
 
 Questo dialetto contiene diverse estensioni al linguaggio [gnu-extensions]_,
 e molte di queste vengono usate sistematicamente dal kernel.
