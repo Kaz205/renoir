@@ -1,5 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0
 
+# The following turn off the warnings enabled by -Wextra
+subdir-ccflags-y += -Wno-shift-negative-value
+
 obj-$(CONFIG_BTRFS_FS) := btrfs.o
 
 btrfs-y += super.o ctree.o extent-tree.o print-tree.o root-tree.o dir-item.o \
