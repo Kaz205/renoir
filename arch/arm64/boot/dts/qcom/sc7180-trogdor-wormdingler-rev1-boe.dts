@@ -17,6 +17,12 @@
 	compatible = "google,wormdingler-sku1024", "qcom,sc7180";
 };
 
+&dsi_phy {
+	qcom,phy-rescode-offset-top = /bits/ 8 <31 31 31 31 (-32)>;
+	qcom,phy-rescode-offset-bot = /bits/ 8 <31 31 31 31 (-32)>;
+	qcom,phy-drive-ldo-level = <450>;
+};
+
 &panel {
 	compatible = "boe,tv110c9m-ll3";
 };

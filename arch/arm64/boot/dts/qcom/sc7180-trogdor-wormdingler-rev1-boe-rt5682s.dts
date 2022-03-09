@@ -27,6 +27,12 @@
 	realtek,dmic-clk-rate-hz = <2048000>;
 };
 
+&dsi_phy {
+	qcom,phy-rescode-offset-top = /bits/ 8 <31 31 31 31 (-32)>;
+	qcom,phy-rescode-offset-bot = /bits/ 8 <31 31 31 31 (-32)>;
+	qcom,phy-drive-ldo-level = <450>;
+};
+
 &sound {
 	compatible = "google,sc7180-trogdor";
 	model = "sc7180-rt5682s-max98357a-1mic";
