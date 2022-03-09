@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2022 MediaTek Inc.
+ */
+&i2c1 {
+	rt5682: codec@1a {
+		compatible = "realtek,rt5682i";
+		reg = <0x1a>;
+		interrupt-parent = <&pio>;
+		interrupts = <18 IRQ_TYPE_LEVEL_LOW>;
+		realtek,jd-src = <1>;
+		realtek,btndet-delay = <16>;
+		#sound-dai-cells = <0>;
+
+		AVDD-supply = <&mt6359_vio18_ldo_reg>;
+		MICVDD-supply = <&pp3300_g>;
+		VBAT-supply = <&pp3300_ldo_z>;
+	};
+};
