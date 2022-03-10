@@ -7639,7 +7639,7 @@ static void dsi_display_handle_fifo_overflow(struct work_struct *work)
 	 * Add sufficient delay to make sure
 	 * pixel transmission has started
 	 */
-	udelay(200);
+	usleep_range(200, 250);
 end:
 	dsi_display_clk_ctrl(display->dsi_clk_handle,
 			DSI_ALL_CLKS, DSI_CLK_OFF);
@@ -7778,8 +7778,6 @@ static void dsi_display_register_error_handler(struct dsi_display *display)
 				dsi_display_handle_fifo_overflow);
 	INIT_WORK(&display->lp_rx_timeout_work,
 				dsi_display_handle_lp_rx_timeout);
-
-	memset(&event_info, 0, sizeof(event_info));
 
 	event_info.event_cb = dsi_display_cb_error_handler;
 	event_info.event_usr_ptr = display;
