@@ -5517,9 +5517,6 @@ static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 		dev_dbg(rtd->card->dev, "%s: clock rate %ul\n", __func__,
 			mi2s_clk[index].clk_freq_in_hz);
 
-		/* Check if msm needs to provide the clock to the interface */
-		if (!mi2s_intf_conf[index].msm_is_mi2s_master)
-			mi2s_clk[index].clk_id = mi2s_ebit_clk[index];
 		ret = msm_mi2s_set_sclk(substream, true);
 		if (ret < 0) {
 			dev_err(rtd->card->dev,
@@ -5542,8 +5539,11 @@ static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 			atomic_inc(&(pdata->mi2s_gpio_ref_count[index]));
 		}
 	}
-	if (!mi2s_intf_conf[index].msm_is_mi2s_master)
+	/* Check if msm needs to provide the clock to the interface */
+	if (!mi2s_intf_conf[index].msm_is_mi2s_master) {
+		mi2s_clk[index].clk_id = mi2s_ebit_clk[index];
 		fmt = SND_SOC_DAIFMT_CBM_CFM;
+	}
 	ret = snd_soc_dai_set_fmt(cpu_dai, fmt);
 	if (ret < 0) {
 		pr_err("%s: set fmt cpu dai failed for MI2S (%d), err:%d\n",
