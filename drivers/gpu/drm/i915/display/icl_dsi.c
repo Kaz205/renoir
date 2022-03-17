@@ -1081,8 +1081,6 @@ static void gen11_dsi_powerup_panel(struct intel_encoder *encoder)
 	}
 
 	/* panel power on related mipi dsi vbt sequences */
-	intel_dsi_vbt_exec_sequence(intel_dsi, MIPI_SEQ_POWER_ON);
-	intel_dsi_msleep(intel_dsi, intel_dsi->panel_on_delay);
 	intel_dsi_vbt_exec_sequence(intel_dsi, MIPI_SEQ_DEASSERT_RESET);
 	intel_dsi_vbt_exec_sequence(intel_dsi, MIPI_SEQ_INIT_OTP);
 	intel_dsi_vbt_exec_sequence(intel_dsi, MIPI_SEQ_DISPLAY_ON);
@@ -1108,13 +1106,19 @@ static void gen11_dsi_pre_enable(struct intel_atomic_state *state,
 				 const struct intel_crtc_state *pipe_config,
 				 const struct drm_connector_state *conn_state)
 {
+	struct intel_dsi *intel_dsi = enc_to_intel_dsi(encoder);
+
 	/* step3b */
 	gen11_dsi_map_pll(encoder, pipe_config);
+
+	/* for mipi dsi vbt sequence to powerup panel */
+	intel_dsi_vbt_exec_sequence(intel_dsi, MIPI_SEQ_POWER_ON);
+	intel_dsi_msleep(intel_dsi, intel_dsi->panel_on_delay);
 
 	/* step4: enable DSI port and DPHY */
 	gen11_dsi_enable_port_and_phy(encoder, pipe_config);
 
-	/* step5: program and powerup panel */
+	/* step5: program panel */
 	gen11_dsi_powerup_panel(encoder);
 
 	intel_dsc_enable(encoder, pipe_config);
