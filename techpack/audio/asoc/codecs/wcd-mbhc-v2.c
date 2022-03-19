@@ -25,6 +25,7 @@
 #include <asoc/wcdcal-hwdep.h>
 #include "wcd-mbhc-legacy.h"
 #include "wcd-mbhc-adc.h"
+#include "bolero/bolero-cdc.h"
 #include <asoc/wcd-mbhc-v2-api.h>
 
 void wcd_mbhc_jack_report(struct wcd_mbhc *mbhc,
@@ -515,6 +516,15 @@ static void wcd_mbhc_set_and_turnoff_hph_padac(struct wcd_mbhc *mbhc)
 int wcd_mbhc_get_impedance(struct wcd_mbhc *mbhc, uint32_t *zl,
 			uint32_t *zr)
 {
+	int detection_type = -EINVAL;
+
+	WCD_MBHC_REG_READ(WCD_MBHC_MECH_DETECTION_TYPE, detection_type);
+	/* Call compute impedance only when accessory is inserted */
+	if (!detection_type) {
+		if (mbhc->mbhc_cb->compute_impedance)
+			mbhc->mbhc_cb->compute_impedance(mbhc,
+						&mbhc->zl, &mbhc->zr);
+	}
 	*zl = mbhc->zl;
 	*zr = mbhc->zr;
 
@@ -566,6 +576,9 @@ void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 	pr_debug("%s: enter insertion %d hph_status %x\n",
 		 __func__, insertion, mbhc->hph_status);
 	if (!insertion) {
+		if (mbhc->hph_status  == SND_JACK_HEADSET) {
+			bolero_tx_macro_mute_hs();
+		}
 		/* Report removal */
 		mbhc->hph_status &= ~jack_type;
 		/*
@@ -787,7 +800,7 @@ void wcd_mbhc_elec_hs_report_unplug(struct wcd_mbhc *mbhc)
 		pr_info("%s: hs_detect_plug work not cancelled\n", __func__);
 
 	pr_debug("%s: Report extension cable\n", __func__);
-	wcd_mbhc_report_plug(mbhc, 1, SND_JACK_LINEOUT);
+	wcd_mbhc_report_plug(mbhc, 1, SND_JACK_HEADPHONE);
 	/*
 	 * If PA is enabled HPHL schmitt trigger can
 	 * be unreliable, make sure to disable it
@@ -839,6 +852,9 @@ void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
 		 * Nothing was reported previously
 		 * report a headphone or unsupported
 		 */
+		if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADSET)
+			wcd_mbhc_report_plug(mbhc, 0, SND_JACK_HEADSET);
+
 		wcd_mbhc_report_plug(mbhc, 1, SND_JACK_HEADPHONE);
 	} else if (plug_type == MBHC_PLUG_TYPE_GND_MIC_SWAP) {
 		if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADPHONE)
@@ -855,6 +871,9 @@ void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
 			mbhc->mbhc_fn->wcd_mbhc_detect_anc_plug_type(mbhc);
 		jack_type = SND_JACK_HEADSET;
 
+		if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADPHONE)
+			wcd_mbhc_report_plug(mbhc, 0, SND_JACK_HEADPHONE);
+
 		/*
 		 * If Headphone was reported previously, this will
 		 * only report the mic line
@@ -862,8 +881,8 @@ void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
 		wcd_mbhc_report_plug(mbhc, 1, jack_type);
 	} else if (plug_type == MBHC_PLUG_TYPE_HIGH_HPH) {
 		if (mbhc->mbhc_cfg->detect_extn_cable) {
-			/* High impedance device found. Report as LINEOUT */
-			wcd_mbhc_report_plug(mbhc, 1, SND_JACK_LINEOUT);
+			/* High impedance device found. Report as HEADPHONE */
+			wcd_mbhc_report_plug(mbhc, 1, SND_JACK_HEADPHONE);
 			pr_debug("%s: setup mic trigger for further detection\n",
 				 __func__);
 
@@ -882,7 +901,7 @@ void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
 			wcd_mbhc_hs_elec_irq(mbhc, WCD_MBHC_ELEC_HS_INS,
 					     true);
 		} else {
-			wcd_mbhc_report_plug(mbhc, 1, SND_JACK_LINEOUT);
+			wcd_mbhc_report_plug(mbhc, 1, SND_JACK_HEADPHONE);
 		}
 	} else {
 		WARN(1, "Unexpected current plug_type %d, plug_type %d\n",
@@ -934,6 +953,9 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 	dev_dbg(component->dev, "%s: enter\n", __func__);
 	WCD_MBHC_RSC_LOCK(mbhc);
 	mbhc->in_swch_irq_handler = true;
+
+	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 0);
+	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 0);
 
 	/* cancel pending button press */
 	if (wcd_cancel_btn_work(mbhc))
@@ -995,6 +1017,7 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 			mbhc->mbhc_cb->enable_mb_source(mbhc, true);
 		mbhc->btn_press_intr = false;
 		mbhc->is_btn_press = false;
+		mbhc->mbhc_cfg->flip_switch = false;
 		if (mbhc->mbhc_fn)
 			mbhc->mbhc_fn->wcd_mbhc_detect_plug_type(mbhc);
 	} else if ((mbhc->current_plug != MBHC_PLUG_TYPE_NONE)
@@ -1448,15 +1471,15 @@ static int wcd_mbhc_initialise(struct wcd_mbhc *mbhc)
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_L_DET_EN, 1);
 
 	if (mbhc->mbhc_cfg->enable_usbc_analog) {
-		/* Insertion debounce set to 48ms */
-		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_INSREM_DBNC, 4);
+		/* Insertion debounce set to 192ms */
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_INSREM_DBNC, 8);
 	} else {
-		/* Insertion debounce set to 96ms */
-		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_INSREM_DBNC, 6);
+		/* Insertion debounce set to 512ms */
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_INSREM_DBNC, 0xb);
 	}
 
-	/* Button Debounce set to 16ms */
-	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_DBNC, 2);
+	/* Button Debounce set to 32ms */
+	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_DBNC, 3);
 
 	/* enable bias */
 	mbhc->mbhc_cb->mbhc_bias(component, true);
@@ -1629,9 +1652,12 @@ static int wcd_mbhc_usbc_ana_event_handler(struct notifier_block *nb,
 	dev_dbg(mbhc->component->dev, "%s: mode = %lu\n", __func__, mode);
 
 	if (mode == TYPEC_ACCESSORY_AUDIO) {
-		if (mbhc->mbhc_cb->clk_setup)
+		if (mbhc->mbhc_cb->clk_setup) {
+			mbhc->mbhc_cb->clk_setup(mbhc->component, false);
 			mbhc->mbhc_cb->clk_setup(mbhc->component, true);
+		}
 		/* insertion detected, enable L_DET_EN */
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_L_DET_EN, 0);
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_L_DET_EN, 1);
 	}
 	return 0;

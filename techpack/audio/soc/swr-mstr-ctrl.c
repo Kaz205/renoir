@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/irq.h>
@@ -226,16 +227,11 @@ static ssize_t swrm_reg_show(struct swr_mstr_ctrl *swrm, char __user *ubuf,
 	int i, reg_val, len;
 	ssize_t total = 0;
 	char tmp_buf[SWR_MSTR_MAX_BUF_LEN];
-	int rem = 0;
 
 	if (!ubuf || !ppos)
 		return 0;
 
 	i = ((int) *ppos + SWRM_BASE);
-	rem = i%4;
-
-	if (rem)
-		i = (i - rem);
 
 	for (; i <= SWRM_MAX_REGISTER; i += 4) {
 		usleep_range(100, 150);
@@ -253,7 +249,7 @@ static ssize_t swrm_reg_show(struct swr_mstr_ctrl *swrm, char __user *ubuf,
 			total = -EFAULT;
 			goto copy_err;
 		}
-		*ppos += len;
+		*ppos += 4;
 		total += len;
 	}
 
@@ -1308,7 +1304,7 @@ static void swrm_disable_ports(struct swr_master *master,
 					<< SWRM_DP_PORT_CTRL_OFFSET2_SHFT);
 		value |= ((mport->offset1)
 				<< SWRM_DP_PORT_CTRL_OFFSET1_SHFT);
-		value |= mport->sinterval;
+		value |= (mport->sinterval & 0xFF);
 
 		swr_master_write(swrm,
 				SWRM_DP_PORT_CTRL_BANK((i + 1), bank),

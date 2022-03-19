@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/device.h>
@@ -50,7 +51,7 @@ static struct reg_default swr_hap_reg_defaults[] = {
 	{AUTO_RES_CAL_DONE_REG, 0},
 	{SWR_READ_DATA_REG, 0},
 	{SWR_PLAY_REG, 4},
-	{SWR_VMAX_REG, 0},
+	{SWR_VMAX_REG, 100},
 };
 
 enum {
@@ -77,6 +78,10 @@ struct swr_haptics_dev {
 	struct regmap			*regmap;
 	struct swr_port			port;
 	struct regulator		*vdd;
+	struct regulator		*hpwr_vreg;
+	u32				hpwr_voltage_mv;
+	bool				hpwr_vreg_enabled;
+	u8					vmax;
 	u32 enable_cnt;
 };
 
@@ -117,6 +122,50 @@ static bool swr_hap_writeable_register(struct device *dev, unsigned int reg)
 	}
 
 	return 1;
+}
+
+static int haptics_enable_hpwr_vreg(struct swr_haptics_dev *swr_hap, bool en)
+{
+	int rc;
+
+	if (swr_hap->hpwr_vreg == NULL || swr_hap->hpwr_vreg_enabled == en)
+		return 0;
+
+	if (!en) {
+		rc = regulator_disable(swr_hap->hpwr_vreg);
+		if (rc < 0) {
+			dev_err(swr_hap->dev, "Disable hpwr failed, rc=%d\n",
+					rc);
+			return rc;
+		}
+
+		rc = regulator_set_voltage(swr_hap->hpwr_vreg, 0, INT_MAX);
+		if (rc < 0) {
+			dev_err(swr_hap->dev, "Set hpwr votlage failed, rc=%d\n",
+					rc);
+			return rc;
+		}
+	} else {
+		rc = regulator_set_voltage(swr_hap->hpwr_vreg,
+				swr_hap->hpwr_voltage_mv * 1000, INT_MAX);
+		if (rc < 0) {
+			dev_err(swr_hap->dev, "Set hpwr votlage failed, rc=%d\n",
+					rc);
+			return rc;
+		}
+
+		rc = regulator_enable(swr_hap->hpwr_vreg);
+		if (rc < 0) {
+			dev_err(swr_hap->dev, "Enable hpwr failed, rc=%d\n",
+					rc);
+			return rc;
+		}
+	}
+
+	dev_dbg(swr_hap->dev, "swr-haptics: %s hpwr_regulator\n",
+			en ? "enabled" : "disabled");
+	swr_hap->hpwr_vreg_enabled = en;
+	return 0;
 }
 
 struct regmap_config swr_hap_regmap_config = {
@@ -170,6 +219,12 @@ static int hap_enable_swr_dac_port(struct snd_soc_dapm_widget *w,
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
+		rc = regmap_write(swr_hap->regmap, SWR_VMAX_REG, swr_hap->vmax);
+		if (rc) {
+				dev_err(swr_hap->dev, "%s: SWR_VMAX update failed, rc=%d\n",
+							__func__, rc);
+				return rc;
+		}
 		swr_device_wakeup_vote(swr_hap->swr_slave);
 		swr_connect_port(swr_hap->swr_slave, &port_id, num_port,
 				&ch_mask, &ch_rate, &num_ch, &port_type);
@@ -177,6 +232,13 @@ static int hap_enable_swr_dac_port(struct snd_soc_dapm_widget *w,
 	case SND_SOC_DAPM_POST_PMU:
 		swr_slvdev_datapath_control(swr_hap->swr_slave,
 				swr_hap->swr_slave->dev_num, true);
+		rc = haptics_enable_hpwr_vreg(swr_hap, true);
+		if (rc < 0) {
+			dev_err(swr_hap->dev, "%s: Enable hpwr_vreg failed, rc=%d\n",
+					__func__, rc);
+			return rc;
+		}
+
 		/* trigger SWR play */
 		val = SWR_PLAY_BIT | SWR_PLAY_SRC_VAL_SWR;
 		rc = regmap_write(swr_hap->regmap, SWR_PLAY_REG, val);
@@ -195,6 +257,13 @@ static int hap_enable_swr_dac_port(struct snd_soc_dapm_widget *w,
 					__func__, rc);
 			return rc;
 		}
+
+		rc = haptics_enable_hpwr_vreg(swr_hap, false);
+		if (rc < 0) {
+			dev_err(swr_hap->dev, "%s: Disable hpwr_vreg failed, rc=%d\n",
+					__func__, rc);
+			return rc;
+		}
 		break;
 	case SND_SOC_DAPM_POST_PMD:
 		swr_disconnect_port(swr_hap->swr_slave, &port_id, num_port,
@@ -210,8 +279,42 @@ static int hap_enable_swr_dac_port(struct snd_soc_dapm_widget *w,
 	return 0;
 }
 
+static int haptics_vmax_get(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component =
+		snd_soc_kcontrol_component(kcontrol);
+	struct swr_haptics_dev *swr_hap =
+		snd_soc_component_get_drvdata(component);
+
+	pr_debug("%s: vmax %u\n", __func__, swr_hap->vmax);
+	ucontrol->value.integer.value[0] = swr_hap->vmax;
+
+	return 0;
+}
+
+static int haptics_vmax_put(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component =
+		snd_soc_kcontrol_component(kcontrol);
+	struct swr_haptics_dev *swr_hap =
+		snd_soc_component_get_drvdata(component);
+
+	swr_hap->vmax = ucontrol->value.integer.value[0];
+	pr_debug("%s: vmax %u\n", __func__, swr_hap->vmax);
+
+	return 0;
+}
+
+static const struct snd_kcontrol_new haptics_snd_controls[] = {
+	SOC_SINGLE_EXT("Haptics Amplitude Step", SND_SOC_NOPM, 0, 255, 0,
+			haptics_vmax_get, haptics_vmax_put),
+};
+
 static const struct snd_soc_dapm_widget haptics_comp_dapm_widgets[] = {
-	SND_SOC_DAPM_INPUT("HAP_IN"),
+	SND_SOC_DAPM_AIF_IN("HAP_IN", "HAPTICS_AIF Playback", 0,
+				SND_SOC_NOPM, 0, 0),
 	SND_SOC_DAPM_MIXER_E("SWR DAC_Port", SND_SOC_NOPM, 0, 0,
 			hap_swr_dac_port, ARRAY_SIZE(hap_swr_dac_port),
 			hap_enable_swr_dac_port,
@@ -256,6 +359,8 @@ static const struct snd_soc_component_driver swr_haptics_component = {
 	.name = "swr-haptics",
 	.probe = haptics_comp_probe,
 	.remove = haptics_comp_remove,
+	.controls = haptics_snd_controls,
+	.num_controls = ARRAY_SIZE(haptics_snd_controls),
 	.dapm_widgets = haptics_comp_dapm_widgets,
 	.num_dapm_widgets = ARRAY_SIZE(haptics_comp_dapm_widgets),
 	.dapm_routes = haptics_comp_dapm_route,
@@ -313,6 +418,7 @@ static int swr_haptics_parse_port_mapping(struct swr_device *sdev)
 static int swr_haptics_probe(struct swr_device *sdev)
 {
 	struct swr_haptics_dev *swr_hap;
+	struct device_node *node = sdev->dev.of_node;
 	int rc;
 	u8 devnum;
 	int retry = 5;
@@ -322,6 +428,7 @@ static int swr_haptics_probe(struct swr_device *sdev)
 	if (!swr_hap)
 		return -ENOMEM;
 
+	swr_hap->vmax = 0;
 	swr_hap->swr_slave = sdev;
 	swr_hap->dev = &sdev->dev;
 	swr_set_dev_data(sdev, swr_hap);
@@ -341,6 +448,26 @@ static int swr_haptics_probe(struct swr_device *sdev)
 			dev_err(swr_hap->dev, "%s: get swr-slave-supply failed, rc=%d\n",
 					__func__, rc);
 		goto clean;
+	}
+
+	if (of_find_property(node, "qcom,hpwr-supply", NULL)) {
+		swr_hap->hpwr_vreg = devm_regulator_get(swr_hap->dev,
+						"qcom,hpwr");
+		if (IS_ERR(swr_hap->hpwr_vreg)) {
+			rc = PTR_ERR(swr_hap->hpwr_vreg);
+			if (rc != -EPROBE_DEFER)
+				dev_err(swr_hap->dev, "%s: Get qcom,hpwr-supply failed, rc=%d\n",
+						__func__, rc);
+			goto clean;
+		}
+
+		rc = of_property_read_u32(node, "qcom,hpwr-voltage-mv",
+				&swr_hap->hpwr_voltage_mv);
+		if (rc < 0) {
+			dev_err(swr_hap->dev, "%s: Failed to read qcom,hpwr-voltage-mv, rc=%d\n",
+					__func__, rc);
+			goto clean;
+		}
 	}
 
 	rc = regulator_enable(swr_hap->vdd);
@@ -459,6 +586,15 @@ static int swr_haptics_device_down(struct swr_device *sdev)
 	} else {
 		swr_hap->enable_cnt = 0;
 	}
+
+	/* Disable HAP_PWR regulator */
+	rc = haptics_enable_hpwr_vreg(swr_hap, false);
+	if (rc < 0) {
+		dev_err(swr_hap->dev, "Disable hpwr_vreg failed, rc=%d\n",
+				rc);
+		return rc;
+	}
+
 	return 0;
 }
 
