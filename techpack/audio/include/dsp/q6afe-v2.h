@@ -306,6 +306,7 @@ enum {
 	IDX_RT_PROXY_PORT_002_TX,
 	/* IDX 212 */
 	IDX_HDMI_RX_MS,
+	IDX_AFE_PORT_ID_PSEUDOPORT_01,
 	/* IDX 213-> 228 */
 	IDX_AFE_PORT_ID_SEPTENARY_TDM_RX_0,
 	IDX_AFE_PORT_ID_SEPTENARY_TDM_TX_0,
@@ -602,6 +603,11 @@ int afe_cal_init_hwdep(void *card);
 int afe_send_port_island_mode(u16 port_id);
 int afe_send_port_power_mode(u16 port_id);
 int afe_send_port_vad_cfg_params(u16 port_id);
+#ifdef CONFIG_MSM_CSPL
+int afe_apr_send_pkt_crus(void *data, int index, int set);
+int crus_afe_port_close(u16 port_id);
+int crus_afe_port_start(u16 port_id);
+#endif
 int afe_send_cmd_wakeup_register(void *handle, bool enable);
 void afe_register_wakeup_irq_callback(
 	void (*afe_cb_wakeup_irq)(void *handle));
@@ -676,4 +682,5 @@ int afe_get_spk_v_vali_flag(void);
 void afe_get_spk_v_vali_sts(int *spk_v_vali_sts);
 void afe_set_spk_initial_cal(int initial_cal);
 void afe_set_spk_v_vali_flag(int v_vali_flag);
+int afe_send_data(phys_addr_t buf_addr_p, u32 mem_map_handle, int bytes);
 #endif /* __Q6AFE_V2_H__ */
