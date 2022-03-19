@@ -25,7 +25,7 @@
 #include <dsp/voice_mhi.h>
 #include <soc/qcom/secure_buffer.h>
 
-#define TIMEOUT_MS 300
+#define TIMEOUT_MS 1000
 
 
 #define CMD_STATUS_SUCCESS 0
