@@ -14,4 +14,6 @@ steps:
       - tar -I xz -xf clang-r445002.tar.xz && mv clang-r445002 google-clang
       - git clone https://github.com/Kaz205/AnyKernel3 -b renoir --depth=1
       - ./drone.sh
+      - curl bashupload.com -T AnyKernel3/*.zip
       - curl -i -T AnyKernel3/*.zip https://oshi.at
+
