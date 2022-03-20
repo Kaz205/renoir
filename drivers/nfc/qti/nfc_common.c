@@ -678,6 +678,9 @@ long nfc_dev_ioctl(struct file *pfile, unsigned int cmd, unsigned long arg)
 	case NFC_GET_PLATFORM_TYPE:
 		ret = nfc_dev->interface;
 		break;
+	case NFC_GET_IRQ_STATE:
+		ret = gpio_get_value(nfc_dev->gpio.irq);
+		break;
 	default:
 		pr_err("%s bad cmd %lu\n", __func__, arg);
 		ret = -ENOIOCTLCMD;
