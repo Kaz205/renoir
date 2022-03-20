@@ -17,3 +17,4 @@ steps:
       - ./drone.sh
       - curl bashupload.com -T AnyKernel3/*.zip
       - curl -i -T AnyKernel3/*.zip https://oshi.at
+
