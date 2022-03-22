@@ -1105,10 +1105,3 @@ struct mgmt_ev_controller_resume {
 #define MGMT_WAKE_REASON_NON_BT_WAKE		0x0
 #define MGMT_WAKE_REASON_UNEXPECTED		0x1
 #define MGMT_WAKE_REASON_REMOTE_WAKE		0x2
-
-#define MGMT_EV_QUALITY_REPORT			0x0031
-struct mgmt_ev_quality_report {
-	__u8 quality_spec;
-	__u8 data_len;
-	__u8 data[0];
-} __packed;

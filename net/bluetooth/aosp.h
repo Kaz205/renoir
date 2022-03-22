@@ -10,8 +10,6 @@ void aosp_do_close(struct hci_dev *hdev);
 
 bool aosp_has_quality_report(struct hci_dev *hdev);
 int aosp_set_quality_report(struct hci_dev *hdev, bool enable);
-bool aosp_is_quality_report_evt(struct sk_buff *skb);
-bool aosp_pull_quality_report_data(struct sk_buff *skb);
 
 #else
 
@@ -26,16 +24,6 @@ static inline bool aosp_has_quality_report(struct hci_dev *hdev)
 static inline int aosp_set_quality_report(struct hci_dev *hdev, bool enable)
 {
 	return -EOPNOTSUPP;
-}
-
-static inline bool aosp_is_quality_report_evt(struct sk_buff *skb)
-{
-	return false;
-}
-
-static inline bool aosp_pull_quality_report_data(struct sk_buff *skb)
-{
-	return false;
 }
 
 #endif

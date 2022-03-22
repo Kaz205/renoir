@@ -34,7 +34,6 @@
 #include "hci_debugfs.h"
 #include "a2mp.h"
 #include "amp.h"
-#include "aosp.h"
 #include "smp.h"
 #include "msft.h"
 #include "eir.h"
@@ -5923,29 +5922,6 @@ static void hci_disconn_phylink_complete_evt(struct hci_dev *hdev,
 }
 #endif
 
-#define QUALITY_SPEC_NA			0x0
-#define QUALITY_SPEC_INTEL_TELEMETRY	0x1
-#define QUALITY_SPEC_AOSP_BQR		0x2
-
-static bool quality_report_evt(struct hci_dev *hdev, struct sk_buff *skb)
-{
-	if (aosp_is_quality_report_evt(skb)) {
-		if (aosp_has_quality_report(hdev) &&
-		    aosp_pull_quality_report_data(skb))
-			mgmt_quality_report(hdev, skb, QUALITY_SPEC_AOSP_BQR);
-	} else if (hdev->is_quality_report_evt &&
-		   hdev->is_quality_report_evt(skb)) {
-		if (hdev->set_quality_report &&
-		    hdev->pull_quality_report_data(skb))
-			mgmt_quality_report(hdev, skb,
-					    QUALITY_SPEC_INTEL_TELEMETRY);
-	} else {
-		return false;
-	}
-
-	return true;
-}
-
 static void le_conn_update_addr(struct hci_conn *conn, bdaddr_t *bdaddr,
 				u8 bdaddr_type, bdaddr_t *local_rpa)
 {
@@ -7414,13 +7390,7 @@ void hci_event_packet(struct hci_dev *hdev, struct sk_buff *skb)
 		break;
 
 	case HCI_EV_VENDOR:
-		/* Every specification must have a well-defined condition
-		 * to determine if an event meets the specification.
-		 * The skb is consumed by a specification only if the event
-		 * meets the specification.
-		 */
-		if (!quality_report_evt(hdev, skb))
-			msft_vendor_evt(hdev, skb);
+		msft_vendor_evt(hdev, skb);
 		break;
 
 	default:
