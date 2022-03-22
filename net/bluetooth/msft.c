@@ -264,24 +264,6 @@ void msft_suspend(struct hci_dev *hdev)
 }
 
 /* This function requires the caller holds hdev->lock */
-static void clear_on_resume(struct hci_dev *hdev)
-{
-	struct monitored_device *dev, *tmp_dev;
-
-	hdev->advmon_pend_notify = false;
-
-	list_for_each_entry_safe(dev, tmp_dev, &hdev->monitored_devices, list) {
-		if (dev->notified)
-			mgmt_adv_monitor_device_lost(hdev, dev->handle,
-						     &dev->bdaddr,
-						     dev->addr_type);
-
-		list_del(&dev->list);
-		kfree(dev);
-	}
-}
-
-/* This function requires the caller holds hdev->lock */
 void msft_resume(struct hci_dev *hdev)
 {
 	struct msft_data *msft = hdev->msft_data;
@@ -290,12 +272,6 @@ void msft_resume(struct hci_dev *hdev)
 		return;
 
 	if (msft_monitor_supported(hdev)) {
-		/* Clear already tracked devices on resume. Once the monitors
-		 * are reregistered, devices in range will be found again after
-		 * system resume.
-		 */
-		clear_on_resume(hdev);
-
 		msft->reregistering = true;
 		/* Monitors are removed on suspend, so we need to add all
 		 * monitors on resume.
@@ -660,17 +636,15 @@ static void msft_le_cancel_monitor_advertisement_cb(struct hci_dev *hdev,
 		/* Do not free the monitor if it is being removed due to
 		 * suspend. It will be re-monitored on resume.
 		 */
-		if (monitor && !msft->suspending) {
+		if (monitor && !msft->suspending)
 			hci_free_adv_monitor(hdev, monitor);
 
-			/* Clear any monitored devices by this Adv Monitor */
-			list_for_each_entry_safe(dev, tmp,
-						 &hdev->monitored_devices,
-						 list) {
-				if (dev->handle == handle_data->mgmt_handle) {
-					list_del(&dev->list);
-					kfree(dev);
-				}
+		/* Clear any monitored devices by this Adv Monitor */
+		list_for_each_entry_safe(dev, tmp, &hdev->monitored_devices,
+					 list) {
+			if (dev->handle == handle_data->mgmt_handle) {
+				list_del(&dev->list);
+				kfree(dev);
 			}
 		}
 
