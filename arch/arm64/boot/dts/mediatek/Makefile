@@ -20,3 +20,4 @@ dtb-$(CONFIG_ARCH_MEDIATEK) += mt8192-spherion-rev0.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8192-spherion-rev1.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8192-spherion-rev2.dtb
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt8192-spherion-rev3.dtb
+dtb-$(CONFIG_ARCH_MEDIATEK) += mt8192-spherion-rev4.dtb
