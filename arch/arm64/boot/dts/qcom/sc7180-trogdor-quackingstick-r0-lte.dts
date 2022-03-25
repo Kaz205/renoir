@@ -18,7 +18,6 @@
 
 &ap_sar_sensor {
 	compatible = "semtech,sx9324";
-	status = "okay";
 	semtech,ph0-pin = <1 2 3>;
 	semtech,ph1-pin = <3 2 1>;
 	semtech,ph2-pin = <1 2 3>;
@@ -29,8 +28,9 @@
 	semtech,ph01-proxraw-strength = <2>;
 	semtech,ph23-proxraw-strength = <2>;
 	semtech,avg-pos-strength = <64>;
+
+	/delete-property/ svdd-supply;
 	vdd-supply = <&pp1800_prox>;
-	label = "proximity-lte";
 };
 
 &ap_sar_sensor_i2c {
