@@ -26,6 +26,7 @@
 #define ELF_BDF_FILE_NAME_J18		 "bd_j18.elf"
 #define ELF_BDF_FILE_NAME_J18_TIME_EXTERNAL		 "bd_j18te.elf"
 #define ELF_BDF_FILE_NAME_K9             "bd_k9.elf"
+#define ELF_BDF_FILE_NAME_K9_JP          "bd_k9jp.elf"
 #define ELF_BDF_FILE_NAME_K9_GLOBAL      "bd_k9gl.elf"
 #define ELF_BDF_FILE_NAME_K11            "bd_k11.elf"
 #define ELF_BDF_FILE_NAME_K11_GLOBAL     "bd_k11gl.elf"
@@ -564,6 +565,8 @@ static int cnss_get_bdf_file_name(struct cnss_plat_data *plat_priv,
 			} else if (hw_platform_ver == HARDWARE_PROJECT_K9) {
 				if((uint32_t)CountryGlobal == hw_country_ver){
 					snprintf(filename_tmp, filename_len, ELF_BDF_FILE_NAME_K9_GLOBAL);
+				} else if ((uint32_t)CountryJapan == hw_country_ver) {
+					snprintf(filename_tmp, filename_len, ELF_BDF_FILE_NAME_K9_JP);
 				} else {
 					snprintf(filename_tmp, filename_len, ELF_BDF_FILE_NAME_K9);
 				}
