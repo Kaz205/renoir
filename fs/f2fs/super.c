@@ -1266,10 +1266,7 @@ static void f2fs_put_super(struct super_block *sb)
 	for (i = 0; i < NR_PAGE_TYPE; i++)
 		kvfree(sbi->write_io[i]);
 #ifdef CONFIG_UNICODE
-	if (sb->s_encoding) {
-		utf8_unload(sb->s_encoding);
-		sb->s_encoding = NULL;
-	}
+	utf8_unload(sb->s_encoding);
 #endif
 	kvfree(sbi);
 }
@@ -3846,10 +3843,7 @@ free_bio_info:
 		kvfree(sbi->write_io[i]);
 
 #ifdef CONFIG_UNICODE
-	if (sb->s_encoding) {
-		utf8_unload(sb->s_encoding);
-		sb->s_encoding = NULL;
-	}
+	utf8_unload(sb->s_encoding);
 #endif
 free_options:
 #ifdef CONFIG_QUOTA
