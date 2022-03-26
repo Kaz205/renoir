@@ -1035,7 +1035,7 @@ next_step:
 		 * race condition along with SSR block allocation.
 		 */
 		if ((gc_type == BG_GC && has_not_enough_free_secs(sbi, 0, 0)) ||
-				get_valid_blocks(sbi, segno, true) ==
+				get_valid_blocks(sbi, segno, false) ==
 							BLKS_PER_SEC(sbi))
 			return submitted;
 
