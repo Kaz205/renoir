@@ -622,6 +622,7 @@ static u32 a4xx_get_rptr(struct msm_gpu *gpu, struct msm_ringbuffer *ring)
 static const struct adreno_gpu_funcs funcs = {
 	.base = {
 		.get_param = adreno_get_param,
+		.set_param = adreno_set_param,
 		.hw_init = a4xx_hw_init,
 		.pm_suspend = a4xx_pm_suspend,
 		.pm_resume = a4xx_pm_resume,
@@ -697,13 +698,14 @@ struct msm_gpu *a4xx_gpu_init(struct drm_device *dev)
 	}
 
 	icc_path = devm_of_icc_get(&pdev->dev, "gfx-mem");
-	ret = IS_ERR(icc_path);
-	if (ret)
+	if (IS_ERR(icc_path)) {
+		ret = PTR_ERR(icc_path);
 		goto fail;
+	}
 
 	ocmem_icc_path = devm_of_icc_get(&pdev->dev, "ocmem");
-	ret = IS_ERR(ocmem_icc_path);
-	if (ret) {
+	if (IS_ERR(ocmem_icc_path)) {
+		ret = PTR_ERR(ocmem_icc_path);
 		/* allow -ENODATA, ocmem icc is optional */
 		if (ret != -ENODATA)
 			goto fail;

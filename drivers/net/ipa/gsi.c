@@ -93,6 +93,7 @@
 
 #define GSI_CHANNEL_STOP_RETRIES	10
 #define GSI_CHANNEL_MODEM_HALT_RETRIES	10
+#define GSI_CHANNEL_MODEM_FLOW_RETRIES	5	/* disable flow control only */
 
 #define GSI_MHI_EVENT_ID_START		10	/* 1st reserved event id */
 #define GSI_MHI_EVENT_ID_END		16	/* Last reserved event id */
@@ -210,11 +211,63 @@ static void gsi_irq_setup(struct gsi *gsi)
 	iowrite32(0, gsi->virt + GSI_CNTXT_GLOB_IRQ_EN_OFFSET);
 	iowrite32(0, gsi->virt + GSI_CNTXT_SRC_IEOB_IRQ_MSK_OFFSET);
 
-	/* The inter-EE registers are in the non-adjusted address range */
-	iowrite32(0, gsi->virt_raw + GSI_INTER_EE_SRC_CH_IRQ_MSK_OFFSET);
-	iowrite32(0, gsi->virt_raw + GSI_INTER_EE_SRC_EV_CH_IRQ_MSK_OFFSET);
+	/* The inter-EE interrupts are not supported for IPA v3.0-v3.1 */
+	if (gsi->version > IPA_VERSION_3_1) {
+		u32 offset;
+
+		/* These registers are in the non-adjusted address range */
+		offset = GSI_INTER_EE_SRC_CH_IRQ_MSK_OFFSET;
+		iowrite32(0, gsi->virt_raw + offset);
+		offset = GSI_INTER_EE_SRC_EV_CH_IRQ_MSK_OFFSET;
+		iowrite32(0, gsi->virt_raw + offset);
+	}
 
 	iowrite32(0, gsi->virt + GSI_CNTXT_GSI_IRQ_EN_OFFSET);
+}
+
+/* Get # supported channel and event rings; there is no gsi_ring_teardown() */
+static int gsi_ring_setup(struct gsi *gsi)
+{
+	struct device *dev = gsi->dev;
+	u32 count;
+	u32 val;
+
+	if (gsi->version < IPA_VERSION_3_5_1) {
+		/* No HW_PARAM_2 register prior to IPA v3.5.1, assume the max */
+		gsi->channel_count = GSI_CHANNEL_COUNT_MAX;
+		gsi->evt_ring_count = GSI_EVT_RING_COUNT_MAX;
+
+		return 0;
+	}
+
+	val = ioread32(gsi->virt + GSI_GSI_HW_PARAM_2_OFFSET);
+
+	count = u32_get_bits(val, NUM_CH_PER_EE_FMASK);
+	if (!count) {
+		dev_err(dev, "GSI reports zero channels supported\n");
+		return -EINVAL;
+	}
+	if (count > GSI_CHANNEL_COUNT_MAX) {
+		dev_warn(dev, "limiting to %u channels; hardware supports %u\n",
+			 GSI_CHANNEL_COUNT_MAX, count);
+		count = GSI_CHANNEL_COUNT_MAX;
+	}
+	gsi->channel_count = count;
+
+	count = u32_get_bits(val, NUM_EV_PER_EE_FMASK);
+	if (!count) {
+		dev_err(dev, "GSI reports zero event rings supported\n");
+		return -EINVAL;
+	}
+	if (count > GSI_EVT_RING_COUNT_MAX) {
+		dev_warn(dev,
+			 "limiting to %u event rings; hardware supports %u\n",
+			 GSI_EVT_RING_COUNT_MAX, count);
+		count = GSI_EVT_RING_COUNT_MAX;
+	}
+	gsi->evt_ring_count = count;
+
+	return 0;
 }
 
 /* Event ring commands are performed one at a time.  Their completion
@@ -1176,18 +1229,23 @@ static void gsi_isr_gp_int1(struct gsi *gsi)
 	u32 result;
 	u32 val;
 
-	/* This interrupt is used to handle completions of the two GENERIC
-	 * GSI commands.  We use these to allocate and halt channels on
-	 * the modem's behalf due to a hardware quirk on IPA v4.2.  Once
-	 * allocated, the modem "owns" these channels, and as a result we
-	 * have no way of knowing the channel's state at any given time.
+	/* This interrupt is used to handle completions of GENERIC GSI
+	 * commands.  We use these to allocate and halt channels on the
+	 * modem's behalf due to a hardware quirk on IPA v4.2.  The modem
+	 * "owns" channels even when the AP allocates them, and have no
+	 * way of knowing whether a modem channel's state has been changed.
+	 *
+	 * We also use GENERIC commands to enable/disable channel flow
+	 * control for IPA v4.2+.
 	 *
 	 * It is recommended that we halt the modem channels we allocated
 	 * when shutting down, but it's possible the channel isn't running
 	 * at the time we issue the HALT command.  We'll get an error in
 	 * that case, but it's harmless (the channel is already halted).
+	 * Similarly, we could get an error back when updating flow control
+	 * on a channel because it's not in the proper state.
 	 *
-	 * For this reason, we silently ignore a CHANNEL_NOT_RUNNING error
+	 * In either case, we silently ignore a CHANNEL_NOT_RUNNING error
 	 * if we receive it.
 	 */
 	val = ioread32(gsi->virt + GSI_CNTXT_SCRATCH_0_OFFSET);
@@ -1666,19 +1724,26 @@ static void gsi_channel_teardown_one(struct gsi *gsi, u32 channel_id)
 	gsi_evt_ring_de_alloc_command(gsi, evt_ring_id);
 }
 
+/* We use generic commands only to operate on modem channels.  We don't have
+ * the ability to determine channel state for a modem channel, so we simply
+ * issue the command and wait for it to complete.
+ */
 static int gsi_generic_command(struct gsi *gsi, u32 channel_id,
-			       enum gsi_generic_cmd_opcode opcode)
+			       enum gsi_generic_cmd_opcode opcode,
+			       u8 params)
 {
 	struct completion *completion = &gsi->completion;
 	bool timeout;
 	u32 val;
 
-	/* The error global interrupt type is always enabled (until we
-	 * teardown), so we won't change that.  A generic EE command
-	 * completes with a GSI global interrupt of type GP_INT1.  We
-	 * only perform one generic command at a time (to allocate or
-	 * halt a modem channel) and only from this function.  So we
-	 * enable the GP_INT1 IRQ type here while we're expecting it.
+	/* The error global interrupt type is always enabled (until we tear
+	 * down), so we will keep it enabled.
+	 *
+	 * A generic EE command completes with a GSI global interrupt of
+	 * type GP_INT1.  We only perform one generic command at a time
+	 * (to allocate, halt, or enable/disable flow control on a modem
+	 * channel), and only from this function.  So we enable the GP_INT1
+	 * IRQ type here, and disable it again after the command completes.
 	 */
 	val = BIT(ERROR_INT) | BIT(GP_INT1);
 	iowrite32(val, gsi->virt + GSI_CNTXT_GLOB_IRQ_EN_OFFSET);
@@ -1692,6 +1757,7 @@ static int gsi_generic_command(struct gsi *gsi, u32 channel_id,
 	val = u32_encode_bits(opcode, GENERIC_OPCODE_FMASK);
 	val |= u32_encode_bits(channel_id, GENERIC_CHID_FMASK);
 	val |= u32_encode_bits(GSI_EE_MODEM, GENERIC_EE_FMASK);
+	val |= u32_encode_bits(params, GENERIC_PARAMS_FMASK);
 
 	timeout = !gsi_command(gsi, GSI_GENERIC_CMD_OFFSET, val, completion);
 
@@ -1710,7 +1776,7 @@ static int gsi_generic_command(struct gsi *gsi, u32 channel_id,
 static int gsi_modem_channel_alloc(struct gsi *gsi, u32 channel_id)
 {
 	return gsi_generic_command(gsi, channel_id,
-				   GSI_GENERIC_ALLOCATE_CHANNEL);
+				   GSI_GENERIC_ALLOCATE_CHANNEL, 0);
 }
 
 static void gsi_modem_channel_halt(struct gsi *gsi, u32 channel_id)
@@ -1720,12 +1786,38 @@ static void gsi_modem_channel_halt(struct gsi *gsi, u32 channel_id)
 
 	do
 		ret = gsi_generic_command(gsi, channel_id,
-					  GSI_GENERIC_HALT_CHANNEL);
+					  GSI_GENERIC_HALT_CHANNEL, 0);
 	while (ret == -EAGAIN && retries--);
 
 	if (ret)
 		dev_err(gsi->dev, "error %d halting modem channel %u\n",
 			ret, channel_id);
+}
+
+/* Enable or disable flow control for a modem GSI TX channel (IPA v4.2+) */
+void
+gsi_modem_channel_flow_control(struct gsi *gsi, u32 channel_id, bool enable)
+{
+	u32 retries = 0;
+	u32 command;
+	int ret;
+
+	command = enable ? GSI_GENERIC_ENABLE_FLOW_CONTROL
+			 : GSI_GENERIC_DISABLE_FLOW_CONTROL;
+	/* Disabling flow control on IPA v4.11+ can return -EAGAIN if enable
+	 * is underway.  In this case we need to retry the command.
+	 */
+	if (!enable && gsi->version >= IPA_VERSION_4_11)
+		retries = GSI_CHANNEL_MODEM_FLOW_RETRIES;
+
+	do
+		ret = gsi_generic_command(gsi, channel_id, command, 0);
+	while (ret == -EAGAIN && retries--);
+
+	if (ret)
+		dev_err(gsi->dev,
+			"error %d %sabling mode channel %u flow control\n",
+			ret, enable ? "en" : "dis", channel_id);
 }
 
 /* Setup function for channels */
@@ -1827,43 +1919,21 @@ static void gsi_channel_teardown(struct gsi *gsi)
 /* Setup function for GSI.  GSI firmware must be loaded and initialized */
 int gsi_setup(struct gsi *gsi)
 {
-	struct device *dev = gsi->dev;
 	u32 val;
+	int ret;
 
 	/* Here is where we first touch the GSI hardware */
 	val = ioread32(gsi->virt + GSI_GSI_STATUS_OFFSET);
 	if (!(val & ENABLED_FMASK)) {
-		dev_err(dev, "GSI has not been enabled\n");
+		dev_err(gsi->dev, "GSI has not been enabled\n");
 		return -EIO;
 	}
 
 	gsi_irq_setup(gsi);		/* No matching teardown required */
 
-	val = ioread32(gsi->virt + GSI_GSI_HW_PARAM_2_OFFSET);
-
-	gsi->channel_count = u32_get_bits(val, NUM_CH_PER_EE_FMASK);
-	if (!gsi->channel_count) {
-		dev_err(dev, "GSI reports zero channels supported\n");
-		return -EINVAL;
-	}
-	if (gsi->channel_count > GSI_CHANNEL_COUNT_MAX) {
-		dev_warn(dev,
-			 "limiting to %u channels; hardware supports %u\n",
-			 GSI_CHANNEL_COUNT_MAX, gsi->channel_count);
-		gsi->channel_count = GSI_CHANNEL_COUNT_MAX;
-	}
-
-	gsi->evt_ring_count = u32_get_bits(val, NUM_EV_PER_EE_FMASK);
-	if (!gsi->evt_ring_count) {
-		dev_err(dev, "GSI reports zero event rings supported\n");
-		return -EINVAL;
-	}
-	if (gsi->evt_ring_count > GSI_EVT_RING_COUNT_MAX) {
-		dev_warn(dev,
-			 "limiting to %u event rings; hardware supports %u\n",
-			 GSI_EVT_RING_COUNT_MAX, gsi->evt_ring_count);
-		gsi->evt_ring_count = GSI_EVT_RING_COUNT_MAX;
-	}
+	ret = gsi_ring_setup(gsi);	/* No matching teardown required */
+	if (ret)
+		return ret;
 
 	/* Initialize the error log */
 	iowrite32(0, gsi->virt + GSI_ERROR_LOG_OFFSET);

@@ -63,7 +63,8 @@
 #define ARM64_HAS_GENERIC_AUTH			53
 #define ARM64_HAS_32BIT_EL1			54
 #define ARM64_HW_AF				55
+#define ARM64_SPECTRE_BHB			56
 
-#define ARM64_NCAPS				56
+#define ARM64_NCAPS				57
 
 #endif /* __ASM_CPUCAPS_H */

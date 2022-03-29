@@ -241,7 +241,7 @@ int intel_gt_resume(struct intel_gt *gt)
 
 	intel_uc_resume(&gt->uc);
 
-	intel_pxp_pm_resume(&gt->pxp);
+	intel_pxp_resume(&gt->pxp);
 
 	user_forcewake(gt, false);
 
@@ -277,7 +277,7 @@ void intel_gt_suspend_prepare(struct intel_gt *gt)
 	user_forcewake(gt, true);
 	wait_for_suspend(gt);
 
-	intel_pxp_pm_prepare_suspend(&gt->pxp);
+	intel_pxp_suspend_prepare(&gt->pxp);
 	intel_uc_suspend(&gt->uc);
 }
 
@@ -301,6 +301,8 @@ void intel_gt_suspend_late(struct intel_gt *gt)
 		return;
 
 	GEM_BUG_ON(gt->awake);
+
+	intel_pxp_suspend(&gt->pxp);
 
 	/*
 	 * On disabling the device, we want to turn off HW access to memory
@@ -328,6 +330,7 @@ void intel_gt_suspend_late(struct intel_gt *gt)
 
 void intel_gt_runtime_suspend(struct intel_gt *gt)
 {
+	intel_pxp_runtime_suspend(&gt->pxp);
 	intel_uc_runtime_suspend(&gt->uc);
 
 	GT_TRACE(gt, "\n");
@@ -335,10 +338,18 @@ void intel_gt_runtime_suspend(struct intel_gt *gt)
 
 int intel_gt_runtime_resume(struct intel_gt *gt)
 {
+	int ret;
+
 	GT_TRACE(gt, "\n");
 	intel_gt_init_swizzling(gt);
 
-	return intel_uc_runtime_resume(&gt->uc);
+	ret = intel_uc_runtime_resume(&gt->uc);
+	if (ret)
+		return ret;
+
+	intel_pxp_runtime_resume(&gt->pxp);
+
+	return 0;
 }
 
 #if IS_ENABLED(CONFIG_DRM_I915_SELFTEST)

@@ -831,6 +831,10 @@ static int ath10k_qmi_fetch_board_file(struct ath10k_qmi *qmi)
 	if (ret)
 		ath10k_dbg(ar, ATH10K_DBG_QMI, "DT bdf variant name not set.\n");
 
+	ret = ath10k_core_parse_default_bdf_dt(ar);
+	if (ret)
+		ath10k_dbg(ar, ATH10K_DBG_QMI, "Default BDF name not set in device tree.\n");
+
 	return ath10k_core_fetch_board_file(qmi->ar, ATH10K_BD_IE_BOARD);
 }
 
@@ -864,7 +868,8 @@ static void ath10k_qmi_event_server_exit(struct ath10k_qmi *qmi)
 
 	ath10k_qmi_remove_msa_permission(qmi);
 	ath10k_core_free_board_files(ar);
-	if (!test_bit(ATH10K_SNOC_FLAG_UNREGISTERING, &ar_snoc->flags))
+	if (!test_bit(ATH10K_SNOC_FLAG_UNREGISTERING, &ar_snoc->flags) &&
+	    !test_bit(ATH10K_SNOC_FLAG_MODEM_STOPPED, &ar_snoc->flags))
 		ath10k_snoc_fw_crashed_dump(ar);
 
 	ath10k_snoc_fw_indication(ar, ATH10K_QMI_EVENT_FW_DOWN_IND);

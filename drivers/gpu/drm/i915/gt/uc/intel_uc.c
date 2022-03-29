@@ -479,6 +479,10 @@ static int __uc_init_hw(struct intel_uc *uc)
 
 	if (intel_uc_uses_guc_submission(uc))
 		intel_guc_submission_enable(guc);
+	else
+		intel_uncore_rmw(uc_to_gt(uc)->uncore,
+				 GUC_GPM_WGBOXPERF_INTR_ENABLE,
+				 0, GUC_GPM_ARAT);
 
 	dev_info(i915->drm.dev, "%s firmware %s version %u.%u %s:%s\n",
 		 intel_uc_fw_type_repr(INTEL_UC_FW_TYPE_GUC), guc->fw.path,

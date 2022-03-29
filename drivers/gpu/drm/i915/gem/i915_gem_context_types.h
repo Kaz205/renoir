@@ -135,7 +135,7 @@ struct i915_gem_context {
 #define UCONTEXT_BANNABLE		2
 #define UCONTEXT_RECOVERABLE		3
 #define UCONTEXT_PERSISTENCE		4
-#define UCONTEXT_PROTECTED		5
+
 	/**
 	 * @flags: small set of booleans
 	 */

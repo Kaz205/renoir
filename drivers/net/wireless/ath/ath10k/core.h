@@ -79,6 +79,9 @@
 /* The magic used by QCA spec */
 #define ATH10K_SMBIOS_BDF_EXT_MAGIC "BDF_"
 
+/* Default BDF board name buffer size */
+#define ATH10K_DEFAULT_BDF_BUFFER_SIZE 0x40
+
 /* Default Airtime weight multipler (Tuned for multiclient performance) */
 #define ATH10K_AIRTIME_WEIGHT_MULTIPLIER  4
 
@@ -811,6 +814,12 @@ enum ath10k_dev_flags {
 
 	/* Per Station statistics service */
 	ATH10K_FLAG_PEER_STATS,
+
+	/* Indicates that ath10k device is during recovery process and not complete */
+	ATH10K_FLAG_RESTARTING,
+
+	/* protected by conf_mutex */
+	ATH10K_FLAG_NAPI_ENABLED,
 };
 
 enum ath10k_cal_mode {
@@ -1037,6 +1046,7 @@ struct ath10k {
 		bool ext_bid_supported;
 
 		char bdf_ext[ATH10K_SMBIOS_BDF_EXT_STR_LENGTH];
+		char default_bdf[ATH10K_DEFAULT_BDF_BUFFER_SIZE];
 	} id;
 
 	int fw_api;
@@ -1251,6 +1261,8 @@ static inline bool ath10k_peer_stats_enabled(struct ath10k *ar)
 
 extern unsigned long ath10k_coredump_mask;
 
+void ath10k_core_napi_sync_disable(struct ath10k *ar);
+void ath10k_core_napi_enable(struct ath10k *ar);
 struct ath10k *ath10k_core_create(size_t priv_size, struct device *dev,
 				  enum ath10k_bus bus,
 				  enum ath10k_hw_rev hw_rev,
@@ -1266,11 +1278,13 @@ int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode,
 		      const struct ath10k_fw_components *fw_components);
 int ath10k_wait_for_suspend(struct ath10k *ar, u32 suspend_opt);
 void ath10k_core_stop(struct ath10k *ar);
+void ath10k_core_start_recovery(struct ath10k *ar);
 int ath10k_core_register(struct ath10k *ar,
 			 const struct ath10k_bus_params *bus_params);
 void ath10k_core_unregister(struct ath10k *ar);
 int ath10k_core_fetch_board_file(struct ath10k *ar, int bd_ie_type);
 int ath10k_core_check_dt(struct ath10k *ar);
+int ath10k_core_parse_default_bdf_dt(struct ath10k *ar);
 void ath10k_core_free_board_files(struct ath10k *ar);
 
 #endif /* _CORE_H_ */

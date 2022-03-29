@@ -25,7 +25,10 @@ ccflags-y += -DDISABLE_BRANCH_PROFILING
 
 VDSO_LDFLAGS := -Bsymbolic
 
-CFLAGS_REMOVE_vgettimeofday.o = $(CC_FLAGS_FTRACE) -Os
+# -Wmissing-prototypes and -Wmissing-declarations are removed from
+# the CFLAGS of vgettimeofday.c to make possible to build the
+# kernel with CONFIG_WERROR enabled.
+CFLAGS_REMOVE_vgettimeofday.o = $(CC_FLAGS_FTRACE) -Os -Wmissing-prototypes -Wmissing-declarations
 KBUILD_CFLAGS			+= $(DISABLE_LTO)
 KASAN_SANITIZE			:= n
 UBSAN_SANITIZE			:= n

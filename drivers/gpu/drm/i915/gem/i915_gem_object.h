@@ -167,6 +167,12 @@ i915_gem_object_set_volatile(struct drm_i915_gem_object *obj)
 }
 
 static inline bool
+i915_gem_object_is_protected(const struct drm_i915_gem_object *obj)
+{
+	return obj->flags & I915_BO_PROTECTED;
+}
+
+static inline bool
 i915_gem_object_type_has(const struct drm_i915_gem_object *obj,
 			 unsigned long flags)
 {

@@ -61,8 +61,9 @@ struct virtio_shm_region {
  *	Returns the first 64 feature bits (all we currently need).
  * @finalize_features: confirm what device features we'll be using.
  *	vdev: the virtio_device
- *	This gives the final feature bits for the device: it can change
+ *	This sends the driver feature bits to the device: it can change
  *	the dev->feature bits if it wants.
+ * Note: despite the name this can be called any number of times.
  *	Returns 0 on success or error status
  * @bus_name: return the bus name associated with the device (optional)
  *	vdev: the virtio_device
@@ -367,6 +368,71 @@ static inline __virtio64 cpu_to_virtio64(struct virtio_device *vdev, u64 val)
 			BUG();						\
 		}							\
 	} while(0)
+
+/*
+ * Nothing virtio-specific about these, but let's worry about generalizing
+ * these later.
+ */
+#define virtio_le_to_cpu(x) \
+	_Generic((x), \
+		__u8: (x), \
+		 __le16: le16_to_cpu(x), \
+		 __le32: le32_to_cpu(x), \
+		 __le64: le64_to_cpu(x) \
+		)
+
+#define virtio_cpu_to_le(x, m) \
+	_Generic((m), \
+		 __u8: (x), \
+		 __le16: cpu_to_le16(x), \
+		 __le32: cpu_to_le32(x), \
+		 __le64: cpu_to_le64(x) \
+		)
+
+/* LE (e.g. modern) Config space accessors. */
+#define virtio_cread_le(vdev, structname, member, ptr)			\
+	do {								\
+		typeof(((structname*)0)->member) virtio_cread_v;	\
+									\
+		might_sleep();						\
+		/* Sanity check: must match the member's type */	\
+		typecheck(typeof(virtio_le_to_cpu(virtio_cread_v)), *(ptr)); \
+									\
+		switch (sizeof(virtio_cread_v)) {			\
+		case 1:							\
+		case 2:							\
+		case 4:							\
+			vdev->config->get((vdev), 			\
+					  offsetof(structname, member), \
+					  &virtio_cread_v,		\
+					  sizeof(virtio_cread_v));	\
+			break;						\
+		default:						\
+			__virtio_cread_many((vdev), 			\
+					  offsetof(structname, member), \
+					  &virtio_cread_v,		\
+					  1,				\
+					  sizeof(virtio_cread_v));	\
+			break;						\
+		}							\
+		*(ptr) = virtio_le_to_cpu(virtio_cread_v);		\
+	} while(0)
+
+/* Config space accessors. */
+#define virtio_cwrite_le(vdev, structname, member, ptr)			\
+	do {								\
+		typeof(((structname*)0)->member) virtio_cwrite_v =	\
+			virtio_cpu_to_le(*(ptr), ((structname*)0)->member); \
+									\
+		might_sleep();						\
+		/* Sanity check: must match the member's type */	\
+		typecheck(typeof(virtio_le_to_cpu(virtio_cwrite_v)), *(ptr)); \
+									\
+		vdev->config->set((vdev), offsetof(structname, member),	\
+				  &virtio_cwrite_v,			\
+				  sizeof(virtio_cwrite_v));		\
+	} while(0)
+
 
 /* Read @count fields, @bytes each. */
 static inline void __virtio_cread_many(struct virtio_device *vdev,

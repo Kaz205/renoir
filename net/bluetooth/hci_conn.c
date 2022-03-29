@@ -508,6 +508,23 @@ static void hci_conn_auto_accept(struct work_struct *work)
 		     &conn->dst);
 }
 
+static void le_disable_advertising(struct hci_dev *hdev)
+{
+	if (ext_adv_capable(hdev)) {
+		struct hci_cp_le_set_ext_adv_enable cp;
+
+		cp.enable = 0x00;
+		cp.num_of_sets = 0x00;
+
+		hci_send_cmd(hdev, HCI_OP_LE_SET_EXT_ADV_ENABLE, sizeof(cp),
+			     &cp);
+	} else {
+		u8 enable = 0x00;
+		hci_send_cmd(hdev, HCI_OP_LE_SET_ADV_ENABLE, sizeof(enable),
+			     &enable);
+	}
+}
+
 static void le_conn_timeout(struct work_struct *work)
 {
 	struct hci_conn *conn = container_of(work, struct hci_conn,
@@ -522,9 +539,8 @@ static void le_conn_timeout(struct work_struct *work)
 	 * (which doesn't have a timeout of its own).
 	 */
 	if (conn->role == HCI_ROLE_SLAVE) {
-		u8 enable = 0x00;
-		hci_send_cmd(hdev, HCI_OP_LE_SET_ADV_ENABLE, sizeof(enable),
-			     &enable);
+		/* Disable LE Advertising */
+		le_disable_advertising(hdev);
 		hci_le_conn_failed(conn, HCI_ERROR_ADVERTISING_TIMEOUT);
 		return;
 	}
@@ -1034,6 +1050,11 @@ struct hci_conn *hci_connect_le(struct hci_dev *hdev, bdaddr_t *dst,
 	struct hci_request req;
 	int err;
 
+	/* This ensures that during disable le_scan address resolution
+	 * will not be disabled if it is followed by le_create_conn
+	 */
+	bool rpa_le_conn = true;
+
 	/* Let's make sure that le is enabled.*/
 	if (!hci_dev_test_flag(hdev, HCI_LE_ENABLED)) {
 		if (lmp_le_capable(hdev))
@@ -1135,7 +1156,7 @@ struct hci_conn *hci_connect_le(struct hci_dev *hdev, bdaddr_t *dst,
 	 * state.
 	 */
 	if (hci_dev_test_flag(hdev, HCI_LE_SCAN)) {
-		hci_req_add_le_scan_disable(&req);
+		hci_req_add_le_scan_disable(&req, rpa_le_conn);
 		hci_dev_set_flag(hdev, HCI_LE_SCAN_INTERRUPTED);
 	}
 
@@ -1224,20 +1245,6 @@ struct hci_conn *hci_connect_le_scan(struct hci_dev *hdev, bdaddr_t *dst,
 		return ERR_PTR(-EOPNOTSUPP);
 	}
 
-	/* If we don't have an Irk or that we have a recent rpa, skip the extra
-	 * scan and try to connect immediately.
-	 */
-	irk = hci_find_irk_by_addr(hdev, dst, dst_type);
-	if (!irk ||
-	    time_before(jiffies, irk->rpa_timestamp + msecs_to_jiffies(2000))) {
-		bt_dev_info(hdev, "Skipping le scan before connect");
-
-		return hci_connect_le(hdev, dst, dst_type,
-				sec_level,
-				HCI_LE_CONN_TIMEOUT,
-				HCI_ROLE_MASTER, NULL);
-	}
-
 	/* Some devices send ATT messages as soon as the physical link is
 	 * established. To be able to handle these ATT messages, the user-
 	 * space first establishes the connection and then starts the pairing
@@ -1252,6 +1259,20 @@ struct hci_conn *hci_connect_le_scan(struct hci_dev *hdev, bdaddr_t *dst,
 		if (conn->pending_sec_level < sec_level)
 			conn->pending_sec_level = sec_level;
 		goto done;
+	}
+
+	/* If we don't have an Irk or that we have a recent rpa, skip the extra
+	 * scan and try to connect immediately.
+	 */
+	irk = hci_find_irk_by_addr(hdev, dst, dst_type);
+	if (!irk ||
+	    time_before(jiffies, irk->rpa_timestamp + msecs_to_jiffies(2000))) {
+		bt_dev_info(hdev, "Skipping le scan before connect");
+
+		return hci_connect_le(hdev, dst, dst_type,
+				sec_level,
+				HCI_LE_CONN_TIMEOUT,
+				HCI_ROLE_MASTER, NULL);
 	}
 
 	BT_DBG("requesting refresh of dst_addr");
