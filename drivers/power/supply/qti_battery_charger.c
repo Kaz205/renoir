@@ -26,6 +26,9 @@
 #include <drm/mi_disp_notifier.h>
 #include <linux/thermal.h>
 #include <linux/hwid.h>
+#ifdef CONFIG_DEBUG_POWER_MI
+#include <linux/power_debug.h>
+#endif
 #include "qti_typec_class.h"
 
 #define MSG_OWNER_BC			32778
@@ -88,6 +91,7 @@ enum uvdm_state {
 	USBPD_UVDM_AUTHENTICATION,
 	USBPD_UVDM_VERIFIED,
 	USBPD_UVDM_REMOVE_COMPENSATION,
+	USBPD_UVDM_REVERSE_AUTHEN,
 	USBPD_UVDM_CONNECT,
 };
 
@@ -237,12 +241,14 @@ enum xm_property_id {
 	XM_PROP_BT_STATE,
 	XM_PROP_REVERSE_CHG_MODE,
 	XM_PROP_REVERSE_CHG_STATE,
+	XM_PROP_WLS_FW_STATE,
 	XM_PROP_RX_VOUT,
 	XM_PROP_RX_VRECT,
 	XM_PROP_RX_IOUT,
 	XM_PROP_TX_ADAPTER,
 	XM_PROP_OP_MODE,
 	XM_PROP_WLS_DIE_TEMP,
+	XM_PROP_WLS_TX_SPEED,
 	/**********************/
 	XM_PROP_INPUT_SUSPEND,
 	XM_PROP_REAL_TYPE,
@@ -255,6 +261,7 @@ enum xm_property_id {
 	XM_PROP_VDM_CMD_AUTHENTICATION,
 	XM_PROP_VDM_CMD_VERIFIED,
 	XM_PROP_VDM_CMD_REMOVE_COMPENSATION,
+	XM_PROP_VDM_CMD_REVERSE_AUTHEN,
 	XM_PROP_CURRENT_STATE,
 	XM_PROP_ADAPTER_ID,
 	XM_PROP_ADAPTER_SVID,
@@ -278,6 +285,7 @@ enum xm_property_id {
 	XM_PROP_THERMAL_TEMP,
 	XM_PROP_TYPEC_MODE,
 	XM_PROP_NIGHT_CHARGING,
+	XM_PROP_SMART_BATT,
 	XM_PROP_FG1_QMAX,
 	XM_PROP_FG1_RM,
 	XM_PROP_FG1_FCC,
@@ -1726,6 +1734,17 @@ static int battery_psy_get_prop(struct power_supply *psy,
 		if(bcdev->fake_soc >= 0 && bcdev->fake_soc <= 100)
 			pval->intval = bcdev->fake_soc;
 
+		/*only for test mode and uncharge state */
+#ifdef CONFIG_DEBUG_POWER_MI
+     if (power_debug_print_enabled())
+         pr_debug(" power_save usb_psy_desc.type=%d, init pval->intval=%d \n",usb_psy_desc.type ,pval->intval);
+	  //if (usb_psy_desc.type == POWER_SUPPLY_TYPE_UNKNOWN)
+	   {
+	     pval->intval = mi_power_save_battery_cave(pval->intval);
+	     if (power_debug_print_enabled())
+			pr_debug(" power_save after pval->intval=%d \n",pval->intval);
+	   }
+#endif
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
 #if defined(CONFIG_BQ_FUEL_GAUGE)
@@ -3993,6 +4012,36 @@ out:
 }
 static CLASS_ATTR_RW(reverse_chg_mode);
 
+static ssize_t wls_tx_speed_store(struct class *c,
+					struct class_attribute *attr,
+					const char *buf, size_t count)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+						battery_class);
+	int rc;
+	int val;
+	if (kstrtoint(buf, 10, &val))
+		return -EINVAL;
+	rc = write_property_id(bcdev, &bcdev->psy_list[PSY_TYPE_XM],
+				XM_PROP_WLS_TX_SPEED, val);
+	if (rc < 0)
+		return rc;
+	return count;
+}
+static ssize_t wls_tx_speed_show(struct class *c,
+					struct class_attribute *attr, char *buf)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+						battery_class);
+	struct psy_state *pst = &bcdev->psy_list[PSY_TYPE_XM];
+	int rc;
+	rc = read_property_id(bcdev, pst, XM_PROP_WLS_TX_SPEED);
+	if (rc < 0)
+		return rc;
+	return scnprintf(buf, PAGE_SIZE, "%u", pst->prop[XM_PROP_WLS_TX_SPEED]);
+}
+static CLASS_ATTR_RW(wls_tx_speed);
+
 static ssize_t reverse_chg_state_show(struct class *c,
 					struct class_attribute *attr, char *buf)
 {
@@ -4008,6 +4057,22 @@ static ssize_t reverse_chg_state_show(struct class *c,
 	return scnprintf(buf, PAGE_SIZE, "%u", pst->prop[XM_PROP_REVERSE_CHG_STATE]);
 }
 static CLASS_ATTR_RO(reverse_chg_state);
+
+static ssize_t wls_fw_state_show(struct class *c,
+					struct class_attribute *attr, char *buf)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+						battery_class);
+	struct psy_state *pst = &bcdev->psy_list[PSY_TYPE_XM];
+	int rc;
+
+	rc = read_property_id(bcdev, pst, XM_PROP_WLS_FW_STATE);
+	if (rc < 0)
+		return rc;
+
+	return scnprintf(buf, PAGE_SIZE, "%u", pst->prop[XM_PROP_WLS_FW_STATE]);
+}
+static CLASS_ATTR_RO(wls_fw_state);
 
 static ssize_t rx_vout_show(struct class *c,
 					struct class_attribute *attr, char *buf)
@@ -4200,6 +4265,44 @@ static ssize_t night_charging_show(struct class *c,
 }
 static CLASS_ATTR_RW(night_charging);
 
+static ssize_t smart_batt_store(struct class *c,
+					struct class_attribute *attr,
+					const char *buf, size_t count)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+						battery_class);
+	int rc;
+	int val;
+
+	if (kstrtoint(buf, 0, &val))
+		return -EINVAL;
+
+	pr_err("set smart batt charging %d\n", val);
+
+	rc = write_property_id(bcdev, &bcdev->psy_list[PSY_TYPE_XM],
+				XM_PROP_SMART_BATT, val);
+	if (rc < 0)
+		return rc;
+
+	return count;
+}
+
+static ssize_t smart_batt_show(struct class *c,
+					struct class_attribute *attr, char *buf)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+						battery_class);
+	struct psy_state *pst = &bcdev->psy_list[PSY_TYPE_XM];
+	int rc;
+
+	rc = read_property_id(bcdev, pst, XM_PROP_SMART_BATT);
+	if (rc < 0)
+		return rc;
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", pst->prop[XM_PROP_SMART_BATT]);
+}
+static CLASS_ATTR_RW(smart_batt);
+
 static ssize_t verify_process_store(struct class *c,
 					struct class_attribute *attr,
 					const char *buf, size_t count)
@@ -4276,6 +4379,12 @@ static void usbpd_request_vdm_cmd(struct battery_chg_dev *bcdev, enum uvdm_state
 		val = *data;
 		pr_err("AUTHENTICATION:data = %d\n", val);
 		break;
+	case USBPD_UVDM_REVERSE_AUTHEN:
+                prop_id = XM_PROP_VDM_CMD_REVERSE_AUTHEN;
+                usbpd_sha256_bitswap32(data, USBPD_UVDM_SS_LEN);
+                val = *data;
+                pr_err("AUTHENTICATION:data = %d\n", val);
+                break;
 	case USBPD_UVDM_REMOVE_COMPENSATION:
 		prop_id = XM_PROP_VDM_CMD_REMOVE_COMPENSATION;
 		val = *data;
@@ -4290,7 +4399,8 @@ static void usbpd_request_vdm_cmd(struct battery_chg_dev *bcdev, enum uvdm_state
 		break;
 	}
 
-	if(cmd == USBPD_UVDM_SESSION_SEED || cmd == USBPD_UVDM_AUTHENTICATION) {
+	if(cmd == USBPD_UVDM_SESSION_SEED || cmd == USBPD_UVDM_AUTHENTICATION
+		|| cmd == USBPD_UVDM_REVERSE_AUTHEN) {
 		rc = write_ss_auth_prop_id(bcdev, &bcdev->psy_list[PSY_TYPE_XM],
 				prop_id, data);
 	}
@@ -4357,6 +4467,7 @@ static ssize_t request_vdm_cmd_show(struct class *c,
 	  case USBPD_UVDM_SESSION_SEED:
 	  case USBPD_UVDM_VERIFIED:
 	  case USBPD_UVDM_REMOVE_COMPENSATION:
+	  case USBPD_UVDM_REVERSE_AUTHEN:
 	  	return snprintf(buf, PAGE_SIZE, "%d,Null", cmd);
 	  	break;
 	  case USBPD_UVDM_AUTHENTICATION:
@@ -5005,6 +5116,7 @@ static struct attribute *battery_class_attrs[] = {
 	&class_attr_bt_state.attr,
 	&class_attr_reverse_chg_mode.attr,
 	&class_attr_reverse_chg_state.attr,
+	&class_attr_wls_fw_state.attr,
 	&class_attr_wireless_chip_fw.attr,
 	&class_attr_wls_bin.attr,
 	&class_attr_rx_vout.attr,
@@ -5014,6 +5126,7 @@ static struct attribute *battery_class_attrs[] = {
 	&class_attr_op_mode.attr,
 	&class_attr_wls_die_temp.attr,
 	&class_attr_wls_power_max.attr,
+	&class_attr_wls_tx_speed.attr,
 #endif
 	/*****************************/
 	&class_attr_input_suspend.attr,
@@ -5041,6 +5154,7 @@ static struct attribute *battery_class_attrs[] = {
 	&class_attr_qbg_temp.attr,
 	&class_attr_typec_mode.attr,
 	&class_attr_night_charging.attr,
+	&class_attr_smart_batt.attr,
 	&class_attr_fg1_qmax.attr,
 	&class_attr_fg1_rm.attr,
 	&class_attr_fg1_fcc.attr,
