@@ -34,6 +34,7 @@
 #include "hci_debugfs.h"
 #include "a2mp.h"
 #include "amp.h"
+#include "aosp.h"
 #include "smp.h"
 #include "msft.h"
 #include "eir.h"
@@ -5432,6 +5433,10 @@ static void hci_disconn_phylink_complete_evt(struct hci_dev *hdev, void *data,
 	hci_dev_unlock(hdev);
 }
 #endif
+
+#define QUALITY_SPEC_NA			0x0
+#define QUALITY_SPEC_INTEL_TELEMETRY	0x1
+#define QUALITY_SPEC_AOSP_BQR		0x2
 
 static void le_conn_update_addr(struct hci_conn *conn, bdaddr_t *bdaddr,
 				u8 bdaddr_type, bdaddr_t *local_rpa)
