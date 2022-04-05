@@ -282,7 +282,7 @@
 
 				type = "ext4";
 				mnt_flags = "ro,barrier=1,discard";
-				fsmgr_flags = "wait,slotselect,avb";
+				fsmgr_flags = "wait,slotselect";
 				status = "ok";
 			};
 		};
