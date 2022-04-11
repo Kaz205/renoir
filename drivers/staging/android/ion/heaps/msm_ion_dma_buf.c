@@ -102,8 +102,7 @@ static int msm_ion_dma_buf_attach(struct dma_buf *dmabuf,
 {
 	struct msm_ion_dma_buf_attachment *a;
 	struct sg_table *table;
-	struct ion_buffer *buffer = container_of(dmabuf->priv, typeof(*buffer),
-						 iommu_data);
+	struct ion_buffer *buffer = dmabuf->priv;
 
 	a = kzalloc(sizeof(*a), GFP_KERNEL);
 	if (!a)
@@ -133,8 +132,7 @@ static void msm_ion_dma_buf_detatch(struct dma_buf *dmabuf,
 				struct dma_buf_attachment *attachment)
 {
 	struct msm_ion_dma_buf_attachment *a = attachment->priv;
-	struct ion_buffer *buffer = container_of(dmabuf->priv, typeof(*buffer),
-						 iommu_data);
+	struct ion_buffer *buffer = dmabuf->priv;
 
 	mutex_lock(&buffer->lock);
 	list_del(&a->list);
@@ -156,8 +154,7 @@ static struct sg_table
 	struct msm_ion_dma_buf_attachment *a = attachment->priv;
 	struct sg_table *table;
 	int count, map_attrs;
-	struct ion_buffer *buffer = container_of(attachment->dmabuf->priv,
-						 typeof(*buffer), iommu_data);
+	struct ion_buffer *buffer = attachment->dmabuf->priv;
 	unsigned long ino = file_inode(attachment->dmabuf->file)->i_ino;
 
 	table = a->table;
@@ -243,8 +240,7 @@ static void msm_ion_unmap_dma_buf(struct dma_buf_attachment *attachment,
 			      enum dma_data_direction direction)
 {
 	int map_attrs;
-	struct ion_buffer *buffer = container_of(attachment->dmabuf->priv,
-						 typeof(*buffer), iommu_data);
+	struct ion_buffer *buffer = attachment->dmabuf->priv;
 	struct msm_ion_dma_buf_attachment *a = attachment->priv;
 	unsigned long ino = file_inode(attachment->dmabuf->file)->i_ino;
 
@@ -335,8 +331,7 @@ static const struct vm_operations_struct msm_ion_vma_ops = {
 
 static int msm_ion_mmap(struct dma_buf *dmabuf, struct vm_area_struct *vma)
 {
-	struct ion_buffer *buffer = container_of(dmabuf->priv, typeof(*buffer),
-						 iommu_data);
+	struct ion_buffer *buffer = dmabuf->priv;
 	struct msm_ion_buf_lock_state *lock_state = buffer->priv_virt;
 	int ret = 0;
 
@@ -381,7 +376,7 @@ int msm_ion_dma_buf_lock(struct dma_buf *dmabuf)
 	if (!dmabuf)
 		return -EINVAL;
 
-	buffer = container_of(dmabuf->priv, typeof(*buffer), iommu_data);
+	buffer = dmabuf->priv;
 	lock_state = buffer->priv_virt;
 
 	if ((!lock_state) || !is_msm_ion_dma_buf(buffer)) {
@@ -414,7 +409,7 @@ void msm_ion_dma_buf_unlock(struct dma_buf *dmabuf)
 	if (!dmabuf)
 		return;
 
-	buffer = container_of(dmabuf->priv, typeof(*buffer), iommu_data);
+	buffer = dmabuf->priv;
 	lock_state = buffer->priv_virt;
 
 	if (!lock_state || !is_msm_ion_dma_buf(buffer)) {
@@ -434,17 +429,15 @@ EXPORT_SYMBOL(msm_ion_dma_buf_unlock);
 
 static void msm_ion_dma_buf_release(struct dma_buf *dmabuf)
 {
-	struct ion_buffer *buffer = container_of(dmabuf->priv, typeof(*buffer),
-						 iommu_data);
+	struct ion_buffer *buffer = dmabuf->priv;
 
-	msm_dma_buf_freed(&buffer->iommu_data);
+	msm_dma_buf_freed(buffer);
 	ion_free(buffer);
 }
 
 static void *msm_ion_dma_buf_vmap(struct dma_buf *dmabuf)
 {
-	struct ion_buffer *buffer = container_of(dmabuf->priv, typeof(*buffer),
-						 iommu_data);
+	struct ion_buffer *buffer = dmabuf->priv;
 	void *vaddr = ERR_PTR(-EINVAL);
 
 	mutex_lock(&buffer->lock);
@@ -460,8 +453,7 @@ static void *msm_ion_dma_buf_vmap(struct dma_buf *dmabuf)
 
 static void msm_ion_dma_buf_vunmap(struct dma_buf *dmabuf, void *vaddr)
 {
-	struct ion_buffer *buffer = container_of(dmabuf->priv, typeof(*buffer),
-						 iommu_data);
+	struct ion_buffer *buffer = dmabuf->priv;
 
 	mutex_lock(&buffer->lock);
 	if (hlos_accessible_buffer(buffer))
@@ -554,8 +546,7 @@ static int ion_sgl_sync_range(struct device *dev, struct scatterlist *sgl,
 static int msm_ion_dma_buf_begin_cpu_access(struct dma_buf *dmabuf,
 					    enum dma_data_direction direction)
 {
-	struct ion_buffer *buffer = container_of(dmabuf->priv, typeof(*buffer),
-						 iommu_data);
+	struct ion_buffer *buffer = dmabuf->priv;
 	struct msm_ion_dma_buf_attachment *a;
 	unsigned long ino = file_inode(dmabuf->file)->i_ino;
 	int ret = 0;
@@ -610,8 +601,7 @@ out:
 static int msm_ion_dma_buf_end_cpu_access(struct dma_buf *dmabuf,
 					  enum dma_data_direction direction)
 {
-	struct ion_buffer *buffer = container_of(dmabuf->priv, typeof(*buffer),
-						 iommu_data);
+	struct ion_buffer *buffer = dmabuf->priv;
 	struct msm_ion_dma_buf_attachment *a;
 	unsigned long ino = file_inode(dmabuf->file)->i_ino;
 	int ret = 0;
@@ -669,8 +659,7 @@ static int msm_ion_dma_buf_begin_cpu_access_partial(struct dma_buf *dmabuf,
 						unsigned int offset,
 						unsigned int len)
 {
-	struct ion_buffer *buffer = container_of(dmabuf->priv, typeof(*buffer),
-						 iommu_data);
+	struct ion_buffer *buffer = dmabuf->priv;
 	struct msm_ion_dma_buf_attachment *a;
 	unsigned long ino = file_inode(dmabuf->file)->i_ino;
 	int ret = 0;
@@ -740,8 +729,7 @@ static int msm_ion_dma_buf_end_cpu_access_partial(struct dma_buf *dmabuf,
 					      unsigned int offset,
 					      unsigned int len)
 {
-	struct ion_buffer *buffer = container_of(dmabuf->priv, typeof(*buffer),
-						 iommu_data);
+	struct ion_buffer *buffer = dmabuf->priv;
 	struct msm_ion_dma_buf_attachment *a;
 	unsigned long ino = file_inode(dmabuf->file)->i_ino;
 
@@ -814,8 +802,7 @@ out:
 static int msm_ion_dma_buf_get_flags(struct dma_buf *dmabuf,
 				 unsigned long *flags)
 {
-	struct ion_buffer *buffer = container_of(dmabuf->priv, typeof(*buffer),
-						 iommu_data);
+	struct ion_buffer *buffer = dmabuf->priv;
 	*flags = buffer->flags;
 
 	return 0;
