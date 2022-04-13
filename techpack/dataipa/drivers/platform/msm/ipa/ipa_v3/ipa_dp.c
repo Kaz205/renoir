@@ -1976,7 +1976,7 @@ static void ipa3_wq_repl_rx(struct work_struct *work)
 	struct ipa3_sys_context *sys;
 	void *ptr;
 	struct ipa3_rx_pkt_wrapper *rx_pkt;
-	gfp_t flag = GFP_KERNEL;
+	gfp_t flag = GFP_KERNEL | __GFP_NOFAIL;
 	u32 next;
 	u32 curr;
 
