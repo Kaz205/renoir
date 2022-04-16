@@ -10,8 +10,8 @@ steps:
       - pacman -Sy && pacman -S dtc --noconfirm
       - git clone https://github.com/arter97/arm32-gcc/ --depth=1 -j$(nproc --all)
       - git clone https://github.com/arter97/arm64-gcc/ --depth=1 -j$(nproc --all)
-      - wget https://github.com/Kaz205/clang-releases/releases/download/clang-r450784b/clang-r450784b.tar.xz
-      - tar -I xz -xf clang-r450784b.tar.xz && mv clang-r450784b google-clang
+      - wget https://github.com/Kaz205/clang-releases/releases/download/clang-r450784c/clang-r450784c.tar.xz
+      - tar -I xz -xf clang-r450784c.tar.xz && mv clang-r450784c google-clang
       - git clone https://github.com/Kaz205/AnyKernel3 -b renoir --depth=1
       - ./drone.sh
       - curl bashupload.com -T AnyKernel3/*.zip
