@@ -116,7 +116,6 @@ ap_h1_spi: &spi0 {};
 		hid-descr-addr = <0x0001>;
 
 		vdd-supply = <&pp3300_ts>;
-		vddl-supply = <&v1p8_disp>;
 	};
 };
 
