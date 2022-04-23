@@ -501,7 +501,9 @@ static inline u64 sched_lpm_disallowed_time(int cpu)
 }
 
 static inline void sched_update_cpu_freq_min_max(const cpumask_t *cpus,
-					u32 fmin, u32 fmax) { }
+					u32 fmin, u32 fmax)
+{
+}
 
 static inline u32 sched_get_wake_up_idle(struct task_struct *p)
 {
@@ -514,7 +516,24 @@ static inline int sched_set_wake_up_idle(struct task_struct *p,
 	return 0;
 }
 
-static inline void set_wake_up_idle(bool enabled) {}
+static inline void set_wake_up_idle(bool enabled)
+{
+}
+
+static inline int sched_isolate_cpu(int cpu)
+{
+	return 0;
+}
+
+static inline int sched_unisolate_cpu(int cpu)
+{
+	return 0;
+}
+
+static inline int sched_unisolate_cpu_unlocked(int cpu)
+{
+	return 0;
+}
 
 struct sched_rt_entity {
 	struct list_head		run_list;
