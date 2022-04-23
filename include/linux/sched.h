@@ -485,6 +485,23 @@ struct sched_entity {
 	ANDROID_KABI_RESERVE(4);
 };
 
+struct cpu_cycle_counter_cb {
+	u64 (*get_cpu_cycle_counter)(int cpu);
+};
+
+static inline int
+register_cpu_cycle_counter_cb(struct cpu_cycle_counter_cb *cb)
+{
+	return 0;
+}
+
+static inline u64 sched_lpm_disallowed_time(int cpu)
+{
+	return 0;
+}
+static inline void sched_update_cpu_freq_min_max(const cpumask_t *cpus,
+					u32 fmin, u32 fmax) { }
+
 struct sched_rt_entity {
 	struct list_head		run_list;
 	unsigned long			timeout;
