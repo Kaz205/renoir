@@ -175,29 +175,8 @@ static inline void read_event(struct event_data *event)
 
 	if (!per_cpu(cpu_is_idle, event->pevent->cpu) &&
 			!per_cpu(cpu_is_hp, event->pevent->cpu)) {
-		if (event->any_cpu_readable) {
-			if (perf_event_read_local(event->pevent, &total))
-				return 0;
-		} else {
-			unsigned int ev_cpu = READ_ONCE(event->pevent->oncpu);
-			bool local_read;
-			int ret;
-
-			if (ev_cpu >= nr_cpu_ids)
-				return 0;
-
-			local_irq_disable();
-			if ((local_read = (ev_cpu == raw_smp_processor_id())))
-				ret = perf_event_read_local(event->pevent, &total);
-			local_irq_enable();
-
-			if (!local_read) {
-				total = perf_event_read_value(event->pevent, &enabled,
+		total = perf_event_read_value(event->pevent, &enabled,
 								&running);
-			} else if (ret) {
-				return ret;
-			}
-		}
 		event->cached_total_count = total;
 	} else {
 		total = event->cached_total_count;
@@ -322,7 +301,6 @@ static struct perf_event_attr *alloc_attr(void)
 static int set_event(struct event_data *ev, int cpu, unsigned int event_id,
 		     struct perf_event_attr *attr)
 {
-	static struct cpumask all_cpu_mask = CPU_MASK_ALL;
 	struct perf_event *pevent;
 
 	if (!event_id)
@@ -335,7 +313,6 @@ static int set_event(struct event_data *ev, int cpu, unsigned int event_id,
 
 	ev->pevent = pevent;
 	perf_event_enable(pevent);
-	ev->any_cpu_readable = cpumask_equal(&pevent->readable_on_cpus, &all_cpu_mask);
 
 	return 0;
 }
