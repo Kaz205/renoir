@@ -1102,7 +1102,7 @@ config QCOM_IRQ_STAT
 
 config QCOM_FORCE_WDOG_BITE_ON_PANIC
 	bool "QCOM force watchdog bite on panic"
-	depends on QCOM_WDT_CORE
+	depends on QCOM_WDT_CORE && !PREEMPT_RT
 	help
 	  This forces a watchdog bite when the device restarts
 	  due to a kernel panic. On certain MSM SoCs,

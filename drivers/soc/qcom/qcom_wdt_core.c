@@ -363,6 +363,9 @@ static int qcom_wdt_panic_handler(struct notifier_block *this,
 				struct msm_watchdog_data, panic_blk);
 
 	wdog_dd->in_panic = true;
+#ifdef CONFIG_PREEMPT_RT
+	panic("Watchdog bite - performing kernel panic!");
+#else
 	if (WDOG_BITE_EARLY_PANIC) {
 		pr_info("Triggering early bite\n");
 		qcom_wdt_trigger_bite();
@@ -372,6 +375,7 @@ static int qcom_wdt_panic_handler(struct notifier_block *this,
 	} else {
 		qcom_wdt_reset_on_oops(wdog_dd, panic_timeout);
 	}
+#endif
 	return NOTIFY_DONE;
 }
 
@@ -847,9 +851,9 @@ static int qcom_wdt_init(struct msm_watchdog_data *wdog_dd,
 		}
 	} else {
 		ret = devm_request_irq(wdog_dd->dev, wdog_dd->bark_irq,
-				qcom_wdt_bark_handler,
-				IRQF_TRIGGER_RISING | IRQF_NO_SUSPEND,
-				"apps_wdog_bark", wdog_dd);
+				       qcom_wdt_bark_handler, IRQF_TRIGGER_RISING |
+				       IRQF_NO_THREAD, "apps_wdog_bark",
+				       wdog_dd);
 		if (ret) {
 			dev_err(wdog_dd->dev, "failed to request bark irq: %d\n", ret);
 			return -EINVAL;
