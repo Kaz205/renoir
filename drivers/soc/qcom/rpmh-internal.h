@@ -37,7 +37,7 @@ struct tcs_group {
 	u32 offset;
 	int num_tcs;
 	int ncpt;
-	spinlock_t lock;
+	raw_spinlock_t lock;
 	const struct tcs_request *req[MAX_TCS_PER_TYPE];
 	u32 *cmd_cache;
 	DECLARE_BITMAP(slots, MAX_TCS_SLOTS);
@@ -105,7 +105,7 @@ struct rsc_drv {
 	int num_tcs;
 	struct tcs_group tcs[TCS_TYPE_NR];
 	DECLARE_BITMAP(tcs_in_use, MAX_TCS_NR);
-	spinlock_t lock;
+	raw_spinlock_t lock;
 	struct rpmh_ctrlr client;
 	int irq;
 	void *ipc_log_ctx;
