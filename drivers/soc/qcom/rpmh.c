@@ -99,9 +99,9 @@ int rpmh_mode_solver_set(const struct device *dev, bool enable)
 	struct rpmh_ctrlr *ctrlr = get_rpmh_ctrlr(dev);
 	unsigned long flags;
 
-	spin_lock_irqsave(&ctrlr->cache_lock, flags);
+	raw_spin_lock_irqsave(&ctrlr->cache_lock, flags);
 	rpmh_rsc_mode_solver_set(ctrlr_to_drv(ctrlr), enable);
-	spin_unlock_irqrestore(&ctrlr->cache_lock, flags);
+	raw_spin_unlock_irqrestore(&ctrlr->cache_lock, flags);
 	atomic_set(&ctrlr->in_solver_mode, 1);
 
 	return 0;
@@ -153,17 +153,17 @@ static struct cache_req *cache_rpm_request(struct rpmh_ctrlr *ctrlr,
 	struct cache_req *req, *new_req = NULL;
 	unsigned long flags;
 
-	spin_lock_irqsave(&ctrlr->cache_lock, flags);
+	raw_spin_lock_irqsave(&ctrlr->cache_lock, flags);
 	req = __find_req(ctrlr, cmd->addr);
 	if (req)
 		goto existing;
-	spin_unlock_irqrestore(&ctrlr->cache_lock, flags);
+	raw_spin_unlock_irqrestore(&ctrlr->cache_lock, flags);
 
 	new_req = kzalloc(sizeof(*new_req), GFP_ATOMIC);
 	if (!new_req)
 		req = ERR_PTR(-ENOMEM);
 
-	spin_lock_irqsave(&ctrlr->cache_lock, flags);
+	raw_spin_lock_irqsave(&ctrlr->cache_lock, flags);
 	req = __find_req(ctrlr, cmd->addr);
 	if (req)
 		goto existing;
@@ -197,7 +197,7 @@ existing:
 	default:
 		break;
 	}
-	spin_unlock_irqrestore(&ctrlr->cache_lock, flags);
+	raw_spin_unlock_irqrestore(&ctrlr->cache_lock, flags);
 
 	if (new_req && new_req != req)
 		kfree(new_req);
