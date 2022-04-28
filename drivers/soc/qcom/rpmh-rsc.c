@@ -408,12 +408,12 @@ static int tcs_write(struct rsc_drv *drv, const struct tcs_request *msg)
 		return PTR_ERR(tcs);
 
 	spin_lock_irqsave(&tcs->lock, flags);
-	spin_lock(&drv->lock);
-	if (msg->state == RPMH_ACTIVE_ONLY_STATE && drv->in_solver_mode) {
+	if (msg->state == RPMH_ACTIVE_ONLY_STATE && atomic_read(&drv->in_solver_mode)) {
 		ret = -EINVAL;
-		spin_unlock(&drv->lock);
 		goto done_write;
 	}
+
+	spin_lock(&drv->lock);
 	/*
 	 * The h/w does not like if we send a request to the same address,
 	 * when one is already in-flight or being processed.
@@ -636,8 +636,8 @@ again:
 			goto again;
 		}
 	}
-	drv->in_solver_mode = enable;
 	spin_unlock(&drv->lock);
+	atomic_set(&drv->in_solver_mode, 1);
 }
 
 int rpmh_rsc_write_pdc_data(struct rsc_drv *drv, const struct tcs_request *msg)
@@ -901,7 +901,7 @@ static int rpmh_rsc_probe(struct platform_device *pdev)
 		return ret;
 
 	spin_lock_init(&drv->lock);
-	drv->in_solver_mode = false;
+	atomic_set(&drv->in_solver_mode, 0);
 	bitmap_zero(drv->tcs_in_use, MAX_TCS_NR);
 
 	irq = platform_get_irq(pdev, drv->id);
@@ -921,7 +921,7 @@ static int rpmh_rsc_probe(struct platform_device *pdev)
 
 	spin_lock_init(&drv->client.cache_lock);
 	INIT_LIST_HEAD(&drv->client.cache);
-	INIT_LIST_HEAD(&drv->client.batch_cache);
+	init_llist_head(&drv->client.batch_cache);
 
 	drv->ipc_log_ctx = ipc_log_context_create(RSC_DRV_IPC_LOG_SIZE,
 						  drv->name, 0);
