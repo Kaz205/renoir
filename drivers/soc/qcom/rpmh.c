@@ -61,7 +61,7 @@ struct cache_req {
  */
 
 struct batch_cache_req {
-	struct list_head list;
+	struct llist_node list;
 	int count;
 	struct rpmh_request *rpm_msgs;
 };
@@ -76,13 +76,10 @@ static struct rpmh_ctrlr *get_rpmh_ctrlr(const struct device *dev)
 static int check_ctrlr_state(struct rpmh_ctrlr *ctrlr, enum rpmh_state state)
 {
 	int ret = 0;
-	unsigned long flags;
 
 	/* Do not allow setting active votes when in solver mode */
-	spin_lock_irqsave(&ctrlr->cache_lock, flags);
-	if (ctrlr->in_solver_mode && state == RPMH_ACTIVE_ONLY_STATE)
+	if (atomic_read(&ctrlr->in_solver_mode) && state == RPMH_ACTIVE_ONLY_STATE)
 		ret = -EBUSY;
-	spin_unlock_irqrestore(&ctrlr->cache_lock, flags);
 
 	return ret;
 }
@@ -104,8 +101,8 @@ int rpmh_mode_solver_set(const struct device *dev, bool enable)
 
 	spin_lock_irqsave(&ctrlr->cache_lock, flags);
 	rpmh_rsc_mode_solver_set(ctrlr_to_drv(ctrlr), enable);
-	ctrlr->in_solver_mode = enable;
 	spin_unlock_irqrestore(&ctrlr->cache_lock, flags);
+	atomic_set(&ctrlr->in_solver_mode, 1);
 
 	return 0;
 }
@@ -153,20 +150,25 @@ static struct cache_req *cache_rpm_request(struct rpmh_ctrlr *ctrlr,
 					   enum rpmh_state state,
 					   struct tcs_cmd *cmd)
 {
-	struct cache_req *req;
+	struct cache_req *req, *new_req = NULL;
 	unsigned long flags;
 
 	spin_lock_irqsave(&ctrlr->cache_lock, flags);
 	req = __find_req(ctrlr, cmd->addr);
 	if (req)
 		goto existing;
+	spin_unlock_irqrestore(&ctrlr->cache_lock, flags);
 
-	req = kzalloc(sizeof(*req), GFP_ATOMIC);
-	if (!req) {
+	new_req = kzalloc(sizeof(*new_req), GFP_ATOMIC);
+	if (!new_req)
 		req = ERR_PTR(-ENOMEM);
-		goto unlock;
-	}
 
+	spin_lock_irqsave(&ctrlr->cache_lock, flags);
+	req = __find_req(ctrlr, cmd->addr);
+	if (req)
+		goto existing;
+
+	req = new_req;
 	req->addr = cmd->addr;
 	req->sleep_val = req->wake_val = UINT_MAX;
 	INIT_LIST_HEAD(&req->list);
@@ -195,10 +197,10 @@ existing:
 	default:
 		break;
 	}
-
-unlock:
 	spin_unlock_irqrestore(&ctrlr->cache_lock, flags);
 
+	if (new_req && new_req != req)
+		kfree(new_req);
 	return req;
 }
 
@@ -346,25 +348,19 @@ EXPORT_SYMBOL(rpmh_write);
 
 static void cache_batch(struct rpmh_ctrlr *ctrlr, struct batch_cache_req *req)
 {
-	unsigned long flags;
-
-	spin_lock_irqsave(&ctrlr->cache_lock, flags);
-	list_add_tail(&req->list, &ctrlr->batch_cache);
+	llist_add(&req->list, &ctrlr->batch_cache);
 	ctrlr->dirty = true;
-	spin_unlock_irqrestore(&ctrlr->cache_lock, flags);
 }
 
 static int flush_batch(struct rpmh_ctrlr *ctrlr)
 {
 	struct batch_cache_req *req;
 	const struct rpmh_request *rpm_msg;
-	unsigned long flags;
 	int ret = 0;
 	int i;
 
 	/* Send Sleep/Wake requests to the controller, expect no response */
-	spin_lock_irqsave(&ctrlr->cache_lock, flags);
-	list_for_each_entry(req, &ctrlr->batch_cache, list) {
+	llist_for_each_entry(req, &ctrlr->batch_cache, list) {
 		for (i = 0; i < req->count; i++) {
 			rpm_msg = req->rpm_msgs + i;
 			ret = rpmh_rsc_write_ctrl_data(ctrlr_to_drv(ctrlr),
@@ -373,7 +369,6 @@ static int flush_batch(struct rpmh_ctrlr *ctrlr)
 				break;
 		}
 	}
-	spin_unlock_irqrestore(&ctrlr->cache_lock, flags);
 
 	return ret;
 }
@@ -381,15 +376,12 @@ static int flush_batch(struct rpmh_ctrlr *ctrlr)
 static void invalidate_batch(struct rpmh_ctrlr *ctrlr)
 {
 	struct batch_cache_req *req, *tmp;
-	unsigned long flags;
 
-	spin_lock_irqsave(&ctrlr->cache_lock, flags);
-	list_for_each_entry_safe(req, tmp, &ctrlr->batch_cache, list) {
-		list_del(&req->list);
+	llist_for_each_entry_safe(req, tmp, &ctrlr->batch_cache, list) {
+		llist_del_first(&req->list);
 		kfree(req);
 	}
-	INIT_LIST_HEAD(&ctrlr->batch_cache);
-	spin_unlock_irqrestore(&ctrlr->cache_lock, flags);
+	init_llist_head(&ctrlr->batch_cache);
 }
 
 /**
