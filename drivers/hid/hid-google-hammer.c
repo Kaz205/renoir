@@ -15,7 +15,6 @@
 
 #include <linux/acpi.h>
 #include <linux/hid.h>
-#include <linux/input/vivaldi-fmap.h>
 #include <linux/leds.h>
 #include <linux/module.h>
 #include <linux/of.h>
@@ -23,7 +22,6 @@
 #include <linux/platform_data/cros_ec_proto.h>
 #include <linux/platform_device.h>
 #include <linux/pm_wakeup.h>
-#include <linux/sysfs.h>
 #include <asm/unaligned.h>
 
 #include "hid-ids.h"
@@ -303,11 +301,6 @@ struct hammer_kbd_leds {
 	u8 buf[2] ____cacheline_aligned;
 };
 
-struct hammer_drvdata {
-	struct vivaldi_data vdata;
-	struct hammer_kbd_leds leds;
-};
-
 static int hammer_kbd_brightness_set_blocking(struct led_classdev *cdev,
 		enum led_brightness br)
 {
@@ -345,11 +338,15 @@ static int hammer_kbd_brightness_set_blocking(struct led_classdev *cdev,
 	return ret;
 }
 
-static int hammer_register_leds(struct hammer_drvdata *hdata, struct hid_device *hdev)
+static int hammer_register_leds(struct hid_device *hdev)
 {
 	struct hammer_kbd_leds *kbd_backlight;
+	int error;
 
-	kbd_backlight = &hdata->leds;
+	kbd_backlight = kzalloc(sizeof(*kbd_backlight), GFP_KERNEL);
+	if (!kbd_backlight)
+		return -ENOMEM;
+
 	kbd_backlight->hdev = hdev;
 	kbd_backlight->cdev.name = "hammer::kbd_backlight";
 	kbd_backlight->cdev.max_brightness = MAX_BRIGHTNESS;
@@ -360,16 +357,26 @@ static int hammer_register_leds(struct hammer_drvdata *hdata, struct hid_device 
 	/* Set backlight to 0% initially. */
 	hammer_kbd_brightness_set_blocking(&kbd_backlight->cdev, 0);
 
-	return led_classdev_register(&hdev->dev, &kbd_backlight->cdev);
+	error = led_classdev_register(&hdev->dev, &kbd_backlight->cdev);
+	if (error)
+		goto err_free_mem;
+
+	hid_set_drvdata(hdev, kbd_backlight);
+	return 0;
+
+err_free_mem:
+	kfree(kbd_backlight);
+	return error;
 }
 
 static void hammer_unregister_leds(struct hid_device *hdev)
 {
-	struct hammer_drvdata *hdata = hid_get_drvdata(hdev);
-	struct hammer_kbd_leds *kbd_backlight = &hdata->leds;
+	struct hammer_kbd_leds *kbd_backlight = hid_get_drvdata(hdev);
 
-	if (kbd_backlight)
+	if (kbd_backlight) {
 		led_classdev_unregister(&kbd_backlight->cdev);
+		kfree(kbd_backlight);
+	}
 }
 
 #define HID_UP_GOOGLEVENDOR	0xffd10000
@@ -378,58 +385,6 @@ static void hammer_unregister_leds(struct hid_device *hdev)
 
 /* HID usage for keyboard backlight (Alphanumeric display brightness) */
 #define HID_AD_BRIGHTNESS	0x00140046
-
-static void hammer_feature_mapping(struct hid_device *hdev,
-				   struct hid_field *field,
-				   struct hid_usage *usage)
-{
-	struct hammer_drvdata *hdata = hid_get_drvdata(hdev);
-
-	vivaldi_hid_feature_mapping(&hdata->vdata, hdev, field, usage);
-}
-
-static ssize_t function_row_physmap_show(struct device *dev,
-					 struct device_attribute *attr,
-					 char *buf)
-{
-	struct hid_device *hdev = to_hid_device(dev);
-	struct hammer_drvdata *hdata = hid_get_drvdata(hdev);
-	struct vivaldi_data *vdata = &hdata->vdata;
-
-	return vivaldi_function_row_physmap_show(vdata, buf);
-}
-
-static DEVICE_ATTR_RO(function_row_physmap);
-static struct attribute *hammer_sysfs_attrs[] = {
-	&dev_attr_function_row_physmap.attr,
-	NULL
-};
-
-static umode_t hammer_attr_is_visible(struct kobject *kobj,
-				      struct attribute *attr, int n)
-{
-	struct device *dev = kobj_to_dev(kobj);
-	struct hid_device *hdev = to_hid_device(dev);
-	struct hammer_drvdata *hdata = hid_get_drvdata(hdev);
-	struct vivaldi_data *vdata = &hdata->vdata;
-
-	if (attr == &dev_attr_function_row_physmap.attr &&
-	    !vdata->num_function_row_keys)
-		return 0;
-
-	return attr->mode;
-}
-
-static const struct attribute_group input_attribute_group = {
-	.is_visible = hammer_attr_is_visible,
-	.attrs = hammer_sysfs_attrs,
-};
-
-static int hammer_input_configured(struct hid_device *hdev,
-				   struct hid_input *hidinput)
-{
-	return sysfs_create_group(&hdev->dev.kobj, &input_attribute_group);
-}
 
 static int hammer_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 				struct hid_field *field,
@@ -562,12 +517,6 @@ static int hammer_probe(struct hid_device *hdev,
 			const struct hid_device_id *id)
 {
 	int error;
-	struct hammer_drvdata *hdata;
-
-	hdata = devm_kzalloc(&hdev->dev, sizeof(*hdata), GFP_KERNEL);
-	if (!hdata)
-		return -ENOMEM;
-	hid_set_drvdata(hdev, hdata);
 
 	error = hid_parse(hdev);
 	if (error)
@@ -593,7 +542,7 @@ static int hammer_probe(struct hid_device *hdev,
 	}
 
 	if (hammer_has_backlight_control(hdev)) {
-		error = hammer_register_leds(hdata, hdev);
+		error = hammer_register_leds(hdev);
 		if (error)
 			hid_warn(hdev,
 				"Failed to register keyboard backlight: %d\n",
@@ -662,8 +611,6 @@ static struct hid_driver hammer_driver = {
 	.id_table = hammer_devices,
 	.probe = hammer_probe,
 	.remove = hammer_remove,
-	.feature_mapping = hammer_feature_mapping,
-	.input_configured = hammer_input_configured,
 	.input_mapping = hammer_input_mapping,
 	.event = hammer_event,
 };
