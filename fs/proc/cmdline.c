@@ -30,12 +30,28 @@ static void patch_flag(char *cmd, const char *flag, const char *val)
 	memcpy(start + flag_len, val, val_len);
 }
 
+static void remove_flag(char *cmd, const char *flag)
+{
+	char *start;
+	size_t remaining_flag_len, remove_flag_len;
+
+	start = strstr(cmd, flag);
+	if (!start)
+		return;
+
+	remove_flag_len = strcspn(start, " ");
+	/* Account for \0 too */
+	remaining_flag_len = strlen(start + remove_flag_len) + 1;
+	memmove(start, start + remove_flag_len, remaining_flag_len);
+}
+
 static void patch_safetynet_flags(char *cmd)
 {
 	patch_flag(cmd, "androidboot.flash.locked=", "1");
 	patch_flag(cmd, "androidboot.verifiedbootstate=", "green");
 	patch_flag(cmd, "androidboot.veritymode=", "enforcing");
 	patch_flag(cmd, "androidboot.vbmeta.device_state=", "locked");
+	remove_flag(cmd, "video=");
 }
 
 static bool in_recovery;
