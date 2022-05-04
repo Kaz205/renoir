@@ -407,6 +407,7 @@ static void ufshcd_add_command_trace(struct ufs_hba *hba,
 	struct scsi_cmnd *cmd = lrbp->cmd;
 	int transfer_len = -1;
 
+	return;
 	if (!trace_ufshcd_command_enabled()) {
 		/* trace UPIU W/O tracing command */
 		if (cmd)
