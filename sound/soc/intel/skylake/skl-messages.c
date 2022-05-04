@@ -28,6 +28,27 @@ static int skl_alloc_dma_buf(struct device *dev,
 	return snd_dma_alloc_pages(SNDRV_DMA_TYPE_DEV, dev, size, dmab);
 }
 
+static int skl_alloc_dsp_loader_buf(struct device *dev,
+		struct snd_dma_buffer *dmab, size_t size)
+{
+	if (WARN_ON(!size))
+		return -ENXIO;
+	if (WARN_ON(!dmab))
+		return -ENXIO;
+
+	dmab->dev.type = SNDRV_DMA_TYPE_DEV;
+	dmab->dev.dev = dev;
+	dmab->bytes = 0;
+
+	dmab->area = dma_alloc_coherent(dmab->dev.dev, size, &dmab->addr,
+			GFP_KERNEL);
+
+	if (!dmab->area)
+		return -ENOMEM;
+	dmab->bytes = size;
+	return 0;
+}
+
 static int skl_free_dma_buf(struct device *dev, struct snd_dma_buffer *dmab)
 {
 	snd_dma_free_pages(dmab);
@@ -148,7 +169,7 @@ static struct skl_dsp_loader_ops skl_get_loader_ops(void)
 
 	memset(&loader_ops, 0, sizeof(struct skl_dsp_loader_ops));
 
-	loader_ops.alloc_dma_buf = skl_alloc_dma_buf;
+	loader_ops.alloc_dma_buf = skl_alloc_dsp_loader_buf;
 	loader_ops.free_dma_buf = skl_free_dma_buf;
 
 	return loader_ops;
