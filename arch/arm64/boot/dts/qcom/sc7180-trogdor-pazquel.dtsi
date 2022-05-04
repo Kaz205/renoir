@@ -9,6 +9,8 @@ ap_ec_spi: &spi6 {};
 ap_h1_spi: &spi0 {};
 
 #include "sc7180-trogdor.dtsi"
+/* Must come after sc7180-trogdor.dtsi to modify cros_ec */
+#include <arm/cros-ec-keyboard.dtsi>
 
 &ap_sar_sensor {
 	compatible = "semtech,sx9324";
