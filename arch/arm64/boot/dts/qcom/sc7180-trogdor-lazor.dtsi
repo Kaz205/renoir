@@ -58,7 +58,6 @@ ap_ts_pen_1v8: &i2c4 {
 
 &wifi {
 	qcom,ath10k-calibration-variant = "GO_LAZOR";
-	qcom,ath10k-default-bdf = "bus=snoc,qmi-board-id=67";
 };
 
 /* PINCTRL - modifications to sc7180-trogdor.dtsi */
