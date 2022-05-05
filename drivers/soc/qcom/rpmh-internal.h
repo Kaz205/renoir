@@ -75,8 +75,8 @@ struct rpmh_ctrlr {
 	struct list_head cache;
 	spinlock_t cache_lock;
 	bool dirty;
-	struct llist_head batch_cache;
-	atomic_t in_solver_mode;
+	struct list_head batch_cache;
+	bool in_solver_mode;
 };
 
 /**
@@ -101,7 +101,7 @@ struct rsc_drv {
 	void __iomem *base;
 	void __iomem *tcs_base;
 	int id;
-	atomic_t in_solver_mode;
+	bool in_solver_mode;
 	int num_tcs;
 	struct tcs_group tcs[TCS_TYPE_NR];
 	DECLARE_BITMAP(tcs_in_use, MAX_TCS_NR);
