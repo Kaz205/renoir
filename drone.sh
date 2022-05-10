@@ -4,7 +4,7 @@ export home=/drone/src
 export ak=$home/AnyKernel3
 export PATH="$home/google-clang/bin:$PATH"
 
-MAKE_PARAMS="CC=clang CLANG_TRIPLE=aarch64-linux-gnu- LLVM=1 \
+MAKE_PARAMS="CC=clang CLANG_TRIPLE=aarch64-linux-gnu- LLVM=1 LLVM_IAS=1 \
 	CROSS_COMPILE=$home/arm64-gcc/bin/aarch64-elf- \
 	CROSS_COMPILE_COMPAT=$home/arm32-gcc/bin/arm-eabi- \
 	LD=ld.lld \
