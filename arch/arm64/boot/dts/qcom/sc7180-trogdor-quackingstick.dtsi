@@ -15,6 +15,9 @@ ap_h1_spi: &spi0 {};
 #include "sc7180-trogdor.dtsi"
 #include "sc7180-trogdor-mipi-camera.dtsi"
 
+/* This board only has 1 USB Type-C port. */
+/delete-node/ &usb_c1;
+
 / {
 	ppvar_lcd: ppvar-lcd {
 		compatible = "regulator-fixed";
