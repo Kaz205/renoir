@@ -457,7 +457,6 @@ static int ipu_isys_stream_start(struct ipu_isys_pipeline *ip,
 					       buf, to_dma_addr(msg),
 					       sizeof(*buf),
 					       send_type);
-		ipu_put_fw_mgs_buf(pipe_av->isys, (uintptr_t)buf);
 	} while (!WARN_ON(rval));
 
 	return 0;
@@ -578,7 +577,6 @@ static void __buf_queue(struct vb2_buffer *vb, bool force)
 				       buf, to_dma_addr(msg),
 				       sizeof(*buf),
 				       IPU_FW_ISYS_SEND_TYPE_STREAM_CAPTURE);
-	ipu_put_fw_mgs_buf(pipe_av->isys, (uintptr_t)buf);
 	if (!WARN_ON(rval < 0))
 		dev_dbg(&av->isys->adev->dev, "queued buffer\n");
 
@@ -840,6 +838,7 @@ get_sof_sequence_by_timestamp(struct ipu_isys_pipeline *ip,
 	 */
 	if (time == 0)
 		return atomic_read(&ip->sequence) - 1;
+
 	for (i = 0; i < IPU_ISYS_MAX_PARALLEL_SOF; i++)
 		if (time == ip->seq[i].timestamp) {
 			dev_dbg(&isys->adev->dev,
@@ -871,7 +870,7 @@ static u64 get_sof_ns_delta(struct ipu_isys_video *av,
 	else
 		delta = 0;
 
-	return ipu_buttress_tsc_ticks_to_ns(delta);
+	return ipu_buttress_tsc_ticks_to_ns(delta, isp);
 }
 
 void

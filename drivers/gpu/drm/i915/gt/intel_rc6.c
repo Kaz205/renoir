@@ -5,6 +5,7 @@
  */
 
 #include <linux/pm_runtime.h>
+#include <linux/dmi.h>
 
 #include "i915_drv.h"
 #include "intel_gt.h"
@@ -456,6 +457,25 @@ static bool bxt_check_bios_rc6_setup(struct intel_rc6 *rc6)
 	return enable_rc6;
 }
 
+static int intel_rc6_support_disabled(const struct dmi_system_id *id)
+{
+	DRM_DEBUG_KMS("A temporary WA to prevent system hang on %s device\n",
+			id->ident);
+	return 1;
+}
+
+static const struct dmi_system_id intel_rc6_support_detect[] = {
+	{
+		.callback = intel_rc6_support_disabled,
+		.ident = "Google Bugzzy",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "Google"),
+			DMI_MATCH(DMI_BOARD_NAME, "Bugzzy"),
+		}
+	},
+	{}
+};
+
 static bool rc6_supported(struct intel_rc6 *rc6)
 {
 	struct drm_i915_private *i915 = rc6_to_i915(rc6);
@@ -474,6 +494,9 @@ static bool rc6_supported(struct intel_rc6 *rc6)
 			   "RC6 and powersaving disabled by BIOS\n");
 		return false;
 	}
+
+	if (dmi_check_system(intel_rc6_support_detect))
+		return false;
 
 	return true;
 }

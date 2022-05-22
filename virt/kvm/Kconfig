@@ -63,3 +63,6 @@ config HAVE_KVM_NO_POLL
 
 config HAVE_KVM_PM_NOTIFIER
        bool
+
+config HAVE_KVM_MAY_PREEMPT
+       bool

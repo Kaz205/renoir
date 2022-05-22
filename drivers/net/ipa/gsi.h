@@ -17,7 +17,7 @@
 
 /* Maximum number of channels and event rings supported by the driver */
 #define GSI_CHANNEL_COUNT_MAX	23
-#define GSI_EVT_RING_COUNT_MAX	20
+#define GSI_EVT_RING_COUNT_MAX	24
 
 /* Maximum TLV FIFO size for a channel; 64 here is arbitrary (and high) */
 #define GSI_TLV_MAX		64
@@ -101,6 +101,7 @@ enum gsi_channel_state {
 	GSI_CHANNEL_STATE_STARTED		= 0x2,
 	GSI_CHANNEL_STATE_STOPPED		= 0x3,
 	GSI_CHANNEL_STATE_STOP_IN_PROC		= 0x4,
+	GSI_CHANNEL_STATE_FLOW_CONTROLLED	= 0x5,	/* IPA v4.2-v4.9 */
 	GSI_CHANNEL_STATE_ERROR			= 0xf,
 };
 
@@ -217,6 +218,15 @@ int gsi_channel_start(struct gsi *gsi, u32 channel_id);
  * Return:	0 if successful, or a negative error code
  */
 int gsi_channel_stop(struct gsi *gsi, u32 channel_id);
+
+/**
+ * gsi_modem_channel_flow_control() - Set channel flow control state (IPA v4.2+)
+ * @gsi:	GSI pointer returned by gsi_setup()
+ * @channel_id:	Modem TX channel to control
+ * @enable:	Whether to enable flow control (i.e., prevent flow)
+ */
+void gsi_modem_channel_flow_control(struct gsi *gsi, u32 channel_id,
+				    bool enable);
 
 /**
  * gsi_channel_reset() - Reset an allocated GSI channel

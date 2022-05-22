@@ -31,6 +31,7 @@ struct intel_hdmi *enc_to_intel_hdmi(struct intel_encoder *encoder);
 int intel_hdmi_compute_config(struct intel_encoder *encoder,
 			      struct intel_crtc_state *pipe_config,
 			      struct drm_connector_state *conn_state);
+void intel_hdmi_encoder_shutdown(struct intel_encoder *encoder);
 bool intel_hdmi_handle_sink_scrambling(struct intel_encoder *encoder,
 				       struct drm_connector *connector,
 				       bool high_tmds_clock_ratio,

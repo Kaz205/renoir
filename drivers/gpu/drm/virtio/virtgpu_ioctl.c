@@ -96,7 +96,7 @@ void virtio_gpu_unref_list(struct list_head *head)
 		bo = buf->bo;
 		qobj = container_of(bo, struct virtio_gpu_object, tbo);
 
-		drm_gem_object_put(&qobj->gem_base);
+		drm_gem_object_put(&qobj->tbo.base);
 	}
 }
 
@@ -358,7 +358,7 @@ static int virtio_gpu_resource_create_ioctl(struct drm_device *dev, void *data,
 	dma_fence_put(&fence->f);
 	if (IS_ERR(qobj))
 		return PTR_ERR(qobj);
-	obj = &qobj->gem_base;
+	obj = &qobj->tbo.base;
 
 	ret = drm_gem_handle_create(file_priv, obj, &handle);
 	if (ret) {
@@ -393,18 +393,19 @@ static int virtio_gpu_resource_info_cros_ioctl(struct drm_device *dev,
 	qobj = gem_to_virtio_gpu_obj(gobj);
 
 	ri->res_handle = qobj->hw_res_handle;
-	ri->size = qobj->gem_base.size;
+	ri->size = qobj->tbo.base.size;
 
 	if (ri->type == VIRTGPU_RESOURCE_INFO_TYPE_DEFAULT) {
 		ri->blob_mem = qobj->blob_mem;
 		goto out;
-	} else {
-		if (qobj->blob_mem) {
-			ret = -EINVAL;
-			goto out;
-		}
-		ri->stride = 0;
+	} else if (qobj->blob_mem == VIRTGPU_BLOB_MEM_GUEST) {
+		ret = -EINVAL;
+		goto out;
 	}
+
+	ri->stride = 0;
+	if (qobj->blob_mem)
+		goto out;
 
 	if (!qobj->create_callback_done) {
 		ret = wait_event_interruptible(vgdev->resp_wq,
@@ -735,7 +736,7 @@ static int virtio_gpu_resource_create_blob_ioctl(struct drm_device *dev,
 						    nents, ents);
 	}
 
-	ret = drm_gem_handle_create(file, &obj->gem_base, &handle);
+	ret = drm_gem_handle_create(file, &obj->tbo.base, &handle);
 	if (ret)
 		goto err_fence_put;
 
@@ -752,7 +753,7 @@ static int virtio_gpu_resource_create_blob_ioctl(struct drm_device *dev,
 
 	virtio_gpu_object_unreserve(obj);
 	dma_fence_put(&fence->f);
-	drm_gem_object_put(&obj->gem_base);
+	drm_gem_object_put(&obj->tbo.base);
 
 	rc_blob->res_handle = obj->hw_res_handle;
 	rc_blob->bo_handle = handle;
@@ -767,7 +768,7 @@ err_fence_put:
 err_free_ents:
 	kfree(ents);
 err_free_obj:
-	drm_gem_object_release(&obj->gem_base);
+	drm_gem_object_release(&obj->tbo.base);
 	return ret;
 }
 

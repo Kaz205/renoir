@@ -311,7 +311,7 @@ static struct sg_table *_op_dma_buf_map(struct dma_buf_attachment *attachment,
 
 	table = a->table;
 
-	map_attrs = attachment->dma_map_attrs | DMA_ATTR_SKIP_CPU_SYNC;
+	map_attrs = DMA_ATTR_SKIP_CPU_SYNC;
 
 	mutex_lock(&buffer->b_lock);
 	table->nents = dma_map_sg_attrs(attachment->dev, table->sgl,
@@ -334,7 +334,7 @@ static void _op_dma_buf_unmap(struct dma_buf_attachment *attachment,
 	int map_attrs;
 	struct cmm_buffer *buffer = attachment->dmabuf->priv;
 
-	map_attrs = attachment->dma_map_attrs | DMA_ATTR_SKIP_CPU_SYNC;
+	map_attrs = DMA_ATTR_SKIP_CPU_SYNC;
 
 	mutex_lock(&buffer->b_lock);
 	dma_unmap_sg_attrs(attachment->dev, table->sgl, table->orig_nents,
@@ -422,22 +422,6 @@ static void _op_dma_buf_vunmap(struct dma_buf *dmabuf, void *vaddr)
 	mutex_unlock(&buffer->b_lock);
 }
 
-static void *_op_dma_buf_kmap(struct dma_buf *dmabuf, unsigned long offset)
-{
-	void *vaddr = _op_dma_buf_vmap(dmabuf);
-
-	if (IS_ERR_OR_NULL(vaddr))
-		return ERR_CAST(vaddr);
-
-	return vaddr + offset * PAGE_SIZE;
-}
-
-static void _op_dma_buf_kunmap(struct dma_buf *dmabuf, unsigned long offset,
-			       void *ptr)
-{
-	_op_dma_buf_vunmap(dmabuf, ptr);
-}
-
 static int _op_dma_buf_beg_cpu_access(struct dma_buf *dmabuf,
 				      enum dma_data_direction direction)
 {
@@ -468,15 +452,6 @@ static int _op_dma_buf_end_cpu_access(struct dma_buf *dmabuf,
 	return ret;
 }
 
-static int _op_dma_buf_get_flags(struct dma_buf *dmabuf,
-				 unsigned long *flags)
-{
-	struct cmm_buffer *buffer = dmabuf->priv;
-	*flags = buffer->flags;
-
-	return 0;
-}
-
 static const struct dma_buf_ops cmm_dma_buf_ops = {
 	.map_dma_buf	  = _op_dma_buf_map,
 	.unmap_dma_buf	  = _op_dma_buf_unmap,
@@ -486,11 +461,8 @@ static const struct dma_buf_ops cmm_dma_buf_ops = {
 	.detach		  = _op_dma_buf_detatch,
 	.begin_cpu_access = _op_dma_buf_beg_cpu_access,
 	.end_cpu_access   = _op_dma_buf_end_cpu_access,
-	.map		  = _op_dma_buf_kmap,
-	.unmap		  = _op_dma_buf_kunmap,
 	.vmap		  = _op_dma_buf_vmap,
 	.vunmap		  = _op_dma_buf_vunmap,
-	.get_flags	  = _op_dma_buf_get_flags,
 };
 
 struct dma_buf *cmm_alloc_buffer(size_t len, unsigned int flags)
@@ -553,6 +525,7 @@ int cam_buf_mgr_init(struct platform_device *pdev)
 
 	idev->dev = &pdev->dev;
 	dma_coerce_mask_and_coherent(idev->dev, DMA_BIT_MASK(64));
+	dma_set_max_seg_size(idev->dev, UINT_MAX);
 	mutex_init(&idev->dev_lock);
 
 	return 0;

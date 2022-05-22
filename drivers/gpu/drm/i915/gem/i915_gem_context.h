@@ -70,16 +70,6 @@ static inline void i915_gem_context_set_recoverable(struct i915_gem_context *ctx
 	set_bit(UCONTEXT_RECOVERABLE, &ctx->user_flags);
 }
 
-static inline void i915_gem_context_set_protected(struct i915_gem_context *ctx)
-{
-	set_bit(UCONTEXT_PROTECTED, &ctx->user_flags);
-}
-
-static inline bool i915_gem_context_is_protected(struct i915_gem_context *ctx)
-{
-	return test_bit(UCONTEXT_PROTECTED, &ctx->user_flags);
-}
-
 static inline void i915_gem_context_clear_recoverable(struct i915_gem_context *ctx)
 {
 	clear_bit(UCONTEXT_RECOVERABLE, &ctx->user_flags);

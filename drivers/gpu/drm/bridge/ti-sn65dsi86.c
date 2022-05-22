@@ -4,6 +4,7 @@
  * datasheet: http://www.ti.com/lit/ds/symlink/sn65dsi86.pdf
  */
 
+#include <linux/auxiliary_bus.h>
 #include <linux/bits.h>
 #include <linux/clk.h>
 #include <linux/debugfs.h>
@@ -16,14 +17,13 @@
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
 #include <linux/regulator/consumer.h>
-#include <linux/workqueue.h>
 
 #include <asm/unaligned.h>
 
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_bridge.h>
-#include <drm/drm_dp_aux_backlight.h>
+#include <drm/drm_dp_aux_bus.h>
 #include <drm/drm_dp_helper.h>
 #include <drm/drm_mipi_dsi.h>
 #include <drm/drm_of.h>
@@ -114,30 +114,27 @@
 #define SN_LINK_TRAINING_TRIES		10
 
 /**
- * struct ti_sn_bridge - Platform data for ti-sn65dsi86 driver.
- * @dev:          Pointer to our device.
+ * struct ti_sn65dsi86 - Platform data for ti-sn65dsi86 driver.
+ * @bridge_aux:   AUX-bus sub device for MIPI-to-eDP bridge functionality.
+ * @gpio_aux:     AUX-bus sub device for GPIO controller functionality.
+ * @aux_aux:      AUX-bus sub device for eDP AUX channel functionality.
+ *
+ * @dev:          Pointer to the top level (i2c) device.
  * @regmap:       Regmap for accessing i2c.
  * @aux:          Our aux channel.
  * @bridge:       Our bridge.
  * @connector:    Our connector.
- * @debugfs:      Used for managing our debugfs.
  * @host_node:    Remote DSI node.
  * @dsi:          Our MIPI DSI source.
- * @edid:         Detected EDID of eDP panel.
  * @refclk:       Our reference clock.
  * @panel:        Our panel.
  * @enable_gpio:  The GPIO we toggle to enable the bridge.
  * @supplies:     Data for bulk enabling/disabling our regulators.
- * @backlight:    The DP aux backlight device.
  * @dp_lanes:     Count of dp_lanes we're using.
  * @ln_assign:    Value to program to the LN_ASSIGN register.
  * @ln_polrs:     Value for the 4-bit LN_POLRS field of SN_ENH_FRAME_REG.
- *
- * @pre_enabled_early: If true we did an early pre_enable at attach.
- * @pre_enable_timeout_work: Delayed work to undo the pre_enable from attach
- *                           if a normal pre_enable never came.
- * @pre_enable_mutex: Lock to synchronize between the pre_enable_timeout_work
- *                    and normal mechanisms.
+ * @comms_enabled: If true then communication over the aux channel is enabled.
+ * @comms_mutex:   Protects modification of comms_enabled.
  *
  * @gchip:        If we expose our GPIOs, this is used.
  * @gchip_output: A cache of whether we've set GPIOs to output.  This
@@ -149,28 +146,27 @@
  *                lock so concurrent users of our 4 GPIOs don't stomp on
  *                each other's read-modify-write.
  */
-struct ti_sn_bridge {
+struct ti_sn65dsi86 {
+	struct auxiliary_device		bridge_aux;
+	struct auxiliary_device		gpio_aux;
+	struct auxiliary_device		aux_aux;
+
 	struct device			*dev;
 	struct regmap			*regmap;
 	struct drm_dp_aux		aux;
 	struct drm_bridge		bridge;
 	struct drm_connector		connector;
-	struct dentry			*debugfs;
-	struct edid			*edid;
 	struct device_node		*host_node;
 	struct mipi_dsi_device		*dsi;
 	struct clk			*refclk;
 	struct drm_panel		*panel;
 	struct gpio_desc		*enable_gpio;
 	struct regulator_bulk_data	supplies[SN_REGULATOR_SUPPLY_NUM];
-	struct drm_dp_aux_backlight	*backlight;
 	int				dp_lanes;
 	u8				ln_assign;
 	u8				ln_polrs;
-
-	bool				pre_enabled_early;
-	struct delayed_work		pre_enable_timeout_work;
-	struct mutex			pre_enable_mutex;
+	bool				comms_enabled;
+	struct mutex			comms_mutex;
 
 #if defined(CONFIG_OF_GPIO)
 	struct gpio_chip		gchip;
@@ -178,182 +174,31 @@ struct ti_sn_bridge {
 #endif
 };
 
-static const struct regmap_range ti_sn_bridge_volatile_ranges[] = {
+static const struct regmap_range ti_sn65dsi86_volatile_ranges[] = {
 	{ .range_min = 0, .range_max = 0xFF },
 };
 
 static const struct regmap_access_table ti_sn_bridge_volatile_table = {
-	.yes_ranges = ti_sn_bridge_volatile_ranges,
-	.n_yes_ranges = ARRAY_SIZE(ti_sn_bridge_volatile_ranges),
+	.yes_ranges = ti_sn65dsi86_volatile_ranges,
+	.n_yes_ranges = ARRAY_SIZE(ti_sn65dsi86_volatile_ranges),
 };
 
-static const struct regmap_config ti_sn_bridge_regmap_config = {
+static const struct regmap_config ti_sn65dsi86_regmap_config = {
 	.reg_bits = 8,
 	.val_bits = 8,
 	.volatile_table = &ti_sn_bridge_volatile_table,
 	.cache_type = REGCACHE_NONE,
+	.max_register = 0xFF,
 };
 
-static void ti_sn_bridge_write_u16(struct ti_sn_bridge *pdata,
+static void ti_sn65dsi86_write_u16(struct ti_sn65dsi86 *pdata,
 				   unsigned int reg, u16 val)
 {
 	regmap_write(pdata->regmap, reg, val & 0xFF);
 	regmap_write(pdata->regmap, reg + 1, val >> 8);
 }
 
-static int __maybe_unused ti_sn_bridge_resume(struct device *dev)
-{
-	struct ti_sn_bridge *pdata = dev_get_drvdata(dev);
-	int ret;
-
-	ret = regulator_bulk_enable(SN_REGULATOR_SUPPLY_NUM, pdata->supplies);
-	if (ret) {
-		DRM_ERROR("failed to enable supplies %d\n", ret);
-		return ret;
-	}
-
-	gpiod_set_value(pdata->enable_gpio, 1);
-
-	return ret;
-}
-
-static int __maybe_unused ti_sn_bridge_suspend(struct device *dev)
-{
-	struct ti_sn_bridge *pdata = dev_get_drvdata(dev);
-	int ret;
-
-	gpiod_set_value(pdata->enable_gpio, 0);
-
-	ret = regulator_bulk_disable(SN_REGULATOR_SUPPLY_NUM, pdata->supplies);
-	if (ret)
-		DRM_ERROR("failed to disable supplies %d\n", ret);
-
-	return ret;
-}
-
-static const struct dev_pm_ops ti_sn_bridge_pm_ops = {
-	SET_RUNTIME_PM_OPS(ti_sn_bridge_suspend, ti_sn_bridge_resume, NULL)
-	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
-				pm_runtime_force_resume)
-};
-
-static int status_show(struct seq_file *s, void *data)
-{
-	struct ti_sn_bridge *pdata = s->private;
-	unsigned int reg, val;
-
-	seq_puts(s, "STATUS REGISTERS:\n");
-
-	pm_runtime_get_sync(pdata->dev);
-
-	/* IRQ Status Registers, see Table 31 in datasheet */
-	for (reg = 0xf0; reg <= 0xf8; reg++) {
-		regmap_read(pdata->regmap, reg, &val);
-		seq_printf(s, "[0x%02x] = 0x%08x\n", reg, val);
-	}
-
-	pm_runtime_put(pdata->dev);
-
-	return 0;
-}
-
-DEFINE_SHOW_ATTRIBUTE(status);
-
-static void ti_sn_debugfs_init(struct ti_sn_bridge *pdata)
-{
-	pdata->debugfs = debugfs_create_dir(dev_name(pdata->dev), NULL);
-
-	debugfs_create_file("status", 0600, pdata->debugfs, pdata,
-			&status_fops);
-}
-
-static void ti_sn_debugfs_remove(struct ti_sn_bridge *pdata)
-{
-	debugfs_remove_recursive(pdata->debugfs);
-	pdata->debugfs = NULL;
-}
-
-/* Connector funcs */
-static struct ti_sn_bridge *
-connector_to_ti_sn_bridge(struct drm_connector *connector)
-{
-	return container_of(connector, struct ti_sn_bridge, connector);
-}
-
-static int ti_sn_bridge_connector_get_modes(struct drm_connector *connector)
-{
-	struct ti_sn_bridge *pdata = connector_to_ti_sn_bridge(connector);
-	struct edid *edid = pdata->edid;
-	int num, ret;
-
-	if (edid && drm_edid_is_valid(edid)) {
-		ret = drm_connector_update_edid_property(connector, edid);
-		if (!ret) {
-			num = drm_add_edid_modes(connector, edid);
-			if (num)
-				return num;
-		}
-	}
-
-	return drm_panel_get_modes(pdata->panel, connector);
-}
-
-static enum drm_mode_status
-ti_sn_bridge_connector_mode_valid(struct drm_connector *connector,
-				  struct drm_display_mode *mode)
-{
-	/* maximum supported resolution is 4K at 60 fps */
-	if (mode->clock > 594000)
-		return MODE_CLOCK_HIGH;
-
-	return MODE_OK;
-}
-
-static struct drm_connector_helper_funcs ti_sn_bridge_connector_helper_funcs = {
-	.get_modes = ti_sn_bridge_connector_get_modes,
-	.mode_valid = ti_sn_bridge_connector_mode_valid,
-};
-
-static enum drm_connector_status
-ti_sn_bridge_connector_detect(struct drm_connector *connector, bool force)
-{
-	/**
-	 * TODO: Currently if drm_panel is present, then always
-	 * return the status as connected. Need to add support to detect
-	 * device state for hot pluggable scenarios.
-	 */
-	return connector_status_connected;
-}
-
-static const struct drm_connector_funcs ti_sn_bridge_connector_funcs = {
-	.fill_modes = drm_helper_probe_single_connector_modes,
-	.detect = ti_sn_bridge_connector_detect,
-	.destroy = drm_connector_cleanup,
-	.reset = drm_atomic_helper_connector_reset,
-	.atomic_duplicate_state = drm_atomic_helper_connector_duplicate_state,
-	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
-};
-
-static struct ti_sn_bridge *bridge_to_ti_sn_bridge(struct drm_bridge *bridge)
-{
-	return container_of(bridge, struct ti_sn_bridge, bridge);
-}
-
-static int ti_sn_bridge_parse_regulators(struct ti_sn_bridge *pdata)
-{
-	unsigned int i;
-	const char * const ti_sn_bridge_supply_names[] = {
-		"vcca", "vcc", "vccio", "vpll",
-	};
-
-	for (i = 0; i < SN_REGULATOR_SUPPLY_NUM; i++)
-		pdata->supplies[i].supply = ti_sn_bridge_supply_names[i];
-
-	return devm_regulator_bulk_get(pdata->dev, SN_REGULATOR_SUPPLY_NUM,
-				       pdata->supplies);
-}
-
-static u32 ti_sn_bridge_get_dsi_freq(struct ti_sn_bridge *pdata)
+static u32 ti_sn_bridge_get_dsi_freq(struct ti_sn65dsi86 *pdata)
 {
 	u32 bit_rate_khz, clk_freq_khz;
 	struct drm_display_mode *mode =
@@ -384,7 +229,7 @@ static const u32 ti_sn_bridge_dsiclk_lut[] = {
 	460800000,
 };
 
-static void ti_sn_bridge_set_refclk_freq(struct ti_sn_bridge *pdata)
+static void ti_sn_bridge_set_refclk_freq(struct ti_sn65dsi86 *pdata)
 {
 	int i;
 	u32 refclk_rate;
@@ -411,18 +256,9 @@ static void ti_sn_bridge_set_refclk_freq(struct ti_sn_bridge *pdata)
 			   REFCLK_FREQ(i));
 }
 
-static void ti_sn_bridge_post_disable(struct drm_bridge *bridge)
+static void ti_sn65dsi86_enable_comms(struct ti_sn65dsi86 *pdata)
 {
-	struct ti_sn_bridge *pdata = bridge_to_ti_sn_bridge(bridge);
-
-	clk_disable_unprepare(pdata->refclk);
-
-	pm_runtime_put_sync(pdata->dev);
-}
-
-static void __ti_sn_bridge_pre_enable(struct ti_sn_bridge *pdata)
-{
-	pm_runtime_get_sync(pdata->dev);
+	mutex_lock(&pdata->comms_mutex);
 
 	/* configure bridge ref_clk */
 	ti_sn_bridge_set_refclk_freq(pdata);
@@ -446,46 +282,214 @@ static void __ti_sn_bridge_pre_enable(struct ti_sn_bridge *pdata)
 	regmap_update_bits(pdata->regmap, SN_HPD_DISABLE_REG, HPD_DISABLE,
 			   HPD_DISABLE);
 
-	drm_panel_prepare(pdata->panel);
+	pdata->comms_enabled = true;
+
+	mutex_unlock(&pdata->comms_mutex);
 }
 
-static void ti_sn_bridge_pre_enable(struct drm_bridge *bridge)
+static void ti_sn65dsi86_disable_comms(struct ti_sn65dsi86 *pdata)
 {
-	struct ti_sn_bridge *pdata = bridge_to_ti_sn_bridge(bridge);
+	mutex_lock(&pdata->comms_mutex);
 
-	mutex_lock(&pdata->pre_enable_mutex);
-	if (pdata->pre_enabled_early)
-		/* Already done! Just mark that normal pre_enable happened */
-		pdata->pre_enabled_early = false;
-	else
-		__ti_sn_bridge_pre_enable(pdata);
-	mutex_unlock(&pdata->pre_enable_mutex);
+	pdata->comms_enabled = false;
+	clk_disable_unprepare(pdata->refclk);
+
+	mutex_unlock(&pdata->comms_mutex);
 }
 
-static void ti_sn_bridge_cancel_early_pre_enable(struct ti_sn_bridge *pdata)
+static int __maybe_unused ti_sn65dsi86_resume(struct device *dev)
 {
-	mutex_lock(&pdata->pre_enable_mutex);
-	if (pdata->pre_enabled_early) {
-		pdata->pre_enabled_early = false;
-		ti_sn_bridge_post_disable(&pdata->bridge);
+	struct ti_sn65dsi86 *pdata = dev_get_drvdata(dev);
+	int ret;
+
+	ret = regulator_bulk_enable(SN_REGULATOR_SUPPLY_NUM, pdata->supplies);
+	if (ret) {
+		DRM_ERROR("failed to enable supplies %d\n", ret);
+		return ret;
 	}
-	mutex_unlock(&pdata->pre_enable_mutex);
+
+	/* td2: min 100 us after regulators before enabling the GPIO */
+	usleep_range(100, 110);
+
+	gpiod_set_value(pdata->enable_gpio, 1);
+
+	/*
+	 * If we have a reference clock we can enable communication w/ the
+	 * panel (including the aux channel) w/out any need for an input clock
+	 * so we can do it in resume which lets us read the EDID before
+	 * pre_enable(). Without a reference clock we need the MIPI reference
+	 * clock so reading early doesn't work.
+	 */
+	if (pdata->refclk)
+		ti_sn65dsi86_enable_comms(pdata);
+
+	return ret;
 }
 
-static void ti_sn_bridge_pre_enable_timeout(struct work_struct *work)
+static int __maybe_unused ti_sn65dsi86_suspend(struct device *dev)
 {
-	struct delayed_work *dwork = to_delayed_work(work);
-	struct ti_sn_bridge *pdata = container_of(dwork, struct ti_sn_bridge,
-						  pre_enable_timeout_work);
+	struct ti_sn65dsi86 *pdata = dev_get_drvdata(dev);
+	int ret;
 
-	ti_sn_bridge_cancel_early_pre_enable(pdata);
+	if (pdata->refclk)
+		ti_sn65dsi86_disable_comms(pdata);
+
+	gpiod_set_value(pdata->enable_gpio, 0);
+
+	ret = regulator_bulk_disable(SN_REGULATOR_SUPPLY_NUM, pdata->supplies);
+	if (ret)
+		DRM_ERROR("failed to disable supplies %d\n", ret);
+
+	return ret;
+}
+
+static const struct dev_pm_ops ti_sn65dsi86_pm_ops = {
+	SET_RUNTIME_PM_OPS(ti_sn65dsi86_suspend, ti_sn65dsi86_resume, NULL)
+	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				pm_runtime_force_resume)
+};
+
+static int status_show(struct seq_file *s, void *data)
+{
+	struct ti_sn65dsi86 *pdata = s->private;
+	unsigned int reg, val;
+
+	seq_puts(s, "STATUS REGISTERS:\n");
+
+	pm_runtime_get_sync(pdata->dev);
+
+	/* IRQ Status Registers, see Table 31 in datasheet */
+	for (reg = 0xf0; reg <= 0xf8; reg++) {
+		regmap_read(pdata->regmap, reg, &val);
+		seq_printf(s, "[0x%02x] = 0x%08x\n", reg, val);
+	}
+
+	pm_runtime_put_autosuspend(pdata->dev);
+
+	return 0;
+}
+
+DEFINE_SHOW_ATTRIBUTE(status);
+
+static void ti_sn65dsi86_debugfs_remove(void *data)
+{
+	debugfs_remove_recursive(data);
+}
+
+static void ti_sn65dsi86_debugfs_init(struct ti_sn65dsi86 *pdata)
+{
+	struct device *dev = pdata->dev;
+	struct dentry *debugfs;
+	int ret;
+
+	debugfs = debugfs_create_dir(dev_name(dev), NULL);
+
+	/*
+	 * We might get an error back if debugfs wasn't enabled in the kernel
+	 * so let's just silently return upon failure.
+	 */
+	if (IS_ERR_OR_NULL(debugfs))
+		return;
+
+	ret = devm_add_action_or_reset(dev, ti_sn65dsi86_debugfs_remove, debugfs);
+	if (ret)
+		return;
+
+	debugfs_create_file("status", 0600, debugfs, pdata, &status_fops);
+}
+
+/* Connector funcs */
+static struct ti_sn65dsi86 *
+connector_to_ti_sn65dsi86(struct drm_connector *connector)
+{
+	return container_of(connector, struct ti_sn65dsi86, connector);
+}
+
+static int ti_sn_bridge_connector_get_modes(struct drm_connector *connector)
+{
+	struct ti_sn65dsi86 *pdata = connector_to_ti_sn65dsi86(connector);
+	return drm_panel_get_modes(pdata->panel, connector);
+}
+
+static enum drm_mode_status
+ti_sn_bridge_connector_mode_valid(struct drm_connector *connector,
+				  struct drm_display_mode *mode)
+{
+	/* maximum supported resolution is 4K at 60 fps */
+	if (mode->clock > 594000)
+		return MODE_CLOCK_HIGH;
+
+	return MODE_OK;
+}
+
+/*
+ * CHROMIUM:
+ *
+ * This is almost entirely a copy-paste from drm_bridge_connector_debugfs_init()
+ * and panel_bridge_debugfs_init() and is only here because
+ * commit e283820cbf80 ("drm/bridge: ti-sn65dsi86: Use drm_bridge_connector")
+ * and commit 4e5763f03e10 ("drm/bridge: ti-sn65dsi86: Wrap panel with
+ * panel-bridge") were going to be a pain to backport. This can be
+ * dropped if those patches are picked or if trogdor devices all move to 5.15.
+ */
+static void ti_sn65dsi86_connector_debugfs_init(struct drm_connector *connector,
+						struct dentry *root)
+{
+	struct ti_sn65dsi86 *pdata = connector_to_ti_sn65dsi86(connector);
+	struct drm_encoder *encoder = pdata->bridge.encoder;
+	struct drm_panel *panel = pdata->panel;
+	struct drm_bridge *bridge;
+
+	/* Do what drm_bridge_connector_debugfs_init() does */
+	list_for_each_entry(bridge, &encoder->bridge_chain, chain_node) {
+		if (bridge->funcs->debugfs_init)
+			bridge->funcs->debugfs_init(bridge, root);
+	}
+
+	/* Do what panel_bridge_debugfs_init() does */
+	root = debugfs_create_dir("panel", root);
+	if (panel->funcs->debugfs_init)
+		panel->funcs->debugfs_init(panel, root);
+}
+
+static struct drm_connector_helper_funcs ti_sn_bridge_connector_helper_funcs = {
+	.get_modes = ti_sn_bridge_connector_get_modes,
+	.mode_valid = ti_sn_bridge_connector_mode_valid,
+};
+
+static const struct drm_connector_funcs ti_sn_bridge_connector_funcs = {
+	.fill_modes = drm_helper_probe_single_connector_modes,
+	.destroy = drm_connector_cleanup,
+	.reset = drm_atomic_helper_connector_reset,
+	.atomic_duplicate_state = drm_atomic_helper_connector_duplicate_state,
+	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
+	.debugfs_init = ti_sn65dsi86_connector_debugfs_init,
+};
+
+static struct ti_sn65dsi86 *bridge_to_ti_sn65dsi86(struct drm_bridge *bridge)
+{
+	return container_of(bridge, struct ti_sn65dsi86, bridge);
+}
+
+static int ti_sn65dsi86_parse_regulators(struct ti_sn65dsi86 *pdata)
+{
+	unsigned int i;
+	const char * const ti_sn_bridge_supply_names[] = {
+		"vcca", "vcc", "vccio", "vpll",
+	};
+
+	for (i = 0; i < SN_REGULATOR_SUPPLY_NUM; i++)
+		pdata->supplies[i].supply = ti_sn_bridge_supply_names[i];
+
+	return devm_regulator_bulk_get(pdata->dev, SN_REGULATOR_SUPPLY_NUM,
+				       pdata->supplies);
 }
 
 static int ti_sn_bridge_attach(struct drm_bridge *bridge,
 			       enum drm_bridge_attach_flags flags)
 {
 	int ret, val;
-	struct ti_sn_bridge *pdata = bridge_to_ti_sn_bridge(bridge);
+	struct ti_sn65dsi86 *pdata = bridge_to_ti_sn65dsi86(bridge);
 	struct mipi_dsi_host *host;
 	struct mipi_dsi_device *dsi;
 	const struct mipi_dsi_device_info info = { .type = "ti_sn_bridge",
@@ -498,12 +502,19 @@ static int ti_sn_bridge_attach(struct drm_bridge *bridge,
 		return -EINVAL;
 	}
 
+	pdata->aux.drm_dev = bridge->dev;
+	ret = drm_dp_aux_register(&pdata->aux);
+	if (ret < 0) {
+		drm_err(bridge->dev, "Failed to register DP AUX channel: %d\n", ret);
+		return ret;
+	}
+
 	ret = drm_connector_init(bridge->dev, &pdata->connector,
 				 &ti_sn_bridge_connector_funcs,
 				 DRM_MODE_CONNECTOR_eDP);
 	if (ret) {
 		DRM_ERROR("Failed to initialize connector with drm\n");
-		return ret;
+		goto err_conn_init;
 	}
 
 	drm_connector_helper_add(&pdata->connector,
@@ -543,7 +554,7 @@ static int ti_sn_bridge_attach(struct drm_bridge *bridge,
 	/* check if continuous dsi clock is required or not */
 	pm_runtime_get_sync(pdata->dev);
 	regmap_read(pdata->regmap, SN_DPPLL_SRC_REG, &val);
-	pm_runtime_put(pdata->dev);
+	pm_runtime_put_autosuspend(pdata->dev);
 	if (!(val & DPPLL_CLK_SRC_DSICLK))
 		dsi->mode_flags |= MIPI_DSI_CLOCK_NON_CONTINUOUS;
 
@@ -557,73 +568,33 @@ static int ti_sn_bridge_attach(struct drm_bridge *bridge,
 	/* attach panel to bridge */
 	drm_panel_attach(pdata->panel, &pdata->connector);
 
-	/*
-	 * If we have a refclk then we can support dynamic EDID.
-	 *
-	 * A few notes:
-	 * - From trial and error it appears that we need our clock setup in
-	 *   order to read the EDID. If we don't have refclk then we
-	 *   (presumably) need the MIPI clock on, but turning that on implies
-	 *   knowing the pixel clock / not needing the EDID. Maybe we could
-	 *   futz this if necessary, but for now we won't.
-	 * - In order to read the EDID we need power on to the bridge and
-	 *   the panel (and it has to finish booting up / assert HPD). This
-	 *   is slow so we leave the panel powered when we're done but setup a
-	 *   timeout so we don't leave it on forever.
-	 * - The rest of Linux assumes that it can read the EDID without
-	 *   (explicitly) enabling the power which is why this somewhat awkward
-	 *   step is needed.
-	 */
-	if (pdata->refclk) {
-		mutex_lock(&pdata->pre_enable_mutex);
-
-		pdata->pre_enabled_early = true;
-		__ti_sn_bridge_pre_enable(pdata);
-		pdata->edid = drm_get_edid(&pdata->connector, &pdata->aux.ddc);
-		schedule_delayed_work(&pdata->pre_enable_timeout_work, 30 * HZ);
-
-		mutex_unlock(&pdata->pre_enable_mutex);
-	}
-
 	return 0;
 
 err_dsi_attach:
 	mipi_dsi_device_unregister(dsi);
 err_dsi_host:
 	drm_connector_cleanup(&pdata->connector);
+err_conn_init:
+	drm_dp_aux_unregister(&pdata->aux);
 	return ret;
 }
 
 static void ti_sn_bridge_detach(struct drm_bridge *bridge)
 {
-	struct ti_sn_bridge *pdata = bridge_to_ti_sn_bridge(bridge);
-
-	cancel_delayed_work_sync(&pdata->pre_enable_timeout_work);
-	ti_sn_bridge_cancel_early_pre_enable(pdata);
-
-	kfree(pdata->edid);
-	pdata->edid = NULL;
+	drm_dp_aux_unregister(&bridge_to_ti_sn65dsi86(bridge)->aux);
 }
 
 static void ti_sn_bridge_disable(struct drm_bridge *bridge)
 {
-	struct ti_sn_bridge *pdata = bridge_to_ti_sn_bridge(bridge);
-
-	drm_dp_aux_backlight_disable(pdata->backlight);
+	struct ti_sn65dsi86 *pdata = bridge_to_ti_sn65dsi86(bridge);
 
 	drm_panel_disable(pdata->panel);
 
 	/* disable video stream */
 	regmap_update_bits(pdata->regmap, SN_ENH_FRAME_REG, VSTREAM_ENABLE, 0);
-	/* semi auto link training mode OFF */
-	regmap_write(pdata->regmap, SN_ML_TX_MODE_REG, 0);
-	/* disable DP PLL */
-	regmap_write(pdata->regmap, SN_PLL_ENABLE_REG, 0);
-
-	drm_panel_unprepare(pdata->panel);
 }
 
-static void ti_sn_bridge_set_dsi_rate(struct ti_sn_bridge *pdata)
+static void ti_sn_bridge_set_dsi_rate(struct ti_sn65dsi86 *pdata)
 {
 	unsigned int bit_rate_mhz, clk_freq_mhz;
 	unsigned int val;
@@ -641,7 +612,7 @@ static void ti_sn_bridge_set_dsi_rate(struct ti_sn_bridge *pdata)
 	regmap_write(pdata->regmap, SN_DSIA_CLK_FREQ_REG, val);
 }
 
-static unsigned int ti_sn_bridge_get_bpp(struct ti_sn_bridge *pdata)
+static unsigned int ti_sn_bridge_get_bpp(struct ti_sn65dsi86 *pdata)
 {
 	if (pdata->connector.display_info.bpc <= 6)
 		return 18;
@@ -658,7 +629,7 @@ static const unsigned int ti_sn_bridge_dp_rate_lut[] = {
 	0, 1620, 2160, 2430, 2700, 3240, 4320, 5400
 };
 
-static int ti_sn_bridge_calc_min_dp_rate_idx(struct ti_sn_bridge *pdata)
+static int ti_sn_bridge_calc_min_dp_rate_idx(struct ti_sn65dsi86 *pdata)
 {
 	unsigned int bit_rate_khz, dp_rate_mhz;
 	unsigned int i;
@@ -679,7 +650,7 @@ static int ti_sn_bridge_calc_min_dp_rate_idx(struct ti_sn_bridge *pdata)
 	return i;
 }
 
-static void ti_sn_bridge_read_valid_rates(struct ti_sn_bridge *pdata,
+static void ti_sn_bridge_read_valid_rates(struct ti_sn65dsi86 *pdata,
 					  bool rate_valid[])
 {
 	unsigned int rate_per_200khz;
@@ -760,7 +731,7 @@ static void ti_sn_bridge_read_valid_rates(struct ti_sn_bridge *pdata,
 	}
 }
 
-static void ti_sn_bridge_set_video_timings(struct ti_sn_bridge *pdata)
+static void ti_sn_bridge_set_video_timings(struct ti_sn65dsi86 *pdata)
 {
 	struct drm_display_mode *mode =
 		&pdata->bridge.encoder->crtc->state->adjusted_mode;
@@ -771,9 +742,9 @@ static void ti_sn_bridge_set_video_timings(struct ti_sn_bridge *pdata)
 	if (mode->flags & DRM_MODE_FLAG_PVSYNC)
 		vsync_polarity = CHA_VSYNC_POLARITY;
 
-	ti_sn_bridge_write_u16(pdata, SN_CHA_ACTIVE_LINE_LENGTH_LOW_REG,
+	ti_sn65dsi86_write_u16(pdata, SN_CHA_ACTIVE_LINE_LENGTH_LOW_REG,
 			       mode->hdisplay);
-	ti_sn_bridge_write_u16(pdata, SN_CHA_VERTICAL_DISPLAY_SIZE_LOW_REG,
+	ti_sn65dsi86_write_u16(pdata, SN_CHA_VERTICAL_DISPLAY_SIZE_LOW_REG,
 			       mode->vdisplay);
 	regmap_write(pdata->regmap, SN_CHA_HSYNC_PULSE_WIDTH_LOW_REG,
 		     (mode->hsync_end - mode->hsync_start) & 0xFF);
@@ -799,7 +770,7 @@ static void ti_sn_bridge_set_video_timings(struct ti_sn_bridge *pdata)
 	usleep_range(10000, 10500); /* 10ms delay recommended by spec */
 }
 
-static unsigned int ti_sn_get_max_lanes(struct ti_sn_bridge *pdata)
+static unsigned int ti_sn_get_max_lanes(struct ti_sn65dsi86 *pdata)
 {
 	u8 data;
 	int ret;
@@ -814,7 +785,7 @@ static unsigned int ti_sn_get_max_lanes(struct ti_sn_bridge *pdata)
 	return data & DP_LANE_COUNT_MASK;
 }
 
-static int ti_sn_link_training(struct ti_sn_bridge *pdata, int dp_rate_idx,
+static int ti_sn_link_training(struct ti_sn65dsi86 *pdata, int dp_rate_idx,
 			       const char **last_err_str)
 {
 	unsigned int val;
@@ -874,7 +845,7 @@ exit:
 
 static void ti_sn_bridge_enable(struct drm_bridge *bridge)
 {
-	struct ti_sn_bridge *pdata = bridge_to_ti_sn_bridge(bridge);
+	struct ti_sn65dsi86 *pdata = bridge_to_ti_sn65dsi86(bridge);
 	bool rate_valid[ARRAY_SIZE(ti_sn_bridge_dp_rate_lut)] = { };
 	const char *last_err_str = "No supported DP rate";
 	int dp_rate_idx;
@@ -897,7 +868,7 @@ static void ti_sn_bridge_enable(struct drm_bridge *bridge)
 	/* set dsi clk frequency value */
 	ti_sn_bridge_set_dsi_rate(pdata);
 
-	/**
+	/*
 	 * The SN65DSI86 only supports ASSR Display Authentication method and
 	 * this method is enabled by default. An eDP panel must support this
 	 * authentication method. We need to enable this method in the eDP panel
@@ -941,8 +912,40 @@ static void ti_sn_bridge_enable(struct drm_bridge *bridge)
 			   VSTREAM_ENABLE);
 
 	drm_panel_enable(pdata->panel);
+}
 
-	drm_dp_aux_backlight_enable(pdata->backlight);
+static void ti_sn_bridge_pre_enable(struct drm_bridge *bridge)
+{
+	struct ti_sn65dsi86 *pdata = bridge_to_ti_sn65dsi86(bridge);
+
+	pm_runtime_get_sync(pdata->dev);
+
+	if (!pdata->refclk)
+		ti_sn65dsi86_enable_comms(pdata);
+
+	/* td7: min 100 us after enable before DSI data */
+	usleep_range(100, 110);
+
+	drm_panel_prepare(pdata->panel);
+}
+
+static void ti_sn_bridge_post_disable(struct drm_bridge *bridge)
+{
+	struct ti_sn65dsi86 *pdata = bridge_to_ti_sn65dsi86(bridge);
+
+	drm_panel_unprepare(pdata->panel);
+
+	/* semi auto link training mode OFF */
+	regmap_write(pdata->regmap, SN_ML_TX_MODE_REG, 0);
+	/* Num lanes to 0 as per power sequencing in data sheet */
+	regmap_update_bits(pdata->regmap, SN_SSC_CONFIG_REG, DP_NUM_LANES_MASK, 0);
+	/* disable DP PLL */
+	regmap_write(pdata->regmap, SN_PLL_ENABLE_REG, 0);
+
+	if (!pdata->refclk)
+		ti_sn65dsi86_disable_comms(pdata);
+
+	pm_runtime_put_sync(pdata->dev);
 }
 
 static const struct drm_bridge_funcs ti_sn_bridge_funcs = {
@@ -954,15 +957,15 @@ static const struct drm_bridge_funcs ti_sn_bridge_funcs = {
 	.post_disable = ti_sn_bridge_post_disable,
 };
 
-static struct ti_sn_bridge *aux_to_ti_sn_bridge(struct drm_dp_aux *aux)
+static struct ti_sn65dsi86 *aux_to_ti_sn65dsi86(struct drm_dp_aux *aux)
 {
-	return container_of(aux, struct ti_sn_bridge, aux);
+	return container_of(aux, struct ti_sn65dsi86, aux);
 }
 
 static ssize_t ti_sn_aux_transfer(struct drm_dp_aux *aux,
 				  struct drm_dp_aux_msg *msg)
 {
-	struct ti_sn_bridge *pdata = aux_to_ti_sn_bridge(aux);
+	struct ti_sn65dsi86 *pdata = aux_to_ti_sn65dsi86(aux);
 	u32 request = msg->request & ~(DP_AUX_I2C_MOT | DP_AUX_I2C_WRITE_STATUS_UPDATE);
 	u32 request_val = AUX_CMD_REQ(msg->request);
 	u8 *buf = msg->buffer;
@@ -974,6 +977,20 @@ static ssize_t ti_sn_aux_transfer(struct drm_dp_aux *aux,
 	if (len > SN_AUX_MAX_PAYLOAD_BYTES)
 		return -EINVAL;
 
+	pm_runtime_get_sync(pdata->dev);
+	mutex_lock(&pdata->comms_mutex);
+
+	/*
+	 * If someone tries to do a DDC over AUX transaction before pre_enable()
+	 * on a device without a dedicated reference clock then we just can't
+	 * do it. Fail right away. This prevents non-refclk users from reading
+	 * the EDID before enabling the panel but such is life.
+	 */
+	if (!pdata->comms_enabled) {
+		ret = -EIO;
+		goto exit;
+	}
+
 	switch (request) {
 	case DP_AUX_NATIVE_WRITE:
 	case DP_AUX_I2C_WRITE:
@@ -984,7 +1001,8 @@ static ssize_t ti_sn_aux_transfer(struct drm_dp_aux *aux,
 		msg->reply = 0;
 		break;
 	default:
-		return -EINVAL;
+		ret = -EINVAL;
+		goto exit;
 	}
 
 	BUILD_BUG_ON(sizeof(addr_len) != sizeof(__be32));
@@ -1008,11 +1026,11 @@ static ssize_t ti_sn_aux_transfer(struct drm_dp_aux *aux,
 	ret = regmap_read_poll_timeout(pdata->regmap, SN_AUX_CMD_REG, val,
 				       !(val & AUX_CMD_SEND), 0, 50 * 1000);
 	if (ret)
-		return ret;
+		goto exit;
 
 	ret = regmap_read(pdata->regmap, SN_AUX_CMD_STATUS_REG, &val);
 	if (ret)
-		return ret;
+		goto exit;
 
 	if (val & AUX_IRQ_STATUS_AUX_RPLY_TOUT) {
 		/*
@@ -1020,13 +1038,14 @@ static ssize_t ti_sn_aux_transfer(struct drm_dp_aux *aux,
 		 * but it hit a timeout. We ignore defers here because they're
 		 * handled in hardware.
 		 */
-		return -ETIMEDOUT;
+		ret = -ETIMEDOUT;
+		goto exit;
 	}
 
 	if (val & AUX_IRQ_STATUS_AUX_SHORT) {
 		ret = regmap_read(pdata->regmap, SN_AUX_LENGTH_REG, &len);
 		if (ret)
-			return ret;
+			goto exit;
 	} else if (val & AUX_IRQ_STATUS_NAT_I2C_FAIL) {
 		switch (request) {
 		case DP_AUX_I2C_WRITE:
@@ -1038,21 +1057,24 @@ static ssize_t ti_sn_aux_transfer(struct drm_dp_aux *aux,
 			msg->reply |= DP_AUX_NATIVE_REPLY_NACK;
 			break;
 		}
-		return 0;
+		len = 0;
+		goto exit;
 	}
 
-	if (request == DP_AUX_NATIVE_WRITE || request == DP_AUX_I2C_WRITE ||
-	    len == 0)
-		return len;
+	if (request != DP_AUX_NATIVE_WRITE && request != DP_AUX_I2C_WRITE && len != 0)
+		ret = regmap_bulk_read(pdata->regmap, SN_AUX_RDATA_REG(0), buf, len);
 
-	ret = regmap_bulk_read(pdata->regmap, SN_AUX_RDATA_REG(0), buf, len);
+exit:
+	mutex_unlock(&pdata->comms_mutex);
+	pm_runtime_mark_last_busy(pdata->dev);
+	pm_runtime_put_autosuspend(pdata->dev);
+
 	if (ret)
 		return ret;
-
 	return len;
 }
 
-static int ti_sn_bridge_parse_dsi_host(struct ti_sn_bridge *pdata)
+static int ti_sn_bridge_parse_dsi_host(struct ti_sn65dsi86 *pdata)
 {
 	struct device_node *np = pdata->dev->of_node;
 
@@ -1087,7 +1109,7 @@ static int tn_sn_bridge_of_xlate(struct gpio_chip *chip,
 static int ti_sn_bridge_gpio_get_direction(struct gpio_chip *chip,
 					   unsigned int offset)
 {
-	struct ti_sn_bridge *pdata = gpiochip_get_data(chip);
+	struct ti_sn65dsi86 *pdata = gpiochip_get_data(chip);
 
 	/*
 	 * We already have to keep track of the direction because we use
@@ -1101,7 +1123,7 @@ static int ti_sn_bridge_gpio_get_direction(struct gpio_chip *chip,
 
 static int ti_sn_bridge_gpio_get(struct gpio_chip *chip, unsigned int offset)
 {
-	struct ti_sn_bridge *pdata = gpiochip_get_data(chip);
+	struct ti_sn65dsi86 *pdata = gpiochip_get_data(chip);
 	unsigned int val;
 	int ret;
 
@@ -1115,7 +1137,7 @@ static int ti_sn_bridge_gpio_get(struct gpio_chip *chip, unsigned int offset)
 	 */
 	pm_runtime_get_sync(pdata->dev);
 	ret = regmap_read(pdata->regmap, SN_GPIO_IO_REG, &val);
-	pm_runtime_put(pdata->dev);
+	pm_runtime_put_autosuspend(pdata->dev);
 
 	if (ret)
 		return ret;
@@ -1126,7 +1148,7 @@ static int ti_sn_bridge_gpio_get(struct gpio_chip *chip, unsigned int offset)
 static void ti_sn_bridge_gpio_set(struct gpio_chip *chip, unsigned int offset,
 				  int val)
 {
-	struct ti_sn_bridge *pdata = gpiochip_get_data(chip);
+	struct ti_sn65dsi86 *pdata = gpiochip_get_data(chip);
 	int ret;
 
 	if (!test_bit(offset, pdata->gchip_output)) {
@@ -1146,7 +1168,7 @@ static void ti_sn_bridge_gpio_set(struct gpio_chip *chip, unsigned int offset,
 static int ti_sn_bridge_gpio_direction_input(struct gpio_chip *chip,
 					     unsigned int offset)
 {
-	struct ti_sn_bridge *pdata = gpiochip_get_data(chip);
+	struct ti_sn65dsi86 *pdata = gpiochip_get_data(chip);
 	int shift = offset * 2;
 	int ret;
 
@@ -1166,7 +1188,7 @@ static int ti_sn_bridge_gpio_direction_input(struct gpio_chip *chip,
 	 * it off and when it comes back it will have lost all state, but
 	 * that's OK because the default is input and we're now an input.
 	 */
-	pm_runtime_put(pdata->dev);
+	pm_runtime_put_autosuspend(pdata->dev);
 
 	return 0;
 }
@@ -1174,7 +1196,7 @@ static int ti_sn_bridge_gpio_direction_input(struct gpio_chip *chip,
 static int ti_sn_bridge_gpio_direction_output(struct gpio_chip *chip,
 					      unsigned int offset, int val)
 {
-	struct ti_sn_bridge *pdata = gpiochip_get_data(chip);
+	struct ti_sn65dsi86 *pdata = gpiochip_get_data(chip);
 	int shift = offset * 2;
 	int ret;
 
@@ -1192,7 +1214,7 @@ static int ti_sn_bridge_gpio_direction_output(struct gpio_chip *chip,
 				 SN_GPIO_MUX_OUTPUT << shift);
 	if (ret) {
 		clear_bit(offset, pdata->gchip_output);
-		pm_runtime_put(pdata->dev);
+		pm_runtime_put_autosuspend(pdata->dev);
 	}
 
 	return ret;
@@ -1208,8 +1230,10 @@ static const char * const ti_sn_bridge_gpio_names[SN_NUM_GPIOS] = {
 	"GPIO1", "GPIO2", "GPIO3", "GPIO4"
 };
 
-static int ti_sn_setup_gpio_controller(struct ti_sn_bridge *pdata)
+static int ti_sn_gpio_probe(struct auxiliary_device *adev,
+			    const struct auxiliary_device_id *id)
 {
+	struct ti_sn65dsi86 *pdata = dev_get_drvdata(adev->dev.parent);
 	int ret;
 
 	/* Only init if someone is going to use us as a GPIO controller */
@@ -1231,23 +1255,44 @@ static int ti_sn_setup_gpio_controller(struct ti_sn_bridge *pdata)
 	pdata->gchip.names = ti_sn_bridge_gpio_names;
 	pdata->gchip.ngpio = SN_NUM_GPIOS;
 	pdata->gchip.base = -1;
-	ret = devm_gpiochip_add_data(pdata->dev, &pdata->gchip, pdata);
+	ret = devm_gpiochip_add_data(&adev->dev, &pdata->gchip, pdata);
 	if (ret)
 		dev_err(pdata->dev, "can't add gpio chip\n");
 
 	return ret;
 }
 
+static const struct auxiliary_device_id ti_sn_gpio_id_table[] = {
+	{ .name = "ti_sn65dsi86.gpio", },
+	{},
+};
+
+MODULE_DEVICE_TABLE(auxiliary, ti_sn_gpio_id_table);
+
+static struct auxiliary_driver ti_sn_gpio_driver = {
+	.name = "gpio",
+	.probe = ti_sn_gpio_probe,
+	.id_table = ti_sn_gpio_id_table,
+};
+
+static int __init ti_sn_gpio_register(void)
+{
+	return auxiliary_driver_register(&ti_sn_gpio_driver);
+}
+
+static void ti_sn_gpio_unregister(void)
+{
+	auxiliary_driver_unregister(&ti_sn_gpio_driver);
+}
+
 #else
 
-static inline int ti_sn_setup_gpio_controller(struct ti_sn_bridge *pdata)
-{
-	return 0;
-}
+static inline int ti_sn_gpio_register(void) { return 0; }
+static inline void ti_sn_gpio_unregister(void) {}
 
 #endif
 
-static void ti_sn_bridge_parse_lanes(struct ti_sn_bridge *pdata,
+static void ti_sn_bridge_parse_lanes(struct ti_sn65dsi86 *pdata,
 				     struct device_node *np)
 {
 	u32 lane_assignments[SN_MAX_DP_LANES] = { 0, 1, 2, 3 };
@@ -1296,126 +1341,38 @@ static void ti_sn_bridge_parse_lanes(struct ti_sn_bridge *pdata,
 	pdata->ln_polrs = ln_polrs;
 }
 
-static int ti_sn_bridge_probe(struct i2c_client *client,
-			      const struct i2c_device_id *id)
+static int ti_sn_bridge_probe(struct auxiliary_device *adev,
+			      const struct auxiliary_device_id *id)
 {
-	struct ti_sn_bridge *pdata;
-	struct drm_dp_aux_backlight *aux_bl;
+	struct ti_sn65dsi86 *pdata = dev_get_drvdata(adev->dev.parent);
+	struct device_node *np = pdata->dev->of_node;
 	int ret;
 
-	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
-		DRM_ERROR("device doesn't support I2C\n");
-		return -ENODEV;
-	}
+	ret = drm_of_find_panel_or_bridge(np, 1, 0, &pdata->panel, NULL);
+	if (ret)
+		return dev_err_probe(&adev->dev, ret,
+				     "could not find any panel node\n");
 
-	pdata = devm_kzalloc(&client->dev, sizeof(struct ti_sn_bridge),
-			     GFP_KERNEL);
-	if (!pdata)
-		return -ENOMEM;
-
-	mutex_init(&pdata->pre_enable_mutex);
-	INIT_DELAYED_WORK(&pdata->pre_enable_timeout_work,
-			  ti_sn_bridge_pre_enable_timeout);
-
-	pdata->regmap = devm_regmap_init_i2c(client,
-					     &ti_sn_bridge_regmap_config);
-	if (IS_ERR(pdata->regmap)) {
-		DRM_ERROR("regmap i2c init failed\n");
-		return PTR_ERR(pdata->regmap);
-	}
-
-	pdata->dev = &client->dev;
-
-	ret = drm_of_find_panel_or_bridge(pdata->dev->of_node, 1, 0,
-					  &pdata->panel, NULL);
-	if (ret) {
-		DRM_ERROR("could not find any panel node\n");
-		return ret;
-	}
-
-	dev_set_drvdata(&client->dev, pdata);
-
-	pdata->enable_gpio = devm_gpiod_get(pdata->dev, "enable",
-					    GPIOD_OUT_LOW);
-	if (IS_ERR(pdata->enable_gpio)) {
-		DRM_ERROR("failed to get enable gpio from DT\n");
-		ret = PTR_ERR(pdata->enable_gpio);
-		return ret;
-	}
-
-	ti_sn_bridge_parse_lanes(pdata, client->dev.of_node);
-
-	ret = ti_sn_bridge_parse_regulators(pdata);
-	if (ret) {
-		DRM_ERROR("failed to parse regulators\n");
-		return ret;
-	}
-
-	pdata->refclk = devm_clk_get_optional(pdata->dev, "refclk");
-	if (IS_ERR(pdata->refclk))
-		return PTR_ERR(pdata->refclk);
+	ti_sn_bridge_parse_lanes(pdata, np);
 
 	ret = ti_sn_bridge_parse_dsi_host(pdata);
 	if (ret)
 		return ret;
 
-	pm_runtime_enable(pdata->dev);
-
-	ret = ti_sn_setup_gpio_controller(pdata);
-	if (ret)
-		goto out;
-
-	i2c_set_clientdata(client, pdata);
-
-	pdata->aux.name = "ti-sn65dsi86-aux";
-	pdata->aux.dev = pdata->dev;
-	pdata->aux.transfer = ti_sn_aux_transfer;
-	drm_dp_aux_register(&pdata->aux);
-
-	if (of_find_property(pdata->dev->of_node, "use-aux-backlight", NULL)) {
-		aux_bl = devm_kzalloc(pdata->dev, sizeof(*aux_bl), GFP_KERNEL);
-		if (!aux_bl) {
-			ret = -ENOMEM;
-			goto out;
-		}
-		aux_bl->dev = pdata->dev;
-		aux_bl->aux = &pdata->aux;
-		ret = drm_dp_aux_backlight_register("ti-sn-aux-backlight",
-						    aux_bl);
-		if (ret) {
-			DRM_ERROR("failed to register dp aux backlight %d\n",
-				  ret);
-			goto out;
-		}
-		pdata->backlight = aux_bl;
-	}
-
 	pdata->bridge.funcs = &ti_sn_bridge_funcs;
-	pdata->bridge.of_node = client->dev.of_node;
+	pdata->bridge.of_node = np;
 
 	drm_bridge_add(&pdata->bridge);
 
-	ti_sn_debugfs_init(pdata);
-
 	return 0;
-
-out:
-	pm_runtime_disable(pdata->dev);
-	return ret;
 }
 
-static int ti_sn_bridge_remove(struct i2c_client *client)
+static void ti_sn_bridge_remove(struct auxiliary_device *adev)
 {
-	struct ti_sn_bridge *pdata = i2c_get_clientdata(client);
+	struct ti_sn65dsi86 *pdata = dev_get_drvdata(adev->dev.parent);
 
 	if (!pdata)
-		return -EINVAL;
-
-	ti_sn_debugfs_remove(pdata);
-
-	of_node_put(pdata->host_node);
-
-	pm_runtime_disable(pdata->dev);
+		return;
 
 	if (pdata->dsi) {
 		mipi_dsi_detach(pdata->dsi);
@@ -1424,32 +1381,241 @@ static int ti_sn_bridge_remove(struct i2c_client *client)
 
 	drm_bridge_remove(&pdata->bridge);
 
-	return 0;
+	of_node_put(pdata->host_node);
 }
 
-static struct i2c_device_id ti_sn_bridge_id[] = {
+static const struct auxiliary_device_id ti_sn_bridge_id_table[] = {
+	{ .name = "ti_sn65dsi86.bridge", },
+	{},
+};
+
+static struct auxiliary_driver ti_sn_bridge_driver = {
+	.name = "bridge",
+	.probe = ti_sn_bridge_probe,
+	.remove = ti_sn_bridge_remove,
+	.id_table = ti_sn_bridge_id_table,
+};
+
+static void ti_sn65dsi86_runtime_disable(void *data)
+{
+	pm_runtime_disable(data);
+}
+
+static void ti_sn65dsi86_uninit_aux(void *data)
+{
+	auxiliary_device_uninit(data);
+}
+
+static void ti_sn65dsi86_delete_aux(void *data)
+{
+	auxiliary_device_delete(data);
+}
+
+/*
+ * AUX bus docs say that a non-NULL release is mandatory, but it makes no
+ * sense for the model used here where all of the aux devices are allocated
+ * in the single shared structure. We'll use this noop as a workaround.
+ */
+static void ti_sn65dsi86_noop(struct device *dev) {}
+
+static int ti_sn65dsi86_add_aux_device(struct ti_sn65dsi86 *pdata,
+				       struct auxiliary_device *aux,
+				       const char *name)
+{
+	struct device *dev = pdata->dev;
+	int ret;
+
+	aux->name = name;
+	aux->dev.parent = dev;
+	aux->dev.release = ti_sn65dsi86_noop;
+	device_set_of_node_from_dev(&aux->dev, dev);
+	ret = auxiliary_device_init(aux);
+	if (ret)
+		return ret;
+	ret = devm_add_action_or_reset(dev, ti_sn65dsi86_uninit_aux, aux);
+	if (ret)
+		return ret;
+
+	ret = auxiliary_device_add(aux);
+	if (ret)
+		return ret;
+	ret = devm_add_action_or_reset(dev, ti_sn65dsi86_delete_aux, aux);
+
+	return ret;
+}
+
+static int ti_sn_aux_probe(struct auxiliary_device *adev,
+			   const struct auxiliary_device_id *id)
+{
+	struct ti_sn65dsi86 *pdata = dev_get_drvdata(adev->dev.parent);
+	int ret;
+
+	pdata->aux.name = "ti-sn65dsi86-aux";
+	pdata->aux.dev = &adev->dev;
+	pdata->aux.transfer = ti_sn_aux_transfer;
+	drm_dp_aux_init(&pdata->aux);
+
+	ret = devm_of_dp_aux_populate_ep_devices(&pdata->aux);
+	if (ret)
+		return ret;
+
+	/*
+	 * The eDP to MIPI bridge parts don't work until the AUX channel is
+	 * setup so we don't add it in the main driver probe, we add it now.
+	 */
+	return ti_sn65dsi86_add_aux_device(pdata, &pdata->bridge_aux, "bridge");
+}
+
+static const struct auxiliary_device_id ti_sn_aux_id_table[] = {
+	{ .name = "ti_sn65dsi86.aux", },
+	{},
+};
+
+static struct auxiliary_driver ti_sn_aux_driver = {
+	.name = "aux",
+	.probe = ti_sn_aux_probe,
+	.id_table = ti_sn_aux_id_table,
+};
+
+static int ti_sn65dsi86_probe(struct i2c_client *client,
+			      const struct i2c_device_id *id)
+{
+	struct device *dev = &client->dev;
+	struct ti_sn65dsi86 *pdata;
+	int ret;
+
+	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
+		DRM_ERROR("device doesn't support I2C\n");
+		return -ENODEV;
+	}
+
+	pdata = devm_kzalloc(dev, sizeof(struct ti_sn65dsi86), GFP_KERNEL);
+	if (!pdata)
+		return -ENOMEM;
+	dev_set_drvdata(dev, pdata);
+	pdata->dev = dev;
+
+	mutex_init(&pdata->comms_mutex);
+
+	pdata->regmap = devm_regmap_init_i2c(client,
+					     &ti_sn65dsi86_regmap_config);
+	if (IS_ERR(pdata->regmap))
+		return dev_err_probe(dev, PTR_ERR(pdata->regmap),
+				     "regmap i2c init failed\n");
+
+	pdata->enable_gpio = devm_gpiod_get(dev, "enable", GPIOD_OUT_LOW);
+	if (IS_ERR(pdata->enable_gpio))
+		return dev_err_probe(dev, PTR_ERR(pdata->enable_gpio),
+				     "failed to get enable gpio from DT\n");
+
+	ret = ti_sn65dsi86_parse_regulators(pdata);
+	if (ret)
+		return dev_err_probe(dev, ret, "failed to parse regulators\n");
+
+	pdata->refclk = devm_clk_get_optional(dev, "refclk");
+	if (IS_ERR(pdata->refclk))
+		return dev_err_probe(dev, PTR_ERR(pdata->refclk),
+				     "failed to get reference clock\n");
+
+	pm_runtime_enable(dev);
+	ret = devm_add_action_or_reset(dev, ti_sn65dsi86_runtime_disable, dev);
+	if (ret)
+		return ret;
+	pm_runtime_set_autosuspend_delay(pdata->dev, 500);
+	pm_runtime_use_autosuspend(pdata->dev);
+
+	ti_sn65dsi86_debugfs_init(pdata);
+
+	/*
+	 * Break ourselves up into a collection of aux devices. The only real
+	 * motiviation here is to solve the chicken-and-egg problem of probe
+	 * ordering. The bridge wants the panel to be there when it probes.
+	 * The panel wants its HPD GPIO (provided by sn65dsi86 on some boards)
+	 * when it probes. The panel and maybe backlight might want the DDC
+	 * bus. Soon the PWM provided by the bridge chip will have the same
+	 * problem. Having sub-devices allows the some sub devices to finish
+	 * probing even if others return -EPROBE_DEFER and gets us around the
+	 * problems.
+	 */
+
+	if (IS_ENABLED(CONFIG_OF_GPIO)) {
+		ret = ti_sn65dsi86_add_aux_device(pdata, &pdata->gpio_aux, "gpio");
+		if (ret)
+			return ret;
+	}
+
+	/*
+	 * NOTE: At the end of the AUX channel probe we'll add the aux device
+	 * for the bridge. This is because the bridge can't be used until the
+	 * AUX channel is there and this is a very simple solution to the
+	 * dependency problem.
+	 */
+	return ti_sn65dsi86_add_aux_device(pdata, &pdata->aux_aux, "aux");
+}
+
+static struct i2c_device_id ti_sn65dsi86_id[] = {
 	{ "ti,sn65dsi86", 0},
 	{},
 };
-MODULE_DEVICE_TABLE(i2c, ti_sn_bridge_id);
+MODULE_DEVICE_TABLE(i2c, ti_sn65dsi86_id);
 
-static const struct of_device_id ti_sn_bridge_match_table[] = {
+static const struct of_device_id ti_sn65dsi86_match_table[] = {
 	{.compatible = "ti,sn65dsi86"},
 	{},
 };
-MODULE_DEVICE_TABLE(of, ti_sn_bridge_match_table);
+MODULE_DEVICE_TABLE(of, ti_sn65dsi86_match_table);
 
-static struct i2c_driver ti_sn_bridge_driver = {
+static struct i2c_driver ti_sn65dsi86_driver = {
 	.driver = {
 		.name = "ti_sn65dsi86",
-		.of_match_table = ti_sn_bridge_match_table,
-		.pm = &ti_sn_bridge_pm_ops,
+		.of_match_table = ti_sn65dsi86_match_table,
+		.pm = &ti_sn65dsi86_pm_ops,
 	},
-	.probe = ti_sn_bridge_probe,
-	.remove = ti_sn_bridge_remove,
-	.id_table = ti_sn_bridge_id,
+	.probe = ti_sn65dsi86_probe,
+	.id_table = ti_sn65dsi86_id,
 };
-module_i2c_driver(ti_sn_bridge_driver);
+
+static int __init ti_sn65dsi86_init(void)
+{
+	int ret;
+
+	ret = i2c_add_driver(&ti_sn65dsi86_driver);
+	if (ret)
+		return ret;
+
+	ret = ti_sn_gpio_register();
+	if (ret)
+		goto err_main_was_registered;
+
+	ret = auxiliary_driver_register(&ti_sn_aux_driver);
+	if (ret)
+		goto err_gpio_was_registered;
+
+	ret = auxiliary_driver_register(&ti_sn_bridge_driver);
+	if (ret)
+		goto err_aux_was_registered;
+
+	return 0;
+
+err_aux_was_registered:
+	auxiliary_driver_unregister(&ti_sn_aux_driver);
+err_gpio_was_registered:
+	ti_sn_gpio_unregister();
+err_main_was_registered:
+	i2c_del_driver(&ti_sn65dsi86_driver);
+
+	return ret;
+}
+module_init(ti_sn65dsi86_init);
+
+static void __exit ti_sn65dsi86_exit(void)
+{
+	auxiliary_driver_unregister(&ti_sn_bridge_driver);
+	auxiliary_driver_unregister(&ti_sn_aux_driver);
+	ti_sn_gpio_unregister();
+	i2c_del_driver(&ti_sn65dsi86_driver);
+}
+module_exit(ti_sn65dsi86_exit);
 
 MODULE_AUTHOR("Sandeep Panda <spanda@codeaurora.org>");
 MODULE_DESCRIPTION("sn65dsi86 DSI to eDP bridge driver");

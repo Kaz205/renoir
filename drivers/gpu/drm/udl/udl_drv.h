@@ -60,6 +60,7 @@ struct udl_device {
 	struct device *dev;
 	struct usb_device *udev;
 	struct drm_crtc *crtc;
+	struct device *dmadev;
 
 	struct mutex gem_lock;
 

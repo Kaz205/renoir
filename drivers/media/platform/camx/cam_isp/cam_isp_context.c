@@ -63,7 +63,7 @@ static void __cam_isp_ctx_update_event_record(
 {
 	int iterator = 0;
 	struct cam_isp_ctx_req  *req_isp;
-	struct timeval cur_time;
+	ktime_t cur_time;
 
 	switch (event) {
 	case CAM_ISP_CTX_EVENT_EPOCH:
@@ -83,23 +83,17 @@ static void __cam_isp_ctx_update_event_record(
 
 	iterator = INC_HEAD(&ctx_isp->event_record_head[event],
 		CAM_ISP_CTX_EVENT_RECORD_MAX_ENTRIES);
-	cam_common_util_get_curr_timestamp(&cur_time);
+	cur_time = cam_common_util_get_curr_timestamp();
 
 	if (req) {
 		req_isp = (struct cam_isp_ctx_req *) req->req_priv;
 		ctx_isp->event_record[event][iterator].req_id =
 			req->request_id;
-		req_isp->event_timestamp[event].tv_sec =
-			cur_time.tv_sec;
-		req_isp->event_timestamp[event].tv_usec =
-			cur_time.tv_usec;
+		req_isp->event_timestamp[event] = cur_time;
 	} else {
 		ctx_isp->event_record[event][iterator].req_id = 0;
 	}
-	ctx_isp->event_record[event][iterator].timestamp.tv_sec =
-		cur_time.tv_sec;
-	ctx_isp->event_record[event][iterator].timestamp.tv_usec =
-		cur_time.tv_usec;
+	ctx_isp->event_record[event][iterator].timestamp = cur_time;
 }
 
 static void __cam_isp_ctx_dump_event_record(
@@ -115,6 +109,7 @@ static void __cam_isp_ctx_dump_event_record(
 	struct cam_isp_context_dump_header *hdr;
 	uint64_t *addr, *start;
 	uint8_t *dst;
+	struct timespec64 tm;
 
 	if (!cpu_addr || !buf_len || !offset) {
 		CAM_ERR(CAM_ISP, "Invalid args");
@@ -137,9 +132,10 @@ static void __cam_isp_ctx_dump_event_record(
 				CAM_ISP_CTX_EVENT_RECORD_MAX_ENTRIES) %
 				CAM_ISP_CTX_EVENT_RECORD_MAX_ENTRIES);
 			record  = &ctx_isp->event_record[i][index];
+			tm = ktime_to_timespec64(record->timestamp);
 			*addr++ = record->req_id;
-			*addr++ = record->timestamp.tv_sec;
-			*addr++ = record->timestamp.tv_usec;
+			*addr++ = tm.tv_sec;
+			*addr++ = tm.tv_nsec / NSEC_PER_USEC;
 		}
 		hdr->size = hdr->word_size * (addr - start);
 		*offset += hdr->size +
@@ -2303,8 +2299,8 @@ static int __cam_isp_ctx_dump_in_top_state(struct cam_context *ctx,
 	struct cam_ctx_request           *req_temp;
 	struct cam_hw_dump_args dump_args;
 	struct cam_isp_context *ctx_isp;
-	uint64_t diff = 0;
-	struct timeval cur_time;
+	s64 diff;
+	ktime_t cur_time;
 	int rc = 0;
 	uintptr_t cpu_addr;
 	size_t buf_len;
@@ -2312,6 +2308,7 @@ static int __cam_isp_ctx_dump_in_top_state(struct cam_context *ctx,
 	uint64_t *addr, *start;
 	uint8_t *dst;
 	bool is_dump_only_event_record = false;
+	struct timespec64 tm, cur_tm;
 
 	list_for_each_entry_safe(req, req_temp,
 		&ctx->active_req_list, list) {
@@ -2333,9 +2330,12 @@ static int __cam_isp_ctx_dump_in_top_state(struct cam_context *ctx,
 hw_dump:
 	if (req) {
 		req_isp = (struct cam_isp_ctx_req *) req->req_priv;
-		cam_common_util_get_curr_timestamp(&cur_time);
-		diff = cam_common_util_get_time_diff(&cur_time,
-			&req_isp->event_timestamp[CAM_ISP_CTX_EVENT_APPLY]);
+		cur_time = cam_common_util_get_curr_timestamp();
+		cur_tm = ktime_to_timespec64(cur_time);
+		tm = ktime_to_timespec64(
+			req_isp->event_timestamp[CAM_ISP_CTX_EVENT_APPLY]);
+		diff = ktime_us_delta(cur_time,
+			req_isp->event_timestamp[CAM_ISP_CTX_EVENT_APPLY]);
 		if (diff < CAM_ISP_CTX_RESPONSE_TIME_THRESHOLD) {
 			CAM_INFO(CAM_ISP, "req %lld found no error",
 				req->request_id);
@@ -2366,12 +2366,10 @@ hw_dump:
 			sizeof(struct cam_isp_context_dump_header));
 		start = addr;
 		*addr++ = req->request_id;
-		*addr++ = req_isp->event_timestamp
-			[CAM_ISP_CTX_EVENT_APPLY].tv_sec;
-		*addr++ = req_isp->event_timestamp
-			[CAM_ISP_CTX_EVENT_APPLY].tv_usec;
-		*addr++ = cur_time.tv_sec;
-		*addr++ = cur_time.tv_usec;
+		*addr++ = tm.tv_sec;
+		*addr++ = tm.tv_nsec / NSEC_PER_USEC;
+		*addr++ = cur_tm.tv_sec;
+		*addr++ = cur_tm.tv_nsec / NSEC_PER_USEC;
 		hdr->size = hdr->word_size * (addr - start);
 		dump_info->offset += hdr->size +
 			sizeof(struct cam_isp_context_dump_header);

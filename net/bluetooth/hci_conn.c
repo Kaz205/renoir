@@ -508,6 +508,23 @@ static void hci_conn_auto_accept(struct work_struct *work)
 		     &conn->dst);
 }
 
+static void le_disable_advertising(struct hci_dev *hdev)
+{
+	if (ext_adv_capable(hdev)) {
+		struct hci_cp_le_set_ext_adv_enable cp;
+
+		cp.enable = 0x00;
+		cp.num_of_sets = 0x00;
+
+		hci_send_cmd(hdev, HCI_OP_LE_SET_EXT_ADV_ENABLE, sizeof(cp),
+			     &cp);
+	} else {
+		u8 enable = 0x00;
+		hci_send_cmd(hdev, HCI_OP_LE_SET_ADV_ENABLE, sizeof(enable),
+			     &enable);
+	}
+}
+
 static void le_conn_timeout(struct work_struct *work)
 {
 	struct hci_conn *conn = container_of(work, struct hci_conn,
@@ -522,9 +539,8 @@ static void le_conn_timeout(struct work_struct *work)
 	 * (which doesn't have a timeout of its own).
 	 */
 	if (conn->role == HCI_ROLE_SLAVE) {
-		u8 enable = 0x00;
-		hci_send_cmd(hdev, HCI_OP_LE_SET_ADV_ENABLE, sizeof(enable),
-			     &enable);
+		/* Disable LE Advertising */
+		le_disable_advertising(hdev);
 		hci_le_conn_failed(conn, HCI_ERROR_ADVERTISING_TIMEOUT);
 		return;
 	}
@@ -1033,6 +1049,12 @@ struct hci_conn *hci_connect_le(struct hci_dev *hdev, bdaddr_t *dst,
 	struct smp_irk *irk;
 	struct hci_request req;
 	int err;
+	u16 conn_latency;
+
+	/* This ensures that during disable le_scan address resolution
+	 * will not be disabled if it is followed by le_create_conn
+	 */
+	bool rpa_le_conn = true;
 
 	/* Let's make sure that le is enabled.*/
 	if (!hci_dev_test_flag(hdev, HCI_LE_ENABLED)) {
@@ -1128,6 +1150,20 @@ struct hci_conn *hci_connect_le(struct hci_dev *hdev, bdaddr_t *dst,
 		conn->le_supv_timeout = hdev->le_supv_timeout;
 	}
 
+	/* With the strict connection expectation from some controllers on
+	 * remote devices which can't listen to consecutive connection,
+	 * connection latency should be calculated based on the spec instead of
+	 * the default 0. The equation is simplified by calculating the time
+	 * units of supervision timeout and connection latency based on
+	 * BLUETOOTH CORE SPECIFICATION Version 5.2 | Vol 6, Part B page 2981
+	 * 2 is the arbitrary number based on the results of experiments.
+	 */
+	if (test_bit(HCI_QUIRK_LOOSEN_CONN_LATENCY, &hdev->quirks)) {
+		conn_latency = (u16)(((conn->le_supv_timeout * 4) /
+					conn->le_conn_max_interval) - 1);
+		conn->le_conn_latency = conn_latency > 2 ? 2 : conn_latency;
+	}
+
 	/* If controller is scanning, we stop it since some controllers are
 	 * not able to scan and connect at the same time. Also set the
 	 * HCI_LE_SCAN_INTERRUPTED flag so that the command complete
@@ -1135,7 +1171,7 @@ struct hci_conn *hci_connect_le(struct hci_dev *hdev, bdaddr_t *dst,
 	 * state.
 	 */
 	if (hci_dev_test_flag(hdev, HCI_LE_SCAN)) {
-		hci_req_add_le_scan_disable(&req);
+		hci_req_add_le_scan_disable(&req, rpa_le_conn);
 		hci_dev_set_flag(hdev, HCI_LE_SCAN_INTERRUPTED);
 	}
 
@@ -1224,20 +1260,6 @@ struct hci_conn *hci_connect_le_scan(struct hci_dev *hdev, bdaddr_t *dst,
 		return ERR_PTR(-EOPNOTSUPP);
 	}
 
-	/* If we don't have an Irk or that we have a recent rpa, skip the extra
-	 * scan and try to connect immediately.
-	 */
-	irk = hci_find_irk_by_addr(hdev, dst, dst_type);
-	if (!irk ||
-	    time_before(jiffies, irk->rpa_timestamp + msecs_to_jiffies(2000))) {
-		bt_dev_info(hdev, "Skipping le scan before connect");
-
-		return hci_connect_le(hdev, dst, dst_type,
-				sec_level,
-				HCI_LE_CONN_TIMEOUT,
-				HCI_ROLE_MASTER, NULL);
-	}
-
 	/* Some devices send ATT messages as soon as the physical link is
 	 * established. To be able to handle these ATT messages, the user-
 	 * space first establishes the connection and then starts the pairing
@@ -1252,6 +1274,20 @@ struct hci_conn *hci_connect_le_scan(struct hci_dev *hdev, bdaddr_t *dst,
 		if (conn->pending_sec_level < sec_level)
 			conn->pending_sec_level = sec_level;
 		goto done;
+	}
+
+	/* If we don't have an Irk or that we have a recent rpa, skip the extra
+	 * scan and try to connect immediately.
+	 */
+	irk = hci_find_irk_by_addr(hdev, dst, dst_type);
+	if (!irk ||
+	    time_before(jiffies, irk->rpa_timestamp + msecs_to_jiffies(2000))) {
+		bt_dev_info(hdev, "Skipping le scan before connect");
+
+		return hci_connect_le(hdev, dst, dst_type,
+				sec_level,
+				HCI_LE_CONN_TIMEOUT,
+				HCI_ROLE_MASTER, NULL);
 	}
 
 	BT_DBG("requesting refresh of dst_addr");

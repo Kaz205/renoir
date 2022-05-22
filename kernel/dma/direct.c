@@ -13,6 +13,7 @@
 #include <linux/pfn.h>
 #include <linux/vmalloc.h>
 #include <linux/set_memory.h>
+#include <linux/slab.h>
 
 /*
  * Most architectures use ZONE_DMA for the first 16 Megabytes, but
@@ -26,7 +27,7 @@ static inline dma_addr_t phys_to_dma_direct(struct device *dev,
 		phys_addr_t phys)
 {
 	if (force_dma_unencrypted(dev))
-		return __phys_to_dma(dev, phys);
+		return phys_to_dma_unencrypted(dev, phys);
 	return phys_to_dma(dev, phys);
 }
 
@@ -45,15 +46,9 @@ u64 dma_direct_get_required_mask(struct device *dev)
 }
 
 static gfp_t __dma_direct_optimal_gfp_mask(struct device *dev, u64 dma_mask,
-		u64 *phys_mask)
+		u64 *phys_limit)
 {
-	if (dev->bus_dma_mask && dev->bus_dma_mask < dma_mask)
-		dma_mask = dev->bus_dma_mask;
-
-	if (force_dma_unencrypted(dev))
-		*phys_mask = __dma_to_phys(dev, dma_mask);
-	else
-		*phys_mask = dma_to_phys(dev, dma_mask);
+	u64 dma_limit = min_not_zero(dma_mask, dev->bus_dma_limit);
 
 	/*
 	 * Optimistically try the zone that the physical address mask falls
@@ -63,17 +58,22 @@ static gfp_t __dma_direct_optimal_gfp_mask(struct device *dev, u64 dma_mask,
 	 * Note that GFP_DMA32 and GFP_DMA are no ops without the corresponding
 	 * zones.
 	 */
-	if (*phys_mask <= DMA_BIT_MASK(ARCH_ZONE_DMA_BITS))
+	*phys_limit = dma_to_phys(dev, dma_limit);
+	if (*phys_limit <= DMA_BIT_MASK(ARCH_ZONE_DMA_BITS))
 		return GFP_DMA;
-	if (*phys_mask <= DMA_BIT_MASK(32))
+	if (*phys_limit <= DMA_BIT_MASK(32))
 		return GFP_DMA32;
 	return 0;
 }
 
 static bool dma_coherent_ok(struct device *dev, phys_addr_t phys, size_t size)
 {
-	return phys_to_dma_direct(dev, phys) + size - 1 <=
-			min_not_zero(dev->coherent_dma_mask, dev->bus_dma_mask);
+	dma_addr_t dma_addr = phys_to_dma_direct(dev, phys);
+
+	if (dma_addr == DMA_MAPPING_ERROR)
+		return false;
+	return dma_addr + size - 1 <=
+		min_not_zero(dev->coherent_dma_mask, dev->bus_dma_limit);
 }
 
 static void __dma_direct_free_pages(struct device *dev, struct page *page, size_t size)
@@ -90,7 +90,7 @@ static struct page *__dma_direct_alloc_pages(struct device *dev, size_t size,
 {
 	int node = dev_to_node(dev);
 	struct page *page = NULL;
-	u64 phys_mask;
+	u64 phys_limit;
 
 	WARN_ON_ONCE(!PAGE_ALIGNED(size));
 
@@ -106,7 +106,7 @@ static struct page *__dma_direct_alloc_pages(struct device *dev, size_t size,
 	/* we always manually zero the memory once we are done: */
 	gfp &= ~__GFP_ZERO;
 	gfp |= __dma_direct_optimal_gfp_mask(dev, dev->coherent_dma_mask,
-			&phys_mask);
+			&phys_limit);
 	page = dma_alloc_contiguous(dev, size, gfp);
 	if (page && !dma_coherent_ok(dev, page_to_phys(page), size)) {
 		dma_free_contiguous(dev, page, size);
@@ -120,7 +120,7 @@ again:
 		page = NULL;
 
 		if (IS_ENABLED(CONFIG_ZONE_DMA32) &&
-		    phys_mask < DMA_BIT_MASK(64) &&
+		    phys_limit < DMA_BIT_MASK(64) &&
 		    !(gfp & (GFP_DMA32 | GFP_DMA))) {
 			gfp |= GFP_DMA32;
 			goto again;
@@ -236,10 +236,7 @@ void *dma_direct_alloc(struct device *dev, size_t size,
 			goto out_encrypt_pages;
 	}
 done:
-	if (force_dma_unencrypted(dev))
-		*dma_handle = __phys_to_dma(dev, page_to_phys(page));
-	else
-		*dma_handle = phys_to_dma(dev, page_to_phys(page));
+	*dma_handle = phys_to_dma_direct(dev, page_to_phys(page));
 	return ret;
 
 out_encrypt_pages:
@@ -424,7 +421,7 @@ dma_addr_t dma_direct_map_resource(struct device *dev, phys_addr_t paddr,
 {
 	dma_addr_t dma_addr = paddr;
 
-	if (unlikely(!dma_capable(dev, dma_addr, size))) {
+	if (unlikely(!dma_capable(dev, dma_addr, size, false))) {
 		report_addr(dev, dma_addr, size);
 		return DMA_MAPPING_ERROR;
 	}
@@ -503,11 +500,11 @@ int dma_direct_supported(struct device *dev, u64 mask)
 	min_mask = min_t(u64, min_mask, (max_pfn - 1) << PAGE_SHIFT);
 
 	/*
-	 * This check needs to be against the actual bit mask value, so
-	 * use __phys_to_dma() here so that the SME encryption mask isn't
+	 * This check needs to be against the actual bit mask value, so use
+	 * phys_to_dma_unencrypted() here so that the SME encryption mask isn't
 	 * part of the check.
 	 */
-	return mask >= __phys_to_dma(dev, min_mask);
+	return mask >= phys_to_dma_unencrypted(dev, min_mask);
 }
 
 size_t dma_direct_max_mapping_size(struct device *dev)
@@ -524,3 +521,45 @@ bool dma_direct_need_sync(struct device *dev, dma_addr_t dma_addr)
 	return !dev_is_dma_coherent(dev) ||
 		is_swiotlb_buffer(dev, dma_to_phys(dev, dma_addr));
 }
+
+/**
+ * dma_direct_set_offset - Assign scalar offset for a single DMA range.
+ * @dev:	device pointer; needed to "own" the alloced memory.
+ * @cpu_start:  beginning of memory region covered by this offset.
+ * @dma_start:  beginning of DMA/PCI region covered by this offset.
+ * @size:	size of the region.
+ *
+ * This is for the simple case of a uniform offset which cannot
+ * be discovered by "dma-ranges".
+ *
+ * It returns -ENOMEM if out of memory, -EINVAL if a map
+ * already exists, 0 otherwise.
+ *
+ * Note: any call to this from a driver is a bug.  The mapping needs
+ * to be described by the device tree or other firmware interfaces.
+ */
+int dma_direct_set_offset(struct device *dev, phys_addr_t cpu_start,
+			 dma_addr_t dma_start, u64 size)
+{
+	struct bus_dma_region *map;
+	u64 offset = (u64)cpu_start - (u64)dma_start;
+
+	if (dev->dma_range_map) {
+		dev_err(dev, "attempt to add DMA range to existing map\n");
+		return -EINVAL;
+	}
+
+	if (!offset)
+		return 0;
+
+	map = kcalloc(2, sizeof(*map), GFP_KERNEL);
+	if (!map)
+		return -ENOMEM;
+	map[0].cpu_start = cpu_start;
+	map[0].dma_start = dma_start;
+	map[0].offset = offset;
+	map[0].size = size;
+	dev->dma_range_map = map;
+	return 0;
+}
+EXPORT_SYMBOL_GPL(dma_direct_set_offset);

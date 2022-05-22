@@ -305,7 +305,7 @@ static int cros_ec_sensors_probe(struct platform_device *pdev)
 	if (!indio_dev)
 		return -ENOMEM;
 
-	ret = cros_ec_sensors_core_init(pdev, indio_dev, true, true,
+	ret = cros_ec_sensors_core_init(pdev, indio_dev, true,
 			cros_ec_activity_capture, cros_ec_activity_push_data);
 	if (ret)
 		return ret;

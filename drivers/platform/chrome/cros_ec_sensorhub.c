@@ -52,28 +52,15 @@ static int cros_ec_sensorhub_register(struct device *dev,
 	int sensor_type[MOTIONSENSE_TYPE_MAX] = { 0 };
 	struct cros_ec_command *msg = sensorhub->msg;
 	struct cros_ec_dev *ec = sensorhub->ec;
-	int ret, i, sensor_num;
+	int ret, i;
 	char *name;
 
-	sensor_num = cros_ec_get_sensor_count(ec);
-	if (sensor_num < 0) {
-		dev_err(dev,
-			"Unable to retrieve sensor information (err:%d)\n",
-			sensor_num);
-		return sensor_num;
-	}
-
-	sensorhub->sensor_num = sensor_num;
-	if (sensor_num == 0) {
-		dev_err(dev, "Zero sensors reported.\n");
-		return -EINVAL;
-	}
 
 	msg->version = 1;
 	msg->insize = sizeof(struct ec_response_motion_sense);
 	msg->outsize = sizeof(struct ec_params_motion_sense);
 
-	for (i = 0; i < sensor_num; i++) {
+	for (i = 0; i < sensorhub->sensor_num; i++) {
 		sensorhub->params->cmd = MOTIONSENSE_CMD_INFO;
 		sensorhub->params->info.sensor_num = i;
 
@@ -125,18 +112,8 @@ static int cros_ec_sensorhub_register(struct device *dev,
 		sensor_type[sensorhub->resp->info.type]++;
 	}
 
-	if (sensor_type[MOTIONSENSE_TYPE_ACCEL] >= 2) {
+	if (sensor_type[MOTIONSENSE_TYPE_ACCEL] >= 2)
 		ec->has_kb_wake_angle = true;
-		if (ec->groups && sysfs_update_groups(&ec->class_dev.kobj, ec->groups))
-			dev_warn(dev, "Unable to update cros-ec-sysfs");
-	}
-
-	if (IS_ENABLED(CONFIG_IIO_CROS_EC_SENSORS_RING) &&
-	    cros_ec_check_features(ec, EC_FEATURE_MOTION_SENSE_FIFO)) {
-		ret = cros_ec_sensorhub_allocate_sensor(dev, "cros-ec-ring", 0);
-		if (ret)
-			return ret;
-	}
 
 	if (cros_ec_check_features(ec,
 				   EC_FEATURE_REFINED_TABLET_MODE_HYSTERESIS)) {
@@ -156,8 +133,7 @@ static int cros_ec_sensorhub_probe(struct platform_device *pdev)
 	struct cros_ec_dev *ec = dev_get_drvdata(dev->parent);
 	struct cros_ec_sensorhub *data;
 	struct cros_ec_command *msg;
-	int ret;
-	int i;
+	int ret, i, sensor_num;
 
 	msg = devm_kzalloc(dev, sizeof(struct cros_ec_command) +
 			   max((u16)sizeof(struct ec_params_motion_sense),
@@ -182,10 +158,52 @@ static int cros_ec_sensorhub_probe(struct platform_device *pdev)
 	dev_set_drvdata(dev, data);
 
 	/* Check whether this EC is a sensor hub. */
-	if (cros_ec_check_features(data->ec, EC_FEATURE_MOTION_SENSE)) {
+	if (cros_ec_check_features(ec, EC_FEATURE_MOTION_SENSE)) {
+		sensor_num = cros_ec_get_sensor_count(ec);
+		if (sensor_num < 0) {
+			dev_err(dev,
+				"Unable to retrieve sensor information (err:%d)\n",
+				sensor_num);
+			return sensor_num;
+		}
+		if (sensor_num == 0) {
+			dev_err(dev, "Zero sensors reported.\n");
+			return -EINVAL;
+		}
+		data->sensor_num = sensor_num;
+
+		/*
+		 * Prepare the ring handler before enumering the
+		 * sensors.
+		 */
+		if (cros_ec_check_features(ec, EC_FEATURE_MOTION_SENSE_FIFO)) {
+			ret = cros_ec_sensorhub_ring_allocate(data);
+			if (ret)
+				return ret;
+		}
+
+		/* Enumerate the sensors.*/
 		ret = cros_ec_sensorhub_register(dev, data);
 		if (ret)
 			return ret;
+
+		/*
+		 * When the EC does not have a FIFO, the sensors will query
+		 * their data themselves via sysfs or a software trigger.
+		 */
+		if (cros_ec_check_features(ec, EC_FEATURE_MOTION_SENSE_FIFO)) {
+			ret = cros_ec_sensorhub_ring_add(data);
+			if (ret)
+				return ret;
+			/*
+			 * The msg and its data is not under the control of the
+			 * ring handler.
+			 */
+			return devm_add_action_or_reset(dev,
+					cros_ec_sensorhub_ring_remove,
+					data);
+		}
+
 	} else {
 		/*
 		 * If the device has sensors but does not claim to
@@ -200,22 +218,6 @@ static int cros_ec_sensorhub_probe(struct platform_device *pdev)
 		}
 	}
 
-	/*
-	 * If the EC does not have a FIFO, the sensors will query their data
-	 * themselves via sysfs or a software trigger.
-	 */
-	if (cros_ec_check_features(ec, EC_FEATURE_MOTION_SENSE_FIFO)) {
-		ret = cros_ec_sensorhub_ring_add(data);
-		if (ret)
-			return ret;
-		/*
-		 * The msg and its data is not under the control of the ring
-		 * handler.
-		 */
-		return devm_add_action_or_reset(dev,
-						cros_ec_sensorhub_ring_remove,
-						data);
-	}
 
 	return 0;
 }

@@ -7,7 +7,6 @@
 #include <linux/slab.h>
 #include <media/v4l2-mem2mem.h>
 #include <media/videobuf2-dma-contig.h>
-#include <media/vp8-ctrls.h>
 
 #include "../mtk_vcodec_dec.h"
 #include "../mtk_vcodec_intr.h"
@@ -36,7 +35,7 @@
  * @bs_dma            : bitstream dma address
  * @bs_sz             : bitstream size
  * @resolution_changed: resolution change flag 1 - changed,  0 - not change
- * @frame_header_type : current frame header type
+ * @frame_type        : current frame type
  * @wait_key_frame    : wait key frame coming
  * @crc               : Used to check whether hardware's status is right
  */
@@ -50,7 +49,7 @@ struct vdec_vp8_slice_info {
 	uint64_t bs_dma;
 	uint32_t bs_sz;
 	uint32_t resolution_changed;
-	uint32_t frame_header_type;
+	uint32_t frame_type;
 	uint32_t crc[8];
 };
 
@@ -210,16 +209,16 @@ static void vdec_vp8_slice_free_working_buf(struct vdec_vp8_slice_inst *inst)
 }
 
 static u64 vdec_vp8_slice_get_ref_by_ts(
-	const struct v4l2_ctrl_vp8_frame_header *frame_header,
+	const struct v4l2_ctrl_vp8_frame *frame,
 	int index)
 {
 	switch (index) {
 	case 0:
-		return frame_header->last_frame_ts;
+		return frame->last_frame_ts;
 	case 1:
-		return frame_header->golden_frame_ts;
+		return frame->golden_frame_ts;
 	case 2:
-		return frame_header->alt_frame_ts;
+		return frame->alt_frame_ts;
 	default:
 		break;
 	}
@@ -230,9 +229,9 @@ static u64 vdec_vp8_slice_get_ref_by_ts(
 static void vdec_vp8_slice_get_decode_parameters(
 	struct vdec_vp8_slice_inst *inst)
 {
-	const struct v4l2_ctrl_vp8_frame_header *frame_header =
+	const struct v4l2_ctrl_vp8_frame *frame =
 		vdec_vp8_slice_get_ctrl_ptr(inst->ctx,
-			V4L2_CID_MPEG_VIDEO_VP8_FRAME_HEADER);
+			V4L2_CID_STATELESS_VP8_FRAME);
 	struct mtk_vcodec_ctx *ctx = inst->ctx;
 	struct vb2_queue *vq;
 	struct vb2_buffer *vb;
@@ -241,10 +240,10 @@ static void vdec_vp8_slice_get_decode_parameters(
 
 	vq = v4l2_m2m_get_vq(ctx->m2m_ctx, V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE);
 	for (index = 0; index < 3; index++) {
-		referenct_ts = vdec_vp8_slice_get_ref_by_ts(frame_header, index);
+		referenct_ts = vdec_vp8_slice_get_ref_by_ts(frame, index);
 		vb2_index = vb2_find_timestamp(vq, referenct_ts, 0);
 		if (vb2_index < 0) {
-			if (!VP8_FRAME_IS_KEY_FRAME(frame_header))
+			if (!V4L2_VP8_FRAME_IS_KEY_FRAME(frame))
 				mtk_vcodec_err(inst, "reference invalid: index(%d) ts(%lld)",
 					index, referenct_ts);
 			inst->vsi->vp8_dpb_info[index].reference_flag = 0;
@@ -264,7 +263,7 @@ static void vdec_vp8_slice_get_decode_parameters(
 				ctx->picinfo.fb_sz[0];
 	}
 
-	inst->vsi->dec.frame_header_type = frame_header->flags >> 1;
+	inst->vsi->dec.frame_type = frame->flags >> 1;
 }
 
 static int vdec_vp8_slice_init(struct mtk_vcodec_ctx *ctx)
@@ -296,7 +295,7 @@ static int vdec_vp8_slice_init(struct mtk_vcodec_ctx *ctx)
 		goto error_deinit;
 
 	mtk_vcodec_debug(inst, "vp8 struct size = %d vsi: %d\n",
-		sizeof(struct v4l2_ctrl_vp8_frame_header),
+		sizeof(struct v4l2_ctrl_vp8_frame),
 		sizeof(struct vdec_vp8_slice_vsi));
 	mtk_vcodec_debug(inst, "vp8:%p, codec_type = 0x%x vsi: 0x%p",
 		inst, inst->vpu.codec_type, inst->vpu.vsi);

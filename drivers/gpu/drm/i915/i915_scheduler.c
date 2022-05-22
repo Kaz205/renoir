@@ -437,7 +437,7 @@ bool __i915_sched_node_add_dependency(struct i915_sched_node *node,
 			node->flags |= I915_SCHED_HAS_SEMAPHORE_CHAIN;
 
 		/* All set, now publish. Beware the lockless walkers. */
-		list_add(&dep->signal_link, &node->signalers_list);
+		list_add_rcu(&dep->signal_link, &node->signalers_list);
 		list_add_rcu(&dep->wait_link, &signal->waiters_list);
 
 		/*
@@ -490,7 +490,7 @@ void i915_sched_node_fini(struct i915_sched_node *node)
 	list_for_each_entry_safe(dep, tmp, &node->signalers_list, signal_link) {
 		GEM_BUG_ON(!list_empty(&dep->dfs_link));
 
-		list_del(&dep->wait_link);
+		list_del_rcu(&dep->wait_link);
 		if (dep->flags & I915_DEPENDENCY_ALLOC)
 			i915_dependency_free(dep);
 	}
@@ -501,7 +501,7 @@ void i915_sched_node_fini(struct i915_sched_node *node)
 		GEM_BUG_ON(dep->signaler != node);
 		GEM_BUG_ON(!list_empty(&dep->dfs_link));
 
-		list_del(&dep->signal_link);
+		list_del_rcu(&dep->signal_link);
 		if (dep->flags & I915_DEPENDENCY_ALLOC)
 			i915_dependency_free(dep);
 	}
@@ -530,7 +530,8 @@ static struct i915_global_scheduler global = { {
 int __init i915_global_scheduler_init(void)
 {
 	global.slab_dependencies = KMEM_CACHE(i915_dependency,
-					      SLAB_HWCACHE_ALIGN);
+					      SLAB_HWCACHE_ALIGN |
+					      SLAB_TYPESAFE_BY_RCU);
 	if (!global.slab_dependencies)
 		return -ENOMEM;
 

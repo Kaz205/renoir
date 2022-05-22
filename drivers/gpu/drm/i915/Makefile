@@ -13,6 +13,7 @@
 # will most likely get a sudden build breakage... Hopefully we will fix
 # new warnings before CI updates!
 subdir-ccflags-y := -Wall -Wextra
+subdir-ccflags-y += -Wno-shift-negative-value
 subdir-ccflags-y += $(call cc-disable-warning, unused-parameter)
 subdir-ccflags-y += $(call cc-disable-warning, type-limits)
 subdir-ccflags-y += $(call cc-disable-warning, missing-field-initializers)
@@ -258,11 +259,11 @@ i915-y += i915_perf.o
 # Protected execution platform (PXP) support
 i915-$(CONFIG_DRM_I915_PXP) += \
 	pxp/intel_pxp.o \
-	pxp/intel_pxp_arb.o \
 	pxp/intel_pxp_cmd.o \
-	pxp/intel_pxp_context.o \
+	pxp/intel_pxp_debugfs.o \
+	pxp/intel_pxp_irq.o \
 	pxp/intel_pxp_pm.o \
-	pxp/intel_pxp_sm.o \
+	pxp/intel_pxp_session.o \
 	pxp/intel_pxp_tee.o
 
 # Post-mortem debug and GPU hang state capture

@@ -76,7 +76,6 @@ struct virtio_gpu_object_params {
 };
 
 struct virtio_gpu_object {
-	struct drm_gem_object gem_base;
 	uint32_t hw_res_handle;
 
 	bool create_callback_done;
@@ -102,7 +101,7 @@ struct virtio_gpu_object {
 	uint32_t blob_mem;
 };
 #define gem_to_virtio_gpu_obj(gobj) \
-	container_of((gobj), struct virtio_gpu_object, gem_base)
+	container_of((gobj), struct virtio_gpu_object, tbo.base)
 
 struct virtio_gpu_vq_cb_target {
 	struct virtio_gpu_object *obj;
@@ -491,7 +490,7 @@ static inline int virtio_gpu_object_reserve(struct virtio_gpu_object *bo,
 	if (unlikely(r != 0)) {
 		if (r != -ERESTARTSYS) {
 			struct virtio_gpu_device *qdev =
-				bo->gem_base.dev->dev_private;
+				bo->tbo.base.dev->dev_private;
 			dev_err(qdev->dev, "%p reserve failed\n", bo);
 		}
 		return r;

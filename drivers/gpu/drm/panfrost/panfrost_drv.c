@@ -660,15 +660,15 @@ static int panfrost_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id dt_match[] = {
-	{ .compatible = "arm,mali-t604" },
-	{ .compatible = "arm,mali-t624" },
-	{ .compatible = "arm,mali-t628" },
-	{ .compatible = "arm,mali-t720" },
-	{ .compatible = "arm,mali-t760" },
-	{ .compatible = "arm,mali-t820" },
-	{ .compatible = "arm,mali-t830" },
-	{ .compatible = "arm,mali-t860" },
-	{ .compatible = "arm,mali-t880" },
+	{ .compatible = "arm,mali-t604-CHROMIUM" },
+	{ .compatible = "arm,mali-t624-CHROMIUM" },
+	{ .compatible = "arm,mali-t628-CHROMIUM" },
+	{ .compatible = "arm,mali-t720-CHROMIUM" },
+	{ .compatible = "arm,mali-t760-CHROMIUM" },
+	{ .compatible = "arm,mali-t820-CHROMIUM" },
+	{ .compatible = "arm,mali-t830-CHROMIUM" },
+	{ .compatible = "arm,mali-t860-CHROMIUM" },
+	{ .compatible = "arm,mali-t880-CHROMIUM" },
 	{}
 };
 MODULE_DEVICE_TABLE(of, dt_match);

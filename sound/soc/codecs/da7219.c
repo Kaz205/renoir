@@ -446,7 +446,7 @@ static int da7219_tonegen_freq_put(struct snd_kcontrol *kcontrol,
 	struct soc_mixer_control *mixer_ctrl =
 		(struct soc_mixer_control *) kcontrol->private_value;
 	unsigned int reg = mixer_ctrl->reg;
-	__le16 val;
+	__le16 val_new, val_old;
 	int ret;
 
 	/*
@@ -454,13 +454,19 @@ static int da7219_tonegen_freq_put(struct snd_kcontrol *kcontrol,
 	 * Therefore we need to convert to little endian here to align with
 	 * HW registers.
 	 */
-	val = cpu_to_le16(ucontrol->value.integer.value[0]);
+	val_new = cpu_to_le16(ucontrol->value.integer.value[0]);
 
 	mutex_lock(&da7219->ctrl_lock);
-	ret = regmap_raw_write(da7219->regmap, reg, &val, sizeof(val));
+	ret = regmap_raw_read(da7219->regmap, reg, &val_old, sizeof(val_old));
+	if (ret == 0 && (val_old != val_new))
+		ret = regmap_raw_write(da7219->regmap, reg,
+				&val_new, sizeof(val_new));
 	mutex_unlock(&da7219->ctrl_lock);
 
-	return ret;
+	if (ret < 0)
+		return ret;
+
+	return val_old != val_new;
 }
 
 
@@ -1773,8 +1779,6 @@ static struct da7219_pdata *da7219_fw_to_pdata(struct snd_soc_component *compone
 			 pdata->dai_clk_names[DA7219_DAI_WCLK_IDX],
 			 pdata->dai_clk_names[DA7219_DAI_BCLK_IDX]);
 
-	device_property_read_string(dev, "dlg,mclk-name", &pdata->mclk_name);
-
 	if (device_property_read_u32(dev, "dlg,micbias-lvl", &of_val32) >= 0)
 		pdata->micbias_lvl = da7219_fw_micbias_lvl(dev, of_val32);
 	else
@@ -2298,11 +2302,7 @@ static int da7219_probe(struct snd_soc_component *component)
 	da7219_handle_pdata(component);
 
 	/* Check if MCLK provided */
-	if (da7219->pdata->mclk_name)
-		da7219->mclk = clk_get(NULL, da7219->pdata->mclk_name);
-	if (!da7219->mclk)
-		da7219->mclk = devm_clk_get(component->dev, "mclk");
-
+	da7219->mclk = devm_clk_get(component->dev, "mclk");
 	if (IS_ERR(da7219->mclk)) {
 		if (PTR_ERR(da7219->mclk) != -ENOENT) {
 			ret = PTR_ERR(da7219->mclk);
@@ -2377,9 +2377,6 @@ static void da7219_remove(struct snd_soc_component *component)
 			clkdev_drop(da7219->dai_clks_lookup[i]);
 	}
 #endif
-
-	if (da7219->pdata->mclk_name)
-		clk_put(da7219->mclk);
 
 	/* Supplies */
 	regulator_bulk_disable(DA7219_NUM_SUPPLIES, da7219->supplies);

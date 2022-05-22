@@ -2,19 +2,16 @@
 /*
  * Copyright 2020 Google LLC
  */
-
-&i2c1 {
-	rt1015@28 {
-		compatible = "realtek,rt1015";
-		reg = <0x28>;
-	};
-
-	rt1015@29 {
-		compatible = "realtek,rt1015";
-		reg = <0x29>;
-	};
-};
+#include "mt8192-asurada-audio-rt5682.dtsi"
+#include "mt8192-asurada-audio-rt1015.dtsi"
 
 &sound {
 	compatible = "mediatek,mt8192_mt6359_rt1015_rt5682";
+	speaker-codecs {
+		sound-dai = <&rt1015_l>,
+			    <&rt1015_r>;
+	};
+	headset-codec {
+		sound-dai = <&rt5682>;
+	};
 };

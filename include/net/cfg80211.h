@@ -4709,6 +4709,7 @@ struct wiphy_iftype_akm_suites {
  * @sar_capa: SAR control capabilities
  */
 struct wiphy {
+	struct mutex mtx;
 	/* assign these fields before you register the wiphy */
 
 	/* permanent MAC address(es) */

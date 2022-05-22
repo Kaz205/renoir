@@ -38,7 +38,7 @@ mt7921_tm_set(struct mt7921_dev *dev, struct mt7921_tm_cmd *req)
 		.param0 = cpu_to_le32(req->param0),
 		.param1 = cpu_to_le32(req->param1),
 	};
-	bool to_testmode = false, to_normal = false;
+	bool testmode = false, normal = false;
 	struct mt76_connac_pm *pm = &dev->pm;
 	struct mt76_phy *phy = &dev->mphy;
 	int ret = -ENOTCONN;
@@ -46,13 +46,13 @@ mt7921_tm_set(struct mt7921_dev *dev, struct mt7921_tm_cmd *req)
 	mutex_lock(&dev->mt76.mutex);
 
 	if (req->action == TM_SWITCH_MODE) {
-		if (req->param0 != MT7921_TM_NORMAL)
-			to_testmode = true;
+		if (req->param0 == MT7921_TM_NORMAL)
+			normal = true;
 		else
-			to_normal = true;
+			testmode = true;
 	}
 
-	if (to_testmode) {
+	if (testmode) {
 		/* Make sure testmode running on full power mode */
 		pm->enable = false;
 		cancel_delayed_work_sync(&pm->ps_work);
@@ -68,8 +68,10 @@ mt7921_tm_set(struct mt7921_dev *dev, struct mt7921_tm_cmd *req)
 
 	ret = mt76_mcu_send_msg(&dev->mt76, MCU_CMD_TEST_CTRL, &cmd,
 				sizeof(cmd), false);
+	if (ret)
+		goto out;
 
-	if (to_normal) {
+	if (normal) {
 		/* Switch back to the normal world */
 		phy->test.state = MT76_TM_STATE_OFF;
 		pm->enable = true;
@@ -82,7 +84,7 @@ out:
 
 static int
 mt7921_tm_query(struct mt7921_dev *dev, struct mt7921_tm_cmd *req,
-		struct mt7921_tm_evt *resp)
+		struct mt7921_tm_evt *evt_resp)
 {
 	struct mt7921_rftest_cmd cmd = {
 		.action = req->action,
@@ -93,18 +95,14 @@ mt7921_tm_query(struct mt7921_dev *dev, struct mt7921_tm_cmd *req,
 	struct sk_buff *skb;
 	int ret;
 
-	mutex_lock(&dev->mt76.mutex);
-
 	ret = mt76_mcu_send_and_get_msg(&dev->mt76, MCU_CMD_TEST_CTRL,
 					&cmd, sizeof(cmd), true, &skb);
-	mutex_unlock(&dev->mt76.mutex);
-
 	if (ret)
 		goto out;
 
-	evt = (struct mt7921_rftest_evt *)(skb->data);
-	resp->param0 = le32_to_cpu(evt->param0);
-	resp->param1 = le32_to_cpu(evt->param1);
+	evt = (struct mt7921_rftest_evt *)skb->data;
+	evt_resp->param0 = le32_to_cpu(evt->param0);
+	evt_resp->param1 = le32_to_cpu(evt->param1);
 out:
 	dev_kfree_skb(skb);
 
@@ -114,36 +112,46 @@ out:
 int mt7921_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 			void *data, int len)
 {
-	struct nlattr *tb[NUM_MT7921_TM_ATTRS];
+	struct nlattr *tb[NUM_MT76_TM_ATTRS];
 	struct mt76_phy *mphy = hw->priv;
 	struct mt7921_phy *phy = mphy->priv;
-	struct mt7921_dev *dev = phy->dev;
 	int err;
 
 	if (!test_bit(MT76_STATE_RUNNING, &mphy->state) ||
 	    !(hw->conf.flags & IEEE80211_CONF_MONITOR))
 		return -ENOTCONN;
 
-	err = nla_parse_deprecated(tb, MT7921_TM_ATTR_MAX, data, len,
-				   mt7921_tm_policy, NULL);
+	err = nla_parse_deprecated(tb, MT76_TM_ATTR_MAX, data, len,
+				   mt76_tm_policy, NULL);
 	if (err)
 		return err;
 
-	err = -EINVAL;
-	if (tb[MT7921_TM_ATTR_SET])
-		err = mt7921_tm_set(dev, nla_data(tb[MT7921_TM_ATTR_SET]));
+	if (tb[MT76_TM_ATTR_DRV_DATA]) {
+		struct nlattr *drv_tb[NUM_MT7921_TM_ATTRS], *data;
+		int ret;
 
-	return err;
+		data = tb[MT76_TM_ATTR_DRV_DATA];
+		ret = nla_parse_nested_deprecated(drv_tb,
+						  MT7921_TM_ATTR_MAX,
+						  data, mt7921_tm_policy,
+						  NULL);
+		if (ret)
+			return ret;
+
+		data = drv_tb[MT7921_TM_ATTR_SET];
+		if (data)
+			return mt7921_tm_set(phy->dev, nla_data(data));
+	}
+
+	return -EINVAL;
 }
 
 int mt7921_testmode_dump(struct ieee80211_hw *hw, struct sk_buff *msg,
 			 struct netlink_callback *cb, void *data, int len)
 {
-	struct nlattr *tb[NUM_MT7921_TM_ATTRS];
+	struct nlattr *tb[NUM_MT76_TM_ATTRS];
 	struct mt76_phy *mphy = hw->priv;
 	struct mt7921_phy *phy = mphy->priv;
-	struct mt7921_dev *dev = phy->dev;
-	struct mt7921_tm_evt resp;
 	int err;
 
 	if (!test_bit(MT76_STATE_RUNNING, &mphy->state) ||
@@ -154,19 +162,36 @@ int mt7921_testmode_dump(struct ieee80211_hw *hw, struct sk_buff *msg,
 	if (cb->args[2]++ > 0)
 		return -ENOENT;
 
-	err = nla_parse_deprecated(tb, MT7921_TM_ATTR_MAX, data, len,
-				   mt7921_tm_policy, NULL);
+	err = nla_parse_deprecated(tb, MT76_TM_ATTR_MAX, data, len,
+				   mt76_tm_policy, NULL);
 	if (err)
 		return err;
 
-	err = -EINVAL;
-	if (tb[MT7921_TM_ATTR_QUERY]) {
-		err = mt7921_tm_query(dev, nla_data(tb[MT7921_TM_ATTR_QUERY]), &resp);
-		if (err)
-			goto out;
+	if (tb[MT76_TM_ATTR_DRV_DATA]) {
+		struct nlattr *drv_tb[NUM_MT7921_TM_ATTRS], *data;
+		int ret;
 
-		err = nla_put(msg, MT7921_TM_ATTR_RSP, sizeof(resp), &resp);
+		data = tb[MT76_TM_ATTR_DRV_DATA];
+		ret = nla_parse_nested_deprecated(drv_tb,
+						  MT7921_TM_ATTR_MAX,
+						  data, mt7921_tm_policy,
+						  NULL);
+		if (ret)
+			return ret;
+
+		data = drv_tb[MT7921_TM_ATTR_QUERY];
+		if (data) {
+			struct mt7921_tm_evt evt_resp;
+
+			err = mt7921_tm_query(phy->dev, nla_data(data),
+					      &evt_resp);
+			if (err)
+				return err;
+
+			return nla_put(msg, MT7921_TM_ATTR_RSP,
+				       sizeof(evt_resp), &evt_resp);
+		}
 	}
-out:
-	return err;
+
+	return -EINVAL;
 }

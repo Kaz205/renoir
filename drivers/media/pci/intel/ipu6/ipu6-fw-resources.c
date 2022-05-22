@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-// Copyright (C) 2015 - 2020 Intel Corporation
+// Copyright (C) 2015 - 2021 Intel Corporation
 
 #include <linux/err.h>
 #include <linux/string.h>
@@ -13,7 +13,7 @@
 /*
  * Cell types by cell IDs
  */
-const u8 ipu6_fw_psys_cell_types[IPU6_FW_PSYS_N_CELL_ID] = {
+static const u8 ipu6_fw_psys_cell_types[IPU6_FW_PSYS_N_CELL_ID] = {
 	IPU6_FW_PSYS_SP_CTRL_TYPE_ID,
 	IPU6_FW_PSYS_VP_TYPE_ID,
 	IPU6_FW_PSYS_ACC_PSA_TYPE_ID,
@@ -48,7 +48,7 @@ const u8 ipu6_fw_psys_cell_types[IPU6_FW_PSYS_N_CELL_ID] = {
 	IPU6_FW_PSYS_TNR_TYPE_ID,
 };
 
-const u16 ipu6_fw_num_dev_channels[IPU6_FW_PSYS_N_DEV_CHN_ID] = {
+static const u16 ipu6_fw_num_dev_channels[IPU6_FW_PSYS_N_DEV_CHN_ID] = {
 	IPU6_FW_PSYS_DEV_CHN_DMA_EXT0_MAX_SIZE,
 	IPU6_FW_PSYS_DEV_CHN_DMA_EXT1_READ_MAX_SIZE,
 	IPU6_FW_PSYS_DEV_CHN_DMA_EXT1_WRITE_MAX_SIZE,
@@ -56,7 +56,7 @@ const u16 ipu6_fw_num_dev_channels[IPU6_FW_PSYS_N_DEV_CHN_ID] = {
 	IPU6_FW_PSYS_DEV_CHN_DMA_ISA_MAX_SIZE,
 };
 
-const u16 ipu6_fw_psys_mem_size[IPU6_FW_PSYS_N_MEM_ID] = {
+static const u16 ipu6_fw_psys_mem_size[IPU6_FW_PSYS_N_MEM_ID] = {
 	IPU6_FW_PSYS_VMEM0_MAX_SIZE,
 	IPU6_FW_PSYS_TRANSFER_VMEM0_MAX_SIZE,
 	IPU6_FW_PSYS_TRANSFER_VMEM1_MAX_SIZE,
@@ -69,7 +69,7 @@ const u16 ipu6_fw_psys_mem_size[IPU6_FW_PSYS_N_MEM_ID] = {
 	IPU6_FW_PSYS_PMEM0_MAX_SIZE
 };
 
-const u16 ipu6_fw_psys_dfms[IPU6_FW_PSYS_N_DEV_DFM_ID] = {
+static const u16 ipu6_fw_psys_dfms[IPU6_FW_PSYS_N_DEV_DFM_ID] = {
 	IPU6_FW_PSYS_DEV_DFM_BB_FULL_PORT_ID_MAX_SIZE,
 	IPU6_FW_PSYS_DEV_DFM_BB_EMPTY_PORT_ID_MAX_SIZE,
 	IPU6_FW_PSYS_DEV_DFM_ISL_FULL_PORT_ID_MAX_SIZE,
@@ -78,7 +78,7 @@ const u16 ipu6_fw_psys_dfms[IPU6_FW_PSYS_N_DEV_DFM_ID] = {
 	IPU6_FW_PSYS_DEV_DFM_LB_EMPTY_PORT_ID_MAX_SIZE,
 };
 
-const u8
+static const u8
 ipu6_fw_psys_c_mem[IPU6_FW_PSYS_N_CELL_ID][IPU6_FW_PSYS_N_MEM_TYPE_ID] = {
 	{
 		/* IPU6_FW_PSYS_SP0_ID */
@@ -539,6 +539,8 @@ int ipu6_fw_psys_get_program_manifest_by_process(
 	return 0;
 }
 
+#if defined(DEBUG) || defined(CONFIG_DYNAMIC_DEBUG) || \
+	(defined(CONFIG_DYNAMIC_DEBUG_CORE) && defined(DYNAMIC_DEBUG_MODULE))
 void ipu6_fw_psys_pg_dump(struct ipu_psys *psys,
 			  struct ipu_psys_kcmd *kcmd, const char *note)
 {
@@ -547,6 +549,20 @@ void ipu6_fw_psys_pg_dump(struct ipu_psys *psys,
 	u8 processes = pg->process_count;
 	u16 *process_offset_table = (u16 *)((char *)pg + pg->processes_offset);
 	unsigned int p, chn, mem, mem_id;
+	unsigned int mem_type, max_mem_id, dev_chn;
+
+	if (ipu_ver == IPU_VER_6SE) {
+		mem_type = IPU6SE_FW_PSYS_N_DATA_MEM_TYPE_ID;
+		max_mem_id = IPU6SE_FW_PSYS_N_MEM_ID;
+		dev_chn = IPU6SE_FW_PSYS_N_DEV_CHN_ID;
+	} else if (ipu_ver == IPU_VER_6 || ipu_ver == IPU_VER_6EP) {
+		mem_type = IPU6_FW_PSYS_N_DATA_MEM_TYPE_ID;
+		max_mem_id = IPU6_FW_PSYS_N_MEM_ID;
+		dev_chn = IPU6_FW_PSYS_N_DEV_CHN_ID;
+	} else {
+		WARN(1, "%s ipu_ver:[%u] is unsupported!\n", __func__, ipu_ver);
+		return;
+	}
 
 	dev_dbg(&psys->adev->dev, "%s %s pgid %i has %i processes:\n",
 		__func__, note, pgid, processes);
@@ -563,16 +579,15 @@ void ipu6_fw_psys_pg_dump(struct ipu_psys *psys,
 		if (!process->process_extension_offset)
 			continue;
 
-		for (mem = 0; mem < IPU6_FW_PSYS_N_DATA_MEM_TYPE_ID;
-		    mem++) {
+		for (mem = 0; mem < mem_type; mem++) {
 			mem_id = pm_ext->ext_mem_id[mem];
-			if (mem_id != IPU6_FW_PSYS_N_MEM_ID)
+			if (mem_id != max_mem_id)
 				dev_dbg(&psys->adev->dev,
 					"\t mem type %u id %d offset=0x%x",
 					mem, mem_id,
 					pm_ext->ext_mem_offset[mem]);
 		}
-		for (chn = 0; chn < IPU6_FW_PSYS_N_DEV_CHN_ID; chn++) {
+		for (chn = 0; chn < dev_chn; chn++) {
 			if (pm_ext->dev_chn_offset[chn] != (u16)(-1))
 				dev_dbg(&psys->adev->dev,
 					"\t dev_chn[%u]=0x%x\n",
@@ -580,3 +595,14 @@ void ipu6_fw_psys_pg_dump(struct ipu_psys *psys,
 		}
 	}
 }
+#else
+void ipu6_fw_psys_pg_dump(struct ipu_psys *psys,
+			  struct ipu_psys_kcmd *kcmd, const char *note)
+{
+	if (ipu_ver == IPU_VER_6SE || ipu_ver == IPU_VER_6 ||
+	    ipu_ver == IPU_VER_6EP)
+		return;
+
+	WARN(1, "%s ipu_ver:[%u] is unsupported!\n", __func__, ipu_ver);
+}
+#endif

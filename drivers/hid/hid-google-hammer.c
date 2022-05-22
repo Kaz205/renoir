@@ -15,6 +15,7 @@
 
 #include <linux/acpi.h>
 #include <linux/hid.h>
+#include <linux/input/vivaldi-fmap.h>
 #include <linux/leds.h>
 #include <linux/module.h>
 #include <linux/of.h>
@@ -25,6 +26,7 @@
 #include <asm/unaligned.h>
 
 #include "hid-ids.h"
+#include "hid-vivaldi-common.h"
 
 /*
  * C(hrome)B(ase)A(ttached)S(witch) - switch exported by Chrome EC and reporting
@@ -516,7 +518,14 @@ out:
 static int hammer_probe(struct hid_device *hdev,
 			const struct hid_device_id *id)
 {
+	struct vivaldi_data *vdata;
 	int error;
+
+	vdata = devm_kzalloc(&hdev->dev, sizeof(*vdata), GFP_KERNEL);
+	if (!vdata)
+		return -ENOMEM;
+
+	hid_set_drvdata(hdev, vdata);
 
 	error = hid_parse(hdev);
 	if (error)
@@ -586,6 +595,8 @@ static void hammer_remove(struct hid_device *hdev)
 static const struct hid_device_id hammer_devices[] = {
 	{ HID_DEVICE(BUS_USB, HID_GROUP_GENERIC,
 		     USB_VENDOR_ID_GOOGLE, USB_DEVICE_ID_GOOGLE_DON) },
+	{ HID_DEVICE(BUS_USB, HID_GROUP_VIVALDI,
+		     USB_VENDOR_ID_GOOGLE, USB_DEVICE_ID_GOOGLE_EEL) },
 	{ HID_DEVICE(BUS_USB, HID_GROUP_GENERIC,
 		     USB_VENDOR_ID_GOOGLE, USB_DEVICE_ID_GOOGLE_HAMMER) },
 	{ HID_DEVICE(BUS_USB, HID_GROUP_GENERIC,
@@ -609,6 +620,8 @@ static struct hid_driver hammer_driver = {
 	.id_table = hammer_devices,
 	.probe = hammer_probe,
 	.remove = hammer_remove,
+	.feature_mapping = vivaldi_feature_mapping,
+	.input_configured = vivaldi_input_configured,
 	.input_mapping = hammer_input_mapping,
 	.event = hammer_event,
 };

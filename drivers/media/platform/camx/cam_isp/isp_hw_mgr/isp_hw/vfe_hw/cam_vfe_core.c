@@ -435,13 +435,11 @@ int cam_vfe_reset(void *hw_priv, void *reset_core_args, uint32_t arg_size)
 
 void cam_isp_hw_get_timestamp(struct cam_isp_timestamp *time_stamp)
 {
-	struct timespec64 ts;
+	ktime_t boot;
 
-	ts = ktime_to_timespec64(ktime_get_boottime());
-	time_stamp->mono_time.tv_sec    = ts.tv_sec;
-	time_stamp->mono_time.tv_usec   = ts.tv_nsec/1000;
-	time_stamp->time_usecs =  ts.tv_sec * 1000000 +
-				time_stamp->mono_time.tv_usec;
+	boot = ktime_get_boottime();
+	time_stamp->mono_time = boot;
+	time_stamp->time_usecs =  ktime_to_us(boot);
 }
 
 static int cam_vfe_irq_top_half(uint32_t    evt_id,

@@ -165,8 +165,6 @@ static bool cnl_compact_ipc_compress(struct snd_sof_ipc_msg *msg,
 
 int cnl_ipc_send_msg(struct snd_sof_dev *sdev, struct snd_sof_ipc_msg *msg)
 {
-	struct sof_intel_hda_dev *hdev = sdev->pdata->hw_pdata;
-	struct sof_ipc_cmd_hdr *hdr;
 	u32 dr = 0;
 	u32 dd = 0;
 
@@ -192,20 +190,6 @@ int cnl_ipc_send_msg(struct snd_sof_dev *sdev, struct snd_sof_ipc_msg *msg)
 			  msg->msg_size);
 	snd_sof_dsp_write(sdev, HDA_DSP_BAR, CNL_DSP_REG_HIPCIDR,
 			  CNL_DSP_REG_HIPCIDR_BUSY);
-
-	hdr = msg->msg_data;
-
-	/*
-	 * Use mod_delayed_work() to schedule the delayed work
-	 * to avoid scheduling multiple workqueue items when
-	 * IPCs are sent at a high-rate. mod_delayed_work()
-	 * modifies the timer if the work is pending.
-	 * Also, a new delayed work should not be queued after the
-	 * CTX_SAVE IPC, which is sent before the DSP enters D3.
-	 */
-	if (hdr->cmd != (SOF_IPC_GLB_PM_MSG | SOF_IPC_PM_CTX_SAVE))
-		mod_delayed_work(system_wq, &hdev->d0i3_work,
-				 msecs_to_jiffies(SOF_HDA_D0I3_WORK_DELAY_MS));
 
 	return 0;
 }

@@ -12,10 +12,12 @@
 #define IPU_MAX_OPINS ((IPU_MAX_IPINS) + 1)
 
 #define IPU6_STREAM_ID_MAX 16
+#define IPU6_NONSECURE_STREAM_ID_MAX 12
 #define IPU6_DEV_SEND_QUEUE_SIZE (IPU6_STREAM_ID_MAX)
 #define IPU6_NOF_SRAM_BLOCKS_MAX (IPU6_STREAM_ID_MAX)
 #define IPU6_N_MAX_MSG_SEND_QUEUES (IPU6_STREAM_ID_MAX)
 #define IPU6SE_STREAM_ID_MAX 8
+#define IPU6SE_NONSECURE_STREAM_ID_MAX 4
 #define IPU6SE_DEV_SEND_QUEUE_SIZE (IPU6SE_STREAM_ID_MAX)
 #define IPU6SE_NOF_SRAM_BLOCKS_MAX (IPU6SE_STREAM_ID_MAX)
 #define IPU6SE_N_MAX_MSG_SEND_QUEUES (IPU6SE_STREAM_ID_MAX)
@@ -503,16 +505,6 @@ struct ipu6_fw_isys_fw_config {
 	u32 num_recv_queues[N_IPU_FW_ISYS_QUEUE_TYPE];
 };
 
-struct ipu6se_fw_isys_buffer_partition_abi {
-	u32 num_gda_pages[IPU6SE_STREAM_ID_MAX];
-};
-
-struct ipu6se_fw_isys_fw_config {
-	struct ipu6se_fw_isys_buffer_partition_abi buffer_partition;
-	u32 num_send_queues[N_IPU_FW_ISYS_QUEUE_TYPE];
-	u32 num_recv_queues[N_IPU_FW_ISYS_QUEUE_TYPE];
-};
-
 /**
  * struct ipu_fw_isys_resolution_abi: Generic resolution structure.
  * @Width
@@ -582,7 +574,7 @@ struct ipu_fw_isys_param_pin_abi {
  * @input_res: input resolution
  * @dt: mipi data type ((enum ipu_fw_isys_mipi_data_type)
  * @mipi_store_mode: defines if legacy long packet header will be stored or
- *		     discarded if discarded, output pin pin type for this
+ *		     discarded if discarded, output pin type for this
  *		     input pin can only be MIPI
  *		     (enum ipu_fw_isys_mipi_store_mode)
  * @bits_per_pix: native bits per pixel

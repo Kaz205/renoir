@@ -1918,34 +1918,20 @@ void intel_uncore_fini_mmio(struct intel_uncore *uncore)
 }
 
 static const struct reg_whitelist {
-	i915_reg_t offset_ldw_lowerbound;
-	i915_reg_t offset_ldw_upperbound;
+	i915_reg_t offset_ldw;
 	i915_reg_t offset_udw;
 	u16 gen_mask;
 	u8 size;
-} reg_read_whitelist[] = {
-	{
-	.offset_ldw_lowerbound = RING_TIMESTAMP(RENDER_RING_BASE),
-	.offset_ldw_upperbound = RING_TIMESTAMP(RENDER_RING_BASE),
+} reg_read_whitelist[] = { {
+	.offset_ldw = RING_TIMESTAMP(RENDER_RING_BASE),
 	.offset_udw = RING_TIMESTAMP_UDW(RENDER_RING_BASE),
 	.gen_mask = INTEL_GEN_MASK(4, 12),
 	.size = 8
-	},
-	{
-	.offset_ldw_lowerbound = PXP_REG_01_LOWERBOUND,
-	.offset_ldw_upperbound = PXP_REG_01_UPPERBOUND,
-	.offset_udw = {0},
-	.gen_mask = INTEL_GEN_MASK(4, 12),
+}, {
+	.offset_ldw = GEN12_KCR_SIP,
+	.gen_mask = INTEL_GEN_MASK(12, 12),
 	.size = 4
-	},
-	{
-	.offset_ldw_lowerbound = PXP_REG_02_LOWERBOUND,
-	.offset_ldw_upperbound = PXP_REG_02_UPPERBOUND,
-	.offset_udw = {0},
-	.gen_mask = INTEL_GEN_MASK(4, 12),
-	.size = 4
-	}
-};
+} };
 
 int i915_reg_read_ioctl(struct drm_device *dev,
 			void *data, struct drm_file *file)
@@ -1958,22 +1944,18 @@ int i915_reg_read_ioctl(struct drm_device *dev,
 	unsigned int flags;
 	int remain;
 	int ret = 0;
-	i915_reg_t offset_ldw;
 
 	entry = reg_read_whitelist;
 	remain = ARRAY_SIZE(reg_read_whitelist);
 	while (remain) {
-		u32 entry_offset_lb = i915_mmio_reg_offset(entry->offset_ldw_lowerbound);
-		u32 entry_offset_ub = i915_mmio_reg_offset(entry->offset_ldw_upperbound);
+		u32 entry_offset = i915_mmio_reg_offset(entry->offset_ldw);
 
 		GEM_BUG_ON(!is_power_of_2(entry->size));
 		GEM_BUG_ON(entry->size > 8);
-		GEM_BUG_ON(entry_offset_lb & (entry->size - 1));
-		GEM_BUG_ON(entry_offset_ub & (entry->size - 1));
+		GEM_BUG_ON(entry_offset & (entry->size - 1));
 
 		if (INTEL_INFO(i915)->gen_mask & entry->gen_mask &&
-		    entry_offset_lb <= (reg->offset & -entry->size) &&
-		    (reg->offset & -entry->size) <= entry_offset_ub)
+		    entry_offset == (reg->offset & -entry->size))
 			break;
 		entry++;
 		remain--;
@@ -1983,21 +1965,23 @@ int i915_reg_read_ioctl(struct drm_device *dev,
 		return -EINVAL;
 
 	flags = reg->offset & (entry->size - 1);
-	offset_ldw = _MMIO(reg->offset - flags);
 
 	with_intel_runtime_pm(&i915->runtime_pm, wakeref) {
 		if (entry->size == 8 && flags == I915_REG_READ_8B_WA)
 			reg->val = intel_uncore_read64_2x32(uncore,
-							    offset_ldw,
+							    entry->offset_ldw,
 							    entry->offset_udw);
 		else if (entry->size == 8 && flags == 0)
-			reg->val = intel_uncore_read64(uncore, offset_ldw);
+			reg->val = intel_uncore_read64(uncore,
+						       entry->offset_ldw);
 		else if (entry->size == 4 && flags == 0)
-			reg->val = intel_uncore_read(uncore, offset_ldw);
+			reg->val = intel_uncore_read(uncore, entry->offset_ldw);
 		else if (entry->size == 2 && flags == 0)
-			reg->val = intel_uncore_read16(uncore, offset_ldw);
+			reg->val = intel_uncore_read16(uncore,
+						       entry->offset_ldw);
 		else if (entry->size == 1 && flags == 0)
-			reg->val = intel_uncore_read8(uncore, offset_ldw);
+			reg->val = intel_uncore_read8(uncore,
+						      entry->offset_ldw);
 		else
 			ret = -EINVAL;
 	}

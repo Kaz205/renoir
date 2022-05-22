@@ -133,8 +133,8 @@
 			cpu-idle-states = <&LITTLE_CPU_SLEEP_0
 					   &LITTLE_CPU_SLEEP_1
 					   &CLUSTER_SLEEP_0>;
-			capacity-dmips-mhz = <1024>;
-			dynamic-power-coefficient = <100>;
+			capacity-dmips-mhz = <415>;
+			dynamic-power-coefficient = <137>;
 			operating-points-v2 = <&cpu0_opp_table>;
 			interconnects = <&gem_noc MASTER_APPSS_PROC 3 &mc_virt SLAVE_EBI1 3>,
 					<&osm_l3 MASTER_OSM_L3_APPS &osm_l3 SLAVE_OSM_L3>;
@@ -158,8 +158,8 @@
 			cpu-idle-states = <&LITTLE_CPU_SLEEP_0
 					   &LITTLE_CPU_SLEEP_1
 					   &CLUSTER_SLEEP_0>;
-			capacity-dmips-mhz = <1024>;
-			dynamic-power-coefficient = <100>;
+			capacity-dmips-mhz = <415>;
+			dynamic-power-coefficient = <137>;
 			next-level-cache = <&L2_100>;
 			operating-points-v2 = <&cpu0_opp_table>;
 			interconnects = <&gem_noc MASTER_APPSS_PROC 3 &mc_virt SLAVE_EBI1 3>,
@@ -180,8 +180,8 @@
 			cpu-idle-states = <&LITTLE_CPU_SLEEP_0
 					   &LITTLE_CPU_SLEEP_1
 					   &CLUSTER_SLEEP_0>;
-			capacity-dmips-mhz = <1024>;
-			dynamic-power-coefficient = <100>;
+			capacity-dmips-mhz = <415>;
+			dynamic-power-coefficient = <137>;
 			next-level-cache = <&L2_200>;
 			operating-points-v2 = <&cpu0_opp_table>;
 			interconnects = <&gem_noc MASTER_APPSS_PROC 3 &mc_virt SLAVE_EBI1 3>,
@@ -202,8 +202,8 @@
 			cpu-idle-states = <&LITTLE_CPU_SLEEP_0
 					   &LITTLE_CPU_SLEEP_1
 					   &CLUSTER_SLEEP_0>;
-			capacity-dmips-mhz = <1024>;
-			dynamic-power-coefficient = <100>;
+			capacity-dmips-mhz = <415>;
+			dynamic-power-coefficient = <137>;
 			next-level-cache = <&L2_300>;
 			operating-points-v2 = <&cpu0_opp_table>;
 			interconnects = <&gem_noc MASTER_APPSS_PROC 3 &mc_virt SLAVE_EBI1 3>,
@@ -224,8 +224,8 @@
 			cpu-idle-states = <&LITTLE_CPU_SLEEP_0
 					   &LITTLE_CPU_SLEEP_1
 					   &CLUSTER_SLEEP_0>;
-			capacity-dmips-mhz = <1024>;
-			dynamic-power-coefficient = <100>;
+			capacity-dmips-mhz = <415>;
+			dynamic-power-coefficient = <137>;
 			next-level-cache = <&L2_400>;
 			operating-points-v2 = <&cpu0_opp_table>;
 			interconnects = <&gem_noc MASTER_APPSS_PROC 3 &mc_virt SLAVE_EBI1 3>,
@@ -246,8 +246,8 @@
 			cpu-idle-states = <&LITTLE_CPU_SLEEP_0
 					   &LITTLE_CPU_SLEEP_1
 					   &CLUSTER_SLEEP_0>;
-			capacity-dmips-mhz = <1024>;
-			dynamic-power-coefficient = <100>;
+			capacity-dmips-mhz = <415>;
+			dynamic-power-coefficient = <137>;
 			next-level-cache = <&L2_500>;
 			operating-points-v2 = <&cpu0_opp_table>;
 			interconnects = <&gem_noc MASTER_APPSS_PROC 3 &mc_virt SLAVE_EBI1 3>,
@@ -268,8 +268,8 @@
 			cpu-idle-states = <&BIG_CPU_SLEEP_0
 					   &BIG_CPU_SLEEP_1
 					   &CLUSTER_SLEEP_0>;
-			capacity-dmips-mhz = <1740>;
-			dynamic-power-coefficient = <405>;
+			capacity-dmips-mhz = <1024>;
+			dynamic-power-coefficient = <480>;
 			next-level-cache = <&L2_600>;
 			operating-points-v2 = <&cpu6_opp_table>;
 			interconnects = <&gem_noc MASTER_APPSS_PROC 3 &mc_virt SLAVE_EBI1 3>,
@@ -290,8 +290,8 @@
 			cpu-idle-states = <&BIG_CPU_SLEEP_0
 					   &BIG_CPU_SLEEP_1
 					   &CLUSTER_SLEEP_0>;
-			capacity-dmips-mhz = <1740>;
-			dynamic-power-coefficient = <405>;
+			capacity-dmips-mhz = <1024>;
+			dynamic-power-coefficient = <480>;
 			next-level-cache = <&L2_700>;
 			operating-points-v2 = <&cpu6_opp_table>;
 			interconnects = <&gem_noc MASTER_APPSS_PROC 3 &mc_virt SLAVE_EBI1 3>,
@@ -788,6 +788,8 @@
 						<&aggre1_noc MASTER_QUP_0 0 &mc_virt SLAVE_EBI1 0>;
 				interconnect-names = "qup-core", "qup-config",
 							"qup-memory";
+				power-domains = <&rpmhpd SC7180_CX>;
+				required-opps = <&rpmhpd_opp_low_svs>;
 				status = "disabled";
 			};
 
@@ -840,6 +842,8 @@
 						<&aggre1_noc MASTER_QUP_0 0 &mc_virt SLAVE_EBI1 0>;
 				interconnect-names = "qup-core", "qup-config",
 							"qup-memory";
+				power-domains = <&rpmhpd SC7180_CX>;
+				required-opps = <&rpmhpd_opp_low_svs>;
 				status = "disabled";
 			};
 
@@ -892,6 +896,8 @@
 						<&aggre1_noc MASTER_QUP_0 0 &mc_virt SLAVE_EBI1 0>;
 				interconnect-names = "qup-core", "qup-config",
 							"qup-memory";
+				power-domains = <&rpmhpd SC7180_CX>;
+				required-opps = <&rpmhpd_opp_low_svs>;
 				status = "disabled";
 			};
 
@@ -926,6 +932,8 @@
 						<&aggre1_noc MASTER_QUP_0 0 &mc_virt SLAVE_EBI1 0>;
 				interconnect-names = "qup-core", "qup-config",
 							"qup-memory";
+				power-domains = <&rpmhpd SC7180_CX>;
+				required-opps = <&rpmhpd_opp_low_svs>;
 				status = "disabled";
 			};
 
@@ -978,6 +986,8 @@
 						<&aggre1_noc MASTER_QUP_0 0 &mc_virt SLAVE_EBI1 0>;
 				interconnect-names = "qup-core", "qup-config",
 							"qup-memory";
+				power-domains = <&rpmhpd SC7180_CX>;
+				required-opps = <&rpmhpd_opp_low_svs>;
 				status = "disabled";
 			};
 
@@ -1012,6 +1022,8 @@
 						<&aggre1_noc MASTER_QUP_0 0 &mc_virt SLAVE_EBI1 0>;
 				interconnect-names = "qup-core", "qup-config",
 							"qup-memory";
+				power-domains = <&rpmhpd SC7180_CX>;
+				required-opps = <&rpmhpd_opp_low_svs>;
 				status = "disabled";
 			};
 
@@ -1079,6 +1091,8 @@
 						<&aggre2_noc MASTER_QUP_1 0 &mc_virt SLAVE_EBI1 0>;
 				interconnect-names = "qup-core", "qup-config",
 							"qup-memory";
+				power-domains = <&rpmhpd SC7180_CX>;
+				required-opps = <&rpmhpd_opp_low_svs>;
 				status = "disabled";
 			};
 
@@ -1131,6 +1145,8 @@
 						<&aggre2_noc MASTER_QUP_1 0 &mc_virt SLAVE_EBI1 0>;
 				interconnect-names = "qup-core", "qup-config",
 							"qup-memory";
+				power-domains = <&rpmhpd SC7180_CX>;
+				required-opps = <&rpmhpd_opp_low_svs>;
 				status = "disabled";
 			};
 
@@ -1165,6 +1181,8 @@
 						<&aggre2_noc MASTER_QUP_1 0 &mc_virt SLAVE_EBI1 0>;
 				interconnect-names = "qup-core", "qup-config",
 							"qup-memory";
+				power-domains = <&rpmhpd SC7180_CX>;
+				required-opps = <&rpmhpd_opp_low_svs>;
 				status = "disabled";
 			};
 
@@ -1217,6 +1235,8 @@
 						<&aggre2_noc MASTER_QUP_1 0 &mc_virt SLAVE_EBI1 0>;
 				interconnect-names = "qup-core", "qup-config",
 							"qup-memory";
+				power-domains = <&rpmhpd SC7180_CX>;
+				required-opps = <&rpmhpd_opp_low_svs>;
 				status = "disabled";
 			};
 
@@ -1251,6 +1271,8 @@
 						<&aggre2_noc MASTER_QUP_1 0 &mc_virt SLAVE_EBI1 0>;
 				interconnect-names = "qup-core", "qup-config",
 							"qup-memory";
+				power-domains = <&rpmhpd SC7180_CX>;
+				required-opps = <&rpmhpd_opp_low_svs>;
 				status = "disabled";
 			};
 
@@ -1303,6 +1325,8 @@
 						<&aggre2_noc MASTER_QUP_1 0 &mc_virt SLAVE_EBI1 0>;
 				interconnect-names = "qup-core", "qup-config",
 							"qup-memory";
+				power-domains = <&rpmhpd SC7180_CX>;
+				required-opps = <&rpmhpd_opp_low_svs>;
 				status = "disabled";
 			};
 
@@ -3055,14 +3079,14 @@
 				status = "disabled";
 			};
 
-			msm_dp: displayport-controller@ae90000 {
-				status = "disabled";
+			mdss_dp: displayport-controller@ae90000 {
 				compatible = "qcom,sc7180-dp";
+				status = "disabled";
 
 				reg = <0 0x0ae90000 0 0x1400>;
 
 				interrupt-parent = <&mdss>;
-				interrupts = <12 IRQ_TYPE_NONE>;
+				interrupts = <12>;
 
 				clocks = <&dispcc DISP_CC_MDSS_AHB_CLK>,
 					 <&dispcc DISP_CC_MDSS_DP_AUX_CLK>,
@@ -3082,6 +3106,7 @@
 				power-domains = <&rpmhpd SC7180_CX>;
 
 				#sound-dai-cells = <0>;
+
 				ports {
 					#address-cells = <1>;
 					#size-cells = <0>;
@@ -3098,7 +3123,7 @@
 					};
 				};
 
-				dp_opp_table: dp-opp-table {
+				dp_opp_table: opp-table {
 					compatible = "operating-points-v2";
 
 					opp-160000000 {
@@ -3197,8 +3222,8 @@
 			#power-domain-cells = <1>;
 		};
 
-		rpmh-sleep-stats@c3f0000 {
-			compatible = "qcom,rpmh-sleep-stats";
+		sram@c3f0000 {
+			compatible = "qcom,rpmh-stats";
 			reg = <0 0x0c3f0000 0 0x400>;
 		};
 
@@ -3588,7 +3613,7 @@
 			polling-delay = <0>;
 
 			thermal-sensors = <&tsens0 1>;
-			sustainable-power = <768>;
+			sustainable-power = <1052>;
 
 			trips {
 				cpu0_alert0: trip-point0 {
@@ -3637,7 +3662,7 @@
 			polling-delay = <0>;
 
 			thermal-sensors = <&tsens0 2>;
-			sustainable-power = <768>;
+			sustainable-power = <1052>;
 
 			trips {
 				cpu1_alert0: trip-point0 {
@@ -3686,7 +3711,7 @@
 			polling-delay = <0>;
 
 			thermal-sensors = <&tsens0 3>;
-			sustainable-power = <768>;
+			sustainable-power = <1052>;
 
 			trips {
 				cpu2_alert0: trip-point0 {
@@ -3735,7 +3760,7 @@
 			polling-delay = <0>;
 
 			thermal-sensors = <&tsens0 4>;
-			sustainable-power = <768>;
+			sustainable-power = <1052>;
 
 			trips {
 				cpu3_alert0: trip-point0 {
@@ -3784,7 +3809,7 @@
 			polling-delay = <0>;
 
 			thermal-sensors = <&tsens0 5>;
-			sustainable-power = <768>;
+			sustainable-power = <1052>;
 
 			trips {
 				cpu4_alert0: trip-point0 {
@@ -3833,7 +3858,7 @@
 			polling-delay = <0>;
 
 			thermal-sensors = <&tsens0 6>;
-			sustainable-power = <768>;
+			sustainable-power = <1052>;
 
 			trips {
 				cpu5_alert0: trip-point0 {
@@ -3882,7 +3907,7 @@
 			polling-delay = <0>;
 
 			thermal-sensors = <&tsens0 9>;
-			sustainable-power = <1202>;
+			sustainable-power = <1425>;
 
 			trips {
 				cpu6_alert0: trip-point0 {
@@ -3923,7 +3948,7 @@
 			polling-delay = <0>;
 
 			thermal-sensors = <&tsens0 10>;
-			sustainable-power = <1202>;
+			sustainable-power = <1425>;
 
 			trips {
 				cpu7_alert0: trip-point0 {
@@ -3964,7 +3989,7 @@
 			polling-delay = <0>;
 
 			thermal-sensors = <&tsens0 11>;
-			sustainable-power = <1202>;
+			sustainable-power = <1425>;
 
 			trips {
 				cpu8_alert0: trip-point0 {
@@ -4005,7 +4030,7 @@
 			polling-delay = <0>;
 
 			thermal-sensors = <&tsens0 12>;
-			sustainable-power = <1202>;
+			sustainable-power = <1425>;
 
 			trips {
 				cpu9_alert0: trip-point0 {
