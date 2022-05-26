@@ -11,7 +11,7 @@
 #define CMDQ_ADDR_HIGH(addr) ((u32)(((addr) >> 16) & GENMASK(31, 0)))
 #endif
 #ifndef CMDQ_ADDR_LOW
-#define CMDQ_ADDR_LOW(addr)	 ((u16)(addr & 0xFFFF) | BIT(1))
+#define CMDQ_ADDR_LOW(addr)	 ((u16)((addr) & 0xFFFF) | BIT(1))
 #endif
 #define UNUSED(x) (void)(x)
 
