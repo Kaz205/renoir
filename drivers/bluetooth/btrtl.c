@@ -737,7 +737,6 @@ void btrtl_set_quirks(struct hci_dev *hdev, struct btrtl_device_info *btrtl_dev)
 		 * global suspend and save power.
 		 */
 		set_bit(HCI_QUIRK_DISABLE_REMOTE_WAKE, &hdev->quirks);
-		set_bit(HCI_QUIRK_LOOSEN_CONN_LATENCY, &hdev->quirks);
 		fallthrough;
 	case CHIP_ID_8852A:
 		set_bit(HCI_QUIRK_VALID_LE_STATES, &hdev->quirks);

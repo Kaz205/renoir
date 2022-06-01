@@ -252,13 +252,6 @@ enum {
 
 	/* This quirk will be set when running on Intel SdP/StP controller */
 	HCI_QUIRK_RESTRICT_CONN_PARAMS,
-
-	/* CHORMIUM-only: This quirk set Connection latency parameter to a
-	 * hardcoded value other than 0 to increase the LE connection success
-	 * rate for the peripherals skipping few CONN_IND request due to power
-	 * saving reason.
-	 */
-	HCI_QUIRK_LOOSEN_CONN_LATENCY,
 };
 
 /* HCI device flags */

@@ -1042,7 +1042,6 @@ struct hci_conn *hci_connect_le(struct hci_dev *hdev, bdaddr_t *dst,
 	struct smp_irk *irk;
 	struct hci_request req;
 	int err;
-	u16 conn_latency;
 
 	/* This ensures that during disable le_scan address resolution
 	 * will not be disabled if it is followed by le_create_conn
@@ -1146,20 +1145,6 @@ struct hci_conn *hci_connect_le(struct hci_dev *hdev, bdaddr_t *dst,
 		conn->le_conn_max_interval = hdev->le_conn_max_interval;
 		conn->le_conn_latency = hdev->le_conn_latency;
 		conn->le_supv_timeout = hdev->le_supv_timeout;
-	}
-
-	/* With the strict connection expectation from some controllers on
-	 * remote devices which can't listen to consecutive connection,
-	 * connection latency should be calculated based on the spec instead of
-	 * the default 0. The equation is simplified by calculating the time
-	 * units of supervision timeout and connection latency based on
-	 * BLUETOOTH CORE SPECIFICATION Version 5.2 | Vol 6, Part B page 2981
-	 * 2 is the arbitrary number based on the results of experiments.
-	 */
-	if (test_bit(HCI_QUIRK_LOOSEN_CONN_LATENCY, &hdev->quirks)) {
-		conn_latency = (u16)(((conn->le_supv_timeout * 4) /
-					conn->le_conn_max_interval) - 1);
-		conn->le_conn_latency = conn_latency > 2 ? 2 : conn_latency;
 	}
 
 	/* If controller is scanning, we stop it since some controllers are
