@@ -1319,11 +1319,13 @@ int pld_exit_power_save(struct device *dev)
 	switch (type) {
 	case PLD_BUS_TYPE_PCIE:
 	case PLD_BUS_TYPE_PCIE_FW_SIM:
-	case PLD_BUS_TYPE_IPCI_FW_SIM:
 	case PLD_BUS_TYPE_SNOC_FW_SIM:
 	case PLD_BUS_TYPE_SNOC:
 	case PLD_BUS_TYPE_SDIO:
 	case PLD_BUS_TYPE_USB:
+		break;
+	case PLD_BUS_TYPE_IPCI_FW_SIM:
+		ret = pld_pcie_fw_sim_exit_power_save(dev);
 		break;
 	case PLD_BUS_TYPE_IPCI:
 		ret = pld_ipci_exit_power_save(dev);
@@ -3149,6 +3151,32 @@ void pld_thermal_unregister(struct device *dev, int mon_id)
 	default:
 		pr_err("Invalid device type %d\n", type);
 		break;
+	}
+}
+
+const char *pld_bus_width_type_to_str(enum pld_bus_width_type level)
+{
+	switch (level) {
+	/* initialize the wlan sub system */
+	case PLD_BUS_WIDTH_NONE:
+		return "NONE";
+	case PLD_BUS_WIDTH_IDLE:
+		return "IDLE";
+	case PLD_BUS_WIDTH_LOW:
+		return "LOW";
+	case PLD_BUS_WIDTH_MEDIUM:
+		return "MEDIUM";
+	case PLD_BUS_WIDTH_HIGH:
+		return "HIGH";
+	case PLD_BUS_WIDTH_VERY_HIGH:
+		return "VERY_HIGH";
+	case PLD_BUS_WIDTH_LOW_LATENCY:
+		return "LOW_LAT";
+	default:
+		if (level > PLD_BUS_WIDTH_ULTRA_HIGH)
+			return "ULTRA_HIGH+";
+		else
+			return "INVAL";
 	}
 }
 
