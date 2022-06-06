@@ -247,34 +247,8 @@ static void dpu_mdss_destroy(struct drm_device *dev)
 	struct dss_module_power *mp = &dpu_mdss->mp;
 	int irq;
 
-	/*
-	 * CHROMIUM HACK:
-	 *
-	 * In chromeos-5.4 we don't have all the reorg that upstream has.
-	 * Specifically, we wish we had the series ending in
-	 * commit 1c77c2c5f42c ("FROMGIT: drm/msm: make mdp5/dpu devices master
-	 * components") but that has a lot of complex dependencies, including
-	 * commit 8f59ee9a570c ("drm/msm/dsi: Adjust probe order") which is a
-	 * cross-kernel series that was known to break a bunch of stuff.
-	 *
-	 * Specifically there are lifetime issues with the current code.
-	 * In the current (5.4 code), this "dpu_mdss" code, part of the DPU
-	 * driver, is in charge of runtime_pm for the main msm_drv. ...but
-	 * that's not so bueno because:
-	 * - By the time dpu_mdss_init() is called there are already several
-	 *   pm_runtime requests. In general all of the "children" of the main
-	 *   msm_drv automatically grab a pm_runtime reference to the parent
-	 *   during their probes.
-	 * - When this destroy gets called some of those other children may
-	 *   still be active. Thus the old pm_runtime_suspend() call that we
-	 *   had here was actually failing.
-	 *
-	 * It seems to work OK here to just force ourselves to suspend. This
-	 * effectively undoes dpu_mdss_init() by disabling runtime_pm and
-	 * forcing the suspend even if there are active requests.
-	 */
-	pm_runtime_force_suspend(dev->dev);
-
+	pm_runtime_suspend(dev->dev);
+	pm_runtime_disable(dev->dev);
 	_dpu_mdss_irq_domain_fini(dpu_mdss);
 	irq = platform_get_irq(pdev, 0);
 	irq_set_chained_handler_and_data(irq, NULL, NULL);
