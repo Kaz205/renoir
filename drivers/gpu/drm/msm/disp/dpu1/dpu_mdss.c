@@ -3,7 +3,6 @@
  * Copyright (c) 2018, The Linux Foundation
  */
 
-#include <linux/interconnect.h>
 #include <linux/irq.h>
 #include <linux/irqchip.h>
 #include <linux/irqdesc.h>
@@ -19,7 +18,8 @@
 #define UBWC_CTRL_2			0x150
 #define UBWC_PREDICTION_MODE		0x154
 
-#define MIN_IB_BW	400000000UL /* Min ib vote 400MB */
+/* Max BW defined in KBps */
+#define MAX_BW				6800000
 
 struct dpu_irq_controller {
 	unsigned long enabled_mask;
@@ -31,46 +31,7 @@ struct dpu_mdss {
 	void __iomem *mmio;
 	struct dss_module_power mp;
 	struct dpu_irq_controller irq_controller;
-	struct icc_path *path[2];
-	u32 num_paths;
 };
-
-static int dpu_mdss_parse_data_bus_icc_path(struct drm_device *dev,
-					    struct dpu_mdss *dpu_mdss)
-{
-	struct icc_path *path0 = of_icc_get(dev->dev, "mdp0-mem");
-	struct icc_path *path1 = of_icc_get(dev->dev, "mdp1-mem");
-
-	if (IS_ERR_OR_NULL(path0))
-		return PTR_ERR_OR_ZERO(path0);
-
-	dpu_mdss->path[0] = path0;
-	dpu_mdss->num_paths = 1;
-
-	if (!IS_ERR_OR_NULL(path1)) {
-		dpu_mdss->path[1] = path1;
-		dpu_mdss->num_paths++;
-	}
-
-	return 0;
-}
-
-static void dpu_mdss_put_icc_path(void *data)
-{
-	struct dpu_mdss *dpu_mdss = data;
-	int i;
-
-	for (i = 0; i < dpu_mdss->num_paths; i++)
-		icc_put(dpu_mdss->path[i]);
-}
-
-static void dpu_mdss_icc_request_bw(struct dpu_mdss *dpu_mdss, unsigned long bw)
-{
-	int i;
-
-	for (i = 0; i < dpu_mdss->num_paths; i++)
-		icc_set_bw(dpu_mdss->path[i], 0, Bps_to_icc(bw));
-}
 
 static void dpu_mdss_irq(struct irq_desc *desc)
 {
@@ -185,13 +146,6 @@ static int dpu_mdss_enable(struct msm_mdss *mdss)
 	struct dss_module_power *mp = &dpu_mdss->mp;
 	int ret;
 
-	/*
-	 * Several components have AXI clocks that can only be turned on if
-	 * the interconnect is enabled (non-zero bandwidth). Let's make sure
-	 * that the interconnects are at least at a minimum amount.
-	 */
-	dpu_mdss_icc_request_bw(dpu_mdss, MIN_IB_BW);
-
 	ret = msm_dss_enable_clk(mp->clk_config, mp->num_clk, true);
 	if (ret) {
 		DPU_ERROR("clock enable failed, ret:%d\n", ret);
@@ -233,8 +187,6 @@ static int dpu_mdss_disable(struct msm_mdss *mdss)
 	ret = msm_dss_enable_clk(mp->clk_config, mp->num_clk, false);
 	if (ret)
 		DPU_ERROR("clock disable failed, ret:%d\n", ret);
-
-	dpu_mdss_icc_request_bw(dpu_mdss, 0);
 
 	return ret;
 }
@@ -285,13 +237,6 @@ int dpu_mdss_init(struct drm_device *dev)
 		return PTR_ERR(dpu_mdss->mmio);
 
 	DRM_DEBUG("mapped mdss address space @%pK\n", dpu_mdss->mmio);
-
-	ret = dpu_mdss_parse_data_bus_icc_path(dev, dpu_mdss);
-	if (ret)
-		return ret;
-	ret = devm_add_action_or_reset(&pdev->dev, dpu_mdss_put_icc_path, dpu_mdss);
-	if (ret)
-		return ret;
 
 	mp = &dpu_mdss->mp;
 	ret = msm_dss_parse_clock(pdev, mp);
