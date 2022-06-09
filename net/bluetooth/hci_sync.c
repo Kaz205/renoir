@@ -5,6 +5,7 @@
  * Copyright (C) 2021 Intel Corporation
  */
 
+#include <linux/kernel.h>
 #include <linux/property.h>
 
 #include <net/bluetooth/bluetooth.h>
@@ -5294,6 +5295,17 @@ int hci_le_create_conn_sync(struct hci_dev *hdev, struct hci_conn *conn)
 		conn->le_conn_latency = hdev->le_conn_latency;
 		conn->le_supv_timeout = hdev->le_supv_timeout;
 	}
+
+	/* With the strict connection expectation from some controllers using
+	 * the default 0, has led to lower than expected connection success
+	 * rates with some peripherals which may miss all anchor points.  This
+	 * is usually only relevant on the initial connection since the
+	 * peripherals own preferred connection parameters are set and honored.
+	 * Based on experiments, loosening to 2 connection events improves
+	 * reliability.
+	 */
+	if (test_bit(HCI_QUIRK_LOOSEN_CONN_LATENCY, &hdev->quirks))
+		conn->le_conn_latency = max_t(__u16, conn->le_conn_latency, 2);
 
 	/* If controller is scanning, we stop it since some controllers are
 	 * not able to scan and connect at the same time. Also set the
