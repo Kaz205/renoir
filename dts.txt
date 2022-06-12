@@ -313,7 +313,6 @@
 					interrupts = <0x00 0x13 0x07 0x03 0x00 0x13 0x06 0x03 0x00 0x13 0x00 0x03 0x00 0x13 0x02 0x03>;
 					interrupt-names = "kpdpwr\0resin\0kpdpwr-bark\0kpdpwr-resin-bark";
 					qcom,kpdpwr-sw-debounce;
-					qcom,pon-dbc-delay = <0x3d09>;
 
 					qcom,pon_1 {
 						qcom,pon-type = <0x00>;
@@ -2685,7 +2684,6 @@
 				mi,hbm-on-51-index = <0x01>;
 				mi,hbm-bl-min-level = <0x01>;
 				mi,hbm-bl-max-level = <0x7ff>;
-				mi,mdss-dsi-panel-dc-type = <0x00>;
 				mi,panel-on-dimming-delay = <0x78>;
 				mi,fp-display-on-optimize-flag;
 				mi,max-brightness-clone = <0x7ff>;
@@ -2887,7 +2885,6 @@
 				mi,hbm-on-51-index = <0x01>;
 				mi,hbm-bl-min-level = <0x01>;
 				mi,hbm-bl-max-level = <0x7ff>;
-				mi,mdss-dsi-panel-dc-type = <0x00>;
 				mi,panel-on-dimming-delay = <0x78>;
 				mi,fp-display-on-optimize-flag;
 				mi,max-brightness-clone = <0x7ff>;
@@ -3089,7 +3086,6 @@
 				mi,hbm-on-51-index = <0x01>;
 				mi,hbm-bl-min-level = <0x01>;
 				mi,hbm-bl-max-level = <0x7ff>;
-				mi,mdss-dsi-panel-dc-type = <0x00>;
 				mi,panel-on-dimming-delay = <0x78>;
 				mi,fp-display-on-optimize-flag;
 				mi,max-brightness-clone = <0x7ff>;
@@ -3291,7 +3287,6 @@
 				mi,hbm-on-51-index = <0x01>;
 				mi,hbm-bl-min-level = <0x01>;
 				mi,hbm-bl-max-level = <0x7ff>;
-				mi,mdss-dsi-panel-dc-type = <0x00>;
 				mi,panel-on-dimming-delay = <0x78>;
 				mi,fp-display-on-optimize-flag;
 				mi,max-brightness-clone = <0x7ff>;
