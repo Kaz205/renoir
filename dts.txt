@@ -2684,6 +2684,7 @@
 				mi,hbm-on-51-index = <0x01>;
 				mi,hbm-bl-min-level = <0x01>;
 				mi,hbm-bl-max-level = <0x7ff>;
+				mi,mdss-dsi-panel-dc-type = <0x00>;
 				mi,panel-on-dimming-delay = <0x78>;
 				mi,fp-display-on-optimize-flag;
 				mi,max-brightness-clone = <0x7ff>;
@@ -2885,6 +2886,7 @@
 				mi,hbm-on-51-index = <0x01>;
 				mi,hbm-bl-min-level = <0x01>;
 				mi,hbm-bl-max-level = <0x7ff>;
+				mi,mdss-dsi-panel-dc-type = <0x00>;
 				mi,panel-on-dimming-delay = <0x78>;
 				mi,fp-display-on-optimize-flag;
 				mi,max-brightness-clone = <0x7ff>;
@@ -3086,6 +3088,7 @@
 				mi,hbm-on-51-index = <0x01>;
 				mi,hbm-bl-min-level = <0x01>;
 				mi,hbm-bl-max-level = <0x7ff>;
+				mi,mdss-dsi-panel-dc-type = <0x00>;
 				mi,panel-on-dimming-delay = <0x78>;
 				mi,fp-display-on-optimize-flag;
 				mi,max-brightness-clone = <0x7ff>;
@@ -3287,6 +3290,7 @@
 				mi,hbm-on-51-index = <0x01>;
 				mi,hbm-bl-min-level = <0x01>;
 				mi,hbm-bl-max-level = <0x7ff>;
+				mi,mdss-dsi-panel-dc-type = <0x00>;
 				mi,panel-on-dimming-delay = <0x78>;
 				mi,fp-display-on-optimize-flag;
 				mi,max-brightness-clone = <0x7ff>;
