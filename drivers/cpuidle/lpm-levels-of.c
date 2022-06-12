@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 /*
- * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt) "%s: " fmt, KBUILD_MODNAME
@@ -155,7 +155,7 @@ static int create_lvl_avail_nodes(const char *name,
 	if (!kobj)
 		return -ENOMEM;
 
-	attr_group = devm_kcalloc(&lpm_pdev->dev, 1, sizeof(*attr_group),
+	attr_group = devm_kzalloc(&lpm_pdev->dev, sizeof(*attr_group),
 				  GFP_KERNEL);
 	if (!attr_group) {
 		ret = -ENOMEM;
@@ -436,13 +436,6 @@ static int parse_cluster_level(struct device_node *dn,
 		return ret;
 	}
 
-	ret = lpm_of_read_u32(dn, "qcom,reset-level",
-			      &level->reset_level, false);
-	if (ret == -EINVAL)
-		level->reset_level = LPM_RESET_LVL_NONE;
-	else if (ret)
-		return ret;
-
 	cluster->nlevels++;
 
 	return 0;
@@ -521,15 +514,6 @@ static int parse_cpu(struct device_node *node, struct lpm_cpu *cpu)
 					"qcom,use-broadcast-timer");
 
 		l->is_reset = of_property_read_bool(n, "qcom,is-reset");
-
-		ret = lpm_of_read_u32(n, "qcom,reset-level", &l->reset_level,
-								false);
-		of_node_put(n);
-
-		if (ret == -EINVAL)
-			l->reset_level = LPM_RESET_LVL_NONE;
-		else if (ret)
-			return ret;
 	}
 
 	for (i = 1; i < cpu->nlevels; i++)
@@ -546,7 +530,7 @@ static int parse_cpu_levels(struct device_node *dn, struct lpm_cluster *c)
 	int ret;
 	struct lpm_cpu *cpu;
 
-	cpu = devm_kcalloc(&lpm_pdev->dev, 1, sizeof(*cpu), GFP_KERNEL);
+	cpu = devm_kzalloc(&lpm_pdev->dev, sizeof(*cpu), GFP_KERNEL);
 	if (!cpu)
 		return -ENOMEM;
 
@@ -627,9 +611,9 @@ struct lpm_cluster *parse_cluster(struct device_node *node,
 	struct device_node *n;
 	int ret = 0, i;
 
-	c = devm_kcalloc(&lpm_pdev->dev, 1, sizeof(*c), GFP_KERNEL);
+	c = devm_kzalloc(&lpm_pdev->dev, sizeof(*c), GFP_KERNEL);
 	if (!c)
-		return ERR_PTR(-ENOMEM);
+		return NULL;
 
 	ret = parse_cluster_params(node, c);
 	if (ret)
@@ -642,10 +626,8 @@ struct lpm_cluster *parse_cluster(struct device_node *node,
 	c->min_child_level = NR_LPM_LEVELS;
 
 	for_each_child_of_node(node, n) {
-		if (!n->name) {
-			of_node_put(n);
+		if (!n->name)
 			continue;
-		}
 
 		if (!of_node_cmp(n->name, "qcom,pm-cluster-level")) {
 			if (parse_cluster_level(n, c)) {
@@ -673,8 +655,6 @@ struct lpm_cluster *parse_cluster(struct device_node *node,
 
 			c->aff_level = 1;
 		}
-
-		of_node_put(n);
 	}
 
 	if (cpumask_intersects(&c->child_cpus, cpu_online_mask))
@@ -713,43 +693,5 @@ struct lpm_cluster *lpm_of_parse_cluster(struct platform_device *pdev)
 	c = parse_cluster(top, NULL);
 	of_node_put(top);
 	return c;
-}
-
-void cluster_dt_walkthrough(struct lpm_cluster *cluster)
-{
-	struct list_head *list;
-	struct lpm_cpu *cpu;
-	int i, j;
-	static int id;
-	char str[10] = {0};
-
-	if (!cluster)
-		return;
-
-	for (i = 0; i < id; i++)
-		snprintf(str+i, 10 - i, "\t");
-
-	for (i = 0; i < cluster->nlevels; i++) {
-		struct lpm_cluster_level *l = &cluster->levels[i];
-
-		pr_info("cluster: %s \t level: %s\n", cluster->cluster_name,
-							l->level_name);
-	}
-
-	list_for_each_entry(cpu, &cluster->cpu, list) {
-		for (j = 0; j < cpu->nlevels; j++)
-			pr_info("%s\tCPU level name: %s\n", str,
-						cpu->levels[j].name);
-	}
-
-	id++;
-
-	list_for_each(list, &cluster->child) {
-		struct lpm_cluster *n;
-
-		n = list_entry(list, typeof(*n), list);
-		cluster_dt_walkthrough(n);
-	}
-	id--;
 }
 

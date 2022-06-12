@@ -4,6 +4,9 @@
  * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
  */
 
+#ifndef __LPM_LEVELS_H__
+#define __LPM_LEVELS_H__
+
 #include <soc/qcom/pm.h>
 
 #define NR_LPM_LEVELS 8
@@ -32,7 +35,6 @@ struct lpm_cpu_level {
 	struct power_params pwr;
 	unsigned int psci_id;
 	bool is_reset;
-	int reset_level;
 };
 
 struct lpm_cpu {
@@ -48,6 +50,7 @@ struct lpm_cpu {
 	bool lpm_prediction;
 	struct cpuidle_driver *drv;
 	struct lpm_cluster *parent;
+	ktime_t next_hrtimer;
 };
 
 struct lpm_level_avail {
@@ -73,7 +76,6 @@ struct lpm_cluster_level {
 	struct lpm_level_avail available;
 	unsigned int psci_id;
 	bool is_reset;
-	int reset_level;
 };
 
 struct cluster_history {
@@ -125,23 +127,5 @@ bool lpm_cluster_mode_allow(struct lpm_cluster *cluster,
 uint32_t *get_per_cpu_max_residency(int cpu);
 uint32_t *get_per_cpu_min_residency(int cpu);
 extern struct lpm_cluster *lpm_root_node;
-
-#if defined(CONFIG_SMP)
-DECLARE_PER_CPU(bool, pending_ipi);
-static inline bool is_IPI_pending(const struct cpumask *mask)
-{
-	unsigned int cpu;
-
-	for_each_cpu(cpu, mask) {
-		if per_cpu(pending_ipi, cpu)
-			return true;
-	}
-	return false;
-}
-#else
-static inline bool is_IPI_pending(const struct cpumask *mask)
-{
-	return false;
-}
-#endif
+#endif /* __LPM_LEVELS_H__ */
 
