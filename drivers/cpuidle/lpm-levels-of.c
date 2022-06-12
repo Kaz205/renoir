@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 /*
- * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt) "%s: " fmt, KBUILD_MODNAME
@@ -10,7 +10,6 @@
 #include <linux/init.h>
 #include <linux/slab.h>
 #include <linux/of.h>
-#include <linux/of_address.h>
 #include <linux/err.h>
 #include <linux/sysfs.h>
 #include <linux/device.h>
@@ -103,8 +102,8 @@ static ssize_t lpm_latency_show(struct kobject *kobj,
 	return ret;
 }
 
-static ssize_t lpm_enable_show(struct kobject *kobj,
-			       struct kobj_attribute *attr, char *buf)
+ssize_t lpm_enable_show(struct kobject *kobj, struct kobj_attribute *attr,
+				char *buf)
 {
 	int ret = 0;
 	struct kernel_param kp;
@@ -126,8 +125,7 @@ static ssize_t lpm_enable_show(struct kobject *kobj,
 	return ret;
 }
 
-static ssize_t lpm_enable_store(struct kobject *kobj,
-				struct kobj_attribute *attr,
+ssize_t lpm_enable_store(struct kobject *kobj, struct kobj_attribute *attr,
 				const char *buf, size_t len)
 {
 	int ret = 0;
@@ -157,7 +155,7 @@ static int create_lvl_avail_nodes(const char *name,
 	if (!kobj)
 		return -ENOMEM;
 
-	attr_group = devm_kzalloc(&lpm_pdev->dev, sizeof(*attr_group),
+	attr_group = devm_kcalloc(&lpm_pdev->dev, 1, sizeof(*attr_group),
 				  GFP_KERNEL);
 	if (!attr_group) {
 		ret = -ENOMEM;
@@ -347,9 +345,9 @@ static int parse_cluster_params(struct device_node *dn, struct lpm_cluster *c)
 {
 	int ret;
 
-	ret = of_property_read_string(dn, "idle-state-name", &c->cluster_name);
+	ret = of_property_read_string(dn, "label", &c->cluster_name);
 	if (ret) {
-		pr_err("Failed to read name ret: %d\n", ret);
+		pr_err("Failed to read label ret: %d\n", ret);
 		return ret;
 	}
 
@@ -386,17 +384,17 @@ static int parse_power_params(struct device_node *dn, struct power_params *pwr)
 {
 	int ret;
 
-	ret  = lpm_of_read_u32(dn, "entry-latency-us",
+	ret  = lpm_of_read_u32(dn, "qcom,entry-latency-us",
 			       &pwr->entry_latency, true);
 	if (ret)
 		return ret;
 
-	ret  = lpm_of_read_u32(dn, "exit-latency-us",
+	ret  = lpm_of_read_u32(dn, "qcom,exit-latency-us",
 			       &pwr->exit_latency, true);
 	if (ret)
 		return ret;
 
-	ret = lpm_of_read_u32(dn, "min-residency-us",
+	ret = lpm_of_read_u32(dn, "qcom,min-residency-us",
 			      &pwr->min_residency, true);
 
 	return ret;
@@ -408,10 +406,9 @@ static int parse_cluster_level(struct device_node *dn,
 	struct lpm_cluster_level *level = &cluster->levels[cluster->nlevels];
 	int ret = -ENOMEM;
 
-	ret = of_property_read_string(dn, "idle-state-name",
-				      &level->level_name);
+	ret = of_property_read_string(dn, "label", &level->level_name);
 	if (ret) {
-		pr_err("Failed to read name ret: %d\n", ret);
+		pr_err("Failed to read label ret: %d\n", ret);
 		return ret;
 	}
 
@@ -439,6 +436,13 @@ static int parse_cluster_level(struct device_node *dn,
 		return ret;
 	}
 
+	ret = lpm_of_read_u32(dn, "qcom,reset-level",
+			      &level->reset_level, false);
+	if (ret == -EINVAL)
+		level->reset_level = LPM_RESET_LVL_NONE;
+	else if (ret)
+		return ret;
+
 	cluster->nlevels++;
 
 	return 0;
@@ -446,17 +450,11 @@ static int parse_cluster_level(struct device_node *dn,
 
 static int parse_cpu_mode(struct device_node *n, struct lpm_cpu_level *l)
 {
-	int ret, p;
+	int ret;
 
-	if (!of_device_is_compatible(n, "arm,idle-state") ||
-	    lpm_of_read_u32(n, "arm,psci-suspend-param", &p, true)) {
-		pr_err("Failed to comply with arm,idle-state bindings.\n");
-		return -EINVAL;
-	}
-
-	ret = of_property_read_string(n, "idle-state-name", &l->name);
+	ret = of_property_read_string(n, "label", &l->name);
 	if (ret) {
-		pr_err("Failed to read level name: ret: %d\n", ret);
+		pr_err("Failed to read label level: %s\n", l->name);
 		return ret;
 	}
 
@@ -523,6 +521,15 @@ static int parse_cpu(struct device_node *node, struct lpm_cpu *cpu)
 					"qcom,use-broadcast-timer");
 
 		l->is_reset = of_property_read_bool(n, "qcom,is-reset");
+
+		ret = lpm_of_read_u32(n, "qcom,reset-level", &l->reset_level,
+								false);
+		of_node_put(n);
+
+		if (ret == -EINVAL)
+			l->reset_level = LPM_RESET_LVL_NONE;
+		else if (ret)
+			return ret;
 	}
 
 	for (i = 1; i < cpu->nlevels; i++)
@@ -539,17 +546,15 @@ static int parse_cpu_levels(struct device_node *dn, struct lpm_cluster *c)
 	int ret;
 	struct lpm_cpu *cpu;
 
-	cpu = devm_kzalloc(&lpm_pdev->dev, sizeof(*cpu), GFP_KERNEL);
+	cpu = devm_kcalloc(&lpm_pdev->dev, 1, sizeof(*cpu), GFP_KERNEL);
 	if (!cpu)
 		return -ENOMEM;
 
-	spin_lock_init(&cpu->cpu_lock);
 	if (get_cpumask_for_node(dn, &cpu->related_cpus))
 		return -EINVAL;
 
 	cpu->parent = c;
 
-	of_property_read_string(dn, "label", &cpu->domain_name);
 	ret = lpm_of_read_u32(dn, "qcom,psci-mode-shift",
 			      &cpu->psci_mode_shift, true);
 	if (ret)
@@ -559,9 +564,6 @@ static int parse_cpu_levels(struct device_node *dn, struct lpm_cluster *c)
 			      &cpu->psci_mode_mask, true);
 	if (ret)
 		return ret;
-
-	cpu->ipi_prediction = !(of_property_read_bool(dn,
-					"qcom,disable-ipi-prediction"));
 
 	cpu->lpm_prediction = !(of_property_read_bool(dn,
 					"qcom,disable-prediction"));
@@ -618,16 +620,16 @@ void free_cluster_node(struct lpm_cluster *cluster)
  * level of a cluster is consistent with reference to its
  * child nodes.
  */
-static struct lpm_cluster *parse_cluster(struct device_node *node,
+struct lpm_cluster *parse_cluster(struct device_node *node,
 				  struct lpm_cluster *parent)
 {
 	struct lpm_cluster *c;
 	struct device_node *n;
 	int ret = 0, i;
 
-	c = devm_kzalloc(&lpm_pdev->dev, sizeof(*c), GFP_KERNEL);
+	c = devm_kcalloc(&lpm_pdev->dev, 1, sizeof(*c), GFP_KERNEL);
 	if (!c)
-		return NULL;
+		return ERR_PTR(-ENOMEM);
 
 	ret = parse_cluster_params(node, c);
 	if (ret)
@@ -640,8 +642,10 @@ static struct lpm_cluster *parse_cluster(struct device_node *node,
 	c->min_child_level = NR_LPM_LEVELS;
 
 	for_each_child_of_node(node, n) {
-		if (!n->name)
+		if (!n->name) {
+			of_node_put(n);
 			continue;
+		}
 
 		if (!of_node_cmp(n->name, "qcom,pm-cluster-level")) {
 			if (parse_cluster_level(n, c)) {
@@ -669,6 +673,8 @@ static struct lpm_cluster *parse_cluster(struct device_node *node,
 
 			c->aff_level = 1;
 		}
+
+		of_node_put(n);
 	}
 
 	if (cpumask_intersects(&c->child_cpus, cpu_online_mask))
@@ -692,48 +698,6 @@ failed_parse_cluster:
 	return NULL;
 }
 
-static void add_rimps_tmr_register(struct device_node *dn,
-		struct lpm_cluster *cl)
-{
-	struct lpm_cpu *lpm_cpu;
-	uint32_t rimps_threshold = 0;
-	uint32_t index;
-
-	if (list_empty(&cl->cpu)) {
-		struct lpm_cluster *n;
-
-		list_for_each_entry(n, &cl->child, list)
-			add_rimps_tmr_register(dn, n);
-	}
-
-	list_for_each_entry(lpm_cpu, &cl->cpu, list) {
-		int idx = lpm_cpu->nlevels-1;
-
-		if (!lpm_cpu->domain_name) {
-			pr_debug("cpu domain name not found\n");
-			return;
-		}
-
-		index = of_property_match_string(dn, "reg-names", lpm_cpu->domain_name);
-		if (index < 0) {
-			pr_debug("reg name field not found for %s\n", lpm_cpu->domain_name);
-			return;
-		}
-
-		lpm_cpu->rimps_tmr_base = of_iomap(dn, index);
-		if (!lpm_cpu->rimps_tmr_base) {
-			pr_debug("Unable to get rimps base address\n");
-			return;
-		}
-		rimps_threshold = lpm_cpu->levels[idx].pwr.min_residency;
-		rimps_threshold = us_to_ticks(rimps_threshold);
-		writel_relaxed(rimps_threshold, lpm_cpu->rimps_tmr_base
-							 + TIMER_THRESHOLD);
-		/* Ensure the write is complete before returning. */
-		wmb();
-	}
-}
-
 struct lpm_cluster *lpm_of_parse_cluster(struct platform_device *pdev)
 {
 	struct device_node *top = NULL;
@@ -747,7 +711,45 @@ struct lpm_cluster *lpm_of_parse_cluster(struct platform_device *pdev)
 
 	lpm_pdev = pdev;
 	c = parse_cluster(top, NULL);
-	add_rimps_tmr_register(pdev->dev.of_node, c);
 	of_node_put(top);
 	return c;
 }
+
+void cluster_dt_walkthrough(struct lpm_cluster *cluster)
+{
+	struct list_head *list;
+	struct lpm_cpu *cpu;
+	int i, j;
+	static int id;
+	char str[10] = {0};
+
+	if (!cluster)
+		return;
+
+	for (i = 0; i < id; i++)
+		snprintf(str+i, 10 - i, "\t");
+
+	for (i = 0; i < cluster->nlevels; i++) {
+		struct lpm_cluster_level *l = &cluster->levels[i];
+
+		pr_info("cluster: %s \t level: %s\n", cluster->cluster_name,
+							l->level_name);
+	}
+
+	list_for_each_entry(cpu, &cluster->cpu, list) {
+		for (j = 0; j < cpu->nlevels; j++)
+			pr_info("%s\tCPU level name: %s\n", str,
+						cpu->levels[j].name);
+	}
+
+	id++;
+
+	list_for_each(list, &cluster->child) {
+		struct lpm_cluster *n;
+
+		n = list_entry(list, typeof(*n), list);
+		cluster_dt_walkthrough(n);
+	}
+	id--;
+}
+

@@ -1,11 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
 /*
- * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
  */
-
-#ifndef __LPM_LEVELS_H__
-#define __LPM_LEVELS_H__
 
 #include <soc/qcom/pm.h>
 
@@ -14,27 +11,13 @@
 #define CLUST_SMPL_INVLD_TIME 40000
 #define DEFAULT_PREMATURE_CNT 3
 #define DEFAULT_STDDEV 100
-#define DEFAULT_IPI_STDDEV 400
 #define DEFAULT_TIMER_ADD 100
-#define DEFAULT_IPI_TIMER_ADD 900
 #define TIMER_ADD_LOW 100
 #define TIMER_ADD_HIGH 1500
 #define STDDEV_LOW 100
 #define STDDEV_HIGH 1000
 #define PREMATURE_CNT_LOW 1
 #define PREMATURE_CNT_HIGH 5
-
-/* RIMPS registers */
-#define TIMER_CTRL		0x0
-#define TIMER_VAL		0x4
-#define TIMER_PENDING		0x18
-#define TIMER_THRESHOLD		0x1C
-
-/* RIMPS registers offset */
-#define TIMER_CONTROL_EN	0x1
-
-/* RIMPS timer clock */
-#define ARCH_TIMER_HZ	19200000
 
 struct power_params {
 	uint32_t entry_latency;		/* Entry latency */
@@ -49,6 +32,7 @@ struct lpm_cpu_level {
 	struct power_params pwr;
 	unsigned int psci_id;
 	bool is_reset;
+	int reset_level;
 };
 
 struct lpm_cpu {
@@ -56,17 +40,12 @@ struct lpm_cpu {
 	struct cpumask related_cpus;
 	struct lpm_cpu_level levels[NR_LPM_LEVELS];
 	int nlevels;
-	const char *domain_name;
 	unsigned int psci_mode_shift;
 	unsigned int psci_mode_mask;
 	uint32_t ref_stddev;
 	uint32_t ref_premature_cnt;
 	uint32_t tmr_add;
 	bool lpm_prediction;
-	void __iomem *rimps_tmr_base;
-	spinlock_t cpu_lock;
-	bool ipi_prediction;
-	uint64_t bias;
 	struct cpuidle_driver *drv;
 	struct lpm_cluster *parent;
 };
@@ -94,6 +73,7 @@ struct lpm_cluster_level {
 	struct lpm_level_avail available;
 	unsigned int psci_id;
 	bool is_reset;
+	int reset_level;
 };
 
 struct cluster_history {
@@ -136,7 +116,6 @@ struct lpm_cluster {
 struct lpm_cluster *lpm_of_parse_cluster(struct platform_device *pdev);
 void free_cluster_node(struct lpm_cluster *cluster);
 void cluster_dt_walkthrough(struct lpm_cluster *cluster);
-uint32_t us_to_ticks(uint64_t sleep_val);
 
 int create_cluster_lvl_nodes(struct lpm_cluster *p, struct kobject *kobj);
 int lpm_cpu_mode_allow(unsigned int cpu,
@@ -146,4 +125,23 @@ bool lpm_cluster_mode_allow(struct lpm_cluster *cluster,
 uint32_t *get_per_cpu_max_residency(int cpu);
 uint32_t *get_per_cpu_min_residency(int cpu);
 extern struct lpm_cluster *lpm_root_node;
-#endif /* __LPM_LEVELS_H__ */
+
+#if defined(CONFIG_SMP)
+DECLARE_PER_CPU(bool, pending_ipi);
+static inline bool is_IPI_pending(const struct cpumask *mask)
+{
+	unsigned int cpu;
+
+	for_each_cpu(cpu, mask) {
+		if per_cpu(pending_ipi, cpu)
+			return true;
+	}
+	return false;
+}
+#else
+static inline bool is_IPI_pending(const struct cpumask *mask)
+{
+	return false;
+}
+#endif
+
