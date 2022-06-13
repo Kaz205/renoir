@@ -126,14 +126,6 @@ properties:
       UINT_MAX (4294967295) represents infinite. Other values
       represent 1-1/N.
 
-  semtech,cs-idle-sleep:
-    description:
-      State of CS pins during sleep mode and idle time.
-    enum:
-      - hz
-      - gnd
-      - vdd
-
   semtech,int-comp-resistor:
     description:
       Internal resistor setting for compensation.
