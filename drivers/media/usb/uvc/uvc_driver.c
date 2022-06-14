@@ -2721,7 +2721,7 @@ static const struct usb_device_id uvc_ids[] = {
 	  .idProduct		= 0x4030,
 	  .bInterfaceClass	= USB_CLASS_VIDEO,
 	  .bInterfaceSubClass	= 1,
-	  .bInterfaceProtocol	= 0,
+	  .bInterfaceProtocol	= 1,
 	  .driver_info		= UVC_INFO_QUIRK(UVC_QUIRK_LIMITED_POWERLINE) },
 	/* Quanta USB2.0 HD UVC Webcam */
 	{ .match_flags		= USB_DEVICE_ID_MATCH_DEVICE
