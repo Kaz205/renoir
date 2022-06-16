@@ -124,6 +124,10 @@ static int op_jenc_vb2_buf_prepare(struct vb2_buffer *vb)
 	pix_mp = &bufq->vf.fmt.pix_mp;
 
 	for (i = 0; i < pix_mp->num_planes; i++) {
+		if (vb->planes[i].data_offset > vb2_plane_size(vb, i) ||
+		    pix_mp->plane_fmt[i].sizeimage >
+		    vb2_plane_size(vb, i) - vb->planes[i].data_offset)
+			return -EINVAL;
 		rc = jenc_hal_dma_buffer_acquire(jctx, vb, i);
 		if (rc)
 			break;
