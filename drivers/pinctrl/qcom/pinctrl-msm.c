@@ -83,15 +83,25 @@ struct msm_pinctrl {
 static struct msm_pinctrl *msm_pinctrl_data;
 
 #define MSM_ACCESSOR(name) \
-static u32 relaxed_msm_readl_##name(struct msm_pinctrl *pctrl, \
+static __maybe_unused u32 relaxed_msm_readl_##name(struct msm_pinctrl *pctrl, \
 			    const struct msm_pingroup *g) \
 { \
 	return readl_relaxed(pctrl->regs[g->tile] + g->name##_reg); \
 } \
-static void relaxed_msm_writel_##name(u32 val, struct msm_pinctrl *pctrl, \
+static __maybe_unused void relaxed_msm_writel_##name(u32 val, struct msm_pinctrl *pctrl, \
 			      const struct msm_pingroup *g) \
 { \
 	writel_relaxed(val, pctrl->regs[g->tile] + g->name##_reg); \
+} \
+static __maybe_unused u32 msm_readl_##name(struct msm_pinctrl *pctrl, \
+			    const struct msm_pingroup *g) \
+{ \
+	return readl(pctrl->regs[g->tile] + g->name##_reg); \
+} \
+static __maybe_unused void msm_writel_##name(u32 val, struct msm_pinctrl *pctrl, \
+			      const struct msm_pingroup *g) \
+{ \
+	writel(val, pctrl->regs[g->tile] + g->name##_reg); \
 }
 
 MSM_ACCESSOR(ctl)
@@ -507,7 +517,7 @@ static int msm_gpio_direction_output(struct gpio_chip *chip, unsigned offset, in
 
 	val = relaxed_msm_readl_ctl(pctrl, g);
 	val |= BIT(g->oe_bit);
-	relaxed_msm_writel_ctl(val, pctrl, g);
+	msm_writel_ctl(val, pctrl, g);
 
 	raw_spin_unlock_irqrestore(&pctrl->lock, flags);
 
@@ -723,11 +733,11 @@ static void msm_gpio_update_dual_edge_pos(struct msm_pinctrl *pctrl,
 	unsigned pol;
 
 	do {
-		val = relaxed_msm_readl_io(pctrl, g) & BIT(g->in_bit);
+		val = msm_readl_io(pctrl, g) & BIT(g->in_bit);
 
 		pol = relaxed_msm_readl_intr_cfg(pctrl, g);
 		pol ^= BIT(g->intr_polarity_bit);
-		relaxed_msm_writel_intr_cfg(pol, pctrl, g);
+		msm_writel_intr_cfg(pol, pctrl, g);
 
 		val2 = relaxed_msm_readl_io(pctrl, g) & BIT(g->in_bit);
 		intstat = relaxed_msm_readl_intr_status(pctrl, g);
@@ -859,7 +869,7 @@ static void msm_gpio_irq_clear_unmask(struct irq_data *d, bool status_clear)
 	val = relaxed_msm_readl_intr_cfg(pctrl, g);
 	val |= BIT(g->intr_raw_status_bit);
 	val |= BIT(g->intr_enable_bit);
-	relaxed_msm_writel_intr_cfg(val, pctrl, g);
+	msm_writel_intr_cfg(val, pctrl, g);
 
 	set_bit(d->hwirq, pctrl->enabled_irqs);
 
@@ -1184,7 +1194,7 @@ static int msm_gpio_irq_set_type(struct irq_data *d, unsigned int type)
 	} else {
 		BUG();
 	}
-	relaxed_msm_writel_intr_cfg(val, pctrl, g);
+	msm_writel_intr_cfg(val, pctrl, g);
 
 	if (test_bit(d->hwirq, pctrl->dual_edge_irqs))
 		msm_gpio_update_dual_edge_pos(pctrl, g, d);
