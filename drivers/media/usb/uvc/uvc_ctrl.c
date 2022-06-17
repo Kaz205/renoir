@@ -1296,7 +1296,8 @@ int uvc_query_v4l2_menu(struct uvc_video_chain *chain,
 		goto done;
 	}
 
-	if (query_menu->index >= mapping->menu_count) {
+	if (query_menu->index >= mapping->menu_count ||
+	    query_menu->index < mapping->menu_min) {
 		ret = -EINVAL;
 		goto done;
 	}
