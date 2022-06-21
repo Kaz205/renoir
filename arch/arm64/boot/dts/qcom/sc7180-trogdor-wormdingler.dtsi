@@ -234,7 +234,8 @@ pp3300_disp_on: &pp3300_dx_edp {
 tp_en: &en_pp3300_dx_edp {
 	pinmux {
 		pins = "gpio85";
-		};
+	};
+
 	pinconf {
 		pins = "gpio85";
 	};
@@ -367,19 +368,6 @@ tp_en: &en_pp3300_dx_edp {
 			  "DP_HOT_PLUG_DET",
 			  "EC_IN_RW_ODL";
 
-	vdd_reset_1800: vdd-reset-1800 {
-		pinmux {
-			pins = "gpio87";
-			function = "gpio";
-		};
-
-		pinconf {
-			pins = "gpio87";
-			drive-strength = <2>;
-			bias-disable;
-		};
-	};
-
 	avdd_lcd_en: avdd-lcd-en {
 		pinmux {
 			pins = "gpio88";
@@ -393,7 +381,7 @@ tp_en: &en_pp3300_dx_edp {
 		};
 	};
 
-	avee_lcd_en: avee-lcd_en {
+	avee_lcd_en: avee-lcd-en {
 		pinmux {
 			pins = "gpio21";
 			function = "gpio";
@@ -414,6 +402,19 @@ tp_en: &en_pp3300_dx_edp {
 
 		pinconf {
 			pins = "gpio86";
+			drive-strength = <2>;
+			bias-disable;
+		};
+	};
+
+	vdd_reset_1800: vdd-reset-1800 {
+		pinmux {
+			pins = "gpio87";
+			function = "gpio";
+		};
+
+		pinconf {
+			pins = "gpio87";
 			drive-strength = <2>;
 			bias-disable;
 		};

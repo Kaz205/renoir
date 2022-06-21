@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Google Quankingstick board device tree source
+ * Google Quackingstick board device tree source
  *
  * Copyright 2021 Google LLC.
  */
@@ -70,8 +70,8 @@ ap_h1_spi: &spi0 {};
 };
 
 &dsi0 {
-
 	panel: panel@0 {
+		/* Compatible will be filled in per-board */
 		reg = <0>;
 		enable-gpios = <&tlmm 87 GPIO_ACTIVE_HIGH>;
 		pinctrl-names = "default";
@@ -166,7 +166,8 @@ pp3300_disp_on: &pp3300_dx_edp {
 tp_en: &en_pp3300_dx_edp {
 	pinmux {
 		pins = "gpio67";
-		};
+	};
+
 	pinconf {
 		pins = "gpio67";
 	};
