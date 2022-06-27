@@ -11,327 +11,54 @@
  * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
  */
 
-#include <linux/of_address.h>
-#include <linux/of_device.h>
-#include <linux/pm_domain.h>
-#include <linux/pm_runtime.h>
-#include <linux/regulator/consumer.h>
-#include <mali_kbase.h>
 #include "mali_kbase_config_platform.h"
-#include <mali_kbase_defs.h>
+#include "mali_kbase_runtime_pm.h"
 
-
-/* Definition for PMIC regulators */
-#define VSRAM_GPU_MAX_VOLT (843750)	/* uV */
-#define VSRAM_GPU_MIN_VOLT (750000)	/* uV */
-#define VGPU_MAX_VOLT (843750)	/* uV */
-#define VGPU_MIN_VOLT (562500)	/* uV */
-
-#define MIN_VOLT_BIAS (0)	/* uV */
-#define MAX_VOLT_BIAS (250000)	/* uV */
-#define VOLT_TOL (125)	/* uV */
-
-#define GPU_CORE_NUM 5
-
-/* Definition for MFG registers */
-#define MFG_QCHANNEL_CON 0xb4
-#define MFG_SYS_TIMER 0x130
-#define MFG_DEBUG_SEL 0x170
-#define MFG_DEBUG_TOP 0x178
-#define BUS_IDLE_BIT 0x4
-/* INFRA_MFG_SLAVE_GALS_CTRL (INFRA_CTL) */
-#define INFRA_CTL 0x290
-#define DIS_MFG2ACP_BIT 0x9
-
-/**
- * Maximum frequency GPU will be clocked at. Given in kHz.
- * This must be specified as there is no default value.
- *
- * Attached value: number in kHz
- * Default value: NA
- */
-#define GPU_FREQ_KHZ_MAX (950000)
-/**
- * Minimum frequency GPU will be clocked at. Given in kHz.
- * This must be specified as there is no default value.
- *
- * Attached value: number in kHz
- * Default value: NA
- */
-#define GPU_FREQ_KHZ_MIN (358000)
-/**
- * Autosuspend delay
- *
- * The delay time (in milliseconds) to be used for autosuspend
- */
-#define AUTO_SUSPEND_DELAY (100)
-
-enum gpu_clk_idx {main, sub, mux, cg};
 /* list of clocks required by GPU */
-static const char * const gpu_clocks[] = {
-	"clk_main_parent", "clk_sub_parent", "clk_mux", "subsys_mfg_cg",
+static const char * const mt8192_gpu_clks[] = {
+	"clk_mux",
+	"clk_main_parent",
+	"clk_sub_parent",
+	"subsys_mfg_cg",
 };
 
-static void pm_domain_term(struct kbase_device *kbdev)
-{
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(kbdev->pm_domain_devs); i++) {
-		if (kbdev->pm_domain_devs[i])
-			dev_pm_domain_detach(kbdev->pm_domain_devs[i], true);
-	}
-}
-
-static int pm_domain_init(struct kbase_device *kbdev)
-{
-	int err;
-	int i, num_domains, num_domain_names;
-	const char *pd_names[GPU_CORE_NUM];
-
-	num_domains = of_count_phandle_with_args(kbdev->dev->of_node,
-						 "power-domains",
-						 "#power-domain-cells");
-
-	num_domain_names = of_property_count_strings(kbdev->dev->of_node,
-					"power-domain-names");
-
-	/*
-	 * Single domain is handled by the core, and, if only a single power
-	 * the power domain is requested, the property is optional.
-	 */
-	if (num_domains < 2 && kbdev->num_pm_domains < 2)
-		return 0;
-
-	if (num_domains != num_domain_names) {
-		dev_err(kbdev->dev,
-			"Device tree power domains are not match: PD %d, PD names %d\n",
-			num_domains, num_domain_names);
-		return -EINVAL;
-	}
-
-	if (num_domains != kbdev->num_pm_domains) {
-		dev_err(kbdev->dev,
-			"Incorrect number of power domains: %d provided, %d needed\n",
-			num_domains, kbdev->num_pm_domains);
-		return -EINVAL;
-	}
-
-	if (WARN(num_domains > ARRAY_SIZE(kbdev->pm_domain_devs),
-			"Too many supplies in compatible structure.\n"))
-		return -EINVAL;
-
-	err = of_property_read_string_array(kbdev->dev->of_node,
-					    "power-domain-names",
-					    pd_names,
-					    num_domain_names);
-
-	if (err < 0) {
-		dev_err(kbdev->dev, "Error reading supply-names: %d\n", err);
-		return err;
-	}
-
-	for (i = 0; i < num_domains; i++) {
-		kbdev->pm_domain_devs[i] =
-			dev_pm_domain_attach_by_name(kbdev->dev,
-					pd_names[i]);
-		if (IS_ERR_OR_NULL(kbdev->pm_domain_devs[i])) {
-			err = PTR_ERR(kbdev->pm_domain_devs[i]) ? : -ENODATA;
-			kbdev->pm_domain_devs[i] = NULL;
-			if (err == -EPROBE_DEFER) {
-				dev_dbg(kbdev->dev,
-					"Probe deferral for pm-domain %s(%d)\n",
-					pd_names[i], i);
-			} else {
-				dev_err(kbdev->dev,
-					"failed to get pm-domain %s(%d): %d\n",
-					pd_names[i], i, err);
-			}
-			goto err;
-		}
-	}
-
-	return 0;
-
-err:
-	pm_domain_term(kbdev);
-	return err;
-}
-
-struct mfg_base {
-	struct clk_bulk_data *clks;
-	int num_clks;
-	void __iomem *g_mfg_base;
-	void __iomem *g_infracfg_base;
-	bool is_powered;
+const struct mtk_hw_config mt8192_hw_config = {
+	.num_pm_domains = 5,
+	.num_clks = ARRAY_SIZE(mt8192_gpu_clks),
+	.clk_names = mt8192_gpu_clks,
+	.mfg_compatible_name = "mediatek,mt8192-mfgcfg",
+	.reg_mfg_timestamp = 0x130,
+	.reg_mfg_qchannel_con = 0xb4,
+	.reg_mfg_debug_sel = 0x170,
+	.reg_mfg_debug_top = 0x178,
+	.top_tsvalueb_en = 0x3,
+	.bus_idle_bit = 0x4,
+	.vgpu_min_microvolt = 562500,
+	.vgpu_max_microvolt = 843750,
+	.vsram_gpu_min_microvolt = 750000,
+	.vsram_gpu_max_microvolt = 843750,
+	.bias_min_microvolt = 0,
+	.bias_max_microvolt = 250000,
+	.supply_tolerance_microvolt = 125,
+	.gpu_freq_min_khz = 358000,
+	.gpu_freq_max_khz = 950000,
+	.auto_suspend_delay_ms = 50,
 };
 
-static void disable_acp(struct kbase_device *kbdev)
-{
-	unsigned int val;
-	struct mfg_base *mfg = kbdev->platform_context;
-
-	/* disable acp */
-	val = readl(mfg->g_infracfg_base + INFRA_CTL) | BIT(DIS_MFG2ACP_BIT);
-	writel(val, mfg->g_infracfg_base + INFRA_CTL);
-}
-
-static void check_bus_idle(struct kbase_device *kbdev)
-{
-	struct mfg_base *mfg = kbdev->platform_context;
-	u32 val;
-
-	/* MFG_QCHANNEL_CON (0x13fb_f0b4) bit [1:0] = 0x1 */
-	writel(0x00000001, mfg->g_mfg_base + MFG_QCHANNEL_CON);
-
-	/* set register MFG_DEBUG_SEL (0x13fb_f170) bit [7:0] = 0x03 */
-	writel(0x00000003, mfg->g_mfg_base + MFG_DEBUG_SEL);
-
-	/* polling register MFG_DEBUG_TOP (0x13fb_f178) bit 2 = 0x1 */
-	/* => 1 for bus idle, 0 for bus non-idle */
-	do {
-		val = readl(mfg->g_mfg_base + MFG_DEBUG_TOP);
-	} while ((val & BUS_IDLE_BIT) != BUS_IDLE_BIT);
-}
-
-static void enable_sys_timer(struct kbase_device *kbdev)
-{
-	struct mfg_base *mfg = kbdev->platform_context;
-
-	writel(0x3, mfg->g_mfg_base + MFG_SYS_TIMER);
-}
-
-static void *get_mfg_base(const char *node_name)
-{
-	struct device_node *node;
-
-	node = of_find_compatible_node(NULL, NULL, node_name);
-
-	if (node)
-		return of_iomap(node, 0);
-
-	return NULL;
-}
-
-static int pm_callback_power_on(struct kbase_device *kbdev)
-{
-	int error, i;
-	struct mfg_base *mfg = kbdev->platform_context;
-
-	if (mfg->is_powered) {
-		dev_dbg(kbdev->dev, "mali_device is already powered\n");
-		return 0;
-	}
-
-	for (i = 0; i < kbdev->nr_regulators; i++) {
-		error = regulator_enable(kbdev->regulators[i]);
-		if (error < 0) {
-			dev_err(kbdev->dev,
-				"Power on reg %d failed error = %d\n",
-				i, error);
-			return error;
-		}
-	}
-
-	for (i = 0; i < kbdev->num_pm_domains; i++) {
-		error = pm_runtime_get_sync(kbdev->pm_domain_devs[i]);
-		if (error < 0) {
-			dev_err(kbdev->dev,
-				"Power on core %d failed (err: %d)\n",
-				i+1, error);
-			return error;
-		}
-	}
-
-	error = clk_bulk_prepare_enable(mfg->num_clks, mfg->clks);
-	if (error < 0) {
-		dev_err(kbdev->dev,
-			"gpu clock enable failed (err: %d)\n",
-			error);
-		return error;
-	}
-
-	enable_sys_timer(kbdev);
-
-	mfg->is_powered = true;
-
-	return 1;
-}
-
-static void pm_callback_power_off(struct kbase_device *kbdev)
-{
-	struct mfg_base *mfg = kbdev->platform_context;
-	int error, i;
-
-	if (!mfg->is_powered) {
-		dev_dbg(kbdev->dev, "mali_device is already powered off\n");
-		return;
-	}
-
-	mfg->is_powered = false;
-
-	check_bus_idle(kbdev);
-
-	clk_bulk_disable_unprepare(mfg->num_clks, mfg->clks);
-
-	for (i = kbdev->num_pm_domains - 1; i >= 0; i--) {
-		pm_runtime_mark_last_busy(kbdev->pm_domain_devs[i]);
-		error = pm_runtime_put_autosuspend(kbdev->pm_domain_devs[i]);
-		if (error < 0)
-			dev_err(kbdev->dev,
-				"Power off core %d failed (err: %d)\n",
-				i+1, error);
-	}
-
-	for (i = kbdev->nr_regulators - 1; i >= 0; i--) {
-		error = regulator_disable(kbdev->regulators[i]);
-		if (error < 0)
-			dev_err(kbdev->dev,
-				"Power off reg %d failed error = %d\n",
-				i, error);
-	}
-}
-
-static int kbase_device_runtime_init(struct kbase_device *kbdev)
-{
-	dev_dbg(kbdev->dev, "%s\n", __func__);
-
-	return 0;
-}
-
-static void kbase_device_runtime_disable(struct kbase_device *kbdev)
-{
-	dev_dbg(kbdev->dev, "%s\n", __func__);
-}
-
-static int pm_callback_runtime_on(struct kbase_device *kbdev)
-{
-	return 0;
-}
-
-static void pm_callback_runtime_off(struct kbase_device *kbdev)
-{
-}
-
-static void pm_callback_resume(struct kbase_device *kbdev)
-{
-	pm_callback_power_on(kbdev);
-}
-
-static void pm_callback_suspend(struct kbase_device *kbdev)
-{
-	pm_callback_power_off(kbdev);
-}
+struct mtk_platform_context mt8192_platform_context = {
+	.config = &mt8192_hw_config,
+};
 
 struct kbase_pm_callback_conf mt8192_pm_callbacks = {
-	.power_on_callback = pm_callback_power_on,
-	.power_off_callback = pm_callback_power_off,
-	.power_suspend_callback = pm_callback_suspend,
-	.power_resume_callback = pm_callback_resume,
+	.power_on_callback = kbase_pm_callback_power_on,
+	.power_off_callback = kbase_pm_callback_power_off,
+	.power_suspend_callback = kbase_pm_callback_suspend,
+	.power_resume_callback = kbase_pm_callback_resume,
 #ifdef KBASE_PM_RUNTIME
-	.power_runtime_init_callback = kbase_device_runtime_init,
-	.power_runtime_term_callback = kbase_device_runtime_disable,
-	.power_runtime_on_callback = pm_callback_runtime_on,
-	.power_runtime_off_callback = pm_callback_runtime_off,
+	.power_runtime_init_callback = kbase_pm_runtime_callback_init,
+	.power_runtime_term_callback = kbase_pm_runtime_callback_term,
+	.power_runtime_on_callback = kbase_pm_runtime_callback_on,
+	.power_runtime_off_callback = kbase_pm_runtime_callback_off,
 #else				/* KBASE_PM_RUNTIME */
 	.power_runtime_init_callback = NULL,
 	.power_runtime_term_callback = NULL,
@@ -340,167 +67,62 @@ struct kbase_pm_callback_conf mt8192_pm_callbacks = {
 #endif				/* KBASE_PM_RUNTIME */
 };
 
-
-static int mali_mfgsys_init(struct kbase_device *kbdev, struct mfg_base *mfg)
+/**
+ * mt8192_disable_acp() - Disable ACP (Accelerator Coherency Port) on MT8192
+ *
+ * The experiemental ACP path on MT8192 should be disabled by default to avoid
+ * breaking IO coherency on MT6873.
+ *
+ * Return: 0 on success, or error code on failure.
+ */
+static int mt8192_disable_acp(void)
 {
-	int err, i;
-	unsigned long volt;
+	const char *infracfg_compatible_name = "mediatek,mt8192-infracfg";
+	const unsigned int INFRA_CTL = 0x290;
+	const unsigned int DIS_MFG2ACP_BIT = 9;
+	struct device_node *node;
+	void __iomem *infracfg_base_addr;
+	unsigned int val;
 
-	kbdev->num_pm_domains = GPU_CORE_NUM;
+	node = of_find_compatible_node(NULL, NULL, infracfg_compatible_name);
+	if (!node)
+		return -ENODEV;
 
-	err = pm_domain_init(kbdev);
-	if (err < 0)
-		return err;
-
-	for (i = 0; i < kbdev->nr_regulators; i++)
-		if (kbdev->regulators[i] == NULL)
-			return -EINVAL;
-
-	mfg->num_clks = ARRAY_SIZE(gpu_clocks);
-	mfg->clks = devm_kcalloc(kbdev->dev, mfg->num_clks,
-				     sizeof(*mfg->clks), GFP_KERNEL);
-
-	if (!mfg->clks)
+	infracfg_base_addr = of_iomap(node, 0);
+	of_node_put(node);
+	if (!infracfg_base_addr)
 		return -ENOMEM;
 
-	for (i = 0; i < mfg->num_clks; ++i)
-		mfg->clks[i].id = gpu_clocks[i];
+	val = readl(infracfg_base_addr + INFRA_CTL) | BIT(DIS_MFG2ACP_BIT);
+	writel(val, infracfg_base_addr + INFRA_CTL);
 
-	err = devm_clk_bulk_get(kbdev->dev, mfg->num_clks, mfg->clks);
-	if (err != 0) {
-		dev_err(kbdev->dev,
-			"clk_bulk_get error: %d\n",
-			err);
-		return err;
-	}
-
-	for (i = 0; i < kbdev->nr_regulators; i++) {
-		volt = (i == 0) ? VGPU_MAX_VOLT : VSRAM_GPU_MAX_VOLT;
-		err = regulator_set_voltage(kbdev->regulators[i],
-			volt, volt + VOLT_TOL);
-		if (err < 0) {
-			dev_err(kbdev->dev,
-				"Regulator %d set voltage failed: %d\n",
-				i, err);
-			return err;
-		}
-#ifdef CONFIG_MALI_VALHALL_DEVFREQ
-		kbdev->current_voltages[i] = volt;
-#endif
-	}
-
-	mfg->g_mfg_base = get_mfg_base("mediatek,mt8192-mfgcfg");
-	if (!mfg->g_mfg_base) {
-		dev_err(kbdev->dev, "Cannot find mfgcfg node\n");
-		return -ENODEV;
-	}
-
-	mfg->g_infracfg_base = get_mfg_base("mediatek,mt8192-infracfg");
-	if (!mfg->g_infracfg_base) {
-		dev_err(kbdev->dev, "Cannot find infracfg node\n");
-		return -ENODEV;
-	}
-
-	mfg->is_powered = false;
-
+	iounmap(infracfg_base_addr);
 	return 0;
 }
-
-#ifdef CONFIG_MALI_VALHALL_DEVFREQ
-static void voltage_range_check(struct kbase_device *kbdev,
-				unsigned long *voltages)
-{
-	if ((long)voltages[1] - (long)voltages[0] < MIN_VOLT_BIAS ||
-	    (long)voltages[1] - (long)voltages[0] > MAX_VOLT_BIAS)
-		voltages[1] = voltages[0] + MIN_VOLT_BIAS;
-	voltages[1] = clamp_t(unsigned long, voltages[1], VSRAM_GPU_MIN_VOLT,
-			      VSRAM_GPU_MAX_VOLT);
-}
-
-static int set_frequency(struct kbase_device *kbdev, unsigned long freq)
-{
-	int err;
-	struct mfg_base *mfg = kbdev->platform_context;
-
-	if (kbdev->current_freqs[0] != freq) {
-		err = clk_set_parent(mfg->clks[mux].clk, mfg->clks[sub].clk);
-		if (err) {
-			dev_err(kbdev->dev, "Failed to select sub clock src\n");
-			return err;
-		}
-
-		err = clk_set_rate(mfg->clks[main].clk, freq);
-		if (err) {
-			dev_err(kbdev->dev,
-				"Failed to set clock rate: %lu (err: %d)\n",
-				freq, err);
-			return err;
-		}
-		kbdev->current_freqs[0] = freq;
-
-		err = clk_set_parent(mfg->clks[mux].clk, mfg->clks[main].clk);
-		if (err) {
-			dev_err(kbdev->dev, "Failed to select main clock src\n");
-			return err;
-		}
-	}
-
-	return 0;
-}
-#endif
 
 static int platform_init(struct kbase_device *kbdev)
 {
-	int err, i;
-	struct mfg_base *mfg;
+	struct mtk_platform_context *ctx = &mt8192_platform_context;
+	int err;
 
-	mfg = devm_kzalloc(kbdev->dev, sizeof(*mfg), GFP_KERNEL);
-	if (!mfg)
-		return -ENOMEM;
+	kbdev->platform_context = ctx;
 
-	err = mali_mfgsys_init(kbdev, mfg);
+	err = mtk_platform_init(kbdev);
 	if (err)
 		return err;
 
-	kbdev->platform_context = mfg;
-	for (i = 0; i < kbdev->num_pm_domains; i++) {
-		pm_runtime_set_autosuspend_delay(kbdev->pm_domain_devs[i], 50);
-		pm_runtime_use_autosuspend(kbdev->pm_domain_devs[i]);
-	}
-
-	err = clk_set_parent(mfg->clks[mux].clk, mfg->clks[sub].clk);
-	if (err) {
-		dev_err(kbdev->dev, "Failed to select sub clock src\n");
-		return err;
-	}
-
-	err = clk_set_rate(mfg->clks[main].clk, GPU_FREQ_KHZ_MAX * 1000);
-	if (err) {
-		dev_err(kbdev->dev, "Failed to set clock %d kHz\n",
-			GPU_FREQ_KHZ_MAX);
-		return err;
-	}
-
-	err = clk_set_parent(mfg->clks[mux].clk, mfg->clks[main].clk);
-	if (err) {
-		dev_err(kbdev->dev, "Failed to select main clock src\n");
-		return err;
-	}
-
-#ifdef CONFIG_MALI_VALHALL_DEVFREQ
-	kbdev->devfreq_ops.set_frequency = set_frequency;
-	kbdev->devfreq_ops.voltage_range_check = voltage_range_check;
+#if IS_ENABLED(CONFIG_MALI_VALHALL_DEVFREQ)
+	kbdev->devfreq_ops.set_frequency = mtk_set_frequency;
+	kbdev->devfreq_ops.voltage_range_check = mtk_voltage_range_check;
 #endif
 
-	disable_acp(kbdev);
+	err = mt8192_disable_acp();
+	if (err) {
+		dev_err(kbdev->dev, "Failed to disable ACP: %d", err);
+		return err;
+	}
 
 	return 0;
-}
-
-static void platform_term(struct kbase_device *kbdev)
-{
-	kbdev->platform_context = NULL;
-	pm_domain_term(kbdev);
 }
 
 struct kbase_platform_funcs_conf mt8192_platform_funcs = {
