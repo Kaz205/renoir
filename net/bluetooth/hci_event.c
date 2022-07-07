@@ -5480,7 +5480,8 @@ static bool quality_report_evt(struct hci_dev *hdev, struct sk_buff *skb)
 	return true;
 }
 
-void hci_vendor_evt(struct hci_dev *hdev, void *data, struct sk_buff *skb)
+static void hci_vendor_evt(struct hci_dev *hdev, void *data,
+			   struct sk_buff *skb)
 {
 	/* Every specification must have a well-defined condition
 	 * to determine if an event meets the specification.
