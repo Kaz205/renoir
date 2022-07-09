@@ -726,8 +726,7 @@ int rpmh_update_fast_path(const struct device *dev,
 }
 EXPORT_SYMBOL(rpmh_update_fast_path);
 
-int rpmh_ctrlr_idle(const struct device *dev,
-			  struct tcs_cmd *cmd, int n, u32 update_mask)
+int rpmh_ctrlr_idle(const struct device *dev)
 {
 	struct rpmh_ctrlr *ctrlr = get_rpmh_ctrlr(dev);
 
