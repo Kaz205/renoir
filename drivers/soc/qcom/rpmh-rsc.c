@@ -101,7 +101,6 @@ static const char * const accl_str[] = {
 static struct rsc_drv *__rsc_drv[MAX_RSC_COUNT];
 static int __rsc_count;
 bool rpmh_standalone;
-static void __iomem *base_global;
 
 /*
  * Here's a high level overview of how all the registers in RPMH work
@@ -780,7 +779,7 @@ bool rpmh_rsc_ctrlr_is_idle(struct rsc_drv *drv)
 int rpmh_rsc_write_pdc_data(struct rsc_drv *drv, const struct tcs_request *msg)
 {
 	int i;
-	void __iomem *addr = base_global + RSC_PDC_DRV_DATA;
+	void __iomem *addr = drv->base + RSC_PDC_DRV_DATA;
 	struct tcs_group *tcs = &drv->tcs[CONTROL_TCS];
 	struct tcs_cmd *cmd;
 
@@ -1071,7 +1070,7 @@ int rpmh_rsc_update_fast_path(struct rsc_drv *drv,
 }
 
 static int rpmh_probe_tcs_config(struct platform_device *pdev,
-				 struct rsc_drv *drv, void __iomem *base)
+				 struct rsc_drv *drv)
 {
 	struct tcs_type_config {
 		u32 type;
@@ -1081,15 +1080,22 @@ static int rpmh_probe_tcs_config(struct platform_device *pdev,
 	u32 config, max_tcs, ncpt, offset;
 	int i, ret, n, st = 0;
 	struct tcs_group *tcs;
+	struct resource *res;
+	char drv_id[10] = {0};
+
+	snprintf(drv_id, ARRAY_SIZE(drv_id), "drv-%d", drv->id);
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, drv_id);
+	drv->base = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(drv->base))
+		return PTR_ERR(drv->base);
 
 	ret = of_property_read_u32(dn, "qcom,tcs-offset", &offset);
 	if (ret)
 		return ret;
 
-	base_global = base;
-	drv->tcs_base = base + offset;
+	drv->tcs_base = drv->base + offset;
 
-	config = readl_relaxed(base + DRV_PRNT_CHLD_CONFIG);
+	config = readl_relaxed(drv->base + DRV_PRNT_CHLD_CONFIG);
 
 	max_tcs = config;
 	max_tcs &= DRV_NUM_TCS_MASK << (DRV_NUM_TCS_SHIFT * drv->id);
@@ -1189,17 +1195,8 @@ static int rpmh_rsc_probe(struct platform_device *pdev)
 
 	rsc_top->drv = drv;
 	rsc_top->dev = &pdev->dev;
-	scnprintf(rsc_top->name, sizeof(rsc_top->name), "%s", drv->name);
 
-	snprintf(drv_id, ARRAY_SIZE(drv_id), "drv-%d", drv->id);
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, drv_id);
-	base = devm_ioremap_resource(&pdev->dev, res);
-	if (IS_ERR(base)) {
-		pr_err("devm_ioremap_resource fail");
-		return PTR_ERR(base);
-	}
-
-	ret = rpmh_probe_tcs_config(pdev, drv, base);
+	ret = rpmh_probe_tcs_config(pdev, drv);
 	if (ret) {
 		pr_err("rpmh_probe_tcs_config fail");
 		return ret;
