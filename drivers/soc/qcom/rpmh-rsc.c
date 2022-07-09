@@ -104,6 +104,7 @@ static const char * const accl_str[] = {
 static struct rsc_drv *__rsc_drv[MAX_RSC_COUNT];
 static int __rsc_count;
 bool rpmh_standalone;
+static void __iomem *base_global;
 
 /*
  * Here's a high level overview of how all the registers in RPMH work
@@ -784,7 +785,7 @@ bool rpmh_rsc_ctrlr_is_idle(struct rsc_drv *drv)
 int rpmh_rsc_write_pdc_data(struct rsc_drv *drv, const struct tcs_request *msg)
 {
 	int i;
-	void __iomem *addr = drv->base + RSC_PDC_DRV_DATA;
+	void __iomem *addr = base_global + RSC_PDC_DRV_DATA;
 	struct tcs_group *tcs = &drv->tcs[CONTROL_TCS];
 	struct tcs_cmd *cmd;
 
@@ -1191,6 +1192,8 @@ static int rpmh_probe_tcs_config(struct platform_device *pdev,
 	ret = of_property_read_u32(dn, "qcom,tcs-offset", &offset);
 	if (ret)
 		return ret;
+
+	base_global = base;
 	drv->tcs_base = base + offset;
 
 	config = readl_relaxed(base + DRV_PRNT_CHLD_CONFIG);
