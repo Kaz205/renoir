@@ -14,7 +14,7 @@
 
 #define MAX_NAME_LENGTH			20
 
-#define TCS_TYPE_NR			5
+#define TCS_TYPE_NR			4
 #define MAX_CMDS_PER_TCS		16
 #define MAX_TCS_PER_TYPE		3
 #define MAX_TCS_NR			(MAX_TCS_PER_TYPE * TCS_TYPE_NR)
