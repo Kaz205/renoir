@@ -961,87 +961,6 @@ static bool rpmh_rsc_ctrlr_is_busy(struct rsc_drv *drv)
 }
 
 /**
- * rpmh_rsc_cpu_pm_callback() - Check if any of the AMCs are busy.
- * @nfb:    Pointer to the notifier block in struct rsc_drv.
- * @action: CPU_PM_ENTER, CPU_PM_ENTER_FAILED, or CPU_PM_EXIT.
- * @v:      Unused
- *
- * This function is given to cpu_pm_register_notifier so we can be informed
- * about when CPUs go down. When all CPUs go down we know no more active
- * transfers will be started so we write sleep/wake sets. This function gets
- * called from cpuidle code paths and also at system suspend time.
- *
- * If its last CPU going down and AMCs are not busy then writes cached sleep
- * and wake messages to TCSes. The firmware then takes care of triggering
- * them when entering deepest low power modes.
- *
- * Return: See cpu_pm_register_notifier()
- */
-static int rpmh_rsc_cpu_pm_callback(struct notifier_block *nfb,
-				    unsigned long action, void *v)
-{
-	struct rsc_drv *drv = container_of(nfb, struct rsc_drv, rsc_pm);
-	int ret = NOTIFY_OK;
-	int cpus_in_pm;
-
-	switch (action) {
-	case CPU_PM_ENTER:
-		cpus_in_pm = atomic_inc_return(&drv->cpus_in_pm);
-		/*
-		 * NOTE: comments for num_online_cpus() point out that it's
-		 * only a snapshot so we need to be careful. It should be OK
-		 * for us to use, though.  It's important for us not to miss
-		 * if we're the last CPU going down so it would only be a
-		 * problem if a CPU went offline right after we did the check
-		 * AND that CPU was not idle AND that CPU was the last non-idle
-		 * CPU. That can't happen. CPUs would have to come out of idle
-		 * before the CPU could go offline.
-		 */
-		if (cpus_in_pm < num_online_cpus())
-			return NOTIFY_OK;
-		break;
-	case CPU_PM_ENTER_FAILED:
-	case CPU_PM_EXIT:
-		atomic_dec(&drv->cpus_in_pm);
-		return NOTIFY_OK;
-	default:
-		return NOTIFY_DONE;
-	}
-
-	/*
-	 * It's likely we're on the last CPU. Grab the drv->lock and write
-	 * out the sleep/wake commands to RPMH hardware. Grabbing the lock
-	 * means that if we race with another CPU coming up we are still
-	 * guaranteed to be safe. If another CPU came up just after we checked
-	 * and has grabbed the lock or started an active transfer then we'll
-	 * notice we're busy and abort. If another CPU comes up after we start
-	 * flushing it will be blocked from starting an active transfer until
-	 * we're done flushing. If another CPU starts an active transfer after
-	 * we release the lock we're still OK because we're no longer the last
-	 * CPU.
-	 */
-	if (spin_trylock(&drv->lock)) {
-		if (rpmh_rsc_ctrlr_is_busy(drv) || rpmh_flush(&drv->client))
-			ret = NOTIFY_BAD;
-		spin_unlock(&drv->lock);
-	} else {
-		/* Another CPU must be up */
-		return NOTIFY_OK;
-	}
-
-	if (ret == NOTIFY_BAD) {
-		/* Double-check if we're here because someone else is up */
-		if (cpus_in_pm < num_online_cpus())
-			ret = NOTIFY_OK;
-		else
-			/* We won't be called w/ CPU_PM_ENTER_FAILED */
-			atomic_dec(&drv->cpus_in_pm);
-	}
-
-	return ret;
-}
-
-/**
  * rpmh_rsc_mode_solver_set() - Enable/disable solver mode.
  * @drv:     The controller.
  * @enable:  Boolean state to be set - true/false
@@ -1147,25 +1066,6 @@ int rpmh_rsc_update_fast_path(struct rsc_drv *drv,
 
 	/* Trigger the TCS to send the request */
 	__tcs_set_trigger(drv, tcs_id, true);
-
-	return 0;
-}
-
-static int rpmh_rsc_poweroff_noirq(struct device *dev)
-{
-	return 0;
-}
-
-static void rpmh_rsc_tcs_irq_enable(struct rsc_drv *drv)
-{
-	writel_relaxed(drv->tcs[ACTIVE_TCS].mask, drv->tcs_base + RSC_DRV_IRQ_ENABLE);
-}
-
-static int rpmh_rsc_restore_noirq(struct device *dev)
-{
-	struct rsc_drv *drv = dev_get_drvdata(dev);
-
-	rpmh_rsc_tcs_irq_enable(drv);
 
 	return 0;
 }
@@ -1318,8 +1218,6 @@ static int rpmh_rsc_probe(struct platform_device *pdev)
 		return ret;
 
 	drv->dev = &pdev->dev;
-	drv->rsc_pm.notifier_call = rpmh_rsc_cpu_pm_callback;
-	cpu_pm_register_notifier(&drv->rsc_pm);
 	drv->client.flags &= ~SOLVER_PRESENT;
 
 	/* Enable the active TCS to send requests immediately */
@@ -1341,11 +1239,6 @@ static int rpmh_rsc_probe(struct platform_device *pdev)
 	return devm_of_platform_populate(&pdev->dev);
 }
 
-static const struct dev_pm_ops rpmh_rsc_dev_pm_ops = {
-	.poweroff_noirq = rpmh_rsc_poweroff_noirq,
-	.restore_noirq = rpmh_rsc_restore_noirq,
-};
-
 static const struct of_device_id rpmh_drv_match[] = {
 	{ .compatible = "qcom,rpmh-rsc", },
 	{ }
@@ -1358,7 +1251,6 @@ static struct platform_driver rpmh_driver = {
 	.driver = {
 		  .name = "rpmh",
 		  .of_match_table = rpmh_drv_match,
-		  .pm = &rpmh_rsc_dev_pm_ops,
 		  .suppress_bind_attrs = true,
 	},
 };
