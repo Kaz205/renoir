@@ -1090,8 +1090,10 @@ static int rpmh_probe_tcs_config(struct platform_device *pdev,
 		return PTR_ERR(drv->base);
 
 	ret = of_property_read_u32(dn, "qcom,tcs-offset", &offset);
-	if (ret)
+	if (ret) {
+		pr_err("qcom,tcs-offset");
 		return ret;
+	}
 
 	drv->tcs_base = drv->base + offset;
 
@@ -1105,29 +1107,41 @@ static int rpmh_probe_tcs_config(struct platform_device *pdev,
 	ncpt = ncpt >> DRV_NCPT_SHIFT;
 
 	n = of_property_count_u32_elems(dn, "qcom,tcs-config");
-	if (n != 2 * TCS_TYPE_NR)
+	if (n != 2 * TCS_TYPE_NR) {
+		pr_err("TCS_TYPE_NR");
 		return -EINVAL;
+	}
 
 	for (i = 0; i < TCS_TYPE_NR; i++) {
 		ret = of_property_read_u32_index(dn, "qcom,tcs-config",
 						 i * 2, &tcs_cfg[i].type);
-		if (ret)
+		if (ret) {
+			pr_err("qcom,tcs-config2");
 			return ret;
-		if (tcs_cfg[i].type >= TCS_TYPE_NR)
+		}
+		if (tcs_cfg[i].type >= TCS_TYPE_NR) {
+			pr_err("TCS_TYPE_NR2");
 			return -EINVAL;
+		}
 
 		ret = of_property_read_u32_index(dn, "qcom,tcs-config",
 						 i * 2 + 1, &tcs_cfg[i].n);
-		if (ret)
+		if (ret) {
+			pr_err("qcom,tcs-config3");
 			return ret;
-		if (tcs_cfg[i].n > MAX_TCS_PER_TYPE)
+		}
+		if (tcs_cfg[i].n > MAX_TCS_PER_TYPE) {
+			pr_err("MAX_TCS_PER_TYPE");
 			return -EINVAL;
+		}
 	}
 
 	for (i = 0; i < TCS_TYPE_NR; i++) {
 		tcs = &drv->tcs[tcs_cfg[i].type];
-		if (tcs->drv)
+		if (tcs->drv) {
+			pr_err("tcs->drv");
 			return -EINVAL;
+		}
 		tcs->drv = drv;
 		tcs->type = tcs_cfg[i].type;
 		tcs->num_tcs = tcs_cfg[i].n;
@@ -1137,8 +1151,10 @@ static int rpmh_probe_tcs_config(struct platform_device *pdev,
 			continue;
 
 		if (st + tcs->num_tcs > max_tcs ||
-		    st + tcs->num_tcs >= BITS_PER_BYTE * sizeof(tcs->mask))
+		    st + tcs->num_tcs >= BITS_PER_BYTE * sizeof(tcs->mask)) {
+			pr_err("BITS_PER_BYTE");
 			return -EINVAL;
+		}
 
 		tcs->mask = ((1 << tcs->num_tcs) - 1) << st;
 		tcs->offset = st;
@@ -1154,11 +1170,8 @@ static int rpmh_rsc_probe(struct platform_device *pdev)
 {
 	struct device_node *dn = pdev->dev.of_node;
 	struct rsc_drv *drv;
-	struct resource *res;
-	char drv_id[10] = {0};
 	struct rsc_drv_top *rsc_top;
 	int ret, irq;
-	void __iomem *base;
 
 	/*
 	 * Even though RPMh doesn't directly use cmd-db, all of its children
