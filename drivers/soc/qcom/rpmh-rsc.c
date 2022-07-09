@@ -88,6 +88,11 @@
 #define CMD_STATUS_ISSUED		BIT(8)
 #define CMD_STATUS_COMPL		BIT(16)
 
+/* PDC wakeup */
+#define RSC_PDC_DATA_SIZE		2
+#define RSC_PDC_DRV_DATA		0x38
+#define RSC_PDC_DATA_OFFSET		0x08
+
 #define ACCL_TYPE(addr)			((addr >> 16) & 0xF)
 #define NR_ACCL_TYPES			3
 #define MAX_RSC_COUNT			2
@@ -766,7 +771,7 @@ int rpmh_rsc_write_ctrl_data(struct rsc_drv *drv, const struct tcs_request *msg)
 bool rpmh_rsc_ctrlr_is_idle(struct rsc_drv *drv)
 {
 	int m;
-	struct tcs_group *tcs = get_tcs_of_type(drv, ACTIVE_TCS);
+	struct tcs_group *tcs = &drv->tcs[ACTIVE_TCS];
 
 	for (m = tcs->offset; m < tcs->offset + tcs->num_tcs; m++) {
 		if (!tcs_is_free(drv, m))
@@ -780,7 +785,7 @@ int rpmh_rsc_write_pdc_data(struct rsc_drv *drv, const struct tcs_request *msg)
 {
 	int i;
 	void __iomem *addr = drv->base + RSC_PDC_DRV_DATA;
-	struct tcs_group *tcs = get_tcs_of_type(drv, CONTROL_TCS);
+	struct tcs_group *tcs = &drv->tcs[CONTROL_TCS];
 	struct tcs_cmd *cmd;
 
 	if (!msg || !msg->cmds || msg->num_cmds != RSC_PDC_DATA_SIZE ||
