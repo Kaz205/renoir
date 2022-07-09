@@ -32,9 +32,6 @@
 
 #include "rpmh-internal.h"
 
-#define CREATE_TRACE_POINTS
-#include "trace-rpmh.h"
-
 #include <linux/ipc_logging.h>
 
 #define RSC_DRV_IPC_LOG_SIZE		2
@@ -442,7 +439,6 @@ static irqreturn_t tcs_tx_done(int irq, void *p)
 			goto skip;
 		}
 
-		trace_rpmh_tx_done(drv, i, req);
 		ipc_log_string(drv->ipc_log_ctx, "IRQ response: m=%d", i);
 
 		/*
@@ -509,7 +505,6 @@ static void __tcs_buffer_write(struct rsc_drv *drv, int tcs_id, int cmd_id,
 		write_tcs_cmd(drv, RSC_DRV_CMD_MSGID, tcs_id, j, msgid);
 		write_tcs_cmd(drv, RSC_DRV_CMD_ADDR, tcs_id, j, cmd->addr);
 		write_tcs_cmd(drv, RSC_DRV_CMD_DATA, tcs_id, j, cmd->data);
-		trace_rpmh_send_msg(drv, tcs_id, j, msgid, cmd);
 		ipc_log_string(drv->ipc_log_ctx,
 			       "TCS write: m=%d n=%d msgid=%#x addr=%#x data=%#x wait=%d",
 			       tcs_id, j, msgid, cmd->addr,
@@ -1018,7 +1013,6 @@ int rpmh_rsc_mode_solver_set(struct rsc_drv *drv, bool enable)
 	if (spin_trylock(&drv->lock)) {
 		if (!enable || !rpmh_rsc_ctrlr_is_busy(drv)) {
 			drv->in_solver_mode = enable;
-			trace_rpmh_solver_set(drv, enable);
 			ipc_log_string(drv->ipc_log_ctx,
 				       "solver mode set: %d", enable);
 			ret = 0;
