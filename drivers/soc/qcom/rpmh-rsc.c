@@ -1194,28 +1194,36 @@ static int rpmh_rsc_probe(struct platform_device *pdev)
 	snprintf(drv_id, ARRAY_SIZE(drv_id), "drv-%d", drv->id);
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, drv_id);
 	base = devm_ioremap_resource(&pdev->dev, res);
-	if (IS_ERR(base))
+	if (IS_ERR(base)) {
+		pr_err("devm_ioremap_resource fail");
 		return PTR_ERR(base);
+	}
 
 	ret = rpmh_probe_tcs_config(pdev, drv, base);
-	if (ret)
+	if (ret) {
+		pr_err("rpmh_probe_tcs_config fail");
 		return ret;
+	}
 
 	spin_lock_init(&drv->lock);
 	init_waitqueue_head(&drv->tcs_wait);
 	bitmap_zero(drv->tcs_in_use, MAX_TCS_NR);
 
 	irq = platform_get_irq(pdev, drv->id);
-	if (irq < 0)
+	if (irq < 0) {
+		pr_err("platform_get_irq fail");
 		return irq;
+	}
 
 	drv->irq = irq;
 
 	ret = devm_request_irq(&pdev->dev, irq, tcs_tx_done,
 			       IRQF_TRIGGER_HIGH | IRQF_NO_SUSPEND,
 			       drv->name, drv);
-	if (ret)
+	if (ret) {
+		pr_err("Interrupt path fail");
 		return ret;
+	}
 
 	drv->dev = &pdev->dev;
 	drv->client.flags &= ~SOLVER_PRESENT;
