@@ -198,18 +198,18 @@ struct sta_rec_sec {
 	struct sec_key key[2];
 } __packed;
 
-enum mt7921_cipher_type {
-	MT_CIPHER_NONE,
-	MT_CIPHER_WEP40,
-	MT_CIPHER_WEP104,
-	MT_CIPHER_WEP128,
-	MT_CIPHER_TKIP,
-	MT_CIPHER_AES_CCMP,
-	MT_CIPHER_CCMP_256,
-	MT_CIPHER_GCMP,
-	MT_CIPHER_GCMP_256,
-	MT_CIPHER_WAPI,
-	MT_CIPHER_BIP_CMAC_128,
+enum mcu_cipher_type {
+	MCU_CIPHER_NONE,
+	MCU_CIPHER_WEP40,
+	MCU_CIPHER_WEP104,
+	MCU_CIPHER_WEP128,
+	MCU_CIPHER_TKIP,
+	MCU_CIPHER_AES_CCMP,
+	MCU_CIPHER_CCMP_256,
+	MCU_CIPHER_GCMP,
+	MCU_CIPHER_GCMP_256,
+	MCU_CIPHER_WAPI,
+	MCU_CIPHER_BIP_CMAC_128,
 };
 
 enum {
@@ -296,11 +296,11 @@ struct mt7921_txpwr_event {
 struct mt7921_mcu_tx_done_event {
 	u8 pid;
 	u8 status;
-	u16 seq;
+	__le16 seq;
 
 	u8 wlan_idx;
 	u8 tx_cnt;
-	u16 tx_rate;
+	__le16 tx_rate;
 
 	u8 flag;
 	u8 tid;
@@ -312,9 +312,9 @@ struct mt7921_mcu_tx_done_event {
 	u8 reason;
 	u8 rsv0[1];
 
-	u32 delay;
-	u32 timestamp;
-	u32 applied_flag;
+	__le32 delay;
+	__le32 timestamp;
+	__le32 applied_flag;
 
 	u8 txs[28];
 

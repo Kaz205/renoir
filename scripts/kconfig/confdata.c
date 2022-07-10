@@ -987,14 +987,19 @@ static int conf_write_dep(const char *name)
 
 static int conf_touch_deps(void)
 {
-	const char *name;
+	const char *name, *tmp;
 	struct symbol *sym;
 	int res, i;
 
-	strcpy(depfile_path, "include/config/");
-	depfile_prefix_len = strlen(depfile_path);
-
 	name = conf_get_autoconfig_name();
+	tmp = strrchr(name, '/');
+	depfile_prefix_len = tmp ? tmp - name + 1 : 0;
+	if (depfile_prefix_len + 1 > sizeof(depfile_path))
+		return -1;
+
+	strncpy(depfile_path, name, depfile_prefix_len);
+	depfile_path[depfile_prefix_len] = 0;
+
 	conf_read_simple(name, S_DEF_AUTO);
 	sym_calc_value(modules_sym);
 
@@ -1242,7 +1247,7 @@ bool conf_set_all_new_symbols(enum conf_def_mode mode)
 					 * pty: probability of tristate = y
 					 * ptm: probability of tristate = m
 					 */
-
+	bool has_changed;
 	pby = 50; pty = ptm = 33; /* can't go as the default in switch-case
 				   * below, otherwise gcc whines about
 				   * -Wmaybe-uninitialized */
@@ -1283,8 +1288,8 @@ bool conf_set_all_new_symbols(enum conf_def_mode mode)
 			exit( 1 );
 		}
 	}
-	bool has_changed = false;
 
+	has_changed = false;
 	for_all_symbols(i, sym) {
 		if (sym_has_value(sym) || (sym->flags & SYMBOL_VALID))
 			continue;

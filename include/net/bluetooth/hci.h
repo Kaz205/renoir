@@ -226,8 +226,48 @@ enum {
 	 */
 	HCI_QUIRK_VALID_LE_STATES,
 
-	/* This quirk will be set when running on Intel StP controller */
-	HCI_QUIRK_INTEL_STP_CONTROLLER,
+	/* When this quirk is set, then erroneous data reporting
+	 * is ignored. This is mainly due to the fact that the HCI
+	 * Read Default Erroneous Data Reporting command is advertised,
+	 * but not supported; these controllers often reply with unknown
+	 * command and tend to lock up randomly. Needing a hard reset.
+	 *
+	 * This quirk can be set before hci_register_dev is called or
+	 * during the hdev->setup vendor callback.
+	 */
+	HCI_QUIRK_BROKEN_ERR_DATA_REPORTING,
+
+	/*
+	 * When this quirk is set, then the hci_suspend_notifier is not
+	 * registered. This is intended for devices which drop completely
+	 * from the bus on system-suspend and which will show up as a new
+	 * HCI after resume.
+	 */
+	HCI_QUIRK_NO_SUSPEND_NOTIFIER,
+
+	/* CHROMIUM-only: This quirk prevents RTL8822 to perform remote wake
+	 * on system suspend to save power. This shouldn't be upstreamed.
+	 */
+	HCI_QUIRK_DISABLE_REMOTE_WAKE,
+
+	/* This quirk will be set when running on Intel SdP/StP controller */
+	HCI_QUIRK_RESTRICT_CONN_PARAMS,
+
+	/* CHORMIUM-only: This quirk set Connection latency parameter to a
+	 * hardcoded value other than 0 to increase the LE connection success
+	 * rate for the peripherals skipping few CONN_IND request due to power
+	 * saving reason.
+	 */
+	HCI_QUIRK_LOOSEN_CONN_LATENCY,
+
+	/*
+	 * When this quirk is set, LE tx power is not queried on startup
+	 * and the min/max tx power values default to HCI_TX_POWER_INVALID.
+	 *
+	 * This quirk can be set before hci_register_dev is called or
+	 * during the hdev->setup vendor callback.
+	 */
+	HCI_QUIRK_BROKEN_READ_TRANSMIT_POWER,
 };
 
 /* HCI device flags */
@@ -309,12 +349,11 @@ enum {
 	HCI_FORCE_BREDR_SMP,
 	HCI_FORCE_STATIC_ADDR,
 	HCI_LL_RPA_RESOLUTION,
+	HCI_ENABLE_LL_PRIVACY,
 	HCI_CMD_PENDING,
 	HCI_FORCE_NO_MITM,
-
-#ifdef CONFIG_BT_FEATURE_QUALITY_REPORT
 	HCI_QUALITY_REPORT,
-#endif
+	HCI_LE_SIMULTANEOUS_ROLES,
 
 	__HCI_NUM_FLAGS,
 };
@@ -324,6 +363,7 @@ enum {
 #define HCI_PAIRING_TIMEOUT	msecs_to_jiffies(60000)	/* 60 seconds */
 #define HCI_INIT_TIMEOUT	msecs_to_jiffies(10000)	/* 10 seconds */
 #define HCI_CMD_TIMEOUT		msecs_to_jiffies(2000)	/* 2 seconds */
+#define HCI_NCMD_TIMEOUT	msecs_to_jiffies(4000)	/* 4 seconds */
 #define HCI_ACL_TX_TIMEOUT	msecs_to_jiffies(45000)	/* 45 seconds */
 #define HCI_AUTO_OFF_TIMEOUT	msecs_to_jiffies(2000)	/* 2 seconds */
 #define HCI_POWER_OFF_TIMEOUT	msecs_to_jiffies(5000)	/* 5 seconds */
@@ -465,12 +505,11 @@ enum {
 #define HCI_LE_PERIPHERAL_FEATURES	0x08
 #define HCI_LE_PING			0x10
 #define HCI_LE_DATA_LEN_EXT		0x20
-#define HCI_LE_PHY_2M			0x01
-#define HCI_LE_PHY_CODED		0x08
-#define HCI_LE_EXT_ADV			0x10
+#define HCI_LE_LL_PRIVACY		0x40
 #define HCI_LE_EXT_SCAN_POLICY		0x80
 #define HCI_LE_PHY_2M			0x01
 #define HCI_LE_PHY_CODED		0x08
+#define HCI_LE_EXT_ADV			0x10
 #define HCI_LE_CHAN_SEL_ALG2		0x40
 
 /* Connection modes */
@@ -528,6 +567,7 @@ enum {
 #define HCI_ERROR_CONNECTION_TIMEOUT	0x08
 #define HCI_ERROR_REJ_LIMITED_RESOURCES	0x0d
 #define HCI_ERROR_REJ_BAD_ADDR		0x0f
+#define HCI_ERROR_INVALID_PARAMETERS	0x12
 #define HCI_ERROR_REMOTE_USER_TERM	0x13
 #define HCI_ERROR_REMOTE_LOW_RESOURCES	0x14
 #define HCI_ERROR_REMOTE_POWER_OFF	0x15
@@ -983,8 +1023,8 @@ struct hci_cp_read_stored_link_key {
 } __packed;
 struct hci_rp_read_stored_link_key {
 	__u8     status;
-	__u8     max_keys;
-	__u8     num_keys;
+	__le16   max_keys;
+	__le16   num_keys;
 } __packed;
 
 #define HCI_OP_DELETE_STORED_LINK_KEY	0x0c12
@@ -994,7 +1034,7 @@ struct hci_cp_delete_stored_link_key {
 } __packed;
 struct hci_rp_delete_stored_link_key {
 	__u8     status;
-	__u8     num_keys;
+	__le16   num_keys;
 } __packed;
 
 #define HCI_MAX_NAME_LENGTH		248
@@ -1379,7 +1419,7 @@ struct hci_rp_read_local_amp_assoc {
 	__u8     status;
 	__u8     phy_handle;
 	__le16   rem_len;
-	__u8     frag[0];
+	__u8     frag[];
 } __packed;
 
 #define HCI_OP_WRITE_REMOTE_AMP_ASSOC	0x140b
@@ -1387,7 +1427,7 @@ struct hci_cp_write_remote_amp_assoc {
 	__u8     phy_handle;
 	__le16   len_so_far;
 	__le16   rem_len;
-	__u8     frag[0];
+	__u8     frag[];
 } __packed;
 struct hci_rp_write_remote_amp_assoc {
 	__u8     status;
@@ -1632,6 +1672,8 @@ struct hci_rp_le_read_resolv_list_size {
 
 #define HCI_OP_LE_SET_ADDR_RESOLV_ENABLE 0x202d
 
+#define HCI_OP_LE_SET_RPA_TIMEOUT	0x202e
+
 #define HCI_OP_LE_READ_MAX_DATA_LEN	0x202f
 struct hci_rp_le_read_max_data_len {
 	__u8	status;
@@ -1657,7 +1699,7 @@ struct hci_cp_le_set_ext_scan_params {
 	__u8    own_addr_type;
 	__u8    filter_policy;
 	__u8    scanning_phys;
-	__u8    data[0];
+	__u8    data[];
 } __packed;
 
 #define LE_SCAN_PHY_1M		0x01
@@ -1685,7 +1727,7 @@ struct hci_cp_le_ext_create_conn {
 	__u8      peer_addr_type;
 	bdaddr_t  peer_addr;
 	__u8      phys;
-	__u8      data[0];
+	__u8      data[];
 } __packed;
 
 struct hci_cp_le_ext_conn_param {
@@ -1737,7 +1779,7 @@ struct hci_rp_le_set_ext_adv_params {
 struct hci_cp_le_set_ext_adv_enable {
 	__u8  enable;
 	__u8  num_of_sets;
-	__u8  data[0];
+	__u8  data[];
 } __packed;
 
 struct hci_cp_ext_adv_set {
@@ -1746,13 +1788,15 @@ struct hci_cp_ext_adv_set {
 	__u8  max_events;
 } __packed;
 
+#define HCI_MAX_EXT_AD_LENGTH	251
+
 #define HCI_OP_LE_SET_EXT_ADV_DATA		0x2037
 struct hci_cp_le_set_ext_adv_data {
 	__u8  handle;
 	__u8  operation;
 	__u8  frag_pref;
 	__u8  length;
-	__u8  data[HCI_MAX_AD_LENGTH];
+	__u8  data[];
 } __packed;
 
 #define HCI_OP_LE_SET_EXT_SCAN_RSP_DATA		0x2038
@@ -1761,7 +1805,7 @@ struct hci_cp_le_set_ext_scan_rsp_data {
 	__u8  operation;
 	__u8  frag_pref;
 	__u8  length;
-	__u8  data[HCI_MAX_AD_LENGTH];
+	__u8  data[];
 } __packed;
 
 #define LE_SET_ADV_DATA_OP_COMPLETE	0x03
@@ -1785,7 +1829,21 @@ struct hci_rp_le_read_transmit_power {
 	__s8  max_le_tx_power;
 } __packed;
 
+#define HCI_NETWORK_PRIVACY		0x00
+#define HCI_DEVICE_PRIVACY		0x01
+
+#define HCI_OP_LE_SET_PRIVACY_MODE	0x204e
+struct hci_cp_le_set_privacy_mode {
+	__u8  bdaddr_type;
+	bdaddr_t  bdaddr;
+	__u8  mode;
+} __packed;
+
 /* ---- HCI Events ---- */
+struct hci_ev_status {
+	__u8    status;
+} __packed;
+
 #define HCI_EV_INQUIRY_COMPLETE		0x01
 
 #define HCI_EV_INQUIRY_RESULT		0x02
@@ -1797,6 +1855,11 @@ struct inquiry_info {
 	__u8     dev_class[3];
 	__le16   clock_offset;
 } __packed;
+
+struct hci_ev_inquiry_result {
+	__u8    num;
+	struct inquiry_info info[];
+};
 
 #define HCI_EV_CONN_COMPLETE		0x03
 struct hci_ev_conn_complete {
@@ -1909,8 +1972,8 @@ struct hci_comp_pkts_info {
 } __packed;
 
 struct hci_ev_num_comp_pkts {
-	__u8     num_hndl;
-	struct hci_comp_pkts_info handles[0];
+	__u8     num;
+	struct hci_comp_pkts_info handles[];
 } __packed;
 
 #define HCI_EV_MODE_CHANGE		0x14
@@ -1959,7 +2022,7 @@ struct hci_ev_pscan_rep_mode {
 } __packed;
 
 #define HCI_EV_INQUIRY_RESULT_WITH_RSSI	0x22
-struct inquiry_info_with_rssi {
+struct inquiry_info_rssi {
 	bdaddr_t bdaddr;
 	__u8     pscan_rep_mode;
 	__u8     pscan_period_mode;
@@ -1967,7 +2030,7 @@ struct inquiry_info_with_rssi {
 	__le16   clock_offset;
 	__s8     rssi;
 } __packed;
-struct inquiry_info_with_rssi_and_pscan_mode {
+struct inquiry_info_rssi_pscan {
 	bdaddr_t bdaddr;
 	__u8     pscan_rep_mode;
 	__u8     pscan_period_mode;
@@ -1975,6 +2038,10 @@ struct inquiry_info_with_rssi_and_pscan_mode {
 	__u8     dev_class[3];
 	__le16   clock_offset;
 	__s8     rssi;
+} __packed;
+struct hci_ev_inquiry_result_rssi {
+	__u8     num;
+	__u8     data[];
 } __packed;
 
 #define HCI_EV_REMOTE_EXT_FEATURES	0x23
@@ -2028,6 +2095,11 @@ struct extended_inquiry_info {
 	__le16   clock_offset;
 	__s8     rssi;
 	__u8     data[240];
+} __packed;
+
+struct hci_ev_ext_inquiry_result {
+	__u8     num;
+	struct extended_inquiry_info info[];
 } __packed;
 
 #define HCI_EV_KEY_REFRESH_COMPLETE	0x30
@@ -2143,7 +2215,7 @@ struct hci_comp_blocks_info {
 struct hci_ev_num_comp_blocks {
 	__le16   num_blocks;
 	__u8     num_hndl;
-	struct hci_comp_blocks_info handles[0];
+	struct hci_comp_blocks_info handles[];
 } __packed;
 
 #define HCI_EV_SYNC_TRAIN_COMPLETE	0x4F
@@ -2190,16 +2262,23 @@ struct hci_ev_le_conn_complete {
 #define LE_EXT_ADV_SCAN_RSP		0x0008
 #define LE_EXT_ADV_LEGACY_PDU		0x0010
 
-#define ADDR_LE_DEV_PUBLIC	0x00
-#define ADDR_LE_DEV_RANDOM	0x01
+#define ADDR_LE_DEV_PUBLIC		0x00
+#define ADDR_LE_DEV_RANDOM		0x01
+#define ADDR_LE_DEV_PUBLIC_RESOLVED	0x02
+#define ADDR_LE_DEV_RANDOM_RESOLVED	0x03
 
 #define HCI_EV_LE_ADVERTISING_REPORT	0x02
 struct hci_ev_le_advertising_info {
-	__u8	 evt_type;
+	__u8	 type;
 	__u8	 bdaddr_type;
 	bdaddr_t bdaddr;
 	__u8	 length;
-	__u8	 data[0];
+	__u8	 data[];
+} __packed;
+
+struct hci_ev_le_advertising_report {
+	__u8    num;
+	struct hci_ev_le_advertising_info info[];
 } __packed;
 
 #define HCI_EV_LE_CONN_UPDATE_COMPLETE	0x03
@@ -2245,7 +2324,7 @@ struct hci_ev_le_data_len_change {
 
 #define HCI_EV_LE_DIRECT_ADV_REPORT	0x0B
 struct hci_ev_le_direct_adv_info {
-	__u8	 evt_type;
+	__u8	 type;
 	__u8	 bdaddr_type;
 	bdaddr_t bdaddr;
 	__u8	 direct_addr_type;
@@ -2253,9 +2332,22 @@ struct hci_ev_le_direct_adv_info {
 	__s8	 rssi;
 } __packed;
 
+struct hci_ev_le_direct_adv_report {
+	__u8	 num;
+	struct hci_ev_le_direct_adv_info info[];
+} __packed;
+
+#define HCI_EV_LE_PHY_UPDATE_COMPLETE	0x0c
+struct hci_ev_le_phy_update_complete {
+	__u8  status;
+	__u16 handle;
+	__u8  tx_phy;
+	__u8  rx_phy;
+} __packed;
+
 #define HCI_EV_LE_EXT_ADV_REPORT    0x0d
-struct hci_ev_le_ext_adv_report {
-	__le16 	 evt_type;
+struct hci_ev_le_ext_adv_info {
+	__le16   type;
 	__u8	 bdaddr_type;
 	bdaddr_t bdaddr;
 	__u8	 primary_phy;
@@ -2263,11 +2355,16 @@ struct hci_ev_le_ext_adv_report {
 	__u8	 sid;
 	__u8	 tx_power;
 	__s8	 rssi;
-	__le16 	 interval;
-	__u8  	 direct_addr_type;
+	__le16   interval;
+	__u8     direct_addr_type;
 	bdaddr_t direct_addr;
-	__u8  	 length;
-	__u8	 data[0];
+	__u8     length;
+	__u8     data[];
+} __packed;
+
+struct hci_ev_le_ext_adv_report {
+	__u8     num;
+	struct hci_ev_le_ext_adv_info info[];
 } __packed;
 
 #define HCI_EV_LE_ENHANCED_CONN_COMPLETE    0x0a
@@ -2299,7 +2396,7 @@ struct hci_evt_le_ext_adv_set_term {
 #define HCI_EV_STACK_INTERNAL	0xfd
 struct hci_ev_stack_internal {
 	__u16    type;
-	__u8     data[0];
+	__u8     data[];
 } __packed;
 
 #define HCI_EV_SI_DEVICE	0x01

@@ -653,7 +653,7 @@ MODULE_PARM_DESC(sched_policy,
  * Maximum number of processes that HWS can schedule concurrently. The maximum is the
  * number of VMIDs assigned to the HWS, which is also the default.
  */
-int hws_max_conc_proc = 8;
+int hws_max_conc_proc = -1;
 module_param(hws_max_conc_proc, int, 0444);
 MODULE_PARM_DESC(hws_max_conc_proc,
 	"Max # processes HWS can execute concurrently when sched_policy=0 (0 = no concurrency, #VMIDs for KFD = Maximum(default))");
@@ -1176,8 +1176,15 @@ amdgpu_pci_shutdown(struct pci_dev *pdev)
 static int amdgpu_pmops_suspend(struct device *dev)
 {
 	struct drm_device *drm_dev = dev_get_drvdata(dev);
+	struct amdgpu_device *adev = (struct amdgpu_device *) drm_dev->dev_private;
+	int r;
 
-	return amdgpu_device_suspend(drm_dev, true, true);
+	r = amdgpu_device_suspend(drm_dev, true, true);
+	if (r)
+		return r;
+
+	r = amdgpu_asic_reset(adev);
+	return r;
 }
 
 static int amdgpu_pmops_resume(struct device *dev)

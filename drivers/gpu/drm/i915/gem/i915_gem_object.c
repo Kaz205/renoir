@@ -26,6 +26,7 @@
 
 #include "display/intel_frontbuffer.h"
 #include "gt/intel_gt.h"
+#include "pxp/intel_pxp.h"
 #include "i915_drv.h"
 #include "i915_gem_clflush.h"
 #include "i915_gem_context.h"

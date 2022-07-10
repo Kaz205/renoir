@@ -50,6 +50,8 @@
 #include "gt/intel_gt_pm.h"
 #include "gt/intel_workarounds.h"
 
+#include "pxp/intel_pxp.h"
+
 #include "i915_drv.h"
 #include "i915_trace.h"
 #include "i915_vgpu.h"
@@ -204,7 +206,7 @@ i915_gem_create(struct drm_file *file,
 		struct intel_memory_region *mr,
 		u64 *size_p,
 		u32 *handle_p,
-		u64 user_flags)
+		unsigned int ext_flags)
 {
 	struct drm_i915_gem_object *obj;
 	u32 handle;
@@ -224,7 +226,8 @@ i915_gem_create(struct drm_file *file,
 	if (IS_ERR(obj))
 		return PTR_ERR(obj);
 
-	obj->user_flags = user_flags;
+	/* Add any flag set by create_ext options */
+	obj->flags |= ext_flags;
 
 	ret = drm_gem_handle_create(file, &obj->base, &handle);
 	/* drop reference from allocate - handle holds it now */
@@ -283,47 +286,6 @@ i915_gem_dumb_create(struct drm_file *file,
 			       &args->size, &args->handle, 0);
 }
 
-struct create_ext {
-	struct drm_i915_private *i915;
-	unsigned long user_flags;
-};
-
-static int __create_setparam(struct drm_i915_gem_object_param *args,
-							struct create_ext *ext_data)
-{
-	if (!(args->param & I915_OBJECT_PARAM)) {
-		DRM_DEBUG("Missing I915_OBJECT_PARAM namespace\n");
-		return -EINVAL;
-	}
-
-	switch (lower_32_bits(args->param)) {
-	case I915_PARAM_PROTECTED_CONTENT:
-		if (args->size) {
-			return -EINVAL;
-		} else if (args->data) {
-			ext_data->user_flags = args->data;
-			return 0;
-		}
-	break;
-	}
-
-	return -EINVAL;
-}
-
-static int create_setparam(struct i915_user_extension __user *base, void *data)
-{
-	struct drm_i915_gem_create_ext_setparam ext;
-
-	if (copy_from_user(&ext, base, sizeof(ext)))
-		return -EFAULT;
-
-	return __create_setparam(&ext.param, data);
-}
-
-static const i915_user_extension_fn create_extensions[] = {
-	[I915_GEM_CREATE_EXT_SETPARAM] = create_setparam,
-};
-
 /**
  * Creates a new mm object and returns a handle to it.
  * @dev: drm device pointer
@@ -335,9 +297,61 @@ i915_gem_create_ioctl(struct drm_device *dev, void *data,
 		      struct drm_file *file)
 {
 	struct drm_i915_private *i915 = to_i915(dev);
-	struct create_ext ext_data = { .i915 = i915 };
+	struct drm_i915_gem_create *args = data;
+
+	i915_gem_flush_free_objects(i915);
+
+	return i915_gem_create(file,
+			       intel_memory_region_by_type(i915,
+							   INTEL_MEMORY_SYSTEM),
+			       &args->size, &args->handle, 0);
+}
+
+struct create_ext {
+	struct drm_i915_private *i915;
+	unsigned long flags;
+};
+
+static int ext_set_protected(struct i915_user_extension __user *base, void *data)
+{
+	struct drm_i915_gem_create_ext_protected_content ext;
+	struct create_ext *ext_data = data;
+
+	if (copy_from_user(&ext, base, sizeof(ext)))
+		return -EFAULT;
+
+	if (ext.flags)
+		return -EINVAL;
+
+	if (!intel_pxp_is_enabled(&ext_data->i915->gt.pxp))
+		return -ENODEV;
+
+	ext_data->flags |= I915_BO_PROTECTED;
+
+        return 0;
+}
+
+static const i915_user_extension_fn create_extensions[] = {
+	[I915_GEM_CREATE_EXT_PROTECTED_CONTENT] = ext_set_protected,
+};
+
+/**
+ * Creates a new mm object and returns a handle to it.
+ * @dev: drm device pointer
+ * @data: ioctl data blob
+ * @file: drm file pointer
+ */
+int
+i915_gem_create_ext_ioctl(struct drm_device *dev, void *data,
+			  struct drm_file *file)
+{
+	struct drm_i915_private *i915 = to_i915(dev);
 	struct drm_i915_gem_create_ext *args = data;
+	struct create_ext ext_data = { .i915 = i915 };
 	int ret;
+
+	if (args->flags)
+		return -EINVAL;
 
 	i915_gem_flush_free_objects(i915);
 
@@ -348,11 +362,10 @@ i915_gem_create_ioctl(struct drm_device *dev, void *data,
 	if (ret)
 		return ret;
 
-
 	return i915_gem_create(file,
 			       intel_memory_region_by_type(i915,
 							   INTEL_MEMORY_SYSTEM),
-			       &args->size, &args->handle, ext_data.user_flags);
+			       &args->size, &args->handle, ext_data.flags);
 }
 
 static int

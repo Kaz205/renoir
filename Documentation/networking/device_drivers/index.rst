@@ -25,6 +25,7 @@ Contents:
    mellanox/mlx5
    netronome/nfp
    pensando/ionic
+   qualcomm/rmnet
 
 .. only::  subproject and html
 

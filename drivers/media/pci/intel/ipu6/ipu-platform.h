@@ -7,6 +7,8 @@
 #define IPU_NAME			"intel-ipu6"
 
 #define IPU6SE_FIRMWARE_NAME		"intel/ipu6se_fw.bin"
+#define IPU6EP_FIRMWARE_NAME		"intel/ipu6ep_fw.bin"
+#define IPU6EPES_FIRMWARE_NAME		"intel/ipu6epes_fw.bin"
 #define IPU6_FIRMWARE_NAME		"intel/ipu6_fw.bin"
 
 /*
@@ -16,8 +18,8 @@
  */
 #define IPU_MEDIA_DEV_MODEL_NAME		"ipu6"
 
-#define IPU6SE_ISYS_NUM_STREAMS          8       /* Max 8 */
-#define IPU6_ISYS_NUM_STREAMS            16      /* Max 16 */
+#define IPU6SE_ISYS_NUM_STREAMS          IPU6SE_NONSECURE_STREAM_ID_MAX
+#define IPU6_ISYS_NUM_STREAMS            IPU6_NONSECURE_STREAM_ID_MAX
 
 /* declearations, definitions in ipu6.c */
 extern struct ipu_isys_internal_pdata isys_ipdata;

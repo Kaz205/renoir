@@ -210,6 +210,8 @@ static inline int task_has_dl_policy(struct task_struct *p)
  */
 #define SCHED_FLAG_SUGOV	0x10000000
 
+#define SCHED_DL_FLAGS (SCHED_FLAG_RECLAIM | SCHED_FLAG_DL_OVERRUN | SCHED_FLAG_SUGOV)
+
 static inline bool dl_entity_is_special(struct sched_dl_entity *dl_se)
 {
 #ifdef CONFIG_CPU_FREQ_GOV_SCHEDUTIL
@@ -503,7 +505,11 @@ struct cfs_rq {
 
 	u64			exec_clock;
 	u64			min_vruntime;
+#ifdef CONFIG_SCHED_CORE
+	unsigned int		forceidle_seq;
 	u64			min_vruntime_fi;
+#endif
+
 #ifndef CONFIG_64BIT
 	u64			min_vruntime_copy;
 #endif
@@ -576,8 +582,8 @@ struct cfs_rq {
 	s64			runtime_remaining;
 
 	u64			throttled_clock;
-	u64			throttled_clock_task;
-	u64			throttled_clock_task_time;
+	u64			throttled_clock_pelt;
+	u64			throttled_clock_pelt_time;
 	int			throttled;
 	int			throttle_count;
 	struct list_head	throttled_list;
@@ -1026,7 +1032,6 @@ struct rq {
 	unsigned int		core_enabled;
 	unsigned int		core_sched_seq;
 	struct rb_root		core_tree;
-	bool			core_forceidle;
 	unsigned char		core_pause_pending;
 	unsigned int		core_this_irq_nest;
 
@@ -1035,6 +1040,8 @@ struct rq {
 	unsigned int		core_pick_seq;
 	unsigned long		core_cookie;
 	unsigned int		core_irq_nest;
+	bool			core_forceidle;
+	unsigned int		core_forceidle_seq;
 #endif
 };
 
@@ -1108,8 +1115,6 @@ static inline bool sched_core_cookie_match(struct rq *rq, struct task_struct *p)
 	return idle_core || rq->core->core_cookie == p->core_cookie;
 }
 
-extern void queue_core_balance(struct rq *rq);
-
 void sched_core_add(struct rq *rq, struct task_struct *p);
 void sched_core_remove(struct rq *rq, struct task_struct *p);
 
@@ -1123,10 +1128,6 @@ static inline bool sched_core_enabled(struct rq *rq)
 static inline raw_spinlock_t *rq_lockp(struct rq *rq)
 {
 	return &rq->__lock;
-}
-
-static inline void queue_core_balance(struct rq *rq)
-{
 }
 
 #endif /* CONFIG_SCHED_CORE */
@@ -2721,7 +2722,7 @@ static inline bool sched_energy_enabled(void) { return false; }
 
 #endif /* CONFIG_ENERGY_MODEL && CONFIG_CPU_FREQ_GOV_SCHEDUTIL */
 
-bool cfs_prio_less(struct task_struct *a, struct task_struct *b);
+bool cfs_prio_less(struct task_struct *a, struct task_struct *b, bool in_fi);
 
 #ifdef CONFIG_MEMBARRIER
 /*

@@ -2049,21 +2049,10 @@ static int ctx_setparam(struct drm_i915_file_private *fpriv,
 	case I915_CONTEXT_PARAM_RECOVERABLE:
 		if (args->size)
 			ret = -EINVAL;
-		else if (args->value) {
-			if (!i915_gem_context_is_protected(ctx))
-				i915_gem_context_set_recoverable(ctx);
-			else
-				ret = -EPERM;
-			}
+		else if (args->value)
+			i915_gem_context_set_recoverable(ctx);
 		else
 			i915_gem_context_clear_recoverable(ctx);
-		break;
-
-	case I915_CONTEXT_PARAM_PROTECTED_CONTENT:
-		if (args->size)
-			ret = -EINVAL;
-		else if (args->value)
-			i915_gem_context_set_protected(ctx);
 		break;
 
 	case I915_CONTEXT_PARAM_PRIORITY:

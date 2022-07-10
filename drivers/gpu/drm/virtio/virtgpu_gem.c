@@ -66,16 +66,16 @@ int virtio_gpu_gem_create(struct drm_file *file,
 	if (IS_ERR(obj))
 		return PTR_ERR(obj);
 
-	ret = drm_gem_handle_create(file, &obj->gem_base, &handle);
+	ret = drm_gem_handle_create(file, &obj->tbo.base, &handle);
 	if (ret) {
-		drm_gem_object_release(&obj->gem_base);
+		drm_gem_object_release(&obj->tbo.base);
 		return ret;
 	}
 
-	*obj_p = &obj->gem_base;
+	*obj_p = &obj->tbo.base;
 
 	/* drop reference from allocate - handle holds it now */
-	drm_gem_object_put(&obj->gem_base);
+	drm_gem_object_put(&obj->tbo.base);
 
 	*handle_p = handle;
 	return 0;
@@ -198,7 +198,7 @@ void virtio_gpu_gem_object_put_free_work(struct work_struct *work)
 					  struct virtio_gpu_vq_cb_target, next);
 		list_del(&target->next);
 		spin_unlock(&vgdev->obj_free_lock);
-		drm_gem_object_put(&target->obj->gem_base);
+		drm_gem_object_put(&target->obj->tbo.base);
 		kfree(target);
 		spin_lock(&vgdev->obj_free_lock);
 	}

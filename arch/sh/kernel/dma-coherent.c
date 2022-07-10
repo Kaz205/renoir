@@ -6,6 +6,7 @@
 #include <linux/init.h>
 #include <linux/dma-noncoherent.h>
 #include <linux/module.h>
+#include <linux/dma-direct.h>
 #include <asm/cacheflush.h>
 #include <asm/addrspace.h>
 
@@ -37,8 +38,8 @@ void *arch_dma_alloc(struct device *dev, size_t size, dma_addr_t *dma_handle,
 	split_page(pfn_to_page(virt_to_phys(ret) >> PAGE_SHIFT), order);
 
 	*dma_handle = virt_to_phys(ret);
-	if (!WARN_ON(!dev))
-		*dma_handle -= PFN_PHYS(dev->dma_pfn_offset);
+	if (!WARN_ON(!dev) && dev->dma_range_map)
+		*dma_handle = translate_phys_to_dma(dev, *dma_handle);
 
 	return ret_nocache;
 }
@@ -50,8 +51,8 @@ void arch_dma_free(struct device *dev, size_t size, void *vaddr,
 	unsigned long pfn = (dma_handle >> PAGE_SHIFT);
 	int k;
 
-	if (!WARN_ON(!dev))
-		pfn += dev->dma_pfn_offset;
+	if (!WARN_ON(!dev) && dev->dma_range_map)
+		pfn = PFN_DOWN(translate_dma_to_phys(dev, PFN_PHYS(pfn)));
 
 	for (k = 0; k < (1 << order); k++)
 		__free_pages(pfn_to_page(pfn + k), 0);

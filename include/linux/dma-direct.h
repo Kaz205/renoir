@@ -12,37 +12,76 @@
 #include <linux/mem_encrypt.h>
 #include <linux/swiotlb.h>
 
-static inline dma_addr_t phys_to_dma(struct device *dev, phys_addr_t paddr);
+/*
+ * Record the mapping of CPU physical to DMA addresses for a given region.
+ */
+struct bus_dma_region {
+	phys_addr_t	cpu_start;
+	dma_addr_t	dma_start;
+	u64		size;
+	u64		offset;
+};
+
+static inline dma_addr_t translate_phys_to_dma(struct device *dev,
+		phys_addr_t paddr)
+{
+	const struct bus_dma_region *m;
+
+	for (m = dev->dma_range_map; m->size; m++)
+		if (paddr >= m->cpu_start && paddr - m->cpu_start < m->size)
+			return (dma_addr_t)paddr - m->offset;
+
+	/* make sure dma_capable fails when no translation is available */
+	return DMA_MAPPING_ERROR;
+}
+
+static inline phys_addr_t translate_dma_to_phys(struct device *dev,
+		dma_addr_t dma_addr)
+{
+	const struct bus_dma_region *m;
+
+	for (m = dev->dma_range_map; m->size; m++)
+		if (dma_addr >= m->dma_start && dma_addr - m->dma_start < m->size)
+			return (phys_addr_t)dma_addr + m->offset;
+
+	return (phys_addr_t)-1;
+}
 
 #ifdef CONFIG_ARCH_HAS_PHYS_TO_DMA
 #include <asm/dma-direct.h>
+#ifndef phys_to_dma_unencrypted
+#define phys_to_dma_unencrypted		phys_to_dma
+#endif
 #else
-static inline dma_addr_t __phys_to_dma(struct device *dev, phys_addr_t paddr)
+static inline dma_addr_t phys_to_dma_unencrypted(struct device *dev,
+		phys_addr_t paddr)
 {
-	dma_addr_t dev_addr = (dma_addr_t)paddr;
-
-	return dev_addr - ((dma_addr_t)dev->dma_pfn_offset << PAGE_SHIFT);
+	if (dev->dma_range_map)
+		return translate_phys_to_dma(dev, paddr);
+	return paddr;
 }
 
-static inline phys_addr_t __dma_to_phys(struct device *dev, dma_addr_t dev_addr)
+/*
+ * If memory encryption is supported, phys_to_dma will set the memory encryption
+ * bit in the DMA address, and dma_to_phys will clear it.
+ * phys_to_dma_unencrypted is for use on special unencrypted memory like swiotlb
+ * buffers.
+ */
+static inline dma_addr_t phys_to_dma(struct device *dev, phys_addr_t paddr)
 {
-	phys_addr_t paddr = (phys_addr_t)dev_addr;
-
-	return paddr + ((phys_addr_t)dev->dma_pfn_offset << PAGE_SHIFT);
+	return __sme_set(phys_to_dma_unencrypted(dev, paddr));
 }
 
-static inline bool dma_capable(struct device *dev, dma_addr_t addr, size_t size)
+static inline phys_addr_t dma_to_phys(struct device *dev, dma_addr_t dma_addr)
 {
-	dma_addr_t end = addr + size - 1;
+	phys_addr_t paddr;
 
-	if (!dev->dma_mask)
-		return false;
+	if (dev->dma_range_map)
+		paddr = translate_dma_to_phys(dev, dma_addr);
+	else
+		paddr = dma_addr;
 
-	if (!IS_ENABLED(CONFIG_ARCH_DMA_ADDR_T_64BIT) &&
-	    min(addr, end) < phys_to_dma(dev, PFN_PHYS(min_low_pfn)))
-		return false;
-
-	return end <= min_not_zero(*dev->dma_mask, dev->bus_dma_mask);
+	return __sme_clr(paddr);
 }
 #endif /* !CONFIG_ARCH_HAS_PHYS_TO_DMA */
 
@@ -55,20 +94,21 @@ static inline bool force_dma_unencrypted(struct device *dev)
 }
 #endif /* CONFIG_ARCH_HAS_FORCE_DMA_UNENCRYPTED */
 
-/*
- * If memory encryption is supported, phys_to_dma will set the memory encryption
- * bit in the DMA address, and dma_to_phys will clear it.  The raw __phys_to_dma
- * and __dma_to_phys versions should only be used on non-encrypted memory for
- * special occasions like DMA coherent buffers.
- */
-static inline dma_addr_t phys_to_dma(struct device *dev, phys_addr_t paddr)
+static inline bool dma_capable(struct device *dev, dma_addr_t addr, size_t size,
+		bool is_ram)
 {
-	return __sme_set(__phys_to_dma(dev, paddr));
-}
+	dma_addr_t end = addr + size - 1;
 
-static inline phys_addr_t dma_to_phys(struct device *dev, dma_addr_t daddr)
-{
-	return __sme_clr(__dma_to_phys(dev, daddr));
+	if (!dev->dma_mask)
+		return false;
+
+	if (addr == DMA_MAPPING_ERROR)
+		return false;
+	if (is_ram && !IS_ENABLED(CONFIG_ARCH_DMA_ADDR_T_64BIT) &&
+	    min(addr, end) < phys_to_dma(dev, PFN_PHYS(min_low_pfn)))
+		return false;
+
+	return end <= min_not_zero(*dev->dma_mask, dev->bus_dma_limit);
 }
 
 u64 dma_direct_get_required_mask(struct device *dev);
@@ -159,7 +199,7 @@ static inline bool dma_direct_possible(struct device *dev, dma_addr_t dma_addr,
 		size_t size)
 {
 	return swiotlb_force != SWIOTLB_FORCE &&
-		dma_capable(dev, dma_addr, size);
+		dma_capable(dev, dma_addr, size, true);
 }
 
 static inline void report_addr(struct device *dev, dma_addr_t dma_addr,
@@ -167,10 +207,10 @@ static inline void report_addr(struct device *dev, dma_addr_t dma_addr,
 {
 	if (!dev->dma_mask) {
 		dev_err_once(dev, "DMA map on device without dma_mask\n");
-	} else if (*dev->dma_mask >= DMA_BIT_MASK(32) || dev->bus_dma_mask) {
+	} else if (*dev->dma_mask >= DMA_BIT_MASK(32) || dev->bus_dma_limit) {
 		dev_err_once(dev,
-			"overflow %pad+%zu of DMA mask %llx bus mask %llx\n",
-			&dma_addr, size, *dev->dma_mask, dev->bus_dma_mask);
+			"overflow %pad+%zu of DMA mask %llx bus limit %llx\n",
+			&dma_addr, size, *dev->dma_mask, dev->bus_dma_limit);
 	}
 	WARN_ON_ONCE(1);
 }
@@ -203,6 +243,7 @@ static inline void dma_direct_unmap_page(struct device *dev, dma_addr_t addr,
 		dma_direct_sync_single_for_cpu(dev, addr, size, dir);
 
 	if (unlikely(is_swiotlb_buffer(dev, phys)))
-		swiotlb_tbl_unmap_single(dev, phys, size, size, dir, attrs);
+		swiotlb_tbl_unmap_single(dev, phys, size, size, dir,
+					 attrs | DMA_ATTR_SKIP_CPU_SYNC);
 }
 #endif /* _LINUX_DMA_DIRECT_H */

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright © 2020 Intel Corporation
+ * Copyright © 2020 - 2021 Intel Corporation
  */
 
 /**
@@ -82,16 +82,15 @@ mei_pxp_receive_message(struct device *dev, void *buffer, size_t size, u8 vtag)
 static const struct i915_pxp_component_ops mei_pxp_ops = {
 	.owner = THIS_MODULE,
 	.send = mei_pxp_send_message,
-	.receive = mei_pxp_receive_message,
+	.recv = mei_pxp_receive_message,
 };
 
 static int mei_component_master_bind(struct device *dev)
 {
 	struct mei_cl_device *cldev = to_mei_cl_device(dev);
-	struct i915_pxp_comp_master *comp_master = mei_cldev_get_drvdata(cldev);
+	struct i915_pxp_component *comp_master = mei_cldev_get_drvdata(cldev);
 	int ret;
 
-	dev_dbg(dev, "%s\n", __func__);
 	comp_master->ops = &mei_pxp_ops;
 	comp_master->tee_dev = dev;
 	ret = component_bind_all(dev, comp_master);
@@ -104,9 +103,8 @@ static int mei_component_master_bind(struct device *dev)
 static void mei_component_master_unbind(struct device *dev)
 {
 	struct mei_cl_device *cldev = to_mei_cl_device(dev);
-	struct i915_pxp_comp_master *comp_master = mei_cldev_get_drvdata(cldev);
+	struct i915_pxp_component *comp_master = mei_cldev_get_drvdata(cldev);
 
-	dev_dbg(dev, "%s\n", __func__);
 	component_unbind_all(dev, comp_master);
 }
 
@@ -135,26 +133,24 @@ static int mei_pxp_component_match(struct device *dev, int subcomponent,
 {
 	struct device *base = data;
 
-	if (subcomponent != I915_COMPONENT_PXP)
+	if (strcmp(dev->driver->name, "i915") ||
+	    subcomponent != I915_COMPONENT_PXP)
 		return 0;
 
-	if (strcmp(dev->driver->name, "i915") == 0) {
-		base = base->parent;
-		if (!base)
-			return 0;
+	base = base->parent;
+	if (!base)
+		return 0;
 
-		base = base->parent;
-		dev = dev->parent;
-		return (base && dev && dev == base);
-	}
+	base = base->parent;
+	dev = dev->parent;
 
-	return 0;
+	return (base && dev && dev == base);
 }
 
 static int mei_pxp_probe(struct mei_cl_device *cldev,
 			 const struct mei_cl_device_id *id)
 {
-	struct i915_pxp_comp_master *comp_master;
+	struct i915_pxp_component *comp_master;
 	struct component_match *master_match;
 	int ret;
 
@@ -199,13 +195,18 @@ enable_err_exit:
 
 static int mei_pxp_remove(struct mei_cl_device *cldev)
 {
-	struct i915_pxp_comp_master *comp_master = mei_cldev_get_drvdata(cldev);
+	struct i915_pxp_component *comp_master = mei_cldev_get_drvdata(cldev);
+	int ret;
 
 	component_master_del(&cldev->dev, &mei_component_master_ops);
 	kfree(comp_master);
 	mei_cldev_set_drvdata(cldev, NULL);
 
-	return mei_cldev_disable(cldev);
+	ret = mei_cldev_disable(cldev);
+	if (ret)
+		dev_warn(&cldev->dev, "mei_cldev_disable() failed\n");
+
+	return ret;
 }
 
 /* fbf6fcf1-96cf-4e2e-a6a6-1bab8cbe36b1 : PAVP GUID*/

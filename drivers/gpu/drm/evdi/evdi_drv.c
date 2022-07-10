@@ -198,7 +198,7 @@ static struct drm_driver driver = {
 	.driver_features = DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC,
 	.load = evdi_driver_load,
 	.unload = evdi_driver_unload,
-	.preclose = evdi_driver_preclose,
+	.postclose = evdi_driver_postclose,
 
 	/* gem hooks */
 	.gem_free_object = evdi_gem_free_object,
@@ -292,7 +292,7 @@ static int evdi_add_device(struct evdi_context *ctx, struct device *parent)
 	return 0;
 }
 
-int evdi_driver_setup_early(struct drm_device *dev)
+static int evdi_drm_device_setup(struct drm_device *dev)
 {
 	struct platform_device *platdev;
 	struct evdi_device *evdi;
@@ -364,7 +364,7 @@ static int evdi_platform_probe(struct platform_device *pdev)
 		goto err_free;
 	}
 
-	ret = evdi_driver_setup_early(dev);
+	ret = evdi_drm_device_setup(dev);
 	if (ret)
 		goto err_put_dev;
 
@@ -375,8 +375,6 @@ static int evdi_platform_probe(struct platform_device *pdev)
 	data->drm_dev = dev;
 	data->symlinked = false;
 	platform_set_drvdata(pdev, data);
-
-	evdi_driver_setup_late(dev);
 
 	return 0;
 

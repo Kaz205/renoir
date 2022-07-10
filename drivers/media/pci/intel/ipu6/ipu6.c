@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-// Copyright (C) 2020 Intel Corporation
+// Copyright (C) 2018 - 2021 Intel Corporation
 
 #include <linux/device.h>
 #include <linux/delay.h>
@@ -109,7 +109,6 @@ struct ipu_isys_internal_pdata isys_ipdata = {
 						   2, 2, 2, 2, 2, 2
 				   },
 				   .insert_read_before_invalidate = false,
-				   .zlw_invalidate = false,
 				   .l1_stream_id_reg_offset =
 				   IPU_MMU_L1_STREAM_ID_REG_OFFSET,
 				   .l2_stream_id_reg_offset =
@@ -129,7 +128,6 @@ struct ipu_isys_internal_pdata isys_ipdata = {
 						   2, 2, 2, 2, 2, 2
 				   },
 				   .insert_read_before_invalidate = false,
-				   .zlw_invalidate = false,
 				   .l1_stream_id_reg_offset =
 				   IPU_MMU_L1_STREAM_ID_REG_OFFSET,
 				   .l2_stream_id_reg_offset =
@@ -171,7 +169,6 @@ struct ipu_psys_internal_pdata psys_ipdata = {
 						   2, 2, 2, 2, 2, 2
 				   },
 				   .insert_read_before_invalidate = false,
-				   .zlw_invalidate = false,
 				   .l1_stream_id_reg_offset =
 				   IPU_MMU_L1_STREAM_ID_REG_OFFSET,
 				   .l2_stream_id_reg_offset =
@@ -195,7 +192,6 @@ struct ipu_psys_internal_pdata psys_ipdata = {
 						   2, 2, 2, 2, 2, 2
 				   },
 				   .insert_read_before_invalidate = false,
-				   .zlw_invalidate = false,
 				   .l1_stream_id_reg_offset =
 				   IPU_MMU_L1_STREAM_ID_REG_OFFSET,
 				   .l2_stream_id_reg_offset =
@@ -215,7 +211,6 @@ struct ipu_psys_internal_pdata psys_ipdata = {
 						   2, 2, 2, 2, 2, 2
 				   },
 				   .insert_read_before_invalidate = false,
-				   .zlw_invalidate = false,
 				   .l1_stream_id_reg_offset =
 				   IPU_MMU_L1_STREAM_ID_REG_OFFSET,
 				   .l2_stream_id_reg_offset =
@@ -343,7 +338,7 @@ int ipu_buttress_psys_freq_get(void *data, u64 *val)
 
 void ipu_internal_pdata_init(void)
 {
-	if (ipu_ver == IPU_VER_6) {
+	if (ipu_ver == IPU_VER_6 || ipu_ver == IPU_VER_6EP) {
 		isys_ipdata.csi2.nports = ARRAY_SIZE(ipu6_csi_offsets);
 		isys_ipdata.csi2.offsets = ipu6_csi_offsets;
 #ifdef CONFIG_VIDEO_INTEL_IPU_TPG

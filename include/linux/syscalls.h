@@ -1421,8 +1421,6 @@ long compat_ksys_semtimedop(int semid, struct sembuf __user *tsems,
 			    unsigned int nsops,
 			    const struct old_timespec32 __user *timeout);
 
-#ifdef CONFIG_ALT_SYSCALL
-
 /* Only used with ALT_SYSCALL enabled */
 
 int ksys_prctl(int option, unsigned long arg2, unsigned long arg3,
@@ -1432,6 +1430,8 @@ int ksys_getpriority(int which, int who);
 int ksys_perf_event_open(
 		struct perf_event_attr __user *attr_uptr,
 		pid_t pid, int cpu, int group_fd, unsigned long flags);
+int ksys_kcmp(pid_t pid1, pid_t pid2, int type,
+		unsigned long idx1, unsigned long idx2);
 int ksys_clock_adjtime(const clockid_t which_clock, struct __kernel_timex __user * utx);
 int ksys_adjtimex(struct __kernel_timex __user *txc_p);
 int ksys_getcpu(unsigned __user *cpu, unsigned __user *node,
@@ -1439,6 +1439,5 @@ int ksys_getcpu(unsigned __user *cpu, unsigned __user *node,
 int ksys_clock_adjtime32(clockid_t which_clock,
 			 struct old_timex32 __user *utp);
 int ksys_adjtimex_time32(struct old_timex32 __user *utp);
-#endif /* CONFIG_ALT_SYSCALL */
 
 #endif

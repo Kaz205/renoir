@@ -225,7 +225,7 @@ static int vdec_h264_slice_alloc_mv_buf(struct vdec_h264_slice_inst *inst,
 	unsigned int buf_sz = mtk_vdec_h264_get_mv_buf_size(
 		pic->buf_w, pic->buf_h);
 
-	mtk_v4l2_debug(3, "size = 0x%lx", buf_sz);
+	mtk_v4l2_debug(3, "size = 0x%x", buf_sz);
 	for (i = 0; i < H264_MAX_MV_NUM; i++) {
 		mem = &inst->mv_buf[i];
 		if (mem->va)
@@ -336,10 +336,10 @@ static int vdec_h264_slice_init(struct mtk_vcodec_ctx *ctx)
 	inst->ctx->msg_queue.init_done = false;
 
 	mtk_vcodec_debug(inst, "lat struct size = %d,%d,%d,%d vsi: %d\n",
-		sizeof(struct mtk_h264_sps_param),
-		sizeof(struct mtk_h264_pps_param),
-		sizeof(struct vdec_h264_slice_lat_dec_param),
-		sizeof(struct mtk_h264_dpb_info),
+		(int)sizeof(struct mtk_h264_sps_param),
+		(int)sizeof(struct mtk_h264_pps_param),
+		(int)sizeof(struct vdec_h264_slice_lat_dec_param),
+		(int)sizeof(struct mtk_h264_dpb_info),
 		vsi_size);
 	mtk_vcodec_debug(inst, "lat H264 instance >> %p, codec_type = 0x%x",
 		inst, inst->vpu.codec_type);
@@ -372,7 +372,6 @@ static int vdec_h264_slice_core_decode(struct vdec_lat_buf *lat_buf)
 	uint64_t y_fb_dma, c_fb_dma;
 	int err, timeout, i, dec_err;
 	struct vdec_vpu_inst *vpu;
-	struct mtk_video_dec_buf *dst_buf_info;
 	struct mtk_vcodec_ctx *ctx = lat_buf->ctx;
 	struct vdec_h264_slice_inst *inst = ctx->drv_handle;
 	struct vb2_v4l2_buffer *vb2_v4l2;
@@ -384,8 +383,7 @@ static int vdec_h264_slice_core_decode(struct vdec_lat_buf *lat_buf)
 		sizeof(share_info->h264_slice_params));
 	fb = ctx->dev->vdec_pdata->get_cap_buffer(ctx);
 	vpu = &inst->vpu;
-	dst_buf_info = container_of(fb, struct mtk_video_dec_buf, frame_buffer);
-	vdec_fb_va = (u64)fb;
+	vdec_fb_va = (unsigned long)fb;
 	y_fb_dma = fb ? (u64)fb->base_y.dma_addr : 0;
 
 	if (ctx->q_data[MTK_Q_DATA_DST].fmt->num_planes == 1)
@@ -394,7 +392,7 @@ static int vdec_h264_slice_core_decode(struct vdec_lat_buf *lat_buf)
 	else
 		c_fb_dma = fb ? (u64)fb->base_c.dma_addr : 0;
 
-	mtk_vcodec_debug(inst, "[h264-core] y/c addr = 0x%x 0x%x", y_fb_dma,
+	mtk_vcodec_debug(inst, "[h264-core] y/c addr = 0x%llx 0x%llx", y_fb_dma,
 		c_fb_dma);
 
 	inst->vsi_core->dec.y_fb_dma = y_fb_dma;

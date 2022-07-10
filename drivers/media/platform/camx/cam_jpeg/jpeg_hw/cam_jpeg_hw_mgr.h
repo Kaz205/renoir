@@ -90,7 +90,7 @@ struct cam_jpeg_hw_cfg_req {
 	struct cam_hw_config_args hw_cfg_args;
 	uint32_t dev_type;
 	uintptr_t req_id;
-	struct timeval submit_timestamp;
+	ktime_t submit_timestamp;
 };
 
 /**
@@ -167,5 +167,7 @@ struct cam_jpeg_hw_mgr {
 	struct list_head free_req_list;
 	struct cam_jpeg_hw_cfg_req req_list[CAM_JPEG_HW_CFG_Q_MAX];
 };
+
+int cam_jpeg_get_iommu_hd(void);
 
 #endif /* CAM_JPEG_HW_MGR_H */

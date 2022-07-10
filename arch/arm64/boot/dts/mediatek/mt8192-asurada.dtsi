@@ -338,9 +338,9 @@
 };
 
 &gpu {
-	supply-names = "mali","mali_sram";
+	supply-names = "mali","sram";
 	mali-supply = <&mt6315_7_vbuck1>;
-	mali_sram-supply = <&mt6359_vsram_others_ldo_reg>;
+	sram-supply = <&mt6359_vsram_others_ldo_reg>;
 	operating-points-v2 = <&gpu_opp_table>;
 	power_model@0 {
 		compatible = "arm,mali-simple-power-model";
@@ -382,19 +382,6 @@
 	pinctrl-0 = <&i2c1_pins>;
 	status = "okay";
 	clock-frequency = <400000>;
-
-	rt5682@1a {
-		compatible = "realtek,rt5682i";
-		reg = <0x1a>;
-		interrupt-parent = <&pio>;
-		interrupts = <18 IRQ_TYPE_LEVEL_LOW>;
-		realtek,jd-src = <1>;
-		realtek,btndet-delay = <16>;
-
-		AVDD-supply = <&mt6359_vio18_ldo_reg>;
-		MICVDD-supply = <&pp3300_g>;
-		VBAT-supply = <&pp3300_ldo_z>;
-	};
 };
 
 &i2c2 {

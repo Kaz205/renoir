@@ -52,7 +52,7 @@
  * @setup_ready_irq:	IPA interrupt triggered by modem to signal GSI ready
  * @clock_on:		Whether IPA clock is on
  * @notified:		Whether modem has been notified of clock state
- * @disabled:		Whether setup ready interrupt handling is disabled
+ * @setup_disabled:	Whether setup ready interrupt handler is disabled
  * @mutex:		Mutex protecting ready-interrupt/shutdown interlock
  * @panic_notifier:	Panic notifier structure
 */
@@ -66,7 +66,7 @@ struct ipa_smp2p {
 	u32 setup_ready_irq;
 	bool clock_on;
 	bool notified;
-	bool disabled;
+	bool setup_disabled;
 	struct mutex mutex;
 	struct notifier_block panic_notifier;
 };
@@ -150,19 +150,19 @@ static irqreturn_t ipa_smp2p_modem_setup_ready_isr(int irq, void *dev_id)
 {
 	struct ipa_smp2p *smp2p = dev_id;
 
-	mutex_lock(&smp2p->mutex);
+	/* Ignore any (spurious) interrupts received after the first */
+	if (smp2p->ipa->setup_complete)
+		return IRQ_HANDLED;
 
-	if (!smp2p->disabled) {
+	if (!smp2p->setup_disabled) {
 		int ret;
 
 		ret = ipa_setup(smp2p->ipa);
 		if (ret)
 			dev_err(&smp2p->ipa->pdev->dev,
 				"error %d from ipa_setup()\n", ret);
-		smp2p->disabled = true;
+		smp2p->setup_disabled = true;
 	}
-
-	mutex_unlock(&smp2p->mutex);
 
 	return IRQ_HANDLED;
 }
@@ -176,11 +176,8 @@ static int ipa_smp2p_irq_init(struct ipa_smp2p *smp2p, const char *name,
 	int ret;
 
 	ret = platform_get_irq_byname(smp2p->ipa->pdev, name);
-	if (ret <= 0) {
-		dev_err(dev, "DT error %d getting \"%s\" IRQ property\n",
-			ret, name);
+	if (ret <= 0)
 		return ret ? : -EINVAL;
-	}
 	irq = ret;
 
 	ret = request_threaded_irq(irq, NULL, handler, 0, name, smp2p);
@@ -298,7 +295,7 @@ void ipa_smp2p_exit(struct ipa *ipa)
 	kfree(smp2p);
 }
 
-void ipa_smp2p_disable(struct ipa *ipa)
+void ipa_smp2p_irq_disable_setup(struct ipa *ipa)
 {
 	struct ipa_smp2p *smp2p = ipa->smp2p;
 
@@ -307,7 +304,10 @@ void ipa_smp2p_disable(struct ipa *ipa)
 
 	mutex_lock(&smp2p->mutex);
 
-	smp2p->disabled = true;
+	if (!smp2p->setup_disabled) {
+		disable_irq(smp2p->setup_ready_irq);
+		smp2p->setup_disabled = true;
+	}
 
 	mutex_unlock(&smp2p->mutex);
 }

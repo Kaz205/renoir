@@ -17,6 +17,9 @@
 #include <linux/sort.h>
 #include <linux/slab.h>
 
+#define CREATE_TRACE_POINTS
+#include "cros_ec_sensorhub_trace.h"
+
 /* Precision of fixed point for the m values from the filter */
 #define M_PRECISION BIT(23)
 
@@ -32,15 +35,6 @@
 /* To measure by how much the filter is overshooting, if it happens. */
 #define FUTURE_TS_ANALYTICS_COUNT_MAX 100
 
-#if IS_ENABLED(CONFIG_IIO_CROS_EC_SENSORS_RING)
-/*
- * To be compliant with existing code, device buffer is only for
- * triggered samples.
- */
-static inline int
-cros_sensorhub_send_sample_to_device(struct cros_ec_sensorhub *sensorhub,
-			   struct cros_ec_sensors_ring_sample *sample);
-
 static inline int
 cros_sensorhub_send_sample(struct cros_ec_sensorhub *sensorhub,
 			   struct cros_ec_sensors_ring_sample *sample)
@@ -51,31 +45,6 @@ cros_sensorhub_send_sample(struct cros_ec_sensorhub *sensorhub,
 
 	if (id >= sensorhub->sensor_num)
 		return -EINVAL;
-
-	if (sensorhub->push_data[id].send_to_device)
-		cros_sensorhub_send_sample_to_device(sensorhub, sample);
-
-	cb = sensorhub->push_data[sensorhub->sensor_num].push_data_cb;
-
-	indio_dev = sensorhub->push_data[sensorhub->sensor_num].indio_dev;
-	if (!indio_dev)
-		return 0;
-
-	return cb(indio_dev, (s16 *)sample, 0);
-}
-
-static inline int
-cros_sensorhub_send_sample_to_device(struct cros_ec_sensorhub *sensorhub,
-			   struct cros_ec_sensors_ring_sample *sample)
-#else
-static inline int
-cros_sensorhub_send_sample(struct cros_ec_sensorhub *sensorhub,
-			   struct cros_ec_sensors_ring_sample *sample)
-#endif
-{
-	int id = sample->sensor_id;
-	cros_ec_sensorhub_push_data_cb_t cb;
-	struct iio_dev *indio_dev;
 
 	cb = sensorhub->push_data[id].push_data_cb;
 	if (!cb)
@@ -94,7 +63,6 @@ cros_sensorhub_send_sample(struct cros_ec_sensorhub *sensorhub,
  *
  * @sensorhub : Sensor Hub object
  * @sensor_num : The sensor the caller is interested in.
- * @send_to_device : True to send samples to the device and the sensor ring.
  * @indio_dev : The iio device to use when a sample arrives.
  * @cb : The callback to call when a sample arrives.
  *
@@ -106,18 +74,14 @@ cros_sensorhub_send_sample(struct cros_ec_sensorhub *sensorhub,
  */
 int cros_ec_sensorhub_register_push_data(struct cros_ec_sensorhub *sensorhub,
 					 u8 sensor_num,
-					 bool send_to_device,
 					 struct iio_dev *indio_dev,
 					 cros_ec_sensorhub_push_data_cb_t cb)
 {
-	if (sensor_num >= sensorhub->sensor_num + 1)
+	if (sensor_num >= sensorhub->sensor_num)
 		return -EINVAL;
 	if (sensorhub->push_data[sensor_num].indio_dev)
 		return -EINVAL;
 
-#if IS_ENABLED(CONFIG_IIO_CROS_EC_SENSORS_RING)
-	sensorhub->push_data[sensor_num].send_to_device = send_to_device;
-#endif
 	sensorhub->push_data[sensor_num].indio_dev = indio_dev;
 	sensorhub->push_data[sensor_num].push_data_cb = cb;
 
@@ -330,6 +294,7 @@ cros_ec_sensor_ring_ts_filter_update(struct cros_ec_sensors_ts_filter_state
 		state->median_m = 0;
 		state->median_error = 0;
 	}
+	trace_cros_ec_sensorhub_filter(state, dx, dy);
 }
 
 /**
@@ -466,6 +431,11 @@ cros_ec_sensor_ring_process_event(struct cros_ec_sensorhub *sensorhub,
 			if (new_timestamp - *current_timestamp > 0)
 				*current_timestamp = new_timestamp;
 		}
+		trace_cros_ec_sensorhub_timestamp(in->timestamp,
+						  fifo_info->timestamp,
+						  fifo_timestamp,
+						  *current_timestamp,
+						  now);
 	}
 
 	if (in->flags & MOTIONSENSE_SENSOR_FLAG_ODR) {
@@ -499,6 +469,12 @@ cros_ec_sensor_ring_process_event(struct cros_ec_sensorhub *sensorhub,
 
 	/* Regular sample */
 	out->sensor_id = in->sensor_num;
+	trace_cros_ec_sensorhub_data(in->sensor_num,
+				     fifo_info->timestamp,
+				     fifo_timestamp,
+				     *current_timestamp,
+				     now);
+
 	if (*current_timestamp - now > 0) {
 		/*
 		 * This fix is needed to overcome the timestamp filter putting
@@ -994,6 +970,53 @@ static int cros_ec_sensorhub_event(struct notifier_block *nb,
 }
 
 /**
+ * cros_ec_sensorhub_ring_allocate() - Prepare the FIFO functionality if the EC
+ *				       supports it.
+ *
+ * @sensorhub : Sensor Hub object.
+ *
+ * Return: 0 on success.
+ */
+int cros_ec_sensorhub_ring_allocate(struct cros_ec_sensorhub *sensorhub)
+{
+	int fifo_info_length =
+		sizeof(struct ec_response_motion_sense_fifo_info) +
+		sizeof(u16) * sensorhub->sensor_num;
+
+	/* Allocate the array for lost events. */
+	sensorhub->fifo_info = devm_kzalloc(sensorhub->dev, fifo_info_length,
+					    GFP_KERNEL);
+	if (!sensorhub->fifo_info)
+		return -ENOMEM;
+
+	/*
+	 * Allocate the callback area based on the number of sensors.
+	 * Add one for the sensor ring.
+	 */
+	sensorhub->push_data = devm_kcalloc(sensorhub->dev,
+			sensorhub->sensor_num,
+			sizeof(*sensorhub->push_data),
+			GFP_KERNEL);
+	if (!sensorhub->push_data)
+		return -ENOMEM;
+
+	sensorhub->tight_timestamps = cros_ec_check_features(
+			sensorhub->ec,
+			EC_FEATURE_MOTION_SENSE_TIGHT_TIMESTAMPS);
+
+	if (sensorhub->tight_timestamps) {
+		sensorhub->batch_state = devm_kcalloc(sensorhub->dev,
+				sensorhub->sensor_num,
+				sizeof(*sensorhub->batch_state),
+				GFP_KERNEL);
+		if (!sensorhub->batch_state)
+			return -ENOMEM;
+	}
+
+	return 0;
+}
+
+/**
  * cros_ec_sensorhub_ring_add() - Add the FIFO functionality if the EC
  *				  supports it.
  *
@@ -1008,12 +1031,6 @@ int cros_ec_sensorhub_ring_add(struct cros_ec_sensorhub *sensorhub)
 	int fifo_info_length =
 		sizeof(struct ec_response_motion_sense_fifo_info) +
 		sizeof(u16) * sensorhub->sensor_num;
-
-	/* Allocate the array for lost events. */
-	sensorhub->fifo_info = devm_kzalloc(sensorhub->dev, fifo_info_length,
-					    GFP_KERNEL);
-	if (!sensorhub->fifo_info)
-		return -ENOMEM;
 
 	/* Retrieve FIFO information */
 	sensorhub->msg->version = 2;
@@ -1035,31 +1052,8 @@ int cros_ec_sensorhub_ring_add(struct cros_ec_sensorhub *sensorhub)
 	if (!sensorhub->ring)
 		return -ENOMEM;
 
-	/*
-	 * Allocate the callback area based on the number of sensors.
-	 * Add one for the sensor ring.
-	 */
-	sensorhub->push_data = devm_kcalloc(
-			sensorhub->dev, sensorhub->sensor_num + 1,
-			sizeof(*sensorhub->push_data),
-			GFP_KERNEL);
-	if (!sensorhub->push_data)
-		return -ENOMEM;
-
 	sensorhub->fifo_timestamp[CROS_EC_SENSOR_LAST_TS] =
 		cros_ec_get_time_ns();
-
-	sensorhub->tight_timestamps = cros_ec_check_features(
-			ec, EC_FEATURE_MOTION_SENSE_TIGHT_TIMESTAMPS);
-
-	if (sensorhub->tight_timestamps) {
-		sensorhub->batch_state = devm_kcalloc(sensorhub->dev,
-				sensorhub->sensor_num,
-				sizeof(*sensorhub->batch_state),
-				GFP_KERNEL);
-		if (!sensorhub->batch_state)
-			return -ENOMEM;
-	}
 
 	/* Register the notifier that will act as a top half interrupt. */
 	sensorhub->notifier.notifier_call = cros_ec_sensorhub_event;

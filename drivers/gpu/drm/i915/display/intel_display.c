@@ -4824,6 +4824,9 @@ u32 glk_plane_color_ctl(const struct intel_crtc_state *crtc_state,
 			plane_color_ctl |= PLANE_COLOR_YUV_RANGE_CORRECTION_DISABLE;
 	}
 
+	if (plane_state->force_black)
+		plane_color_ctl |= PLANE_COLOR_PLANE_CSC_ENABLE;
+
 	return plane_color_ctl;
 }
 
@@ -12578,6 +12581,7 @@ static int icl_check_nv12_planes(struct intel_crtc_state *crtc_state)
 		linked_state->ctl = plane_state->ctl | PLANE_CTL_YUV420_Y_PLANE;
 		linked_state->color_ctl = plane_state->color_ctl;
 		linked_state->view = plane_state->view;
+		linked_state->decrypt = plane_state->decrypt;
 		memcpy(linked_state->color_plane, plane_state->color_plane,
 		       sizeof(linked_state->color_plane));
 
@@ -12927,7 +12931,7 @@ static void
 intel_dump_dp_vsc_sdp(struct drm_i915_private *dev_priv,
 		      const struct drm_dp_vsc_sdp *vsc)
 {
-	if (!drm_debug_syslog_enabled(DRM_UT_KMS))
+	if (!drm_debug_enabled(DRM_UT_KMS))
 		return;
 
 	drm_dp_vsc_sdp_log(KERN_DEBUG, dev_priv->drm.dev, vsc);
@@ -13588,7 +13592,7 @@ pipe_config_dp_vsc_sdp_mismatch(struct drm_i915_private *dev_priv,
 				const struct drm_dp_vsc_sdp *b)
 {
 	if (fastset) {
-		if (!drm_debug_syslog_enabled(DRM_UT_KMS))
+		if (!drm_debug_enabled(DRM_UT_KMS))
 			return;
 
 		drm_dbg_kms(&dev_priv->drm,
@@ -14931,6 +14935,10 @@ static int intel_atomic_check_async(struct intel_atomic_state *state)
 			drm_dbg_kms(&i915->drm, "Color range cannot be changed in async flip\n");
 			return -EINVAL;
 		}
+
+		/* plane decryption is allow to change only in synchronous flips */
+		if (old_plane_state->decrypt != new_plane_state->decrypt)
+			return -EINVAL;
 	}
 
 	return 0;

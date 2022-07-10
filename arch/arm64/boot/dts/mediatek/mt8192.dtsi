@@ -1430,7 +1430,9 @@
 		};
 
 		gpu: mali@13000000 {
-			compatible = "mediatek,mali", "arm,mali-valhall";
+			compatible = "mediatek,mt8192-mali",
+				     "mediatek,mali",
+				     "arm,mali-valhall";
 			reg = <0 0x13000000 0 0x4000>;
 			interrupts =
 				<GIC_SPI 363 IRQ_TYPE_LEVEL_HIGH 0>,

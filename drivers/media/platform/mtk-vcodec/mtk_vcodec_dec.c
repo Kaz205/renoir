@@ -46,14 +46,7 @@ static struct mtk_q_data *mtk_vdec_get_q_data(struct mtk_vcodec_ctx *ctx,
 static int vidioc_try_decoder_cmd(struct file *file, void *priv,
 				struct v4l2_decoder_cmd *cmd)
 {
-	struct mtk_vcodec_ctx *ctx = fh_to_ctx(priv);
-
-	/* Use M2M stateless helper if relevant */
-	if (ctx->dev->vdec_pdata->uses_stateless_api)
-		return v4l2_m2m_ioctl_stateless_try_decoder_cmd(file, priv,
-								cmd);
-	else
-		return v4l2_m2m_ioctl_try_decoder_cmd(file, priv, cmd);
+	return v4l2_m2m_ioctl_try_decoder_cmd(file, priv, cmd);
 }
 
 static int vidioc_decoder_cmd(struct file *file, void *priv,
@@ -66,10 +59,6 @@ static int vidioc_decoder_cmd(struct file *file, void *priv,
 	ret = vidioc_try_decoder_cmd(file, priv, cmd);
 	if (ret)
 		return ret;
-
-	/* Use M2M stateless helper if relevant */
-	if (ctx->dev->vdec_pdata->uses_stateless_api)
-		return v4l2_m2m_ioctl_stateless_decoder_cmd(file, priv, cmd);
 
 	mtk_v4l2_debug(1, "decoder cmd=%u", cmd->cmd);
 	dst_vq = v4l2_m2m_get_vq(ctx->m2m_ctx,
@@ -740,10 +729,18 @@ int vb2ops_vdec_buf_prepare(struct vb2_buffer *vb)
 	q_data = mtk_vdec_get_q_data(ctx, vb->vb2_queue->type);
 
 	for (i = 0; i < q_data->fmt->num_planes; i++) {
-		if (vb2_plane_size(vb, i) < q_data->sizeimage[i]) {
-			mtk_v4l2_err("data will not fit into plane %d (%lu < %d)",
+		if (vb->planes[i].data_offset > vb2_plane_size(vb, i)) {
+			mtk_v4l2_err("data offset larger than plane size");
+			return -EINVAL;
+		}
+
+		if (vb2_plane_size(vb, i) - vb->planes[i].data_offset
+		    < q_data->sizeimage[i]) {
+			mtk_v4l2_err("data will not fit into plane %d (%lu - %u < %u)",
 				i, vb2_plane_size(vb, i),
+				vb->planes[i].data_offset,
 				q_data->sizeimage[i]);
+			return -EINVAL;
 		}
 	}
 

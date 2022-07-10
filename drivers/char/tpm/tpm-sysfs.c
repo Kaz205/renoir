@@ -309,6 +309,16 @@ static ssize_t timeouts_show(struct device *dev, struct device_attribute *attr,
 }
 static DEVICE_ATTR_RO(timeouts);
 
+static ssize_t tpm_version_major_show(struct device *dev,
+				  struct device_attribute *attr, char *buf)
+{
+	struct tpm_chip *chip = to_tpm_chip(dev);
+
+	return sprintf(buf, "%s\n", chip->flags & TPM_CHIP_FLAG_TPM2
+		       ? "2" : "1");
+}
+static DEVICE_ATTR_RO(tpm_version_major);
+
 static struct attribute *tpm1_dev_attrs[] = {
 	&dev_attr_pubek.attr,
 	&dev_attr_pcrs.attr,
@@ -320,6 +330,7 @@ static struct attribute *tpm1_dev_attrs[] = {
 	&dev_attr_cancel.attr,
 	&dev_attr_durations.attr,
 	&dev_attr_timeouts.attr,
+	&dev_attr_tpm_version_major.attr,
 	NULL,
 };
 
@@ -458,6 +469,7 @@ static struct attribute *tpm2_dev_attrs[] = {
 	ATTR_FOR_TPM2_PROP(lockout_recovery),
 	&dev_attr_durations.attr,
 	&dev_attr_timeouts.attr,
+	&dev_attr_tpm_version_major.attr,
 	NULL,
 };
 

@@ -568,6 +568,12 @@ struct intel_plane_state {
 		int x, y;
 	} color_plane[4];
 
+	/* Plane pxp decryption state */
+	bool decrypt;
+
+	/* Plane state to display black pixels when pxp is borked */
+	bool force_black;
+
 	/* plane control register */
 	u32 ctl;
 

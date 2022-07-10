@@ -296,6 +296,7 @@ generic_pm_domain *scpsys_add_one_domain(struct scpsys *scpsys, struct device_no
 	const struct scpsys_domain_data *domain_data;
 	struct scpsys_domain *pd;
 	struct device_node *root_node = scpsys->dev->of_node;
+	struct device_node *smi_node;
 	struct property *prop;
 	const char *clk_name;
 	int i, ret, num_clks;
@@ -351,9 +352,13 @@ generic_pm_domain *scpsys_add_one_domain(struct scpsys *scpsys, struct device_no
 	if (IS_ERR(pd->infracfg))
 		return ERR_CAST(pd->infracfg);
 
-	pd->smi = syscon_regmap_lookup_by_phandle_optional(node, "mediatek,smi");
-	if (IS_ERR(pd->smi))
-		return ERR_CAST(pd->smi);
+	smi_node = of_parse_phandle(node, "mediatek,smi", 0);
+	if (smi_node) {
+		pd->smi = device_node_to_regmap(smi_node);
+		of_node_put(smi_node);
+		if (IS_ERR(pd->smi))
+			return ERR_CAST(pd->smi);
+	}
 
 	num_clks = of_clk_get_parent_count(node);
 	if (num_clks > 0) {
@@ -436,6 +441,9 @@ generic_pm_domain *scpsys_add_one_domain(struct scpsys *scpsys, struct device_no
 
 	pd->genpd.power_off = scpsys_power_off;
 	pd->genpd.power_on = scpsys_power_on;
+
+	if (MTK_SCPD_CAPS(pd, MTK_SCPD_ACTIVE_WAKEUP))
+		pd->genpd.flags |= GENPD_FLAG_ACTIVE_WAKEUP;
 
 	if (MTK_SCPD_CAPS(pd, MTK_SCPD_KEEP_DEFAULT_OFF))
 		pm_genpd_init(&pd->genpd, NULL, true);

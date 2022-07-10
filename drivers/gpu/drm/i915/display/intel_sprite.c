@@ -39,8 +39,6 @@
 #include <drm/drm_plane_helper.h>
 #include <drm/drm_rect.h>
 
-#include "pxp/intel_pxp.h"
-
 #include "i915_drv.h"
 #include "i915_trace.h"
 #include "intel_atomic_plane.h"
@@ -49,6 +47,7 @@
 #include "intel_pm.h"
 #include "intel_psr.h"
 #include "intel_sprite.h"
+#include "pxp/intel_pxp.h"
 
 int intel_usecs_to_scanlines(const struct drm_display_mode *adjusted_mode,
 			     int usecs)
@@ -566,11 +565,6 @@ icl_program_input_csc(struct intel_plane *plane,
 			  PLANE_INPUT_CSC_POSTOFF(pipe, plane_id, 2), 0x0);
 }
 
-static bool intel_fb_obj_protected(const struct drm_i915_gem_object *obj)
-{
-	return obj->user_flags & I915_BO_PROTECTED ? true : false;
-}
-
 static void
 skl_plane_async_flip(struct intel_plane *plane,
 		     const struct intel_crtc_state *crtc_state,
@@ -594,6 +588,31 @@ skl_plane_async_flip(struct intel_plane *plane,
 	spin_unlock_irqrestore(&dev_priv->uncore.lock, irqflags);
 }
 
+static void icl_plane_csc_load_black(struct intel_plane *plane)
+{
+	struct drm_i915_private *i915 = to_i915(plane->base.dev);
+	enum plane_id plane_id = plane->id;
+	enum pipe pipe = plane->pipe;
+
+	intel_de_write_fw(i915, PLANE_CSC_COEFF(pipe, plane_id, 0), 0);
+	intel_de_write_fw(i915, PLANE_CSC_COEFF(pipe, plane_id, 1), 0);
+
+	intel_de_write_fw(i915, PLANE_CSC_COEFF(pipe, plane_id, 2), 0);
+	intel_de_write_fw(i915, PLANE_CSC_COEFF(pipe, plane_id, 3), 0);
+
+	intel_de_write_fw(i915, PLANE_CSC_COEFF(pipe, plane_id, 4), 0);
+	intel_de_write_fw(i915, PLANE_CSC_COEFF(pipe, plane_id, 5), 0);
+
+	intel_de_write_fw(i915, PLANE_CSC_PREOFF(pipe, plane_id, 0), 0);
+	intel_de_write_fw(i915, PLANE_CSC_PREOFF(pipe, plane_id, 1), 0);
+	intel_de_write_fw(i915, PLANE_CSC_PREOFF(pipe, plane_id, 2), 0);
+
+	intel_de_write_fw(i915, PLANE_CSC_POSTOFF(pipe, plane_id, 0), 0);
+	intel_de_write_fw(i915, PLANE_CSC_POSTOFF(pipe, plane_id, 1), 0);
+	intel_de_write_fw(i915, PLANE_CSC_POSTOFF(pipe, plane_id, 2), 0);
+}
+
+
 static void
 skl_program_plane(struct intel_plane *plane,
 		  const struct intel_crtc_state *crtc_state,
@@ -607,7 +626,6 @@ skl_program_plane(struct intel_plane *plane,
 	u32 surf_addr = plane_state->color_plane[color_plane].offset;
 	u32 stride = skl_plane_stride(plane_state, color_plane);
 	const struct drm_framebuffer *fb = plane_state->hw.fb;
-	const struct drm_i915_gem_object *obj = intel_fb_obj(fb);
 	int aux_plane = intel_main_to_aux_plane(fb, color_plane);
 	int crtc_x = plane_state->uapi.dst.x1;
 	int crtc_y = plane_state->uapi.dst.y1;
@@ -650,7 +668,18 @@ skl_program_plane(struct intel_plane *plane,
 			aux_dist |= skl_plane_stride(plane_state, aux_plane);
 	}
 
+	plane_surf = intel_plane_ggtt_offset(plane_state) + surf_addr;
+	if (plane_state->decrypt)
+		plane_surf |= PLANE_SURF_DECRYPT;
+
 	spin_lock_irqsave(&dev_priv->uncore.lock, irqflags);
+
+	/*
+	 * FIXME: pxp session invalidation can hit any time even at time of commit
+	 * or after the commit, display content will be garbage.
+	 */
+	if (plane_state->force_black)
+		icl_plane_csc_load_black(plane);
 
 	intel_de_write_fw(dev_priv, PLANE_STRIDE(pipe, plane_id), stride);
 	intel_de_write_fw(dev_priv, PLANE_POS(pipe, plane_id),
@@ -691,13 +720,6 @@ skl_program_plane(struct intel_plane *plane,
 	 * the control register just before the surface register.
 	 */
 	intel_de_write_fw(dev_priv, PLANE_CTL(pipe, plane_id), plane_ctl);
-	plane_surf = intel_plane_ggtt_offset(plane_state) + surf_addr;
-
-	if (intel_pxp_gem_object_status(dev_priv) &&
-	    intel_fb_obj_protected(obj))
-		plane_surf |= PLANE_SURF_DECRYPTION_ENABLED;
-	else
-		plane_surf &= ~PLANE_SURF_DECRYPTION_ENABLED;
 
 	intel_de_write_fw(dev_priv, PLANE_SURF(pipe, plane_id), plane_surf);
 
@@ -2240,6 +2262,18 @@ static int skl_plane_max_scale(struct drm_i915_private *dev_priv,
 		return 0x20000 - 1;
 }
 
+static bool bo_has_valid_encryption(struct drm_i915_gem_object *obj)
+{
+	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+
+	return intel_pxp_key_check(&i915->gt.pxp, obj, false) == 0;
+}
+
+static bool pxp_is_borked(struct drm_i915_gem_object *obj)
+{
+	return i915_gem_object_is_protected(obj) && !bo_has_valid_encryption(obj);
+}
+
 static int skl_plane_check(struct intel_crtc_state *crtc_state,
 			   struct intel_plane_state *plane_state)
 {
@@ -2285,6 +2319,11 @@ static int skl_plane_check(struct intel_crtc_state *crtc_state,
 	ret = skl_plane_check_nv12_rotation(plane_state);
 	if (ret)
 		return ret;
+
+	if (INTEL_GEN(dev_priv) >= 11) {
+		plane_state->decrypt = bo_has_valid_encryption(intel_fb_obj(fb));
+		plane_state->force_black = pxp_is_borked(intel_fb_obj(fb));
+	}
 
 	/* HW only has 8 bits pixel precision, disable plane if invisible */
 	if (!(plane_state->hw.alpha >> 8))

@@ -117,10 +117,28 @@ static const struct gmbus_pin *get_gmbus_pin(struct drm_i915_private *dev_priv,
 		return &gmbus_pins[pin];
 }
 
+static bool intel_gmbus_ddc_reserve_for_mipi_dsi(struct drm_i915_private *dev_priv,
+						 unsigned int pin)
+{
+	if (intel_bios_is_dsi_present(dev_priv, NULL)) {
+		if (INTEL_GEN(dev_priv) >= 11) {
+			if ((pin == GMBUS_PIN_2_BXT && dev_priv->vbt.dsi.config->dual_link) ||
+			     pin == GMBUS_PIN_1_BXT) {
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
 bool intel_gmbus_is_valid_pin(struct drm_i915_private *dev_priv,
 			      unsigned int pin)
 {
 	unsigned int size;
+
+	if (intel_gmbus_ddc_reserve_for_mipi_dsi(dev_priv, pin))
+		return false;
 
 	if (INTEL_PCH_TYPE(dev_priv) >= PCH_DG1)
 		size = ARRAY_SIZE(gmbus_pins_dg1);

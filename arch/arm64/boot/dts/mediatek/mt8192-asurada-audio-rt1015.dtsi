@@ -1,0 +1,17 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (C) 2022 MediaTek Inc.
+ */
+&i2c1 {
+	rt1015_l: codec@28 {
+		compatible = "realtek,rt1015";
+		reg = <0x28>;
+		#sound-dai-cells = <0>;
+	};
+
+	rt1015_r: codec@29 {
+		compatible = "realtek,rt1015";
+		reg = <0x29>;
+		#sound-dai-cells = <0>;
+	};
+};
