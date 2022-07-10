@@ -3334,6 +3334,14 @@ static ssize_t fg2_tfullq_show(struct class *c,
 }
 static CLASS_ATTR_RO(fg2_tfullq);
 
+static ssize_t power_max_show(struct class *c,
+			struct class_attribute *attr, char *buf)
+{
+	pr_info("power_max_show read");
+	return scnprintf(buf, PAGE_SIZE, "%u", 0);
+}
+static CLASS_ATTR_RO(power_max);
+
 static ssize_t is_old_hw_store(struct class *c,
 					struct class_attribute *attr,
 					const char *buf, size_t count)
@@ -5084,6 +5092,7 @@ static struct attribute *battery_class_attrs[] = {
 	&class_attr_fg2_tremq.attr,
 	&class_attr_fg2_tfullq.attr,
 	&class_attr_is_old_hw.attr,
+	&class_attr_power_max.attr,
 #endif
 	&class_attr_vbus_disable.attr,
 	&class_attr_cc_orientation.attr,
