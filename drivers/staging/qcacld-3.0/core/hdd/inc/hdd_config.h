@@ -1294,7 +1294,7 @@ struct dhcp_server {
 	"gActionOUIDisableAggressiveEDCA", \
 	0, \
 	ACTION_OUI_MAX_STR_LEN, \
-	"", \
+	"ac853d 00 01", \
 	"Used to specify action OUIs to control edca configuration")
 
 /*
