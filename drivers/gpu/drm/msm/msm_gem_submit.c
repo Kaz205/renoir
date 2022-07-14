@@ -882,7 +882,7 @@ int msm_ioctl_gem_submit(struct drm_device *dev, void *data,
 			submit->user_fence, 1, INT_MAX, GFP_KERNEL);
 	mutex_unlock(&queue->lock);
 	if (submit->fence_id < 0) {
-		ret = submit->fence_id = 0;
+		ret = submit->fence_id;
 		submit->fence_id = 0;
 		goto out;
 	}
