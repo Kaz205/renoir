@@ -8,7 +8,7 @@ steps:
     image: panchajanya1999/archlinux:latest
     commands:
       - pacman -Sy && pacman -S dtc --noconfirm
-      - export CLANG_VERSION=clang-r450784e
+      - export CLANG_VERSION=clang-r458507
       - git clone https://github.com/arter97/arm32-gcc/ --depth=1 -j$(nproc --all)
       - git clone https://github.com/arter97/arm64-gcc/ --depth=1 -j$(nproc --all)
       - wget https://github.com/Kaz205/clang-releases/releases/download/$CLANG_VERSION/$CLANG_VERSION.tar.xz
