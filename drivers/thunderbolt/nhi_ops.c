@@ -160,11 +160,17 @@ static int icl_nhi_suspend_noirq(struct tb_nhi *nhi, bool wakeup)
 
 static int icl_nhi_resume(struct tb_nhi *nhi)
 {
+	u32 class;
 	int ret;
 
 	ret = icl_nhi_force_power(nhi, true);
 	if (ret)
 		return ret;
+
+	/* Set device class & rev as it might have changed after powering up */
+	pci_read_config_dword(nhi->pdev, PCI_CLASS_REVISION, &class);
+	nhi->pdev->class = class >> 8;
+	nhi->pdev->revision = class & 0xff;
 
 	icl_nhi_set_ltr(nhi);
 	return 0;
