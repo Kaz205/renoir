@@ -23,8 +23,8 @@
 		qcom,panel-supply-entry@0 {
 			reg = <0>;
 			qcom,supply-name = "vddio";
-			qcom,supply-min-voltage = <1820000>;
-			qcom,supply-max-voltage = <1820000>;
+			qcom,supply-min-voltage = <1888000>;
+			qcom,supply-max-voltage = <1888000>;
 			qcom,supply-enable-load = <60700>;
 			qcom,supply-disable-load = <80>;
 			qcom,supply-post-on-sleep = <20>;
@@ -128,7 +128,8 @@
 				 <&mdss_dsi_phy1 BYTECLK_SRC_1_CLK>,
 				 <&mdss_dsi_phy1 PCLK_SRC_1_CLK>,
 				 <&mdss_dsi_phy1 SHADOW_BYTECLK_SRC_1_CLK>,
-				 <&mdss_dsi_phy1 SHADOW_PCLK_SRC_1_CLK>;
+				 <&mdss_dsi_phy1 SHADOW_PCLK_SRC_1_CLK>,
+				 <&mdss_dsi_phy1 SHADOW_CPHY_PCLK_SRC_0_CLK>;
 		clock-names = "mux_byte_clk0", "mux_pixel_clk0",
 				"cphy_byte_clk0", "cphy_pixel_clk0",
 				"src_byte_clk0", "src_pixel_clk0",
@@ -136,7 +137,8 @@
 				"mux_byte_clk1", "mux_pixel_clk1",
 				"cphy_byte_clk1", "cphy_pixel_clk1",
 				"src_byte_clk1", "src_pixel_clk1",
-				"shadow_byte_clk1", "shadow_pixel_clk1";
+				"shadow_byte_clk1", "shadow_pixel_clk1",
+				"mdp_core_clk";
 
 		pinctrl-names = "panel_active", "panel_suspend";
 		pinctrl-0 = <&sde_dsi_active &sde_te_active>;
@@ -170,11 +172,13 @@
 			 <&mdss_dsi_phy1 BYTECLK_MUX_1_CLK>,
 			 <&mdss_dsi_phy1 PCLK_MUX_1_CLK>,
 			 <&mdss_dsi_phy1 CPHY_BYTECLK_SRC_1_CLK>,
-			 <&mdss_dsi_phy1 CPHY_PCLK_SRC_1_CLK>;
+			 <&mdss_dsi_phy1 CPHY_PCLK_SRC_1_CLK>,
+			 <&mdss_dsi_phy1 SHADOW_CPHY_PCLK_SRC_0_CLK>;
 		clock-names = "mux_byte_clk0", "mux_pixel_clk0",
 				"cphy_byte_clk0", "cphy_pixel_clk0",
 				"mux_byte_clk1", "mux_pixel_clk1",
-				"cphy_byte_clk1", "cphy_pixel_clk1";
+				"cphy_byte_clk1", "cphy_pixel_clk1",
+				"mdp_core_clk";
 
 		pinctrl-names = "panel_active", "panel_suspend";
 		pinctrl-0 = <&sde_dsi1_active &sde_te1_active>;
