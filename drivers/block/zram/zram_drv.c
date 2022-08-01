@@ -1674,6 +1674,15 @@ static int zram_rw_page(struct block_device *bdev, sector_t sector,
 		return -ENOTSUPP;
 	zram = bdev->bd_disk->private_data;
 
+	/*
+	 * Note: by allowing rw_page to be called and returning -ENOTSUPP we
+	 * potentially bypass a very minor optimization where we would not
+	 * call rw_page at all, that optimization is likely negligible.
+	 */
+	if (!(zram->disk->queue->backing_dev_info->capabilities &
+			BDI_CAP_SYNCHRONOUS_IO))
+		return -ENOTSUPP;
+
 	if (!valid_io_request(zram, sector, PAGE_SIZE)) {
 		atomic64_inc(&zram->stats.invalid_io);
 		ret = -EINVAL;
