@@ -189,6 +189,14 @@ int intel_pxp_start(struct intel_pxp *pxp)
 	if (!intel_pxp_is_enabled(pxp))
 		return -ENODEV;
 
+	mutex_lock(&pxp->tee_mutex);
+	/* check if mei_pxp is bound */
+	if (!pxp->pxp_component) {
+		mutex_unlock(&pxp->tee_mutex);
+		return -EAGAIN;
+	}
+	mutex_unlock(&pxp->tee_mutex);
+
 	mutex_lock(&pxp->arb_mutex);
 
 	if (pxp->arb_session.is_valid)
