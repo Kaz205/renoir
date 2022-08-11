@@ -51,7 +51,7 @@ config MALI_VALHALL_REAL_HW
 	def_bool !MALI_VALHALL_NO_MALI
 
 menu "Platform specific options"
-source "drivers/gpu/arm/valhall/platform/Kconfig"
+source "drivers/gpu/arm/mali/platform/Kconfig"
 endmenu
 
 config MALI_VALHALL_CSF_SUPPORT
@@ -383,7 +383,7 @@ config MALI_VALHALL_ARBITRATION
 	  If unsure, say N.
 
 if MALI_VALHALL_ARBITRATION
-source "drivers/gpu/arm/valhall/arbitration/Kconfig"
+source "drivers/gpu/arm/mali/arbitration/Kconfig"
 endif
 
 endif

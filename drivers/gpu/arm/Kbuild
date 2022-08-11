@@ -20,4 +20,4 @@
 #
 
 
-obj-$(CONFIG_MALI_VALHALL) += valhall/
+obj-$(CONFIG_MALI_VALHALL) += mali/
