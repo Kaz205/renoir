@@ -296,14 +296,6 @@ int __ion_device_add_heap(struct ion_heap *heap, struct module *owner)
 			goto out_heap_cleanup;
 	}
 
-	if ((heap->flags & ION_HEAP_FLAG_DEFER_FREE) || heap->ops->shrink) {
-		ret = ion_heap_init_shrinker(heap);
-		if (ret) {
-			pr_err("%s: Failed to register shrinker\n", __func__);
-			goto out_heap_cleanup;
-		}
-	}
-
 	down_write(&dev->lock);
 	ret = ion_assign_heap_id(heap, dev);
 	if (ret) {
