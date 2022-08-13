@@ -1409,9 +1409,10 @@ static int lpm_cpuidle_enter(struct cpuidle_device *dev,
 	cpuidle_clear_idle_cpu(dev->cpu);
 	success = (ret == 0);
 
-exit:
 	if (idx == cpu->nlevels - 1)
 		disable_rimps_timer(cpu);
+
+exit:
 	lpm_stats_cpu_exit(idx, 0, success);
 
 	cluster_unprepare(cpu->parent, cpumask, idx, true, 0, success);
