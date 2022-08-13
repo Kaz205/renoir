@@ -123,8 +123,8 @@ struct msm_ion_heap {
 };
 
 struct msm_ion_buf_lock_state {
-	bool locked;
-	int vma_count;
+	atomic_t locked;
+	atomic_t vma_count;
 };
 
 /**

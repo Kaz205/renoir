@@ -306,16 +306,14 @@ static void __msm_ion_vm_open(struct ion_buffer *buffer)
 {
 	struct msm_ion_buf_lock_state *lock_state = buffer->priv_virt;
 
-	lock_state->vma_count++;
+	atomic_inc(&lock_state->vma_count);
 }
 
 static void msm_ion_vm_open(struct vm_area_struct *vma)
 {
 	struct ion_buffer *buffer = vma->vm_private_data;
 
-	mutex_lock(&buffer->lock);
 	__msm_ion_vm_open(buffer);
-	mutex_unlock(&buffer->lock);
 }
 
 static void msm_ion_vm_close(struct vm_area_struct *vma)
@@ -323,9 +321,7 @@ static void msm_ion_vm_close(struct vm_area_struct *vma)
 	struct ion_buffer *buffer = vma->vm_private_data;
 	struct msm_ion_buf_lock_state *lock_state = buffer->priv_virt;
 
-	mutex_lock(&buffer->lock);
-	lock_state->vma_count--;
-	mutex_unlock(&buffer->lock);
+	atomic_dec(&lock_state->vma_count);
 }
 
 static const struct vm_operations_struct msm_ion_vma_ops = {
@@ -390,17 +386,13 @@ int msm_ion_dma_buf_lock(struct dma_buf *dmabuf)
 		return -EINVAL;
 	}
 
-	mutex_lock(&buffer->lock);
-	if (lock_state->locked) {
+	if (atomic_read(&lock_state->locked)) {
 		ret = -EINVAL;
 		pr_err("%s: buffer is already locked\n", __func__);
-	} else if (lock_state->vma_count) {
-		ret = -EBUSY;
 	} else {
 		ret = 0;
-		lock_state->locked = true;
+		atomic_set(&lock_state->locked, 1);
 	}
-	mutex_unlock(&buffer->lock);
 
 	return ret;
 }
@@ -423,12 +415,8 @@ void msm_ion_dma_buf_unlock(struct dma_buf *dmabuf)
 		return;
 	}
 
-	mutex_lock(&buffer->lock);
-	if (!lock_state->locked)
-		pr_warn("%s: buffer is already unlocked\n", __func__);
-	else
-		lock_state->locked = false;
-	mutex_unlock(&buffer->lock);
+	if (atomic_read(&lock_state->locked))
+		atomic_set(&lock_state->locked, 0);
 }
 EXPORT_SYMBOL(msm_ion_dma_buf_unlock);
 
