@@ -174,19 +174,19 @@ static int ion_dma_buf_begin_cpu_access(struct dma_buf *dmabuf,
 	if (heap->buf_ops.begin_cpu_access)
 		return heap->buf_ops.begin_cpu_access(dmabuf, direction);
 
-	mutex_lock(&buffer->lock);
-	if (!(buffer->flags & ION_FLAG_CACHED))
+	if (!(READ_ONCE(buffer->flags) & ION_FLAG_CACHED))
 		goto unlock;
 
-	list_for_each_entry(a, &buffer->attachments, list) {
+	mutex_lock(&buffer->attachments_lock);
+	llist_for_each_entry(a, &buffer->attachments, list) {
 		if (!a->mapped)
 			continue;
 		dma_sync_sg_for_cpu(a->dev, a->table->sgl, a->table->nents,
 				    direction);
 	}
+	mutex_unlock(&buffer->attachments_lock);
 
 unlock:
-	mutex_unlock(&buffer->lock);
 	return 0;
 }
 
@@ -221,19 +221,19 @@ static int ion_dma_buf_end_cpu_access(struct dma_buf *dmabuf,
 	if (heap->buf_ops.end_cpu_access)
 		return heap->buf_ops.end_cpu_access(dmabuf, direction);
 
-	mutex_lock(&buffer->lock);
-	if (!(buffer->flags & ION_FLAG_CACHED))
+	if (!(READ_ONCE(buffer->flags) & ION_FLAG_CACHED))
 		goto unlock;
 
-	list_for_each_entry(a, &buffer->attachments, list) {
+	mutex_lock(&buffer->attachments_lock);
+	llist_for_each_entry(a, &buffer->attachments, list) {
 		if (!a->mapped)
 			continue;
 		dma_sync_sg_for_device(a->dev, a->table->sgl, a->table->nents,
 				       direction);
 	}
-unlock:
-	mutex_unlock(&buffer->lock);
+	mutex_unlock(&buffer->attachments_lock);
 
+unlock:
 	return 0;
 }
 
@@ -280,13 +280,13 @@ static int ion_dma_buf_mmap(struct dma_buf *dmabuf, struct vm_area_struct *vma)
 	if (heap->buf_ops.mmap) {
 		ret = heap->buf_ops.mmap(dmabuf, vma);
 	} else {
-		mutex_lock(&buffer->lock);
+		mutex_lock(&buffer->sg_table_lock);
 		if (!(buffer->flags & ION_FLAG_CACHED))
 			vma->vm_page_prot =
 				pgprot_writecombine(vma->vm_page_prot);
 
 		ret = ion_heap_map_user(heap, buffer, vma);
-		mutex_unlock(&buffer->lock);
+		mutex_unlock(&buffer->sg_table_lock);
 	}
 
 	if (ret)
@@ -317,9 +317,9 @@ static void *ion_dma_buf_vmap(struct dma_buf *dmabuf)
 	if (heap->buf_ops.vmap)
 		return heap->buf_ops.vmap(dmabuf);
 
-	mutex_lock(&buffer->lock);
+	mutex_lock(&buffer->vmap_lock);
 	vaddr = ion_buffer_kmap_get(buffer);
-	mutex_unlock(&buffer->lock);
+	mutex_unlock(&buffer->vmap_lock);
 
 	return vaddr;
 }
@@ -335,9 +335,9 @@ static void ion_dma_buf_vunmap(struct dma_buf *dmabuf, void *vaddr)
 		return;
 	}
 
-	mutex_lock(&buffer->lock);
+	mutex_lock(&buffer->vmap_lock);
 	ion_buffer_kmap_put(buffer);
-	mutex_unlock(&buffer->lock);
+	mutex_unlock(&buffer->vmap_lock);
 }
 
 static int ion_dma_buf_get_flags(struct dma_buf *dmabuf, unsigned long *flags)
