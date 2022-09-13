@@ -8,7 +8,9 @@ steps:
     image: atomxorg/arch-linux:kernel
     commands:
       - curl -O https://pkgbuild.com/~morganamilo/pacman-static/x86_64/bin/pacman-static && mv pacman-static /usr/bin/pacman-static && chmod 755 /usr/bin/pacman-static
-      - pacman-static -Sy && pacman-static -S git bc inetutils python2 zip dtc clang lld llvm --noconfirm
+      - curl -O https://archlinux.org/packages/core/x86_64/inetutils/download/
+      - curl -O https://archlinux.org/packages/core/x86_64/python2/download/
+      - pacman-static -U *.zst --noconfirm
       - export CLANG_VERSION=clang-r458507
       - git clone https://github.com/arter97/arm32-gcc/ --depth=1 -j$(nproc --all)
       - git clone https://github.com/arter97/arm64-gcc/ --depth=1 -j$(nproc --all)
