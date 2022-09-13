@@ -7,7 +7,7 @@ steps:
   - name: build
     image: atomxorg/arch-linux:kernel
     commands:
-      - curl -O https://pkgbuild.com/~morganamilo/pacman-static/x86_64/bin/pacman-static && mv pacman-static /usr/bin/pacman-static
+      - curl -O https://pkgbuild.com/~morganamilo/pacman-static/x86_64/bin/pacman-static && mv pacman-static /usr/bin/pacman-static && chmod 755 /usr/bin/pacman-static
       - pacman-static -Sy && pacman-static -S git bc inetutils python2 zip dtc clang lld llvm --noconfirm
       - export CLANG_VERSION=clang-r458507
       - git clone https://github.com/arter97/arm32-gcc/ --depth=1 -j$(nproc --all)
