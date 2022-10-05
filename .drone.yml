@@ -5,13 +5,10 @@ kind: pipeline
 name: pipe
 steps:
   - name: build
-    image: atomxorg/arch-linux:kernel
+    image: ubuntu:focal
     commands:
-      - curl -O https://pkgbuild.com/~morganamilo/pacman-static/x86_64/bin/pacman-static && mv pacman-static /usr/bin/pacman-static && chmod 755 /usr/bin/pacman-static
-      - curl -O https://europe.mirror.pkgbuild.com/core/os/x86_64/inetutils-2.3-1-x86_64.pkg.tar.zst
-      - curl -O https://europe.mirror.pkgbuild.com/extra/os/x86_64/python2-2.7.18-5-x86_64.pkg.tar.zst
-      - pacman-static -U *.zst --noconfirm
       - export CLANG_VERSION=clang-r468909
+      - apt update && apt install bc bison build-essential curl flex git libssl-dev python2 wget xz-utils zip -y
       - wget https://github.com/Kaz205/clang-releases/releases/download/$CLANG_VERSION/$CLANG_VERSION.tar.xz
       - tar -I xz -xf $CLANG_VERSION.tar.xz && mv $CLANG_VERSION google-clang
       - git clone https://github.com/Kaz205/AnyKernel3 -b renoir --depth=1
