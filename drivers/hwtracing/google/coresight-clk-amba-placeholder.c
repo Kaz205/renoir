@@ -20,7 +20,7 @@ static int coresight_clk_disable_amba_probe(struct amba_device *adev,
 	return 0;
 }
 
-#define ETM4x_AMBA_ID(pid)                                                     \
+#define CS_AMBA_ID(pid)                                                     \
 	{                                                                      \
 		.id = pid, .mask = 0x000fffff,                                 \
 	}
@@ -31,11 +31,11 @@ static int coresight_clk_disable_amba_probe(struct amba_device *adev,
 
 static const struct amba_id coresight_ids[] = {
 	/* ETM4 IDs */
-	ETM4x_AMBA_ID(0x000bb95d), /* Cortex-A53 */
-	ETM4x_AMBA_ID(0x000bb95e), /* Cortex-A57 */
-	ETM4x_AMBA_ID(0x000bb95a), /* Cortex-A72 */
-	ETM4x_AMBA_ID(0x000bb959), /* Cortex-A73 */
-	ETM4x_AMBA_ID(0x000bb9da), /* Cortex-A35 */
+	CS_AMBA_ID(0x000bb95d), /* Cortex-A53 */
+	CS_AMBA_ID(0x000bb95e), /* Cortex-A57 */
+	CS_AMBA_ID(0x000bb95a), /* Cortex-A72 */
+	CS_AMBA_ID(0x000bb959), /* Cortex-A73 */
+	CS_AMBA_ID(0x000bb9da), /* Cortex-A35 */
 	/* dynamic-replicator IDs */
 	{
 		.id = 0x000bb909,
