@@ -1135,6 +1135,7 @@ static struct rw_semaphore *
 rwsem_down_write_slowpath(struct rw_semaphore *sem, int state)
 {
 	struct rwsem_waiter waiter;
+	int null_owner_retries;
 	DEFINE_WAKE_Q(wake_q);
 
 	/* do optimistic spinning and steal lock if possible */
@@ -1175,7 +1176,7 @@ rwsem_down_write_slowpath(struct rw_semaphore *sem, int state)
 	/* wait until we successfully acquire the lock */
 	trace_android_vh_rwsem_write_wait_start(sem);
 	set_current_state(state);
-	for (;;) {
+	for (null_owner_retries = 0;;) {
 		if (rwsem_try_write_lock(sem, &waiter)) {
 			/* rwsem_try_write_lock() implies ACQUIRE on success */
 			break;
@@ -1201,8 +1202,21 @@ rwsem_down_write_slowpath(struct rw_semaphore *sem, int state)
 			owner_state = rwsem_spin_on_owner(sem);
 			preempt_enable();
 
-			if (owner_state == OWNER_NULL)
+			/*
+			 * owner is NULL doesn't guarantee the lock is free.
+			 * An incoming reader will temporarily increment the
+			 * reader count without changing owner and the
+			 * rwsem_try_write_lock() will fails if the reader
+			 * is not able to decrement it in time. Allow 8
+			 * trylock attempts when hitting a NULL owner before
+			 * going to sleep.
+			 */
+			if ((owner_state == OWNER_NULL) &&
+			    (null_owner_retries < 8)) {
+				null_owner_retries++;
 				goto trylock_again;
+			}
+			null_owner_retries = 0;
 		}
 
 		schedule();
