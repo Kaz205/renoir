@@ -1,11 +1,14 @@
 #include "lahaina-sde-common.dtsi"
 #include <dt-bindings/clock/mdss-5nm-pll-clk.h>
 
-&soc {
+&reserved_memory {
 	disp_rdump_memory: disp_rdump_region@e1000000 {
-		reg = <0xe1000000 0x00800000>;
+		reg = <0xe1000000 0x00a00000>;
 		label = "disp_rdump_region";
 	};
+};
+
+&soc {
 
 	ext_disp: qcom,msm-ext-disp {
 		compatible = "qcom,msm-ext-disp";
