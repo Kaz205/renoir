@@ -329,6 +329,7 @@
 		reg-names = "dsi_phy", "pll_base", "gdsc_base", "dyn_refresh_base";
 		pll-label = "dsi_pll_5nm";
 
+		qcom,panel-allow-phy-poweroff;
 		qcom,platform-strength-ctrl = [55 03
 						55 03
 						55 03
