@@ -419,10 +419,10 @@ static inline struct file *maybe_unlock_mmap_for_io(struct vm_fault *vmf,
 	/*
 	 * FAULT_FLAG_RETRY_NOWAIT means we don't want to wait on page locks or
 	 * anything, so we only pin the file and drop the mmap_sem if only
-	 * FAULT_FLAG_ALLOW_RETRY is set, while this is the first attempt.
+	 * FAULT_FLAG_ALLOW_RETRY is set.
 	 */
-	if (fault_flag_allow_retry_first(flags) &&
-	    !(flags & FAULT_FLAG_RETRY_NOWAIT)) {
+	if ((flags & (FAULT_FLAG_ALLOW_RETRY | FAULT_FLAG_RETRY_NOWAIT)) ==
+	    FAULT_FLAG_ALLOW_RETRY) {
 		fpin = get_file(vmf->vma->vm_file);
 		up_read(&vmf->vma->vm_mm->mmap_sem);
 	}

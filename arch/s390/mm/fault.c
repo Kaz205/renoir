@@ -513,7 +513,10 @@ retry:
 				fault = VM_FAULT_PFAULT;
 				goto out_up;
 			}
-			flags &= ~FAULT_FLAG_RETRY_NOWAIT;
+			/* Clear FAULT_FLAG_ALLOW_RETRY to avoid any risk
+			 * of starvation. */
+			flags &= ~(FAULT_FLAG_ALLOW_RETRY |
+				   FAULT_FLAG_RETRY_NOWAIT);
 			flags |= FAULT_FLAG_TRIED;
 			down_read(&mm->mmap_sem);
 			goto retry;
