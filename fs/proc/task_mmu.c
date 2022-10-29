@@ -705,7 +705,7 @@ static void smaps_pte_hole_lookup(unsigned long addr, struct mm_walk *walk)
 #ifdef CONFIG_SHMEM
 	if (walk->ops->pte_hole) {
 		/* depth is not used */
-		smaps_pte_hole(addr, addr + PAGE_SIZE, walk);
+		smaps_pte_hole(addr, addr + PAGE_SIZE, 0, walk);
 	}
 #endif
 }
