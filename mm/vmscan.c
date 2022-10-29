@@ -3189,7 +3189,7 @@ static int page_update_gen(struct page *page, int gen)
 
 		new_flags = old_flags & ~(LRU_GEN_MASK | LRU_REFS_MASK | LRU_REFS_FLAGS);
 		new_flags |= (gen + 1UL) << LRU_GEN_PGOFF;
-	} while (!try_cmpxchg(&page->flags, &old_flags, new_flags));
+	} while (cmpxchg(&page->flags, old_flags, new_flags) != old_flags);
 
 	return ((old_flags & LRU_GEN_MASK) >> LRU_GEN_PGOFF) - 1;
 }
@@ -3215,7 +3215,7 @@ static int page_inc_gen(struct lruvec *lruvec, struct page *page, bool reclaimin
 		/* for end_page_writeback() */
 		if (reclaiming)
 			new_flags |= BIT(PG_reclaim);
-	} while (!try_cmpxchg(&page->flags, &old_flags, new_flags));
+	} while (cmpxchg(&page->flags, old_flags, new_flags) != old_flags);
 
 	lru_gen_update_size(lruvec, page, old_gen, new_gen);
 

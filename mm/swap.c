@@ -407,7 +407,7 @@ static void page_inc_refs(struct page *page)
 
 		new_flags += BIT(LRU_REFS_PGOFF);
 		new_flags |= old_flags & ~LRU_REFS_MASK;
-	} while (!try_cmpxchg(&page->flags, &old_flags, new_flags));
+	} while (cmpxchg(&page->flags, old_flags, new_flags) != old_flags);
 }
 #else
 static void page_inc_refs(struct page *page)
