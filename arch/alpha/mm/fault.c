@@ -150,7 +150,7 @@ retry:
 	   the fault.  */
 	fault = handle_mm_fault(vma, address, flags);
 
-	if (fault_signal_pending(fault, regs))
+	if ((fault & VM_FAULT_RETRY) && fatal_signal_pending(current))
 		return;
 
 	if (unlikely(fault & VM_FAULT_ERROR)) {
