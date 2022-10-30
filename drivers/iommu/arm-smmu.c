@@ -3322,6 +3322,7 @@ static void arm_smmu_iotlb_sync(struct iommu_domain *domain,
 			return;
 		}
 		smmu_domain->flush_ops->tlb_flush_all(smmu_domain);
+		pr_info("tlb_flush_all");
 		arm_smmu_domain_power_off(domain, smmu);
 		arm_smmu_rpm_put(smmu);
 	}
