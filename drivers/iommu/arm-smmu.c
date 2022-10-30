@@ -979,7 +979,6 @@ static void arm_smmu_tlb_inv_walk(unsigned long iova, size_t size,
 
 	if (smmu->flush_walk_prefer_tlbiasid) {
 		ops->tlb.tlb_flush_all(cookie);
-		pr_info("AAAA: flush_walk_prefer_tlbiasid");
 	} else {
 		ops->tlb_inv_range(iova, size, granule, false, cookie);
 		ops->tlb_sync(cookie);
