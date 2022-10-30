@@ -888,6 +888,7 @@ static void arm_smmu_tlb_inv_context_s1(void *cookie)
 		wmb();
 		arm_smmu_cb_write(smmu, idx, ARM_SMMU_CB_S1_TLBIASID,
 				  cfg->asid);
+		pr_info("ARM_SMMU_CB_S1_TLBIASID")
 	} else {
 		wmb();
 		arm_smmu_cb_write(smmu, idx, ARM_SMMU_CB_S1_TLBIALL, 0);
