@@ -8478,8 +8478,10 @@ static int idle_cpu_without(int cpu, struct task_struct *p)
 	 */
 
 #ifdef CONFIG_SMP
+#if SCHED_FEAT_TTWU_QUEUE
 	if (!llist_empty(&rq->wake_list))
 		return 0;
+#endif
 #endif
 
 	return 1;
