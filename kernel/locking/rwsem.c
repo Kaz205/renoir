@@ -337,12 +337,17 @@ enum rwsem_waiter_type {
 	RWSEM_WAITING_FOR_READ
 };
 
+enum rwsem_handoff_state {
+	HANDOFF_NONE = 0,
+	HANDOFF_REQUESTED,
+};
+
 struct rwsem_waiter {
 	struct list_head list;
 	struct task_struct *task;
 	enum rwsem_waiter_type type;
+	enum rwsem_handoff_state handoff_state;
 	unsigned long timeout;
-	bool handoff_set;
 };
 #define rwsem_first_waiter(sem) \
 	list_first_entry(&sem->wait_list, struct rwsem_waiter, list)
@@ -469,7 +474,7 @@ static void rwsem_mark_wake(struct rw_semaphore *sem,
 					adjustment -= RWSEM_FLAG_HANDOFF;
 					lockevent_inc(rwsem_rlock_handoff);
 				}
-				waiter->handoff_set = true;
+				WRITE_ONCE(waiter->handoff_state, HANDOFF_REQUESTED);
 			}
 
 			atomic_long_add(-adjustment, &sem->count);
@@ -621,7 +626,7 @@ static inline bool rwsem_try_write_lock(struct rw_semaphore *sem,
 			 * waiter is the one that set it. Otherwisee, we
 			 * still try to acquire the rwsem.
 			 */
-			if (first->handoff_set && (waiter != first))
+			if (first->handoff_state && (waiter != first))
 				return false;
 		}
 
@@ -649,11 +654,11 @@ static inline bool rwsem_try_write_lock(struct rw_semaphore *sem,
 
 	/*
 	 * We have either acquired the lock with handoff bit cleared or set
-	 * the handoff bit. Only the first waiter can have its handoff_set
+	 * the handoff bit. Only the first waiter can have its handoff_state
 	 * set here to enable optimistic spinning in slowpath loop.
 	 */
 	if (new & RWSEM_FLAG_HANDOFF) {
-		first->handoff_set = true;
+		WRITE_ONCE(first->handoff_state, HANDOFF_REQUESTED);
 		lockevent_inc(rwsem_wlock_handoff);
 		return false;
 	}
@@ -1048,7 +1053,7 @@ queue:
 	waiter.task = current;
 	waiter.type = RWSEM_WAITING_FOR_READ;
 	waiter.timeout = jiffies + RWSEM_WAIT_TIMEOUT;
-	waiter.handoff_set = false;
+	waiter.handoff_state = HANDOFF_NONE;
 
 	raw_spin_lock_irq(&sem->wait_lock);
 	if (list_empty(&sem->wait_list)) {
@@ -1134,7 +1139,7 @@ rwsem_down_write_slowpath(struct rw_semaphore *sem, int state)
 	waiter.task = current;
 	waiter.type = RWSEM_WAITING_FOR_WRITE;
 	waiter.timeout = jiffies + RWSEM_WAIT_TIMEOUT;
-	waiter.handoff_set = false;
+	waiter.handoff_state = HANDOFF_NONE;
 
 	raw_spin_lock_irq(&sem->wait_lock);
 	rwsem_add_waiter(sem, &waiter);
@@ -1178,7 +1183,7 @@ rwsem_down_write_slowpath(struct rw_semaphore *sem, int state)
 		 * In this case, we attempt to acquire the lock again
 		 * without sleeping.
 		 */
-		if (waiter.handoff_set) {
+		if (READ_ONCE(waiter.handoff_state)) {
 			enum owner_state owner_state;
 
 			owner_state = rwsem_spin_on_owner(sem);
