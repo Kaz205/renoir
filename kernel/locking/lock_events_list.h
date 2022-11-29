@@ -63,9 +63,7 @@ LOCK_EVENT(rwsem_rlock)		/* # of read locks acquired		*/
 LOCK_EVENT(rwsem_rlock_steal)	/* # of read locks by lock stealing	*/
 LOCK_EVENT(rwsem_rlock_fast)	/* # of fast read locks acquired	*/
 LOCK_EVENT(rwsem_rlock_fail)	/* # of failed read lock acquisitions	*/
+LOCK_EVENT(rwsem_rlock_handoff)	/* # of read lock handoffs		*/
 LOCK_EVENT(rwsem_wlock)		/* # of write locks acquired		*/
 LOCK_EVENT(rwsem_wlock_fail)	/* # of failed write lock acquisitions	*/
-LOCK_EVENT(rwsem_handoff_read)	/* # of read lock handoffs		*/
-LOCK_EVENT(rwsem_handoff_write)	/* # of write lock handoffs		*/
-LOCK_EVENT(rwsem_handoff_rslow)	/* # of handoffs in read slowpath	*/
-LOCK_EVENT(rwsem_handoff_wspin)	/* # of handoff spins in write slowpath	*/
+LOCK_EVENT(rwsem_wlock_handoff)	/* # of write lock handoffs		*/

@@ -471,8 +471,10 @@ static void rwsem_mark_wake(struct rw_semaphore *sem,
 			 * force the issue.
 			 */
 			if (time_after(jiffies, waiter->timeout)) {
-				if (!(oldcount & RWSEM_FLAG_HANDOFF))
+				if (!(oldcount & RWSEM_FLAG_HANDOFF)) {
 					adjustment -= RWSEM_FLAG_HANDOFF;
+					lockevent_inc(rwsem_rlock_handoff);
+				}
 				WRITE_ONCE(waiter->handoff_state, HANDOFF_REQUESTED);
 			}
 
@@ -677,6 +679,7 @@ static inline bool rwsem_try_write_lock(struct rw_semaphore *sem,
 	 */
 	if (new & RWSEM_FLAG_HANDOFF) {
 		WRITE_ONCE(first->handoff_state, HANDOFF_REQUESTED);
+		lockevent_inc(rwsem_wlock_handoff);
 		return false;
 	}
 
@@ -1021,12 +1024,10 @@ static void rwsem_handoff(struct rw_semaphore *sem, long adj,
 		wake_type = RWSEM_WAKE_ANY;
 		adj += RWSEM_WRITER_LOCKED;
 		atomic_long_set(&sem->owner, (long)waiter->task);
-		lockevent_inc(rwsem_handoff_write);
 	} else {
 		wake_type = RWSEM_WAKE_READ_OWNED;
 		adj += RWSEM_READER_BIAS;
 		__rwsem_set_reader_owned(sem, waiter->task);
-		lockevent_inc(rwsem_handoff_read);
 	}
 	atomic_long_add(adj, &sem->count);
 	rwsem_mark_wake(sem, wake_type, wake_q);
@@ -1135,7 +1136,6 @@ queue:
 		if (rwsem_first_waiter(sem)->type == RWSEM_WAITING_FOR_READ)
 			adjustment = 0;
 		rwsem_handoff(sem, adjustment, &wake_q);
-		lockevent_inc(rwsem_handoff_rslow);
 
 		if (!adjustment) {
 			raw_spin_unlock_irq(&sem->wait_lock);
@@ -1264,7 +1264,6 @@ rwsem_down_write_slowpath(struct rw_semaphore *sem, int state)
 			if (handoff == HANDOFF_REQUESTED) {
 				rwsem_spin_on_owner(sem);
 				handoff = READ_ONCE(waiter.handoff_state);
-				lockevent_inc(rwsem_handoff_wspin);
 			}
 
 			if (handoff == HANDOFF_GRANTED)
