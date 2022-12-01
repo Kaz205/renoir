@@ -2600,7 +2600,6 @@ __call_rcu_common(struct rcu_head *head, rcu_callback_t func, bool lazy)
 			rcu_segcblist_init(&rdp->cblist);
 	}
 
-	if (rcu_nocb_try_bypass(rdp, head, &was_alldone, flags))
 	if (rcu_nocb_try_bypass(rdp, head, &was_alldone, flags, lazy))
 		return; // Enqueued onto ->nocb_bypass, so just leave.
 	/* If we get here, rcu_nocb_try_bypass() acquired ->nocb_lock. */
