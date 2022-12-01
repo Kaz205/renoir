@@ -2710,7 +2710,7 @@ EXPORT_SYMBOL_GPL(call_rcu);
  */
 void kfree_call_rcu(struct rcu_head *head, rcu_callback_t func)
 {
-	__call_rcu(head, func);
+	__call_rcu_common(head, func, false);
 }
 EXPORT_SYMBOL_GPL(kfree_call_rcu);
 
