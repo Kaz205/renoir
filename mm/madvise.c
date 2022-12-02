@@ -40,7 +40,6 @@ struct madvise_walk_private {
 	struct mmu_gather *tlb;
 	bool pageout;
 	struct task_struct *target_task;
-	bool can_pageout_file;
 };
 
 /*
@@ -306,6 +305,20 @@ static long madvise_willneed(struct vm_area_struct *vma,
 	return 0;
 }
 
+static inline bool can_do_file_pageout(struct vm_area_struct *vma)
+{
+	if (!vma->vm_file)
+		return false;
+	/*
+	 * paging out pagecache only for non-anonymous mappings that correspond
+	 * to the files the calling process could (if tried) open for writing;
+	 * otherwise we'd be including shared non-exclusive mappings, which
+	 * opens a side channel.
+	 */
+	return inode_owner_or_capable(file_inode(vma->vm_file)) ||
+		inode_permission(file_inode(vma->vm_file), MAY_WRITE) == 0;
+}
+
 static int madvise_cold_or_pageout_pte_range(pmd_t *pmd,
 				unsigned long addr, unsigned long end,
 				struct mm_walk *walk)
@@ -313,16 +326,19 @@ static int madvise_cold_or_pageout_pte_range(pmd_t *pmd,
 	struct madvise_walk_private *private = walk->private;
 	struct mmu_gather *tlb = private->tlb;
 	bool pageout = private->pageout;
-	bool pageout_anon_only = pageout && !private->can_pageout_file;
 	struct mm_struct *mm = tlb->mm;
 	struct vm_area_struct *vma = walk->vma;
 	pte_t *orig_pte, *pte, ptent;
 	spinlock_t *ptl;
 	struct page *page = NULL;
 	LIST_HEAD(page_list);
+	bool pageout_anon_only_filter;
 
 	if (fatal_signal_pending(current))
 		return -EINTR;
+
+	pageout_anon_only_filter = pageout && !vma_is_anonymous(vma) &&
+					!can_do_file_pageout(vma);
 
 	if (private->target_task &&
 			fatal_signal_pending(private->target_task))
@@ -354,7 +370,7 @@ static int madvise_cold_or_pageout_pte_range(pmd_t *pmd,
 		if (page_mapcount(page) != 1)
 			goto huge_unlock;
 
-		if (pageout_anon_only && !PageAnon(page))
+		if (pageout_anon_only_filter && !PageAnon(page))
 			goto huge_unlock;
 
 		if (next - addr != HPAGE_PMD_SIZE) {
@@ -425,7 +441,7 @@ regular_page:
 		if (PageTransCompound(page)) {
 			if (page_mapcount(page) != 1)
 				break;
-			if (pageout_anon_only && !PageAnon(page))
+			if (pageout_anon_only_filter && !PageAnon(page))
 				break;
 			get_page(page);
 			if (!trylock_page(page)) {
@@ -451,7 +467,7 @@ regular_page:
 		if (page_mapcount(page) != 1)
 			continue;
 
-		if (pageout_anon_only && !PageAnon(page))
+		if (pageout_anon_only_filter && !PageAnon(page))
 			continue;
 
 		VM_BUG_ON_PAGE(PageTransCompound(page), page);
@@ -537,14 +553,12 @@ static long madvise_cold(struct task_struct *task,
 static void madvise_pageout_page_range(struct mmu_gather *tlb,
 			     struct task_struct *task,
 			     struct vm_area_struct *vma,
-			     unsigned long addr, unsigned long end,
-			     bool can_pageout_file)
+			     unsigned long addr, unsigned long end)
 {
 	struct madvise_walk_private walk_private = {
 		.pageout = true,
 		.tlb = tlb,
 		.target_task = task,
-		.can_pageout_file = can_pageout_file,
 	};
 
 	vm_write_begin(vma);
@@ -554,20 +568,6 @@ static void madvise_pageout_page_range(struct mmu_gather *tlb,
 	vm_write_end(vma);
 }
 
-static inline bool can_do_file_pageout(struct vm_area_struct *vma)
-{
-	if (!vma->vm_file)
-		return false;
-	/*
-	 * paging out pagecache only for non-anonymous mappings that correspond
-	 * to the files the calling process could (if tried) open for writing;
-	 * otherwise we'd be including shared non-exclusive mappings, which
-	 * opens a side channel.
-	 */
-	return inode_owner_or_capable(file_inode(vma->vm_file)) ||
-		inode_permission(file_inode(vma->vm_file), MAY_WRITE) == 0;
-}
-
 static long madvise_pageout(struct task_struct *task,
 			struct vm_area_struct *vma,
 			struct vm_area_struct **prev,
@@ -575,7 +575,6 @@ static long madvise_pageout(struct task_struct *task,
 {
 	struct mm_struct *mm = vma->vm_mm;
 	struct mmu_gather tlb;
-	bool can_pageout_file;
 
 	*prev = vma;
 	if (!can_madv_lru_vma(vma))
@@ -584,14 +583,16 @@ static long madvise_pageout(struct task_struct *task,
 	/*
 	 * If the VMA belongs to a private file mapping, there can be private
 	 * dirty pages which can be paged out if even this process is neither
-	 * owner nor write capable of the file. Cache the file access check
-	 * here and use it later during page walk.
+	 * owner nor write capable of the file. We allow private file mappings
+	 * further to pageout dirty anon pages.
 	 */
-	can_pageout_file = can_do_file_pageout(vma);
+	if (!vma_is_anonymous(vma) && (!can_do_file_pageout(vma) &&
+				(vma->vm_flags & VM_MAYSHARE)))
+		return 0;
 
 	lru_add_drain();
 	tlb_gather_mmu(&tlb, mm, start_addr, end_addr);
-	madvise_pageout_page_range(&tlb, task, vma, start_addr, end_addr, can_pageout_file);
+	madvise_pageout_page_range(&tlb, task, vma, start_addr, end_addr);
 	tlb_finish_mmu(&tlb, start_addr, end_addr);
 
 	return 0;
