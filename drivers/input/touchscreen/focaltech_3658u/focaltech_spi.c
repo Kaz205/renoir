@@ -237,11 +237,6 @@ int fts_read(u8 *cmd, u32 cmdlen, u8 *data, u32 datalen)
 	u8 ctrl = READ_CMD;
 	u32 dp = 0;
 
-	if (!cmd || !cmdlen || !data || !datalen) {
-		FTS_ERROR("cmd/cmdlen/data/datalen is invalid");
-		return -EINVAL;
-	}
-
 	mutex_lock(&ts_data->bus_lock);
 	if (txlen_need > SPI_BUF_LENGTH) {
 		txbuf = kzalloc(txlen_need, GFP_KERNEL);
