@@ -142,7 +142,7 @@ int fts_write(u8 *writebuf, u32 writelen)
 	u8 *txbuf = NULL;
 	u8 *rxbuf = NULL;
 	u32 txlen = 0;
-	u32 txlen_need = writelen + SPI_HEADER_LENGTH + ts_data->dummy_byte;
+	u32 txlen_need = writelen + SPI_HEADER_LENGTH + SPI_DUMMY_BYTE;
 	u32 datalen = writelen - 1;
 
 	if (!writebuf || !writelen) {
@@ -233,7 +233,7 @@ int fts_read(u8 *cmd, u32 cmdlen, u8 *data, u32 datalen)
 	u8 *txbuf = NULL;
 	u8 *rxbuf = NULL;
 	u32 txlen = 0;
-	u32 txlen_need = datalen + SPI_HEADER_LENGTH + ts_data->dummy_byte;
+	u32 txlen_need = datalen + SPI_HEADER_LENGTH + SPI_DUMMY_BYTE;
 	u8 ctrl = READ_CMD;
 	u32 dp = 0;
 
@@ -341,7 +341,6 @@ int fts_bus_init(struct fts_ts_data *ts_data)
 		return -ENOMEM;
 	}
 
-	ts_data->dummy_byte = SPI_DUMMY_BYTE;
 	FTS_FUNC_EXIT();
 	return 0;
 }
