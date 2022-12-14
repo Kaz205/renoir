@@ -230,8 +230,6 @@ int fts_read(u8 *cmd, u32 cmdlen, u8 *data, u32 datalen)
 	int ret = 0;
 	int i = 0;
 	struct fts_ts_data *ts_data = fts_data;
-	u8 txbuf_onstack[SPI_BUF_LENGTH];
-	u8 rxbuf_onstack[SPI_BUF_LENGTH];
 	u8 *txbuf = NULL;
 	u8 *rxbuf = NULL;
 	u32 txlen = 0;
@@ -260,8 +258,8 @@ int fts_read(u8 *cmd, u32 cmdlen, u8 *data, u32 datalen)
 			goto err_read;
 		}
 	} else {
-		txbuf = txbuf_onstack;
-		rxbuf = rxbuf_onstack;
+		txbuf = ts_data->bus_tx_buf;
+		rxbuf = ts_data->bus_rx_buf;
 		memset(txbuf, 0x0, SPI_BUF_LENGTH);
 		memset(rxbuf, 0x0, SPI_BUF_LENGTH);
 	}
