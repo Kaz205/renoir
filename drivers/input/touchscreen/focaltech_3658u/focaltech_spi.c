@@ -244,6 +244,7 @@ int fts_read(u8 *cmd, u32 cmdlen, u8 *data, u32 datalen)
 		return -EINVAL;
 	}
 
+	mutex_lock(&ts_data->bus_lock);
 	if (txlen_need > SPI_BUF_LENGTH) {
 		txbuf = kzalloc(txlen_need, GFP_KERNEL);
 		if (NULL == txbuf) {
@@ -275,7 +276,6 @@ int fts_read(u8 *cmd, u32 cmdlen, u8 *data, u32 datalen)
 		txlen = txlen + 2;
 	}
 
-	mutex_lock(&ts_data->bus_lock);
 	for (i = 0; i < SPI_RETRY_NUMBER; i++) {
 		ret = fts_spi_transfer(txbuf, rxbuf, txlen);
 		if ((0 == ret) && ((rxbuf[3] & 0xA0) == 0)) {
@@ -298,7 +298,6 @@ int fts_read(u8 *cmd, u32 cmdlen, u8 *data, u32 datalen)
 			udelay(CS_HIGH_DELAY);
 		}
 	}
-	mutex_unlock(&ts_data->bus_lock);
 
 	if (ret < 0) {
 		FTS_ERROR("data read(addr:%x) %s,status:%x,ret:%d", cmd[0],
@@ -320,6 +319,7 @@ err_read:
 	}
 
 	udelay(CS_HIGH_DELAY);
+	mutex_unlock(&ts_data->bus_lock);
 	return ret;
 }
 
