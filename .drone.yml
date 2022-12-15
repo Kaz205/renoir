@@ -7,7 +7,7 @@ steps:
   - name: build
     image: ubuntu:focal
     commands:
-      - export CLANG_VERSION=clang-r468909b
+      - export CLANG_VERSION=clang-r475365b
       - apt update && apt install bc bison build-essential curl flex git libssl-dev python2 wget xz-utils zip -y
       - wget https://github.com/Kaz205/clang-releases/releases/download/$CLANG_VERSION/$CLANG_VERSION.tar.xz
       - tar -I xz -xf $CLANG_VERSION.tar.xz && mv $CLANG_VERSION google-clang
