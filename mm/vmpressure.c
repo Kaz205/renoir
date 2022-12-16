@@ -346,9 +346,6 @@ bool vmpressure_inc_users(int order)
 	struct vmpressure *vmpr = &global_vmpressure;
 	unsigned long flags;
 
-	if (order > PAGE_ALLOC_COSTLY_ORDER)
-		return false;
-
 	write_lock_irqsave(&vmpr->users_lock, flags);
 	if (atomic_long_inc_return_relaxed(&vmpr->users) == 1) {
 		/* Clear out stale vmpressure data when reclaim begins */
@@ -447,13 +444,10 @@ static void __vmpressure(gfp_t gfp, struct mem_cgroup *memcg, bool critical,
  * This function does not return any value.
  */
 void vmpressure(gfp_t gfp, struct mem_cgroup *memcg, bool tree,
-		unsigned long scanned, unsigned long reclaimed, int order)
+		unsigned long scanned, unsigned long reclaimed)
 {
 	struct vmpressure *vmpr = &global_vmpressure;
 	unsigned long flags;
-
-	if (order > PAGE_ALLOC_COSTLY_ORDER)
-		return;
 
 	/*
 	 * It's possible for kswapd to keep doing reclaim even though memory
@@ -482,11 +476,8 @@ void vmpressure(gfp_t gfp, struct mem_cgroup *memcg, bool tree,
  *
  * This function does not return any value.
  */
-void vmpressure_prio(gfp_t gfp, struct mem_cgroup *memcg, int prio, int order)
+void vmpressure_prio(gfp_t gfp, struct mem_cgroup *memcg, int prio)
 {
-	if (order > PAGE_ALLOC_COSTLY_ORDER)
-		return;
-
 	/*
 	 * We only use prio for accounting critical level. For more info
 	 * see comment for vmpressure_level_critical_prio variable above.
