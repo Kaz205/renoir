@@ -21,4 +21,4 @@ cp out/arch/arm64/boot/Image $ak/Image
 find out/arch/arm64/boot/dts -name '*.dtb' -exec cat {} + > $ak/dtb
 cp out/arch/arm64/boot/dtbo.img $ak/dtbo.img
 cd $ak
-zip -FSr9 $NAME.zip ./*
+zip -FSr9 $NAME.zip ./*  -x "*.zip"
