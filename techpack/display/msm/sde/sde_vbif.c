@@ -98,7 +98,7 @@ int sde_vbif_halt_plane_xin(struct sde_kms *sde_kms, u32 xin_id, u32 clk_ctrl)
 	mdp = sde_kms->hw_mdp;
 	if (!vbif || !mdp || !vbif->ops.get_xin_halt_status ||
 		       !vbif->ops.set_xin_halt ||
-		       !mdp->ops.setup_clk_force_ctrl) {
+		       !mdp->ops.setup_clk_force_ctrl_atomic) {
 		SDE_ERROR("invalid vbif or mdp arguments\n");
 		return -EINVAL;
 	}
@@ -118,7 +118,7 @@ int sde_vbif_halt_plane_xin(struct sde_kms *sde_kms, u32 xin_id, u32 clk_ctrl)
 		return 0;
 	}
 
-	forced_on = mdp->ops.setup_clk_force_ctrl(mdp, clk_ctrl, true);
+	forced_on = mdp->ops.setup_clk_force_ctrl_atomic(mdp, clk_ctrl, true);
 
 	/* send halt request for unused plane's xin client */
 	vbif->ops.set_xin_halt(vbif, xin_id, true);
@@ -268,7 +268,7 @@ void sde_vbif_set_ot_limit(struct sde_kms *sde_kms,
 		return;
 	}
 
-	if (!mdp->ops.setup_clk_force_ctrl ||
+	if (!mdp->ops.setup_clk_force_ctrl_atomic ||
 			!vbif->ops.set_limit_conf ||
 			!vbif->ops.set_xin_halt)
 		return;
@@ -289,7 +289,7 @@ void sde_vbif_set_ot_limit(struct sde_kms *sde_kms,
 	trace_sde_perf_set_ot(params->num, params->xin_id, ot_lim,
 		params->vbif_idx);
 
-	forced_on = mdp->ops.setup_clk_force_ctrl(mdp, params->clk_ctrl, true);
+	forced_on = mdp->ops.setup_clk_force_ctrl_atomic(mdp, params->clk_ctrl, true);
 
 	vbif->ops.set_limit_conf(vbif, params->xin_id, params->rd, ot_lim);
 
@@ -376,7 +376,7 @@ bool sde_vbif_set_xin_halt(struct sde_kms *sde_kms,
 		return false;
 	}
 
-	if (!mdp->ops.setup_clk_force_ctrl ||
+	if (!mdp->ops.setup_clk_force_ctrl_atomic ||
 			!vbif->ops.set_xin_halt)
 		return false;
 
@@ -385,7 +385,7 @@ bool sde_vbif_set_xin_halt(struct sde_kms *sde_kms,
 	SDE_EVT32_VERBOSE(vbif->idx, params->xin_id);
 
 	if (params->enable) {
-		forced_on = mdp->ops.setup_clk_force_ctrl(mdp,
+		forced_on = mdp->ops.setup_clk_force_ctrl_atomic(mdp,
 				params->clk_ctrl, true);
 
 		vbif->ops.set_xin_halt(vbif, params->xin_id, true);
@@ -492,7 +492,7 @@ void sde_vbif_set_qos_remap(struct sde_kms *sde_kms,
 		return;
 	}
 
-	if (!vbif->ops.set_qos_remap || !mdp->ops.setup_clk_force_ctrl) {
+	if (!vbif->ops.set_qos_remap || !mdp->ops.setup_clk_force_ctrl_atomic) {
 		SDE_DEBUG("qos remap not supported\n");
 		return;
 	}
@@ -510,7 +510,7 @@ void sde_vbif_set_qos_remap(struct sde_kms *sde_kms,
 
 	mutex_lock(&vbif->mutex);
 
-	forced_on = mdp->ops.setup_clk_force_ctrl(mdp, params->clk_ctrl, true);
+	forced_on = mdp->ops.setup_clk_force_ctrl_atomic(mdp, params->clk_ctrl, true);
 
 	for (i = 0; i < qos_tbl->npriority_lvl; i++) {
 		SDE_DEBUG("vbif:%d xin:%d lvl:%d/%d\n",
