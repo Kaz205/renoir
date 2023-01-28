@@ -462,7 +462,6 @@ static int ion_msm_system_heap_allocate(struct ion_heap *heap,
 	}
 	buffer->priv_virt = lock_state;
 
-	ion_prepare_sgl_for_force_dma_sync(buffer->sg_table);
 	return 0;
 
 err_free_sg2:

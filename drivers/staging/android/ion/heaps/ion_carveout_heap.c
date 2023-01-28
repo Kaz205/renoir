@@ -103,7 +103,6 @@ static int ion_carveout_heap_allocate(struct ion_heap *heap,
 	if (ion_buffer_cached(buffer))
 		ion_pages_sync_for_device(dev, sg_page(table->sgl),
 					  buffer->size, DMA_FROM_DEVICE);
-	ion_prepare_sgl_for_force_dma_sync(buffer->sg_table);
 
 	return 0;
 

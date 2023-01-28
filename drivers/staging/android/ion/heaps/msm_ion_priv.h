@@ -145,7 +145,10 @@ struct ion_platform_data {
  *
  * indicates whether this ion buffer is cached
  */
-bool ion_buffer_cached(struct ion_buffer *buffer);
+static inline bool ion_buffer_cached(struct ion_buffer *buffer)
+{
+	return !!(buffer->flags & ION_FLAG_CACHED);
+}
 
 /**
  * functions for creating and destroying the built in ion heaps.
@@ -186,8 +189,6 @@ static inline struct ion_heap *ion_cma_heap_create(struct ion_platform_heap *h)
 struct device *msm_ion_heap_device(struct ion_heap *heap);
 
 struct ion_heap *get_ion_heap(int heap_id);
-
-void ion_prepare_sgl_for_force_dma_sync(struct sg_table *table);
 
 /**
  * ion_pages_sync_for_device - cache flush pages for use with the specified

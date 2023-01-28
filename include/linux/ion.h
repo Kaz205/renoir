@@ -44,10 +44,13 @@ struct ion_buffer {
 	size_t size;
 	void *priv_virt;
 	struct mutex lock;
+	struct mutex kmap_lock;
 	int kmap_cnt;
 	void *vaddr;
 	struct sg_table *sg_table;
 	struct list_head attachments;
+	struct list_head map_freelist;
+	spinlock_t freelist_lock;
 	struct msm_iommu_data iommu_data;
 };
 
@@ -238,14 +241,13 @@ size_t ion_heap_freelist_size(struct ion_heap *heap);
 /**
  * ion_heap_map_kernel - map the ion_buffer in kernel virtual address space.
  *
- * @heap:               the heap
  * @buffer:             buffer to be mapped
  *
  * Maps the buffer using vmap(). The function respects cache flags for the
  * buffer and creates the page table entries accordingly. Returns virtual
  * address at the beginning of the buffer or ERR_PTR.
  */
-void *ion_heap_map_kernel(struct ion_heap *heap, struct ion_buffer *buffer);
+void *ion_heap_map_kernel(struct ion_buffer *buffer);
 
 /**
  * ion_heap_unmap_kernel - unmap ion_buffer
@@ -254,7 +256,10 @@ void *ion_heap_map_kernel(struct ion_heap *heap, struct ion_buffer *buffer);
  *
  * ION wrapper for vunmap() of the ion buffer.
  */
-void ion_heap_unmap_kernel(struct ion_heap *heap, struct ion_buffer *buffer);
+static inline void ion_heap_unmap_kernel(struct ion_buffer *buffer)
+{
+	vunmap(buffer->vaddr);
+}
 
 /**
  * ion_heap_map_user - map given ion buffer in provided vma
@@ -364,14 +369,12 @@ static inline size_t ion_heap_freelist_size(struct ion_heap *heap)
 	return -ENODEV;
 }
 
-static inline void *ion_heap_map_kernel(struct ion_heap *heap,
-					struct ion_buffer *buffer)
+static inline void *ion_heap_map_kernel(struct ion_buffer *buffer)
 {
 	return ERR_PTR(-ENODEV);
 }
 
-static inline void ion_heap_unmap_kernel(struct ion_heap *heap,
-					 struct ion_buffer *buffer) {}
+static inline void ion_heap_unmap_kernel(struct ion_buffer *buffer) {}
 
 static inline int ion_heap_map_user(struct ion_heap *heap,
 				    struct ion_buffer *buffer,

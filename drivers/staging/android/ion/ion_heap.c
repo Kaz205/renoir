@@ -122,8 +122,7 @@ static int ion_heap_deferred_free(void *data)
 	return 0;
 }
 
-void *ion_heap_map_kernel(struct ion_heap *heap,
-			  struct ion_buffer *buffer)
+void *ion_heap_map_kernel(struct ion_buffer *buffer)
 {
 	struct scatterlist *sg;
 	int i, j;
@@ -160,13 +159,6 @@ void *ion_heap_map_kernel(struct ion_heap *heap,
 	return vaddr;
 }
 EXPORT_SYMBOL_GPL(ion_heap_map_kernel);
-
-void ion_heap_unmap_kernel(struct ion_heap *heap,
-			   struct ion_buffer *buffer)
-{
-	vunmap(buffer->vaddr);
-}
-EXPORT_SYMBOL_GPL(ion_heap_unmap_kernel);
 
 int ion_heap_map_user(struct ion_heap *heap, struct ion_buffer *buffer,
 		      struct vm_area_struct *vma)

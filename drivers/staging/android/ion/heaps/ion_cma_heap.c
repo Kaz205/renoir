@@ -134,7 +134,6 @@ static int ion_cma_allocate(struct ion_heap *heap, struct ion_buffer *buffer,
 	buffer->sg_table = table;
 	buffer->priv_virt = &info->lock_state;
 
-	ion_prepare_sgl_for_force_dma_sync(buffer->sg_table);
 	return 0;
 
 free_table:
