@@ -243,6 +243,7 @@
 
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "apb_pclk";
+		status = "disabled";
 
 		in-ports {
 			#address-cells = <1>;
@@ -483,6 +484,7 @@
 
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "apb_pclk";
+		status = "disabled";
 
 		out-ports {
 			port {
@@ -579,6 +581,7 @@
 
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "apb_pclk";
+		status = "disabled";
 
 		out-ports {
 			port {
@@ -628,6 +631,7 @@
 
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "apb_pclk";
+		status = "disabled";
 
 		out-ports {
 			port {
@@ -686,6 +690,7 @@
 
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "apb_pclk";
+		status = "disabled";
 
 		out-ports {
 			port {
@@ -752,6 +757,7 @@
 
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "apb_pclk";
+		status = "disabled";
 
 		out-ports {
 			port {
@@ -788,6 +794,7 @@
 
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "apb_pclk";
+		status = "disabled";
 		qcom,duplicate-funnel;
 
 		out-ports {
@@ -955,6 +962,7 @@
 
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "apb_pclk";
+		status = "disabled";
 
 		out-ports {
 			port {
@@ -1338,6 +1346,7 @@
 
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "apb_pclk";
+		status = "disabled";
 
 		out-ports {
 			port {
@@ -1487,6 +1496,7 @@
 
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "apb_pclk";
+		status = "disabled";
 
 		out-ports {
 			port {
@@ -1581,6 +1591,7 @@
 
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "apb_pclk";
+		status = "disabled";
 
 		out-ports {
 			port {
@@ -1615,6 +1626,7 @@
 
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "apb_pclk";
+		status = "disabled";
 
 		out-ports {
 			#address-cells = <1>;
@@ -2050,6 +2062,7 @@
 
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "apb_pclk";
+		status = "disabled";
 
 		out-ports {
 			port {
@@ -2100,6 +2113,7 @@
 
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "apb_pclk";
+		status = "disabled";
 
 		out-ports {
 			port {
@@ -2204,6 +2218,7 @@
 
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "apb_pclk";
+		status = "disabled";
 		qcom,duplicate-funnel;
 
 		out-ports {
@@ -2239,6 +2254,7 @@
 
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "apb_pclk";
+		status = "disabled";
 
 		out-ports {
 			#address-cells = <1>;
@@ -2350,6 +2366,7 @@
 
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "apb_pclk";
+		status = "disabled";
 
 		out-ports {
 			port {
@@ -2400,6 +2417,7 @@
 
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "apb_pclk";
+		status = "disabled";
 
 		out-ports {
 			port {
@@ -2506,6 +2524,7 @@
 
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "apb_pclk";
+		status = "disabled";
 
 		out-ports {
 			port {
@@ -2624,6 +2643,7 @@
 
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "apb_pclk";
+		status = "disabled";
 
 		out-ports {
 			port {
@@ -2851,6 +2871,7 @@
 
 		clocks = <&aopcc QDSS_CLK>;
 		clock-names = "apb_pclk";
+		status = "disabled";
 
 		out-ports {
 			port {
