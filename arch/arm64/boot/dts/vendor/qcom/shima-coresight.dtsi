@@ -2,7 +2,6 @@
 	replicator_qdss: replicator@6046000 {
 		compatible = "arm,coresight-dynamic-replicator",
 				"arm,primecell";
-		arm,primecell-periphid = <0x000bb909>;
 
 		reg = <0x6046000 0x1000>;
 		reg-names = "replicator-base";
@@ -38,7 +37,6 @@
 	replicator_swao: replicator@6b06000 {
 		compatible = "arm,coresight-dynamic-replicator",
 				"arm,primecell";
-		arm,primecell-periphid = <0x000bb909>;
 
 		reg = <0x6b06000 0x1000>;
 		reg-names = "replicator-base";
