@@ -2831,7 +2831,7 @@ static inline bool queue_kfree_rcu_work(struct kfree_rcu_cpu *krcp)
 				krcp->head = NULL;
 			}
 
-			WRITE_ONCE(krcp->count, 0);
+			krcp->count = 0;
 
 			/*
 			 * One work is per one batch, so there are two "free channels",
@@ -2984,7 +2984,7 @@ void kfree_call_rcu(struct rcu_head *head, rcu_callback_t func)
 		krcp->head = head;
 	}
 
-	WRITE_ONCE(krcp->count, krcp->count + 1);
+	krcp->count++;
 
 	// Set timer to drain after KFREE_DRAIN_JIFFIES.
 	if (rcu_scheduler_active == RCU_SCHEDULER_RUNNING &&
@@ -3004,13 +3004,15 @@ static unsigned long
 kfree_rcu_shrink_count(struct shrinker *shrink, struct shrink_control *sc)
 {
 	int cpu;
-	unsigned long count = 0;
+	unsigned long flags, count = 0;
 
 	/* Snapshot count of all CPUs */
 	for_each_online_cpu(cpu) {
 		struct kfree_rcu_cpu *krcp = per_cpu_ptr(&krc, cpu);
 
-		count += READ_ONCE(krcp->count);
+		spin_lock_irqsave(&krcp->lock, flags);
+		count += krcp->count;
+		spin_unlock_irqrestore(&krcp->lock, flags);
 	}
 
 	return count;
