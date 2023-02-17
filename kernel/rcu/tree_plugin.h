@@ -2322,8 +2322,6 @@ static void __init rcu_organize_nocb_kthreads(void)
 {
 	int cpu;
 	bool firsttime = true;
-	bool gotnocbs = false;
-	bool gotnocbscbs = true;
 	int ls = rcu_nocb_gp_stride;
 	int nl = 0;  /* Next GP kthread. */
 	struct rcu_data *rdp;
@@ -2346,31 +2344,21 @@ static void __init rcu_organize_nocb_kthreads(void)
 		rdp = per_cpu_ptr(&rcu_data, cpu);
 		if (rdp->cpu >= nl) {
 			/* New GP kthread, set up for CBs & next GP. */
-			gotnocbs = true;
 			nl = DIV_ROUND_UP(rdp->cpu + 1, ls) * ls;
 			rdp->nocb_gp_rdp = rdp;
 			rdp_gp = rdp;
-			if (dump_tree) {
-				if (!firsttime)
-					pr_cont("%s\n", gotnocbscbs
-							? "" : " (self only)");
-				gotnocbscbs = false;
-				firsttime = false;
-				pr_alert("%s: No-CB GP kthread CPU %d:",
-					 __func__, cpu);
-			}
+			if (!firsttime && dump_tree)
+				pr_cont("\n");
+			firsttime = false;
+			pr_alert("%s: No-CB GP kthread CPU %d:", __func__, cpu);
 		} else {
 			/* Another CB kthread, link to previous GP kthread. */
-			gotnocbscbs = true;
 			rdp->nocb_gp_rdp = rdp_gp;
 			rdp_prev->nocb_next_cb_rdp = rdp;
-			if (dump_tree)
-				pr_cont(" %d", cpu);
+			pr_alert(" %d", cpu);
 		}
 		rdp_prev = rdp;
 	}
-	if (gotnocbs && dump_tree)
-		pr_cont("%s\n", gotnocbscbs ? "" : " (self only)");
 }
 
 /*
