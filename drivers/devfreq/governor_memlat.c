@@ -427,8 +427,6 @@ static int devfreq_memlat_ev_handler(struct devfreq *df,
 		sample_ms = *(unsigned int *)data;
 		sample_ms = max(MIN_MS, sample_ms);
 		sample_ms = min(MAX_MS, sample_ms);
-		if (hw->request_update_ms)
-			hw->request_update_ms(hw, sample_ms);
 		if (!hw->should_ignore_df_monitor)
 			devfreq_interval_update(df, &sample_ms);
 		break;
