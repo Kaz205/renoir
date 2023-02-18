@@ -333,16 +333,6 @@ static int init_common_evs(struct memlat_cpu_grp *cpu_grp,
 	return ret;
 }
 
-static inline void queue_cpugrp_work(struct memlat_cpu_grp *cpu_grp)
-{
-	if (cpumask_weight(&cpu_grp->cpus) == 1)
-		queue_delayed_work_on(cpumask_first(&cpu_grp->cpus),  memlat_wq, &cpu_grp->work,
-		  msecs_to_jiffies(cpu_grp->update_ms));
-	else
-		queue_delayed_work(memlat_wq, &cpu_grp->work,
-		  msecs_to_jiffies(cpu_grp->update_ms));
-}
-
 static void free_common_evs(struct memlat_cpu_grp *cpu_grp)
 {
 	unsigned int cpu, i;
@@ -383,7 +373,8 @@ static void memlat_monitor_work(struct work_struct *work)
 		mutex_unlock(&df->lock);
 	}
 
-	queue_cpugrp_work(cpu_grp);
+	queue_delayed_work(memlat_wq, &cpu_grp->work,
+			   msecs_to_jiffies(cpu_grp->update_ms));
 
 unlock_out:
 	mutex_unlock(&cpu_grp->mons_lock);
@@ -635,7 +626,8 @@ static int start_hwmon(struct memlat_hwmon *hw)
 
 
 	if (should_init_cpu_grp)
-		queue_cpugrp_work(cpu_grp);
+		queue_delayed_work(memlat_wq, &cpu_grp->work,
+				   msecs_to_jiffies(cpu_grp->update_ms));
 
 unlock_out:
 	mutex_unlock(&cpu_grp->mons_lock);
@@ -715,10 +707,12 @@ static void set_update_ms(struct memlat_cpu_grp *cpu_grp)
 	if (new_update_ms == UINT_MAX) {
 		cancel_delayed_work(&cpu_grp->work);
 	} else if (cpu_grp->update_ms == UINT_MAX) {
-		queue_cpugrp_work(cpu_grp);
+		queue_delayed_work(memlat_wq, &cpu_grp->work,
+				   msecs_to_jiffies(new_update_ms));
 	} else if (new_update_ms > cpu_grp->update_ms) {
 		cancel_delayed_work(&cpu_grp->work);
-		queue_cpugrp_work(cpu_grp);
+		queue_delayed_work(memlat_wq, &cpu_grp->work,
+				   msecs_to_jiffies(new_update_ms));
 	}
 
 	cpu_grp->update_ms = new_update_ms;
@@ -871,8 +865,7 @@ static int memlat_mon_probe(struct platform_device *pdev, bool is_compute)
 	unsigned long flags;
 
 	if (!memlat_wq)
-		memlat_wq = alloc_workqueue("memlat_wq",
-		  __WQ_LEGACY | WQ_FREEZABLE | WQ_MEM_RECLAIM, 1);
+		memlat_wq = create_freezable_workqueue("memlat_wq");
 
 	if (!memlat_wq) {
 		dev_err(dev, "Couldn't create memlat workqueue.\n");
