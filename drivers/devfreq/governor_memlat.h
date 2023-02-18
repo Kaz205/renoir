@@ -59,8 +59,6 @@ struct memlat_hwmon {
 	void			(*stop_hwmon)(struct memlat_hwmon *hw);
 	unsigned long		(*get_cnt)(struct memlat_hwmon *hw);
 	struct device_node	*(*get_child_of_node)(struct device *dev);
-	void			(*request_update_ms)(struct memlat_hwmon *hw,
-					unsigned int update_ms);
 	struct device		*dev;
 	struct device_node	*of_node;
 
