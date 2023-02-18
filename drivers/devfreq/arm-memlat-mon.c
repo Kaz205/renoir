@@ -82,9 +82,6 @@ struct cpu_data {
  * @wb_ev:			The cache writeback perf event exclusive to this
  *				mon. Optional - only needed for writeback
  *				percent.
- * @requested_update_ms:	The mon's desired polling rate. The lowest
- *				@requested_update_ms of all mons determines
- *				@cpu_grp's update_ms.
  * @hw:				The memlat_hwmon struct corresponding to this
  *				mon's specific memlat instance.
  * @cpu_grp:			The cpu_grp who owns this mon.
@@ -95,7 +92,6 @@ struct memlat_mon {
 	unsigned int		miss_ev_id;
 	unsigned int		access_ev_id;
 	unsigned int		wb_ev_id;
-	unsigned int		requested_update_ms;
 	struct event_data	*miss_ev;
 	struct event_data	*access_ev;
 	struct event_data	*wb_ev;
@@ -117,8 +113,6 @@ struct memlat_mon {
  * @last_ts_delta_us:		The time difference between the most recent
  *				update and the one before that. Used to compute
  *				effective frequency.
- * @work:			The delayed_work used for handling updates.
- * @update_ms:			The frequency with which @work triggers.
  * @num_mons:		The number of @mons for this cpu_grp.
  * @num_inited_mons:	The number of @mons who have probed.
  * @num_active_mons:	The number of @mons currently running
@@ -133,9 +127,6 @@ struct memlat_cpu_grp {
 	struct cpu_data		*cpus_data;
 	ktime_t			last_update_ts;
 	unsigned long		last_ts_delta_us;
-
-	struct delayed_work	work;
-	unsigned int		update_ms;
 
 	unsigned int		num_mons;
 	unsigned int		num_inited_mons;
@@ -157,7 +148,6 @@ struct memlat_mon_spec {
 	(&mon->hw.core_stats[cpu - cpumask_first(&mon->cpus)])
 #define to_mon(hwmon) container_of(hwmon, struct memlat_mon, hw)
 
-static struct workqueue_struct *memlat_wq;
 static DEFINE_PER_CPU(struct memlat_cpu_grp *, per_cpu_grp);
 static DEFINE_MUTEX(notify_lock);
 static int hp_idle_register_cnt;
@@ -234,6 +224,8 @@ static unsigned long get_cnt(struct memlat_hwmon *hw)
 	struct memlat_mon *mon = to_mon(hw);
 	struct memlat_cpu_grp *cpu_grp = mon->cpu_grp;
 	unsigned int cpu;
+
+	update_counts(cpu_grp);
 
 	for_each_cpu(cpu, &mon->cpus) {
 		struct cpu_data *cpu_data = to_cpu_data(cpu_grp, cpu);
@@ -343,41 +335,6 @@ static void free_common_evs(struct memlat_cpu_grp *cpu_grp)
 		for (i = 0; i < NUM_COMMON_EVS; i++)
 			delete_event(&common_evs[i]);
 	}
-}
-
-static void memlat_monitor_work(struct work_struct *work)
-{
-	int err;
-	struct memlat_cpu_grp *cpu_grp =
-		container_of(work, struct memlat_cpu_grp, work.work);
-	struct memlat_mon *mon;
-	unsigned int i;
-
-	mutex_lock(&cpu_grp->mons_lock);
-	if (!cpu_grp->num_active_mons)
-		goto unlock_out;
-	update_counts(cpu_grp);
-	for (i = 0; i < cpu_grp->num_mons; i++) {
-		struct devfreq *df;
-
-		mon = &cpu_grp->mons[i];
-
-		if (!mon->is_active)
-			continue;
-
-		df = mon->hw.df;
-		mutex_lock(&df->lock);
-		err = update_devfreq(df);
-		if (err < 0)
-			dev_err(mon->hw.dev, "Memlat update failed: %d\n", err);
-		mutex_unlock(&df->lock);
-	}
-
-	queue_delayed_work(memlat_wq, &cpu_grp->work,
-			   msecs_to_jiffies(cpu_grp->update_ms));
-
-unlock_out:
-	mutex_unlock(&cpu_grp->mons_lock);
 }
 
 static int memlat_idle_read_events(unsigned int cpu)
@@ -590,8 +547,6 @@ static int start_hwmon(struct memlat_hwmon *hw)
 		ret = init_common_evs(cpu_grp, attr);
 		if (ret < 0)
 			goto unlock_out;
-
-		INIT_DEFERRABLE_WORK(&cpu_grp->work, &memlat_monitor_work);
 	}
 
 	if (mon->miss_ev) {
@@ -623,11 +578,6 @@ static int start_hwmon(struct memlat_hwmon *hw)
 	cpu_grp->num_active_mons++;
 	mon->is_active = true;
 	spin_unlock_irqrestore(&cpu_grp->mon_active_lock, flags);
-
-
-	if (should_init_cpu_grp)
-		queue_delayed_work(memlat_wq, &cpu_grp->work,
-				   msecs_to_jiffies(cpu_grp->update_ms));
 
 unlock_out:
 	mutex_unlock(&cpu_grp->mons_lock);
@@ -668,7 +618,6 @@ static void stop_hwmon(struct memlat_hwmon *hw)
 	}
 
 	if (!cpu_grp->num_active_mons) {
-		cancel_delayed_work(&cpu_grp->work);
 		free_common_evs(cpu_grp);
 		mutex_lock(&notify_lock);
 		hp_idle_register_cnt--;
@@ -685,53 +634,6 @@ static void stop_hwmon(struct memlat_hwmon *hw)
 		}
 	}
 	mutex_unlock(&notify_lock);
-}
-
-/**
- * We should set update_ms to the lowest requested_update_ms of all of the
- * active mons, or 0 (i.e. stop polling) if ALL active mons have 0.
- * This is expected to be called with cpu_grp->mons_lock taken.
- */
-static void set_update_ms(struct memlat_cpu_grp *cpu_grp)
-{
-	struct memlat_mon *mon;
-	unsigned int i, new_update_ms = UINT_MAX;
-
-	for (i = 0; i < cpu_grp->num_mons; i++) {
-		mon = &cpu_grp->mons[i];
-		if (mon->is_active && mon->requested_update_ms)
-			new_update_ms =
-				min(new_update_ms, mon->requested_update_ms);
-	}
-
-	if (new_update_ms == UINT_MAX) {
-		cancel_delayed_work(&cpu_grp->work);
-	} else if (cpu_grp->update_ms == UINT_MAX) {
-		queue_delayed_work(memlat_wq, &cpu_grp->work,
-				   msecs_to_jiffies(new_update_ms));
-	} else if (new_update_ms > cpu_grp->update_ms) {
-		cancel_delayed_work(&cpu_grp->work);
-		queue_delayed_work(memlat_wq, &cpu_grp->work,
-				   msecs_to_jiffies(new_update_ms));
-	}
-
-	cpu_grp->update_ms = new_update_ms;
-}
-
-static void request_update_ms(struct memlat_hwmon *hw, unsigned int update_ms)
-{
-	struct devfreq *df = hw->df;
-	struct memlat_mon *mon = to_mon(hw);
-	struct memlat_cpu_grp *cpu_grp = mon->cpu_grp;
-
-	mutex_lock(&df->lock);
-	df->profile->polling_ms = update_ms;
-	mutex_unlock(&df->lock);
-
-	mutex_lock(&cpu_grp->mons_lock);
-	mon->requested_update_ms = update_ms;
-	set_update_ms(cpu_grp);
-	mutex_unlock(&cpu_grp->mons_lock);
 }
 
 static int get_mask_from_dev_handle(struct platform_device *pdev,
@@ -780,7 +682,6 @@ static struct device_node *parse_child_nodes(struct device *dev)
 	return NULL;
 }
 
-#define DEFAULT_UPDATE_MS 100
 static int memlat_cpu_grp_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -844,7 +745,6 @@ static int memlat_cpu_grp_probe(struct platform_device *pdev)
 
 	mutex_init(&cpu_grp->mons_lock);
 	spin_lock_init(&cpu_grp->mon_active_lock);
-	cpu_grp->update_ms = DEFAULT_UPDATE_MS;
 
 	for_each_cpu(cpu, &cpu_grp->cpus) {
 		per_cpu(per_cpu_grp, cpu) = cpu_grp;
@@ -864,14 +764,6 @@ static int memlat_mon_probe(struct platform_device *pdev, bool is_compute)
 	unsigned int event_id, num_cpus, cpu;
 	unsigned long flags;
 
-	if (!memlat_wq)
-		memlat_wq = create_freezable_workqueue("memlat_wq");
-
-	if (!memlat_wq) {
-		dev_err(dev, "Couldn't create memlat workqueue.\n");
-		return -ENOMEM;
-	}
-
 	cpu_grp = dev_get_drvdata(dev->parent);
 	if (!cpu_grp) {
 		dev_err(dev, "Mon initialized without cpu_grp.\n");
@@ -883,7 +775,6 @@ static int memlat_mon_probe(struct platform_device *pdev, bool is_compute)
 	spin_lock_irqsave(&cpu_grp->mon_active_lock, flags);
 	mon->is_active = false;
 	spin_unlock_irqrestore(&cpu_grp->mon_active_lock, flags);
-	mon->requested_update_ms = 0;
 	mon->cpu_grp = cpu_grp;
 
 	if (get_mask_from_dev_handle(pdev, &mon->cpus)) {
@@ -926,7 +817,6 @@ static int memlat_mon_probe(struct platform_device *pdev, bool is_compute)
 	hw->get_cnt = &get_cnt;
 	if (of_get_child_count(dev->of_node))
 		hw->get_child_of_node = &parse_child_nodes;
-	hw->request_update_ms = &request_update_ms;
 
 	/*
 	 * Compute mons rely solely on common events.
