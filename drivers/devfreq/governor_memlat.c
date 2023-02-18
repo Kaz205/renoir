@@ -214,8 +214,7 @@ static int gov_suspend(struct devfreq *df)
 	unsigned long prev_freq = df->previous_freq;
 
 	node->mon_started = false;
-	if (!hw->should_ignore_df_monitor)
-		devfreq_monitor_suspend(df);
+	devfreq_monitor_suspend(df);
 
 	mutex_lock(&df->lock);
 	update_devfreq(df);
@@ -237,8 +236,7 @@ static int gov_resume(struct devfreq *df)
 
 	node->resume_freq = 0;
 
-	if (!hw->should_ignore_df_monitor)
-		devfreq_monitor_resume(df);
+	devfreq_monitor_resume(df);
 	node->mon_started = true;
 
 	return 0;
