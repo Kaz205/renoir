@@ -110,6 +110,8 @@ struct memlat_mon {
  */
 struct memlat_cpu_grp {
 	cpumask_t		cpus;
+	unsigned int i;
+	unsigned long any_cpu_ev_mask;
 	unsigned int		common_ev_ids[NUM_COMMON_EVS];
 	struct cpu_data		*cpus_data;
 	ktime_t			last_update_ts;
@@ -129,6 +131,12 @@ struct memlat_mon_spec {
 	enum mon_type type;
 };
 
+struct ipi_data {
+	struct task_struct *waiter_task;
+	struct memlat_cpu_grp *cpu_grp;
+	atomic_t cpus_left;
+};
+
 #define to_cpu_data(cpu_grp, cpu) \
 	(&cpu_grp->cpus_data[cpu - cpumask_first(&cpu_grp->cpus)])
 #define to_common_evs(cpu_grp, cpu) \
@@ -140,49 +148,89 @@ struct memlat_mon_spec {
 static struct workqueue_struct *memlat_wq;
 
 #define MAX_COUNT_LIM 0xFFFFFFFFFFFFFFFF
-static inline void read_event(struct event_data *event)
+static void read_event(struct event_data *event)
 {
 	unsigned long ev_count = 0;
-	u64 total, enabled, running;
+	u64 total;
 
-	if (!event->pevent)
+	if (!event->pevent || perf_event_read_local(event->pevent, &total, NULL, NULL))
 		return;
 
-	total = perf_event_read_value(event->pevent, &enabled, &running);
 	ev_count = total - event->prev_count;
 	event->prev_count = total;
 	event->last_delta = ev_count;
 }
 
-static void update_counts(struct memlat_cpu_grp *cpu_grp)
+static void read_perf_counters(struct ipi_data *ipd, int cpu)
 {
-	unsigned int cpu, i;
+	struct memlat_cpu_grp *cpu_grp = ipd->cpu_grp;
+	struct cpu_data *cpu_data = to_cpu_data(cpu_grp, cpu);
+	struct event_data *common_evs = cpu_data->common_evs;
 	struct memlat_mon *mon;
-	ktime_t now = ktime_get();
-	unsigned long delta = ktime_us_delta(now, cpu_grp->last_update_ts);
+	int ev;
 
-	cpu_grp->last_ts_delta_us = delta;
-	cpu_grp->last_update_ts = now;
+	for (ev = 0; ev < NUM_COMMON_EVS; ev++) {
+		if (!(cpu_grp->any_cpu_ev_mask & BIT(ev)))
+			read_event(&common_evs[ev]);
+	}
 
-	for_each_cpu(cpu, &cpu_grp->cpus) {
+	for (ev = 0; ev < cpu_grp->num_mons; ev++) {
+		mon = &cpu_grp->mons[ev];
+
+		if (!mon->is_active || !mon->miss_ev ||
+			(cpu_grp->any_cpu_ev_mask & BIT(ev)))
+			continue;
+
+		for_each_cpu(cpu, &mon->cpus) {
+			unsigned int mon_idx =
+				cpu - cpumask_first(&mon->cpus);
+			read_event(&mon->miss_ev[mon_idx]);
+		}
+	}
+}
+
+static void read_evs_ipi(void *info)
+{
+	int cpu = raw_smp_processor_id();
+	struct ipi_data *ipd = info;
+	struct task_struct *waiter;
+
+	read_perf_counters(ipd, cpu);
+
+	/*
+	 * Wake up the waiter task if we're the final CPU. The ipi_data pointer
+	 * isn't safe to dereference once cpus_left reaches zero, so the waiter
+	 * task_struct pointer must be cached before that. Also defend against
+	 * the extremely unlikely possibility that the waiter task will have
+	 * exited by the time wake_up_process() is reached.
+	 */
+	waiter = ipd->waiter_task;
+	get_task_struct(waiter);
+	if (atomic_fetch_andnot(BIT(cpu), &ipd->cpus_left) == BIT(cpu) &&
+	    waiter->state != TASK_RUNNING)
+		wake_up_process(waiter);
+	put_task_struct(waiter);
+}
+
+static void read_any_cpu_events(struct ipi_data *ipd, unsigned long cpus)
+{
+	struct memlat_cpu_grp *cpu_grp = ipd->cpu_grp;
+	struct memlat_mon *mon;
+	int cpu, ev;
+
+	if (!cpu_grp->any_cpu_ev_mask)
+		return;
+
+	for_each_cpu(cpu, to_cpumask(&cpus)) {
 		struct cpu_data *cpu_data = to_cpu_data(cpu_grp, cpu);
 		struct event_data *common_evs = cpu_data->common_evs;
 
-		for (i = 0; i < NUM_COMMON_EVS; i++)
-			read_event(&common_evs[i]);
-
-		if (!common_evs[STALL_IDX].pevent)
-			common_evs[STALL_IDX].last_delta =
-				common_evs[CYC_IDX].last_delta;
-
-		cpu_data->freq = common_evs[CYC_IDX].last_delta / delta;
-		cpu_data->stall_pct = mult_frac(100,
-				common_evs[STALL_IDX].last_delta,
-				common_evs[CYC_IDX].last_delta);
+		for_each_set_bit(ev, &cpu_grp->any_cpu_ev_mask, NUM_COMMON_EVS)
+			read_event(&common_evs[ev]);
 	}
 
-	for (i = 0; i < cpu_grp->num_mons; i++) {
-		mon = &cpu_grp->mons[i];
+	for (ev = 0; ev < cpu_grp->num_mons; ev++) {
+		mon = &cpu_grp->mons[ev];
 
 		if (!mon->is_active || !mon->miss_ev)
 			continue;
@@ -193,6 +241,89 @@ static void update_counts(struct memlat_cpu_grp *cpu_grp)
 			read_event(&mon->miss_ev[mon_idx]);
 		}
 	}
+}
+
+static void compute_perf_counters(struct ipi_data *ipd, int cpu)
+{
+	struct memlat_cpu_grp *cpu_grp = ipd->cpu_grp;
+	struct cpu_data *cpu_data = to_cpu_data(cpu_grp, cpu);
+	struct event_data *common_evs = cpu_data->common_evs;
+	ktime_t now = ktime_get();
+	unsigned long delta = ktime_us_delta(now, cpu_grp->last_update_ts);
+
+	cpu_grp->last_ts_delta_us = delta;
+	cpu_grp->last_update_ts = now;
+
+	if (!common_evs[STALL_IDX].pevent)
+		common_evs[STALL_IDX].last_delta =
+			common_evs[CYC_IDX].last_delta;
+
+	cpu_data->freq = common_evs[CYC_IDX].last_delta / delta;
+	cpu_data->stall_pct = mult_frac(100,
+			common_evs[STALL_IDX].last_delta,
+			common_evs[CYC_IDX].last_delta);
+}
+
+static void update_counts(struct memlat_cpu_grp *cpu_grp)
+{
+	unsigned long cpus_read_mask, tmp_mask;
+	call_single_data_t csd[NR_CPUS];
+	struct ipi_data ipd;
+	int cpu, this_cpu;
+
+	ipd.waiter_task = current;
+	ipd.cpu_grp = cpu_grp;
+
+	/* Dispatch asynchronous IPIs to each CPU to read the perf events */
+	cpus_read_lock();
+	preempt_disable();
+	this_cpu = raw_smp_processor_id();
+	cpus_read_mask = *cpumask_bits(&cpu_grp->cpus);
+	tmp_mask = cpus_read_mask & ~BIT(this_cpu);
+	ipd.cpus_left = (atomic_t)ATOMIC_INIT(tmp_mask);
+	for_each_cpu(cpu, to_cpumask(&tmp_mask)) {
+		/* Skip offline CPUs too. */
+		csd[cpu].flags = 0;
+		if (generic_exec_single(cpu, &csd[cpu], read_evs_ipi, &ipd))
+			cpus_read_mask &= ~BIT(cpu);
+	}
+	cpus_read_unlock();
+	/* Read this CPU's events while the IPIs run */
+	if (cpus_read_mask & BIT(this_cpu))
+		read_perf_counters(&ipd, this_cpu);
+	preempt_enable();
+
+	/* Bail out if there weren't any CPUs available */
+	if (!cpus_read_mask)
+		return;
+
+	/* Read any any-CPU events while the IPIs run */
+	read_any_cpu_events(&ipd, cpus_read_mask);
+
+	/* Clear out CPUs which were skipped */
+	atomic_andnot(cpus_read_mask ^ tmp_mask, &ipd.cpus_left);
+
+	/*
+	 * Wait until all the IPIs are done reading their events, and compute
+	 * each finished CPU's results while waiting since some CPUs may finish
+	 * reading their events faster than others.
+	 */
+	for (tmp_mask = cpus_read_mask;;) {
+		unsigned long cpus_done, cpus_left;
+
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		cpus_left = (unsigned int)atomic_read(&ipd.cpus_left);
+		if ((cpus_done = cpus_left ^ tmp_mask)) {
+			for_each_cpu(cpu, to_cpumask(&cpus_done))
+				compute_perf_counters(&ipd, cpu);
+			if (!cpus_left)
+				break;
+			tmp_mask = cpus_left;
+		} else {
+			schedule();
+		}
+	}
+	__set_current_state(TASK_RUNNING);
 }
 
 static unsigned long get_cnt(struct memlat_hwmon *hw)
@@ -249,7 +380,7 @@ static struct perf_event_attr *alloc_attr(void)
 }
 
 static int set_event(struct event_data *ev, int cpu, unsigned int event_id,
-		     struct perf_event_attr *attr)
+		     struct perf_event_attr *attr, struct memlat_cpu_grp *cpu_grp)
 {
 	struct perf_event *pevent;
 
@@ -263,6 +394,8 @@ static int set_event(struct event_data *ev, int cpu, unsigned int event_id,
 
 	ev->pevent = pevent;
 	perf_event_enable(pevent);
+	if (cpumask_equal(&pevent->readable_on_cpus, &CPU_MASK_ALL))
+		cpu_grp->any_cpu_ev_mask |= BIT(cpu_grp->i);
 
 	return 0;
 }
@@ -277,8 +410,9 @@ static int init_common_evs(struct memlat_cpu_grp *cpu_grp,
 		struct event_data *common_evs = to_common_evs(cpu_grp, cpu);
 
 		for (i = 0; i < NUM_COMMON_EVS; i++) {
+			cpu_grp->i = i;
 			ret = set_event(&common_evs[i], cpu,
-					cpu_grp->common_ev_ids[i], attr);
+					cpu_grp->common_ev_ids[i], attr, cpu_grp);
 			if (ret < 0)
 				break;
 		}
@@ -357,11 +491,12 @@ static int start_hwmon(struct memlat_hwmon *hw)
 	}
 
 	if (mon->miss_ev) {
+		cpu_grp->i = 0;
 		for_each_cpu(cpu, &mon->cpus) {
 			unsigned int idx = cpu - cpumask_first(&mon->cpus);
 
 			ret = set_event(&mon->miss_ev[idx], cpu,
-					mon->miss_ev_id, attr);
+					mon->miss_ev_id, attr, cpu_grp);
 			if (ret < 0)
 				goto unlock_out;
 		}
