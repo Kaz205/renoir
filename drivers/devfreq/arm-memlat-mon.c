@@ -161,31 +161,30 @@ static void read_event(struct event_data *event)
 	event->last_delta = ev_count;
 }
 
+static void read_event_ipi(struct event_data *event)
+{
+	unsigned long ev_count = 0;
+	u64 total, enabled, running;
+
+	if (!event->pevent)
+		return;
+
+	total = perf_event_read_value(event->pevent, &enabled, &running);
+	ev_count = total - event->prev_count;
+	event->prev_count = total;
+	event->last_delta = ev_count;
+}
+
 static void read_perf_counters(struct ipi_data *ipd, int cpu)
 {
 	struct memlat_cpu_grp *cpu_grp = ipd->cpu_grp;
 	struct cpu_data *cpu_data = to_cpu_data(cpu_grp, cpu);
 	struct event_data *common_evs = cpu_data->common_evs;
-	struct memlat_mon *mon;
 	int ev;
 
 	for (ev = 0; ev < NUM_COMMON_EVS; ev++) {
 		if (!(cpu_grp->any_cpu_ev_mask & BIT(ev)))
 			read_event(&common_evs[ev]);
-	}
-
-	for (ev = 0; ev < cpu_grp->num_mons; ev++) {
-		mon = &cpu_grp->mons[ev];
-
-		if (!mon->is_active || !mon->miss_ev ||
-			(cpu_grp->any_cpu_ev_mask & BIT(ev)))
-			continue;
-
-		for_each_cpu(cpu, &mon->cpus) {
-			unsigned int mon_idx =
-				cpu - cpumask_first(&mon->cpus);
-			read_event(&mon->miss_ev[mon_idx]);
-		}
 	}
 }
 
@@ -215,7 +214,6 @@ static void read_evs_ipi(void *info)
 static void read_any_cpu_events(struct ipi_data *ipd, unsigned long cpus)
 {
 	struct memlat_cpu_grp *cpu_grp = ipd->cpu_grp;
-	struct memlat_mon *mon;
 	int cpu, ev;
 
 	if (!cpu_grp->any_cpu_ev_mask)
@@ -228,6 +226,13 @@ static void read_any_cpu_events(struct ipi_data *ipd, unsigned long cpus)
 		for_each_set_bit(ev, &cpu_grp->any_cpu_ev_mask, NUM_COMMON_EVS)
 			read_event(&common_evs[ev]);
 	}
+}
+
+static void read_missed_events(struct ipi_data *ipd)
+{
+	struct memlat_cpu_grp *cpu_grp = ipd->cpu_grp;
+	struct memlat_mon *mon;
+	int cpu, ev;
 
 	for (ev = 0; ev < cpu_grp->num_mons; ev++) {
 		mon = &cpu_grp->mons[ev];
@@ -238,7 +243,7 @@ static void read_any_cpu_events(struct ipi_data *ipd, unsigned long cpus)
 		for_each_cpu(cpu, &mon->cpus) {
 			unsigned int mon_idx =
 				cpu - cpumask_first(&mon->cpus);
-			read_event(&mon->miss_ev[mon_idx]);
+			read_event_ipi(&mon->miss_ev[mon_idx]);
 		}
 	}
 }
@@ -287,6 +292,7 @@ static void update_counts(struct memlat_cpu_grp *cpu_grp)
 		if (generic_exec_single(cpu, &csd[cpu], read_evs_ipi, &ipd))
 			cpus_read_mask &= ~BIT(cpu);
 	}
+	read_missed_events(&ipd);
 	cpus_read_unlock();
 	/* Read this CPU's events while the IPIs run */
 	if (cpus_read_mask & BIT(this_cpu))
