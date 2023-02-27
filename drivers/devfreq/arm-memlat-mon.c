@@ -74,19 +74,12 @@ struct ipi_data {
 	atomic_t cpus_left;
 };
 
-static struct delayed_work memlat_work;
-static bool get_cnt_ready = true;
-
 #define to_cpustats(cpu_grp, cpu) \
 	(&cpu_grp->cpustats[cpu - cpumask_first(&cpu_grp->cpus)])
 #define to_devstats(cpu_grp, cpu) \
 	(&cpu_grp->hw.core_stats[cpu - cpumask_first(&cpu_grp->cpus)])
 #define to_cpu_grp(hwmon) container_of(hwmon, struct cpu_grp_info, hw)
 
-static void memlat_update_work(struct work_struct *work)
-{
-	WRITE_ONCE(get_cnt_ready, true);
-}
 
 static unsigned long compute_freq(struct cpu_pmu_stats *cpustats,
 						unsigned long cyc_cnt)
@@ -200,10 +193,6 @@ static unsigned long get_cnt(struct memlat_hwmon *hw)
 	struct ipi_data ipd;
 	int cpu, this_cpu;
 
-	if (!READ_ONCE(get_cnt_ready))
-		return 0;
-
-	WRITE_ONCE(get_cnt_ready, false);
 	ipd.waiter_task = current;
 	ipd.cpu_grp = cpu_grp;
 
@@ -257,8 +246,6 @@ static unsigned long get_cnt(struct memlat_hwmon *hw)
 		}
 	}
 	__set_current_state(TASK_RUNNING);
-
-	queue_delayed_work(system_unbound_wq, &memlat_work, msecs_to_jiffies(80));
 
 	return 0;
 }
@@ -490,8 +477,6 @@ static int arm_memlat_mon_driver_probe(struct platform_device *pdev)
 		dev_dbg(dev, "Stall cycle event not specified. Event ignored.\n");
 	else
 		cpu_grp->event_ids[STALL_CYC_IDX] = event_id;
-
-	INIT_DEFERRABLE_WORK(&memlat_work, memlat_update_work);
 
 	ret = register_memlat(dev, hw);
 	if (ret < 0)
