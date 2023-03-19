@@ -1,7 +1,7 @@
 export ARCH=arm64
 export SUBARCH=arm64
 export ak=$HOME/AnyKernel3
-export PATH="$HOME/google-clang/bin:$PATH"
+export PATH="$HOME/llvm-16.0.0/bin:$PATH"
 
 MAKE_PARAMS="LLVM=1 LLVM_IAS=1"
 git submodule init && git submodule update
