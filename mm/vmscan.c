@@ -625,9 +625,6 @@ static unsigned long shrink_slab_memcg(gfp_t gfp_mask, int nid,
 	if (!mem_cgroup_online(memcg))
 		return 0;
 
-	if (!down_read_trylock(&shrinker_rwsem))
-		return 0;
-
 	map = rcu_dereference_protected(memcg->nodeinfo[nid]->shrinker_map,
 					true);
 	if (unlikely(!map))
@@ -680,13 +677,7 @@ static unsigned long shrink_slab_memcg(gfp_t gfp_mask, int nid,
 		}
 		freed += ret;
 
-		if (rwsem_is_contended(&shrinker_rwsem)) {
-			freed = freed ? : 1;
-			break;
-		}
-	}
 unlock:
-	up_read(&shrinker_rwsem);
 	return freed;
 }
 #else /* CONFIG_MEMCG */
