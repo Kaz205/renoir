@@ -278,9 +278,9 @@ int fts_ex_mode_recovery(struct fts_ts_data *ts_data)
 	}
 
 	if (ts_data->fps_state != 60) {
-		FTS_INFO("config touch work with %d fps", ts_data->fps_state);
+		FTS_DEBUG("config touch work with %d fps", ts_data->fps_state);
 		if (!fts_write_reg(FTS_REG_FPS_VALUE, ts_data->fps_cmd))
-			FTS_INFO("config fps successful");
+			FTS_DEBUG("config fps successful");
 	}
 
 	return 0;
