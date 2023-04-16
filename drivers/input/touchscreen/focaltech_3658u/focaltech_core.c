@@ -1387,12 +1387,12 @@ static int check_fps(unsigned long event, void *data)
 			break;
 		}
 		if (legally) {
-			FTS_INFO("config touch work with %d fps", fps);
+			FTS_DEBUG("config touch work with %d fps", fps);
 			if (suspend)
 				FTS_INFO("tp in suspend status now, config is put-off to resume");
 			else {
 				if (!fts_write_reg(FTS_REG_FPS_VALUE, cmd))
-					FTS_INFO("config fps successful");
+					FTS_DEBUG("config fps successful");
 			}
 		}
 		fts_data->fps_state = fps;

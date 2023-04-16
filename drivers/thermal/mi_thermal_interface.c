@@ -98,7 +98,7 @@ static int screen_state_for_thermal_callback(struct notifier_block *nb,
 		break;
 	}
 
-	pr_warn("%s: %s, sm.screen_state = %d\n", __func__, get_screen_state_name(blank),
+	pr_debug("%s: %s, sm.screen_state = %d\n", __func__, get_screen_state_name(blank),
 			sm.screen_state);
 	sysfs_notify(&mi_thermal_dev.dev->kobj, NULL, "screen_state");
 

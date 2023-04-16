@@ -87,12 +87,12 @@ static int try_to_freeze_tasks(bool user_only)
 	elapsed_msecs = ktime_to_ms(elapsed);
 
 	if (wakeup) {
-		pr_debug("\n");
-		pr_debug("Freezing of tasks aborted after %d.%03d seconds",
+		pr_cont("\n");
+		pr_err("Freezing of tasks aborted after %d.%03d seconds",
 		       elapsed_msecs / 1000, elapsed_msecs % 1000);
 	} else if (todo) {
-		pr_debug("\n");
-		pr_debug("Freezing of tasks failed after %d.%03d seconds"
+		pr_cont("\n");
+		pr_err("Freezing of tasks failed after %d.%03d seconds"
 		       " (%d tasks refusing to freeze, wq_busy=%d):\n",
 		       elapsed_msecs / 1000, elapsed_msecs % 1000,
 		       todo - wq_busy, wq_busy);
@@ -110,7 +110,7 @@ static int try_to_freeze_tasks(bool user_only)
 			read_unlock(&tasklist_lock);
 		}
 	} else {
-		pr_debug("(elapsed %d.%03d seconds) ", elapsed_msecs / 1000,
+		pr_cont("(elapsed %d.%03d seconds) ", elapsed_msecs / 1000,
 			elapsed_msecs % 1000);
 	}
 
@@ -138,14 +138,14 @@ int freeze_processes(void)
 	if (!pm_freezing)
 		atomic_inc(&system_freezing_cnt);
 
-	pr_debug("Freezing user space processes ... ");
+	pr_info("Freezing user space processes ... ");
 	pm_freezing = true;
 	error = try_to_freeze_tasks(true);
 	if (!error) {
 		__usermodehelper_set_disable_depth(UMH_DISABLED);
-		pr_debug("done.");
+		pr_cont("done.");
 	}
-	pr_debug("\n");
+	pr_cont("\n");
 	BUG_ON(in_atomic());
 
 	/*
@@ -174,14 +174,14 @@ int freeze_kernel_threads(void)
 {
 	int error;
 
-	pr_debug("Freezing remaining freezable tasks ... ");
+	pr_info("Freezing remaining freezable tasks ... ");
 
 	pm_nosig_freezing = true;
 	error = try_to_freeze_tasks(false);
 	if (!error)
-		pr_debug("done.");
+		pr_cont("done.");
 
-	pr_debug("\n");
+	pr_cont("\n");
 	BUG_ON(in_atomic());
 
 	if (error)
@@ -202,7 +202,7 @@ void thaw_processes(void)
 
 	oom_killer_enable();
 
-	pr_debug("Restarting tasks ... ");
+	pr_info("Restarting tasks ... ");
 
 	__usermodehelper_set_disable_depth(UMH_FREEZING);
 	thaw_workqueues();
@@ -223,7 +223,7 @@ void thaw_processes(void)
 	usermodehelper_enable();
 
 	schedule();
-	pr_debug("done.\n");
+	pr_cont("done.\n");
 	trace_suspend_resume(TPS("thaw_processes"), 0, false);
 }
 
@@ -244,5 +244,5 @@ void thaw_kernel_threads(void)
 	read_unlock(&tasklist_lock);
 
 	schedule();
-	pr_debug("done.\n");
+	pr_cont("done.\n");
 }

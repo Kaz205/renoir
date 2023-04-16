@@ -140,7 +140,7 @@
 
 #define TOUCH_NAME    "FTS_TS"
 #define TOUCH_UTC_ERROR(fmt, ...)  \
-		mi_touch_printk_utc(KERN_INFO, "[error]" fmt, ##__VA_ARGS__)
+		pr_debug("[error]" fmt, ##__VA_ARGS__)
 
 struct tp_raw {
 	uint16_t frm_idx;
