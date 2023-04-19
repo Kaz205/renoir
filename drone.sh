@@ -4,7 +4,7 @@ export home=/drone/src
 export ak=$home/AnyKernel3
 export PATH="$home/google-clang/bin:$PATH"
 
-MAKE_PARAMS="LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_COMPAT=arm-none-eabi-"
+MAKE_PARAMS="LLVM=1 LLVM_IAS=1"
 git submodule init && git submodule update
 
 cd "$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
