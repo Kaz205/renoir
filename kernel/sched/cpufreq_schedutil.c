@@ -251,8 +251,10 @@ unsigned long schedutil_cpu_util(int cpu, unsigned long util_cfs,
 		return max;
 	}
 
-	if (p->dying_task)
+	if (p->dying_task) {
+		pr_info("AAAA: dying task, boosting freq");
 		return max;
+	}
 
 	/*
 	 * Early check to see if IRQ/steal time saturates the CPU, can be
