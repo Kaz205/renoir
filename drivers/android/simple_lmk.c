@@ -249,11 +249,10 @@ static void scan_and_kill(void)
 		 * long time for exit_mmap() to complete.
 		 */
 		rcu_read_lock();
-		for_each_thread(vtsk, t) {
+		for_each_thread(vtsk, t)
 			set_tsk_thread_flag(t, TIF_MEMDIE);
+		for_each_thread(vtsk, t)
 			sched_setscheduler_nocheck(t, SCHED_RR, &min_rt_prio);
-			t->dying_task = true;
-		}
 		rcu_read_unlock();
 
 		/* Allow the victim to run on any CPU. This won't schedule. */

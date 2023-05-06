@@ -1359,8 +1359,6 @@ struct task_struct {
 	unsigned long			prev_lowest_stack;
 #endif
 
-	bool				dying_task;
-
 	ANDROID_VENDOR_DATA_ARRAY(1, 3);
 
 	ANDROID_KABI_RESERVE(1);

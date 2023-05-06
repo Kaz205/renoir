@@ -251,9 +251,6 @@ unsigned long schedutil_cpu_util(int cpu, unsigned long util_cfs,
 		return max;
 	}
 
-	if (p->dying_task)
-		return max;
-
 	/*
 	 * Early check to see if IRQ/steal time saturates the CPU, can be
 	 * because of inaccuracies in how we track these -- see
