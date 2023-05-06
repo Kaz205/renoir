@@ -5669,7 +5669,7 @@ static bool shrink_node(pg_data_t *pgdat, struct scan_control *sc)
 			/* Record the group's reclaim efficiency */
 			vmpressure(sc->gfp_mask, memcg, false,
 				   sc->nr_scanned - scanned,
-				   sc->nr_reclaimed - reclaimed);
+				   sc->nr_reclaimed - reclaimed, sc->order);
 
 		} while ((memcg = mem_cgroup_iter(root, memcg, NULL)));
 
@@ -5683,7 +5683,7 @@ static bool shrink_node(pg_data_t *pgdat, struct scan_control *sc)
 		 */
 		vmpressure(sc->gfp_mask, sc->target_mem_cgroup, true,
 			   sc->nr_scanned - nr_scanned,
-			   sc->nr_reclaimed - nr_reclaimed);
+			   sc->nr_reclaimed - nr_reclaimed, sc->order);
 
 		if (reclaim_state) {
 			sc->nr_reclaimed += reclaim_state->reclaimed_slab;
@@ -5943,7 +5943,7 @@ retry:
 
 	do {
 		vmpressure_prio(sc->gfp_mask, sc->target_mem_cgroup,
-				sc->priority);
+				sc->priority, sc->order);
 		sc->nr_scanned = 0;
 		shrink_zones(zonelist, sc);
 
