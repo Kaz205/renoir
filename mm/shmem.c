@@ -2364,13 +2364,6 @@ int shmem_mfill_atomic_pte(struct mm_struct *dst_mm,
 	if (ret)
 		goto out_release;
 
-	ret = shmem_add_to_page_cache(page, mapping, pgoff, NULL,
-						gfp & GFP_RECLAIM_MASK);
-	if (ret)
-		goto out_release;
-
-	mem_cgroup_commit_charge(page, memcg, false);
-
 	ret = mfill_atomic_install_pte(dst_mm, dst_pmd, dst_vma, dst_addr,
 				       page, true);
 	if (ret)

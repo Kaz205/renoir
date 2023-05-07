@@ -138,7 +138,6 @@ static int mcopy_atomic_pte(struct mm_struct *dst_mm,
 	ret = mfill_atomic_install_pte(dst_mm, dst_pmd, dst_vma, dst_addr,
 				       page, true);
 	if (ret) {
-		mem_cgroup_cancel_charge(page, memcg, false);
 		goto out_release;
 	}
 out:
