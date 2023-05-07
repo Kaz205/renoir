@@ -348,15 +348,4 @@ static __always_inline void del_page_from_lru_list(struct page *page,
 			-hpage_nr_pages(page));
 }
 
-static inline bool vma_has_recency(struct vm_area_struct *vma)
-{
-	if (vma->vm_flags & (VM_SEQ_READ | VM_RAND_READ))
-		return false;
-
-	if (vma->vm_file && (vma->vm_file->f_mode & FMODE_NOREUSE))
-		return false;
-
-	return true;
-}
-
 #endif
