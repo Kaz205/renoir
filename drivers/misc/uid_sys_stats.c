@@ -34,7 +34,7 @@ DECLARE_HASHTABLE(hash_table, UID_HASH_BITS);
 /*
  * uid_lock[bkt] ensure consistency of hash_table[bkt]
  */
-struct rt_mutex uid_lock[UID_HASH_NUMS];
+static struct raw_spinlock uid_lock[UID_HASH_NUMS];
 
 static struct proc_dir_entry *cpu_parent;
 static struct proc_dir_entry *io_parent;
@@ -82,28 +82,28 @@ struct uid_entry {
 
 static inline void lock_uid(uid_t uid)
 {
-	rt_mutex_lock(&uid_lock[hash_min(uid, HASH_BITS(hash_table))]);
+	raw_spin_lock(&uid_lock[hash_min(uid, HASH_BITS(hash_table))]);
 }
 
 static inline void unlock_uid(uid_t uid)
 {
-	rt_mutex_unlock(&uid_lock[hash_min(uid, HASH_BITS(hash_table))]);
+	raw_spin_unlock(&uid_lock[hash_min(uid, HASH_BITS(hash_table))]);
 }
 
 static inline int trylock_uid(uid_t uid)
 {
-	return rt_mutex_trylock(
+	return raw_spin_trylock(
 		&uid_lock[hash_min(uid, HASH_BITS(hash_table))]);
 }
 
 static inline void lock_uid_by_bkt(u32 bkt)
 {
-	rt_mutex_lock(&uid_lock[bkt]);
+	raw_spin_lock(&uid_lock[bkt]);
 }
 
 static inline void unlock_uid_by_bkt(u32 bkt)
 {
-	rt_mutex_unlock(&uid_lock[bkt]);
+	raw_spin_unlock(&uid_lock[bkt]);
 }
 
 static u64 compute_write_bytes(struct task_io_accounting *ioac)
@@ -783,7 +783,7 @@ static void init_hash_table_and_lock(void)
 
 	hash_init(hash_table);
 	for (i = 0; i < UID_HASH_NUMS; i++)
-		rt_mutex_init(&uid_lock[i]);
+		raw_spin_lock_init(&uid_lock[i]);
 }
 
 static int __init proc_uid_sys_stats_init(void)
