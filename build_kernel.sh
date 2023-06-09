@@ -8,8 +8,8 @@ MAKE_PARAMS="LLVM=1 LLVM_IAS=1"
 git submodule init && git submodule update
 
 cd "$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-make $MAKE_PARAMS renoir_defconfig -j9
-make $MAKE_PARAMS Image dtbs dtbo.img -j9
+make $MAKE_PARAMS renoir_defconfig -j$(nproc --all)
+make $MAKE_PARAMS Image dtbs dtbo.img -j$(nproc --all)
 
 if [ $? -ne 0 ]
 then
