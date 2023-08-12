@@ -1,0 +1,28 @@
+name: Build
+
+on:
+  push:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Fetch tools
+        run: |
+          git clone https://github.com/Kaz205/AnyKernel3 -b renoir --depth=1
+          wget https://github.com/Kaz205/clang-releases/releases/download/16.0.6/llvm-16.0.6.tar.lz4
+          lz4 -d < *.lz4 | tar xvf -
+
+      - name: Build kernel
+        run: bash build_ci.sh
+
+      - name: Upload Installer Executable as Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.name }}
+          path: AnyKernel3/
