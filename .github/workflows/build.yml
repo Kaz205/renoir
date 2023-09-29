@@ -15,7 +15,7 @@ jobs:
       - name: Fetch tools
         run: |
           git clone https://github.com/Kaz205/AnyKernel3 -b renoir --depth=1
-          wget https://github.com/Kaz205/clang-releases/releases/download/16.0.6/llvm-16.0.6.tar.lz4
+          wget https://github.com/Kaz205/clang-releases/releases/download/17.0.1/llvm-17.0.1.tar.lz4
           lz4 -d < *.lz4 | tar xvf -
 
       - name: Build kernel

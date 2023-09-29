@@ -1,7 +1,7 @@
 export ARCH=arm64
 export SUBARCH=arm64
 export ak=$HOME/AnyKernel3
-export PATH="$HOME/llvm-16.0.6/bin:$PATH"
+export PATH="$HOME/llvm-17.0.1/bin:$PATH"
 
 NAME=$(git describe --exact-match --tags 2> /dev/null || git rev-parse --short HEAD)
 MAKE_PARAMS="LLVM=1 LLVM_IAS=1"
